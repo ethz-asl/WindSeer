@@ -5,3 +5,4 @@ polyMesh/
 dynamicCode/
 *.stl
 *.eMesh
+bolund2D/bolund_simpleFoam/system/sliceDict
