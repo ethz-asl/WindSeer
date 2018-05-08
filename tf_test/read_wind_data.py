@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import glob
 
-WINDNX = 129
-WINDNZ = 65
+WINDNX = 128
+WINDNZ = 64
 NRECORDS = WINDNX*WINDNZ
 
 

@@ -2,7 +2,7 @@
 
 YLO=-65.00
 YHI=45.00
-NY=55
+NY=110
 DW=1
 
 DY=$(echo "scale=2; ($YHI - $YLO) / $NY" | bc)

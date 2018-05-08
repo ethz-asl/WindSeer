@@ -46,6 +46,19 @@ def unet_model_fn(features, labels, mode):
     # Dense Layer
     pool2_flat = tf.reshape(pool[-1], [-1, 4*2*128])
     dense = tf.layers.dense(inputs=pool2_flat, units=512, activation=tf.nn.relu)
+    input = dense
+
+    # Up, up, up
+    for i in range(depth-1, -1, -1):
+        conv.append(tf.layers.conv2d_transpose(inputs=input,
+                                     filters=8*(i+1),
+                                     kernel_size=[3, 3],
+                                     padding="same",
+                                     activation=tf.nn.leaky_relu(alpha=0.2)))
+
+        pool.append(tf.layers.max_pooling2d(inputs=conv[-1], pool_size=[2, 2], strides=2))
+        input = conv[-1]
+
 
 def main(unused_argv):
     # Load training and evaluation data
