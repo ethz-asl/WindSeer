@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import glob
 
-WINDNX = 128
-WINDNZ = 64
+WINDNX = 129
+WINDNZ = 65
 NRECORDS = WINDNX*WINDNZ
 
 
@@ -50,7 +50,7 @@ def build_tf_dataset(directory):
     # Load data from csv files:
     all_files = glob.glob(directory+'/Y*.csv')
     n_files = len(all_files)
-    train_input = {'isWind': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.bool),
+    train_input = {'isWind': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32),
                   'Ux_in': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32),
                   'Uz_in': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32)}
     train_labels = {'Ux_out': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32),
@@ -62,7 +62,7 @@ def build_tf_dataset(directory):
         train_labels['Uz_out'][i, :, :] = wind_out.get('U:2').values.reshape([WINDNZ, WINDNX])
 
         wind_in = build_input_from_output(wind_out)
-        train_input['isWind'][i,:,:] = wind_in.get('isWind').values.reshape([WINDNZ, WINDNX])
+        train_input['isWind'][i, :, :] = wind_in.get('isWind').values.reshape([WINDNZ, WINDNX]).astype(np.float32)
         train_input['Ux_in'][i, :, :] = wind_in.get('Ux').values.reshape([WINDNZ, WINDNX])
         train_input['Uz_in'][i, :, :] = wind_in.get('Uz').values.reshape([WINDNZ, WINDNX])
 

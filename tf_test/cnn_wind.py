@@ -13,7 +13,7 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 def dataset_input_fn(dataset, batch_size=32, num_epochs=1000, shuffle=True):
     if shuffle:
-        dataset = dataset.shuffle()             # buffer_size=10000
+        dataset = dataset.shuffle(buffer_size=10000)             #
     dataset = dataset.batch(batch_size)
     dataset = dataset.repeat(num_epochs)
     iterator = dataset.make_one_shot_iterator()
@@ -21,49 +21,83 @@ def dataset_input_fn(dataset, batch_size=32, num_epochs=1000, shuffle=True):
     features, labels = iterator.get_next()
     return features, labels
 
-def unet_model_fn(features, labels, mode):
+def unet_model_fn(features, labels, mode, params):
 
-    input_layer = features
+    input_layer = tf.feature_column.input_layer(features, params['feature_columns'])
 
     depth = 5
-    input = input_layer
+    feed_layer = input_layer
 
     conv = []
     pool = []
 
     # Down, down down
     for i in range(depth):
-        conv.append(tf.layers.conv2d(inputs=input,
-                                     filters=8*(i+1),
-                                     kernel_size=[3, 3],
+        conv.append(tf.layers.conv2d(inputs=feed_layer,
+                                     filters=2**(i+3),
+                                     kernel_size=3,
                                      padding="same",
                                      activation=tf.nn.leaky_relu(alpha=0.2)))
 
         pool.append(tf.layers.max_pooling2d(inputs=conv[-1], pool_size=[2, 2], strides=2))
-        input = conv[-1]
+        feed_layer = conv[-1]
 
 
     # Dense Layer
     pool2_flat = tf.reshape(pool[-1], [-1, 4*2*128])
     dense = tf.layers.dense(inputs=pool2_flat, units=512, activation=tf.nn.relu)
-    input = dense
+    feed_layer = dense
 
     # Up, up, up
     for i in range(depth-1, -1, -1):
-        conv.append(tf.layers.conv2d_transpose(inputs=input,
-                                     filters=8*(i+1),
-                                     kernel_size=[3, 3],
-                                     padding="same",
-                                     activation=tf.nn.leaky_relu(alpha=0.2)))
+        conv.append(tf.layers.conv2d_transpose(inputs=feed_layer,
+                                               filters=2**(i+3),
+                                               strides=2,
+                                               kernel_size=3,
+                                               padding="same",
+                                               activation=tf.nn.leaky_relu(alpha=0.2)))
+        feed_layer = conv[-1]
 
-        pool.append(tf.layers.max_pooling2d(inputs=conv[-1], pool_size=[2, 2], strides=2))
-        input = conv[-1]
+    # Output layer (to get to 2 output channels, maybe?)
+    conv.append(tf.layers.conv2d(inputs=feed_layers,
+                                 filters=2,
+                                 kernel_size=1,
+                                 padding='same'))
+
+    predictions = {
+        # Generate predictions (for PREDICT and EVAL mode)
+        "Ux_out": tf.slice(conv[-1], (0, 0, 0, 0), (-1, -1, -1, 1)),
+        "Uz_out": tf.slice(conv[-1], (0, 0, 0, 0), (-1, -1, -1, 2))
+        # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
+        # `logging_hook`.
+    }
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
+
+    # Calculate Loss (for both TRAIN and EVAL modes)
+    loss = tf.losses.mean_pairwise_squared_error(labels=labels, predictions=predictions, weights=features['isWind']) 
+
+    # Configure the Training Op (for TRAIN mode)
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+        train_op = optimizer.minimize(
+            loss=loss,
+            global_step=tf.train.get_global_step())
+        return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
+
+    # Add evaluation metrics (for EVAL mode)
+    eval_metric_ops = {
+        "accuracy": tf.metrics.accuracy(
+            labels=labels, predictions=predictions["classes"])}
+    return tf.estimator.EstimatorSpec(
+        mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
 
 def main(unused_argv):
     # Load training and evaluation data
     train = wind_data.build_tf_dataset('data/train')
-    test = wind_data.build_tf_dataset('data/train')
+    test = wind_data.build_tf_dataset('data/validate')
 
     wind_unet = tf.estimator.Estimator(
             model_fn=unet_model_fn, model_dir="tmp/wind_convnet_model")
