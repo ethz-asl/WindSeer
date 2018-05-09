@@ -6,8 +6,8 @@ from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 import read_wind_data as wind_data
-from layers import (weight_variable, weight_variable_devonc, bias_variable, conv2d, deconv2d,
-                    max_pool, crop_and_concat, pixel_wise_softmax_2, cross_entropy)
+import matplotlib.pyplot as plt
+import glob
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -66,10 +66,11 @@ def unet_model_fn(features, labels, mode):      #, params
                                  kernel_size=1,
                                  padding='same'))
 
+
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode)
-        "Ux_out": tf.slice(conv[-1], (0, 0, 0, 0), (-1, -1, -1, 1)),
-        "Uz_out": tf.slice(conv[-1], (0, 0, 0, 0), (-1, -1, -1, 2))
+        "U_out": conv[-1],
+        # "U_truth": tf.stack([labels['Ux_out'], labels['Uz_out']], axis=3)
         # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
         # `logging_hook`.
     }
@@ -92,8 +93,8 @@ def unet_model_fn(features, labels, mode):      #, params
 
     # Add evaluation metrics (for EVAL mode)
     eval_metric_ops = {
-        "accuracy": tf.metrics.accuracy(
-            labels=labels, predictions=predictions)}
+        "MSE": tf.metrics.mean_squared_error(
+            labels=label_tensor, predictions=conv[-1])}
     return tf.estimator.EstimatorSpec(
         mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
@@ -101,7 +102,7 @@ def unet_model_fn(features, labels, mode):      #, params
 def main(unused_argv):
     # Load training and evaluation data
     train = wind_data.build_tf_dataset('data/mini_train')
-    # test = wind_data.build_tf_dataset('data/mini_train')
+    test = wind_data.build_tf_dataset('data/test')
 
 
     wind_unet = tf.estimator.Estimator(
@@ -117,15 +118,29 @@ def main(unused_argv):
 
     train_input_fn = lambda: dataset_input_fn(train, batch_size=1, num_epochs=1000, shuffle=True)
 
-    wind_unet.train(
-            input_fn=train_input_fn,
-            steps=20000)
-            # hooks=[logging_hook])
+    # wind_unet.train(input_fn=train_input_fn, steps=20000) # hooks=[logging_hook])
 
-    # Test the model
-    # test_input_fn = lambda: dataset_input_fn(test, batch_size=1, num_epochs=1, shuffle=False)
-    # test_results = wind_unet.evaluate(input_fn=test_input_fn)
-    # print(test_results)
+    # Make some predictions
+    test_input_fn = lambda: dataset_input_fn(test, batch_size=1, num_epochs=1, shuffle=False)
+    test_results = wind_unet.predict(test_input_fn)
+    all_files = glob.glob('data/test/Y*.csv')
+
+    for i in range(5):
+        output = test_results.next()
+        wind_out = wind_data.read_wind_csv(all_files[i])
+        Ux = wind_out.get('U:0').values.reshape([wind_data.WINDNZ, wind_data.WINDNX])
+        Uz = wind_out.get('U:2').values.reshape([wind_data.WINDNZ, wind_data.WINDNX])
+
+        fh, ah = plt.subplots(2, 2)
+        fh.set_size_inches(10,5)
+        # ah[0].quiver(truth_out['Ux_out'], truth_out['Uz_out'], np.sqrt(truth_out['Ux_out'] ** 2 + truth_out['Uz_out'] ** 2))
+        ht0 = ah[0][0].imshow(Ux, origin='lower'); fh.colorbar(ht0, ax=ah[0][0]); ah[0][0].set_title('True Ux')
+        ht1 = ah[0][1].imshow(Uz, origin='lower'); fh.colorbar(ht1, ax=ah[0][1]); ah[0][1].set_title('True Uz')
+        ht2 = ah[1][0].imshow(output['U_out'][:, :, 0], origin='lower'); fh.colorbar(ht2, ax=ah[1][0]); ah[1][0].set_title('Est Ux')
+        ht3 = ah[1][1].imshow(output['U_out'][:, :, 1], origin='lower'); fh.colorbar(ht3, ax=ah[1][1]); ah[1][1].set_title('Est Uz')
+        # ah[1].quiver(U[:,:,0], U[:,:,0], np.sqrt(U[:,:,0] ** 2 + U[:,:,1] ** 2))
+        # ah[1].set_aspect('equal')
+    plt.show()
 
 if __name__ == "__main__":
   tf.app.run()
