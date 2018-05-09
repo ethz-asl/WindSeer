@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import glob
 
-WINDNX = 129
-WINDNZ = 65
+WINDNX = 128
+WINDNZ = 64
 NRECORDS = WINDNX*WINDNZ
 
 
@@ -21,7 +21,10 @@ def read_wind_csv(infile):
              "Points:1": np.float32,
              "Points:2": np.float32}
     wind_data = pd.read_csv(infile, dtype=types)
-    wind_data.drop(['U:1', 'Points:1'], axis=1)     # Get rid of y data
+    if 'U:0' not in wind_data.keys():
+        print 'U:0 not in {0}'.format(infile)
+        raise IOError
+    # wind_data.drop(['U:1', 'Points:1'], axis=1)     # Get rid of y data
     # For some reason the rename doesn't work
     # wind_data.rename(
     #     index=str, columns={'U:0': 'Ux', 'U:2': 'Uz', 'vtkValidPointMask': 'is_air', 'Points:0': 'x', 'Points:2': 'z'})
@@ -57,7 +60,11 @@ def build_tf_dataset(directory):
                     'Uz_out': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32)}
 
     for i, wind_csv in enumerate(all_files):
-        wind_out = read_wind_csv(wind_csv)
+        try:
+            wind_out = read_wind_csv(wind_csv)
+        except IOError:
+            continue
+
         train_labels['Ux_out'][i, :, :] = wind_out.get('U:0').values.reshape([WINDNZ, WINDNX])
         train_labels['Uz_out'][i, :, :] = wind_out.get('U:2').values.reshape([WINDNZ, WINDNX])
 
