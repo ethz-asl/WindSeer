@@ -41,11 +41,11 @@ def unet_model_fn(features, labels, mode):      #, params
                                      activation=tf.nn.leaky_relu))
 
         pool.append(tf.layers.max_pooling2d(inputs=conv[-1], pool_size=[2, 2], strides=2))
-        feed_layer = conv[-1]
+        feed_layer = pool[-1]
 
 
     # Dense Layer
-    pool2_flat = tf.reshape(pool[-1], [-1, 4*2*128])
+    pool2_flat = tf.reshape(pool[-1], [-1, 2*4*128])
     dense = tf.layers.dense(inputs=pool2_flat, units=512, activation=tf.nn.leaky_relu)
     dense2 = tf.layers.dense(inputs=dense, units=1024, activation=tf.nn.leaky_relu)
     feed_layer = tf.reshape(dense2, [-1, 2, 4, 128])
@@ -81,11 +81,12 @@ def unet_model_fn(features, labels, mode):      #, params
     # Calculate Loss (for both TRAIN and EVAL modes)
     label_tensor = tf.stack([labels['Ux_out'], labels['Uz_out']], axis=3)
     label_weights = tf.stack([features['isWind'], features['isWind']], axis=3)
-    loss = tf.losses.mean_squared_error(labels=label_tensor, predictions=conv[-1])  #, weights=label_weights)
+    loss = tf.losses.mean_squared_error(labels=label_tensor, predictions=conv[-1], weights=label_weights)  #
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.0001)
+        # optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.0001)
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
         train_op = optimizer.minimize(
             loss=loss,
             global_step=tf.train.get_global_step())
@@ -101,7 +102,7 @@ def unet_model_fn(features, labels, mode):      #, params
 
 def main(unused_argv):
     # Load training and evaluation data
-    train = wind_data.build_tf_dataset('data/mini_train')
+    train = wind_data.build_tf_dataset('data/train')
     test = wind_data.build_tf_dataset('data/test')
 
 
@@ -118,7 +119,7 @@ def main(unused_argv):
 
     train_input_fn = lambda: dataset_input_fn(train, batch_size=1, num_epochs=1000, shuffle=True)
 
-    # wind_unet.train(input_fn=train_input_fn, steps=20000) # hooks=[logging_hook])
+    wind_unet.train(input_fn=train_input_fn, steps=20000) # hooks=[logging_hook])
 
     # Make some predictions
     test_input_fn = lambda: dataset_input_fn(test, batch_size=1, num_epochs=1, shuffle=False)
