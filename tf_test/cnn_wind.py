@@ -21,10 +21,10 @@ def dataset_input_fn(dataset, batch_size=32, num_epochs=1000, shuffle=True):
     features, labels = iterator.get_next()
     return features, labels
 
-def unet_model_fn(features, labels, mode):      #, params
+def unet_model_fn(features, labels, mode, params):      #, params
 
     # input_layer = tf.feature_column.input_layer(features, params['feature_columns'])
-    input_layer = tf.stack([features['Ux_in'], features['Uz_in'], features['isWind']], axis=3)
+    input_layer = tf.stack([features[col] for col in params['feature_columns']], axis=3)
 
     depth = 5
     feed_layer = input_layer
@@ -38,7 +38,7 @@ def unet_model_fn(features, labels, mode):      #, params
                                      filters=2**(i+3),
                                      kernel_size=3,
                                      padding="same",
-                                     activation=tf.nn.leaky_relu))
+                                     activation=params['activation']))
 
         pool.append(tf.layers.max_pooling2d(inputs=conv[-1], pool_size=[2, 2], strides=2))
         feed_layer = pool[-1]
@@ -46,8 +46,8 @@ def unet_model_fn(features, labels, mode):      #, params
 
     # Dense Layer
     pool2_flat = tf.reshape(pool[-1], [-1, 2*4*128])
-    dense = tf.layers.dense(inputs=pool2_flat, units=512, activation=tf.nn.leaky_relu)
-    dense2 = tf.layers.dense(inputs=dense, units=1024, activation=tf.nn.leaky_relu)
+    dense = tf.layers.dense(inputs=pool2_flat, units=512, activation=params['activation'])
+    dense2 = tf.layers.dense(inputs=dense, units=1024, activation=params['activation'])
     feed_layer = tf.reshape(dense2, [-1, 2, 4, 128])
 
     # Up, up, up
@@ -57,7 +57,7 @@ def unet_model_fn(features, labels, mode):      #, params
                                                strides=2,
                                                kernel_size=3,
                                                padding="same",
-                                               activation=tf.nn.leaky_relu))
+                                               activation=params['activation']))
         feed_layer = conv[-1]
 
     # Output layer (to get to 2 output channels, maybe?)
@@ -81,7 +81,7 @@ def unet_model_fn(features, labels, mode):      #, params
     # Calculate Loss (for both TRAIN and EVAL modes)
     label_tensor = tf.stack([labels['Ux_out'], labels['Uz_out']], axis=3)
     label_weights = tf.stack([features['isWind'], features['isWind']], axis=3)
-    loss = tf.losses.mean_squared_error(labels=label_tensor, predictions=conv[-1], weights=label_weights)  #
+    loss = tf.losses.mean_squared_error(labels=label_tensor, predictions=conv[-1])  #, weights=label_weights
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -108,7 +108,9 @@ def main(unused_argv):
 
     wind_unet = tf.estimator.Estimator(
         model_fn=unet_model_fn,
-        model_dir="tmp/wind_convnet_model"
+        model_dir="tmp/wind_convnet_model",
+        params={'feature_columns': ['Ux_in', 'Uz_in', 'isWind'],
+                'activation': tf.nn.leaky_relu}
     )
     # Logging
     # tensors_to_log = {"probabilities": "softmax_tensor"}
@@ -117,7 +119,7 @@ def main(unused_argv):
 
     # Train the model
 
-    train_input_fn = lambda: dataset_input_fn(train, batch_size=1, num_epochs=1000, shuffle=True)
+    train_input_fn = lambda: dataset_input_fn(train, batch_size=32, num_epochs=1000, shuffle=True)
 
     wind_unet.train(input_fn=train_input_fn, steps=20000) # hooks=[logging_hook])
 

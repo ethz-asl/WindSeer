@@ -9,3 +9,4 @@ bolund2D/bolund_simpleFoam/system/sliceDict
 .idea/
 tf_test/data/
 tmp/
+tf_test/fig/
