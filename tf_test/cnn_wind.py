@@ -23,17 +23,26 @@ def dataset_input_fn(dataset, batch_size=32, num_epochs=1000, shuffle=True):
 
 def unet_model_fn(features, labels, mode, params):      #, params
 
+    # Defaults:
+    if 'dense_nodes' not in params:
+        params['dense_nodes'] = 512
+    if 'depth' not in params:
+        params['depth'] = 5
+
     # input_layer = tf.feature_column.input_layer(features, params['feature_columns'])
     input_layer = tf.stack([features[col] for col in params['feature_columns']], axis=3)
+    image_width, image_height, n_channels = input_layer.get_shape()[1:]
 
-    depth = 5
+    print("Wind CNN: Dense nodes: {0}, conv depth: {1}, input {2}x{3}x{4}".format(
+        params['dense_nodes'], params['depth'], image_width, image_height, n_channels))
+
     feed_layer = input_layer
 
     conv = []
     pool = []
 
     # Down, down down
-    for i in range(depth):
+    for i in range(params['depth']):
         conv.append(tf.layers.conv2d(inputs=feed_layer,
                                      filters=2**(i+3),
                                      kernel_size=3,
@@ -45,13 +54,17 @@ def unet_model_fn(features, labels, mode, params):      #, params
 
 
     # Dense Layer
-    pool2_flat = tf.reshape(pool[-1], [-1, 2*4*128])
-    dense = tf.layers.dense(inputs=pool2_flat, units=512, activation=params['activation'])
-    dense2 = tf.layers.dense(inputs=dense, units=1024, activation=params['activation'])
-    feed_layer = tf.reshape(dense2, [-1, 2, 4, 128])
+    # Calculate image dimensions after conv-pool for varying depth
+    dense_width, dense_height = image_width//(2**params['depth']), image_height//(2**params['depth'])
+    dense_channels = 2**(params['depth']+2)
+    n_after_conv = dense_width*dense_height*dense_channels
+    pool2_flat = tf.reshape(feed_layer, [-1, n_after_conv])
+    dense = tf.layers.dense(inputs=pool2_flat, units=params['dense_nodes'], activation=params['activation'])
+    dense2 = tf.layers.dense(inputs=dense, units=n_after_conv, activation=params['activation'])
+    feed_layer = tf.reshape(dense2, [-1, dense_width, dense_height, dense_channels])
 
     # Up, up, up
-    for i in range(depth-1, -1, -1):
+    for i in range(params['depth']-1, -1, -1):
         conv.append(tf.layers.conv2d_transpose(inputs=feed_layer,
                                                filters=2**(i+3),
                                                strides=2,
@@ -64,7 +77,8 @@ def unet_model_fn(features, labels, mode, params):      #, params
     conv.append(tf.layers.conv2d(inputs=feed_layer,
                                  filters=2,
                                  kernel_size=1,
-                                 padding='same'))
+                                 padding='same',
+                                 activation=None))
 
 
     predictions = {
@@ -110,7 +124,9 @@ def main(unused_argv):
         model_fn=unet_model_fn,
         model_dir="tmp/wind_convnet_model",
         params={'feature_columns': ['Ux_in', 'Uz_in', 'isWind'],
-                'activation': tf.nn.leaky_relu}
+                'activation': tf.nn.leaky_relu,
+                'depth': 2,
+                'dense_nodes': 512}
     )
     # Logging
     # tensors_to_log = {"probabilities": "softmax_tensor"}
