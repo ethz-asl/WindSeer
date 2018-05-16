@@ -125,7 +125,7 @@ def main(unused_argv):
         model_dir="tmp/wind_convnet_model",
         params={'feature_columns': ['Ux_in', 'Uz_in', 'isWind'],
                 'activation': tf.nn.leaky_relu,
-                'depth': 2,
+                'depth': 5,
                 'dense_nodes': 512}
     )
     # Logging

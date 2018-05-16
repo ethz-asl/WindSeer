@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import glob
+import os
 
 WINDNX = 128
 WINDNZ = 64
@@ -76,3 +77,41 @@ def build_tf_dataset(directory):
     tf_train_features = tf.data.Dataset.from_tensor_slices(train_input)
     tf_train_labels   = tf.data.Dataset.from_tensor_slices(train_labels)
     return tf.data.Dataset.zip((tf_train_features, tf_train_labels))
+
+
+def move_junk_data(in_directory, junk_directory, thresh=1.0e4):
+    all_files = glob.glob(in_directory+'/Y*.csv')
+    n_files = len(all_files)
+    junked_files = 0
+    for i, wind_csv in enumerate(all_files):
+        fname = os.path.basename(wind_csv)
+        try:
+            wind_out = read_wind_csv(wind_csv)
+        except IOError:
+            print "{0}: File read failed (IOError), moving to junk".format(fname)
+            os.rename(wind_csv, os.path.join(junk_directory, fname))
+            junked_files += 1
+            continue
+
+        data_max = wind_out.max()
+        data_min = wind_out.min()
+        if (data_max['U:0'] > thresh) or (data_max['U:2'] > thresh) or (data_min['U:0'] < -thresh) or (data_min['U:2'] < -thresh):
+            print "{0}: Value outside threshold, moving to junk.".format(fname)
+            os.rename(wind_csv, os.path.join(junk_directory, fname))
+            junked_files += 1
+    print "{0} files processed, {1} sent to junk".format(n_files, junked_files)
+
+
+        # get('U:0')
+        # train_labels['Uz_out'][i, :, :] = wind_out.get('U:2').values.reshape([WINDNZ, WINDNX])
+
+
+
+def feeder_tf_dataset(directory):
+    # Load data from csv files:
+    file_list = tf.train.match_filenames_once(directory + '/Y*.csv')
+    file_reader = tf.train.string_input_producer(file_list, shuffle=True)
+
+
+if __name__ == "__main__":
+    move_junk_data('data/train', 'data/junk')
