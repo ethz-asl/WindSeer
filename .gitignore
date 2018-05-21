@@ -11,3 +11,4 @@ tf_test/data/
 tmp/
 tf_test/fig/
 .*
+*__pycache__*
