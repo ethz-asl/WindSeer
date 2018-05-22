@@ -14,16 +14,14 @@ plot_every_n_batches = 10
 n_epochs = 10
 save_model = True
 savepath = 'models/trained_models/ednn_2D_v1.model'
+evaluate_testset = True
 
 
 
 trainset = utils.MyDataset('data/clean_train.zip')
-testset = utils.MyDataset('data/test.zip')
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=32,
                                           shuffle=True, num_workers=2)
-testloader = torch.utils.data.DataLoader(testset, batch_size=1,
-                                         shuffle=False, num_workers=2)
 
 net = models.ModelEDNN2D(3)
 optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
@@ -58,3 +56,16 @@ print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 if (save_model):
     torch.save(net.state_dict(), savepath)
 
+if (evaluate_testset):
+    testset = utils.MyDataset('data/test.zip')
+    testloader = torch.utils.data.DataLoader(testset, batch_size=1,
+                                             shuffle=False, num_workers=2)
+
+    with torch.no_grad():
+        loss = 0.0
+        for data in testloader:
+            inputs, labels = data
+            outputs = net(inputs)
+            loss += loss_fn(outputs, labels)
+
+        print('INFO: Average loss on test set: %s' % (loss.item()/len(testset)))
