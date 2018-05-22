@@ -16,14 +16,18 @@ save_model = True
 savepath = 'models/trained_models/ednn_2D_v1.model'
 evaluate_testset = True
 
-
-
 trainset = utils.MyDataset('data/clean_train.zip')
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=32,
                                           shuffle=True, num_workers=2)
 
+#check if gpu is available
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print('INFO: Start training on device %s' % device)
+
 net = models.ModelEDNN2D(3)
+net.to(device)
+
 optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 loss_fn = torch.nn.MSELoss()
 
@@ -34,6 +38,8 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
     for i, data in enumerate(trainloader, 0):
         # get the inputs
         inputs, labels = data
+
+        inputs, labels = inputs.to(device), labels.to(device)
 
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -65,6 +71,7 @@ if (evaluate_testset):
         loss = 0.0
         for data in testloader:
             inputs, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
             loss += loss_fn(outputs, labels)
 
