@@ -38,8 +38,9 @@ class MyDataset():
             # generate the labels
             u_x_out = torch.from_numpy(wind_data.get('U:0').values.reshape([self.__nz, self.__nx])).unsqueeze(0)
             u_z_out = torch.from_numpy(wind_data.get('U:2').values.reshape([self.__nz, self.__nx])).unsqueeze(0)
+            turbelence_viscosity_out = torch.from_numpy(wind_data.get('nut').values.reshape([self.__nz, self.__nx])).unsqueeze(0)
 
-            label = torch.cat((u_x_out, u_z_out), 0)
+            label = torch.cat((u_x_out, u_z_out, turbelence_viscosity_out), 0)
 
             # generate the input
             is_wind_in = torch.from_numpy(wind_data.get('vtkValidPointMask').values.reshape([self.__nz, self.__nx]).astype(np.float32)).unsqueeze(0)

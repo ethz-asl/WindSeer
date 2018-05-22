@@ -38,7 +38,7 @@ class ModelEDNN2D(nn.Module):
         x = x.view(-1, self.num_flat_features(x))
         x = self.leakyrelu(self.fc1(x))
         x = self.leakyrelu(self.fc2(x))
-        x = x.view(shape) #TODO fix here right dimension
+        x = x.view(shape)
         
         x = self.deconv5(x)
         x = self.deconv4(x)
