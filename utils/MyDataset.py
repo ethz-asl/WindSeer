@@ -4,7 +4,7 @@ import torch
 import zipfile
 
 class MyDataset():
-    def __init__(self, filename, nx = 128, nz = 64):
+    def __init__(self, filename, nx = 128, nz = 64, scaling_ux = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
         self.__filename = filename
 
         with zipfile.ZipFile(self.__filename, "r") as zip:
@@ -24,6 +24,9 @@ class MyDataset():
         
         self.__nx = nx
         self.__nz = nz
+        self.__scaling_ux = scaling_ux
+        self.__scaling_uz = scaling_uz
+        self.__scaling_nut = scaling_nut
 
 
     def __getitem__(self, index):
@@ -36,9 +39,9 @@ class MyDataset():
                 raise IOError
 
             # generate the labels
-            u_x_out = torch.from_numpy(wind_data.get('U:0').values.reshape([self.__nz, self.__nx])).unsqueeze(0)
-            u_z_out = torch.from_numpy(wind_data.get('U:2').values.reshape([self.__nz, self.__nx])).unsqueeze(0)
-            turbelence_viscosity_out = torch.from_numpy(wind_data.get('nut').values.reshape([self.__nz, self.__nx])).unsqueeze(0)
+            u_x_out = torch.from_numpy(wind_data.get('U:0').values.reshape([self.__nz, self.__nx])).unsqueeze(0) / self.__scaling_ux
+            u_z_out = torch.from_numpy(wind_data.get('U:2').values.reshape([self.__nz, self.__nx])).unsqueeze(0) / self.__scaling_uz
+            turbelence_viscosity_out = torch.from_numpy(wind_data.get('nut').values.reshape([self.__nz, self.__nx])).unsqueeze(0) / self.__scaling_nut
 
             label = torch.cat((u_x_out, u_z_out, turbelence_viscosity_out), 0)
 

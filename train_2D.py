@@ -13,10 +13,10 @@ learning_rate = 1e-4
 plot_every_n_batches = 10
 n_epochs = 10
 save_model = True
-savepath = 'models/trained_models/ednn_2D_v1.model'
+savepath = 'models/trained_models/ednn_2D_v2_scaled.model'
 evaluate_testset = True
 
-trainset = utils.MyDataset('data/clean_train.zip')
+trainset = utils.MyDataset('data/clean_train.zip',  scaling_ux = 10.0, scaling_uz = 2.5, scaling_nut = 10.0)
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=32,
                                           shuffle=True, num_workers=2)
@@ -63,7 +63,7 @@ if (save_model):
     torch.save(net.state_dict(), savepath)
 
 if (evaluate_testset):
-    testset = utils.MyDataset('data/test.zip')
+    testset = utils.MyDataset('data/test.zip',  scaling_ux = 10.0, scaling_uz = 2.5, scaling_nut = 10.0)
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=2)
 

@@ -2,7 +2,7 @@ import utils
 import time
 import matplotlib.pyplot as plt
 
-db = utils.MyDataset('data/train.zip')
+db = utils.MyDataset('data/train.zip',  scaling_ux = 10.0, scaling_uz = 2.5, scaling_nut = 10.0)
 
 start_time = time.time()
 for i in range(len(db)):

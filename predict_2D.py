@@ -9,11 +9,11 @@ import utils
 # params
 dataset = 'data/test.zip'
 index = 3 # plot the prediction for the following sample in the set
-model = 'models/trained_models/ednn_2D_v1.model'
+model = 'models/trained_models/ednn_2D_v2_scaled.model'
 
 
 # load sample
-testset = utils.MyDataset(dataset)
+testset = utils.MyDataset(dataset,  scaling_ux = 10.0, scaling_uz = 2.5, scaling_nut = 10.0)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 net = models.ModelEDNN2D(3)
