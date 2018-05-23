@@ -12,3 +12,4 @@ tmp/
 tf_test/fig/
 .*
 *__pycache__*
+*.pyc
