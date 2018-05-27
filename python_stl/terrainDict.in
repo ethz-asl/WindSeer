@@ -1,0 +1,70 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5                                     |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+
+MINX $MINX;
+MAXX $MAXX;
+MINY $MINY;
+MAXY $MAXY;
+MINZ $MINZ;
+MAXZ $MAXZ;
+
+SLICE
+{
+    SLICEWIDTH 0.1;
+    MINX $MINX;
+    MAXX $MAXX;
+    MINY YSLICE;
+    MAXY #calc "$MINY+$SLICEWIDTH";
+    MINZ $MINZ;
+    MAXZ 70.0;
+}
+
+GRADE
+{
+    X
+    {
+        N 300;
+        S ( (0.3 0.3 0.33) (0.7 0.7 3.0) );
+    }
+    Y
+    {
+        N 1;
+        S 1;
+    }
+    Z
+    {
+        N 64;
+        S 6;
+    }
+}
+
+INPOINT
+{
+    X 0.0;
+    Y #calc "$MINY+$SLICEWIDTH/2.0";
+    Z 15.0;
+}
+
+SUBGRADE
+{
+    X
+    {
+        N 127;
+        S ( (0.3 0.3 0.33) (0.7 0.7 3.0) );
+    }
+    Y
+    {
+        N 1;
+        S 1;
+    }
+    Z
+    {
+        N 63;
+        S 6;
+    }
+}

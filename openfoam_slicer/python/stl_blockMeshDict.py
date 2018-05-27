@@ -2,8 +2,34 @@
 import os
 import numpy as np
 import argparse
-from read_grd import create_blockMeshDict
 from stl import mesh
+from string import Template
+
+
+def create_blockMeshDict(outfile, xyz_lims, nx=10, ny=10, nz=10, infile = './blockMeshDict.in',
+                         mconvert=1.0, in_buffer=0.0, gx=1, gy=1, gz=1, quiet=False):
+    xyz_lims = np.array(xyz_lims)
+    dx, dy, dz = [h - l for l, h in xyz_lims]
+    lx, hx = xyz_lims[0]+ [in_buffer*dx, -in_buffer*dx]
+    ly, hy = xyz_lims[1]+ [in_buffer*dy, -in_buffer*dy]
+    lz, hz = xyz_lims[2]    # + [0.001*dz, 0.0]
+    sub_dict = {'MINX': '{0:0.4f}'.format(lx), 'MAXX': '{0:0.4f}'.format(hx),
+                'MINY': '{0:0.4f}'.format(ly), 'MAXY': '{0:0.4f}'.format(hy),
+                'MINZ': '{0:0.4f}'.format(lz), 'MAXZ': '{0:0.4f}'.format(hz),
+                'NX': '{0:d}'.format(nx), 'NY': '{0:d}'.format(ny), 'NZ': '{0:d}'.format(nz),
+                'MCONVERT': '{0:0.2f}'.format(mconvert), 'GX': gx, 'GY': gy, 'GZ': gz}
+
+    if not quiet:
+        print "Creating outfile {0} from {1}".format(outfile, infile)
+        print "Mesh limits: x in [{0}, {1}], y in [{2}, {3}], z in [{4}, {5}]".format(lx, hx, ly, hy, lz, hz)
+
+    with open(infile, "r") as fh:
+        src = Template(fh.read())
+    mesh_dict = src.substitute(sub_dict)
+
+    with open(outfile, "w") as out_fh:
+        out_fh.write(mesh_dict)
+
 
 def generate_blockMeshDict(stl_file, block_mesh, infile='blockMeshDict.in', nx=128, ny=128, nz=128, pad_z=3.0):
 

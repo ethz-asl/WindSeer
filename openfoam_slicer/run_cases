@@ -1,5 +1,44 @@
 #!/bin/bash
 
+# Set up some stuff for getopts
+OPTIND=1
+stl_dir=stl
+base_directory="base_case/simpleFoam"
+
+while getopts "h?sb" opt; do
+    case "$opt" in
+        h?)
+            echo "run_cases [-s stl_dir -b base_dir]"
+            exit 0
+            ;;
+        s)  stl_dir=$OPTARG
+            ;;
+        b)  base_directory=$OPTARG
+    esac
+done
+
+sys_dirs=(constant system)
+constant_files=(transportProperties turbulenceProperties)
+system_files=(controlDict fvSchemes fvSolution)
+
+# Loop over stl files, create new directory for each case
+for stl_file in "${stl_dir}/*.stl"; do
+    basename=$(basename -- "$stl_file")
+    extension="${basename##*.}"
+    casename="${basename%.*}"
+    
+    echo "Creating new case ${casename} based on ${stl_file}"
+
+    # Create system directories, symlink the constant files
+    for d in ${sys_dirs[@]}; do
+        mkdir -p ${casename}/${d}
+        s_files=${d}_files
+        for i in ${s_files[@]}; do
+            ln -s ${base_directory}/${d}/${i} ${casename}/${d}/${i}
+        done
+    done
+
+done 
 YLO=-65.00
 YHI=45.00
 NY=110
