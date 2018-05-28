@@ -15,6 +15,8 @@ FoamFile
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 
+#include "terrainDict"
+
 castellatedMesh true;
 snap            true;
 addLayers       true;
@@ -24,7 +26,7 @@ geometry
     bolund
     {
         type triSurfaceMesh;
-        file "bolund.stl";
+        file $STL_FILE;
     }
 
 };
@@ -130,8 +132,7 @@ castellatedMeshControls
     // NOTE: This point should never be on a face, always inside a cell, even
     // after refinement.
 
-    #include "sliceDict"
-    locationInMesh ($INPOINT.X $INPOINT.Y $INPOINT.Z);
+    locationInMesh ($SLICEDICT.INPOINT.X $SLICEDICT.INPOINT.Y $SLICEDICT.INPOINT.Z);
 
     // Whether any faceZones (as specified in the refinementSurfaces)
     // are only on the boundary of corresponding cellZones or also allow
