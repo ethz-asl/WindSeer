@@ -7,13 +7,13 @@ from torch.utils.data import DataLoader
 import utils
 
 # params
-dataset = 'data/test.zip'
+dataset = 'data/converted_test.tar'
 index = 3 # plot the prediction for the following sample in the set
-model = 'models/trained_models/ednn_2D_v2_scaled.model'
+model = 'models/trained_models/ednn_2D_v1.model'
 
 
 # load sample
-testset = utils.MyDataset(dataset,  scaling_ux = 10.0, scaling_uz = 2.5, scaling_nut = 10.0)
+testset = utils.MyDataset(dataset,  scaling_ux = 1.0, scaling_uz = 1, scaling_nut = 1.0)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 net = models.ModelEDNN2D(3)
@@ -22,7 +22,7 @@ net.to(device)
 loss_fn = torch.nn.MSELoss()
 
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
-                                             shuffle=False, num_workers=2)
+                                             shuffle=False, num_workers=0)
 
 #Compute the average loss
 with torch.no_grad():
@@ -43,7 +43,6 @@ with torch.no_grad():
     print('INFO: Average loss on test set for ux: %s' % (loss_ux.item()/len(testset)))
     print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(testset)))
     print('INFO: Average loss on test set for turbulence: %s' % (loss_nut.item()/len(testset)))
-
 
     # plot prediction
     input, label = testset[index]

@@ -1,13 +1,44 @@
-import utils
-import time
-import matplotlib.pyplot as plt
+#!/usr/bin/env python
+'''
+Script to test and benchmark the implementation of MyDataset
+'''
 
-db = utils.MyDataset('data/train.zip',  scaling_ux = 10.0, scaling_uz = 2.5, scaling_nut = 10.0)
+import matplotlib.pyplot as plt
+import sys
+import time
+import torch
+from torch.utils.data import DataLoader
+import utils
+
+
+#------ Params to modidify ---------------------------
+input_dataset = 'data/converted_train.tar'
+ux_scaling = 9.0
+uz_scaling = 2.5
+turbulence_scaling = 5.0
+plot_sample_num = 1242
+dataset_rounds = 3
+#-----------------------------------------------------
+
+
+db = utils.MyDataset(input_dataset,  scaling_ux = ux_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+
+dbloader = torch.utils.data.DataLoader(db, batch_size=1,
+                                          shuffle=True, num_workers=0)
 
 start_time = time.time()
-for i in range(len(db)):
-    input, label = db[i]
-print("INFO: Time to get all samples in the dataset took %s seconds" % (time.time() - start_time))
+for j in range(dataset_rounds):
+    for data in dbloader:
+        input, label = data
+print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
+
+input, label = db[plot_sample_num]
+
+try:
+    input, label = db[plot_sample_num]
+except:
+    print('The plot_sample_num needs to be a value between 0 and', len(db)-1, '->' , plot_sample_num, ' is invalid.')
+    sys.exit()
 
 fh_in, ah_in = plt.subplots(3, 2)
 fh_in.set_size_inches([6.2, 10.2])

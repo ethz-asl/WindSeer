@@ -1,67 +1,58 @@
+from io import BytesIO
 import numpy as np
-import pandas as pd
+import sys
+import tarfile
 import torch
-import zipfile
 
+'''
+TODO: try if it is feasable also to store the filedescriptors or how much faster it will make the dataloading
+'''
 class MyDataset():
-    def __init__(self, filename, nx = 128, nz = 64, scaling_ux = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
-        self.__filename = filename
+    def __init__(self, filename, scaling_ux = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
+        try:
+            self.__tar = tarfile.open(filename, 'r')
+        except IOError as e:
+            print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, filename))
+            sys.exit()
 
-        with zipfile.ZipFile(self.__filename, "r") as zip:
-            self.__nameslist = zip.namelist()
+        self.__num_files = len(self.__tar.getnames())
+        self.__memberslist = self.__tar.getmembers()
 
-        self.__types = {"p": np.float32,
-             "U:0": np.float32,
-             "U:1": np.float32,
-             "U:2": np.float32,
-             "epsilon": np.float32,
-             "k": np.float32,
-             "nut": np.float32,
-             "vtkValidPointMask": np.bool,
-             "Points:0": np.float32,
-             "Points:1": np.float32,
-             "Points:2": np.float32}
-        
-        self.__nx = nx
-        self.__nz = nz
         self.__scaling_ux = scaling_ux
         self.__scaling_uz = scaling_uz
         self.__scaling_nut = scaling_nut
 
+#         self.__fileslist = []
+#         for i in range(self.__num_files):
+#             self.__fileslist.append(self.__tar.extractfile(self.__memberslist[i]))
+
+    def __del__(self):
+        try:
+            self.__tar.close()
+        except:
+            pass
 
     def __getitem__(self, index):
-        with zipfile.ZipFile(self.__filename, "r") as zip:
-            f = zip.open(self.__nameslist[index])
-            wind_data = pd.read_csv(f, header=0, dtype = self.__types)
+#         self.__fileslist[index].seek(0)
+#         data = torch.load(self.__fileslist[index])
+#         self.__fileslist[index].seek(0)
 
-            if 'U:0' not in wind_data.keys():
-                print('U:0 not in {0}'.format(self.__nameslist[index]))
-                raise IOError
+        file = self.__tar.extractfile(self.__memberslist[index])
+        data = torch.load(file)
+#         file.seek(0)
 
-            # generate the labels
-            u_x_out = torch.from_numpy(wind_data.get('U:0').values.reshape([self.__nz, self.__nx])).unsqueeze(0) / self.__scaling_ux
-            u_z_out = torch.from_numpy(wind_data.get('U:2').values.reshape([self.__nz, self.__nx])).unsqueeze(0) / self.__scaling_uz
-            turbelence_viscosity_out = torch.from_numpy(wind_data.get('nut').values.reshape([self.__nz, self.__nx])).unsqueeze(0) / self.__scaling_nut
+        # split into input output
+        input = data[:3, :, :]
+        output = data[3:, :, :]
 
-            label = torch.cat((u_x_out, u_z_out, turbelence_viscosity_out), 0)
+        # apply scaling
+        input[1, :, :] /= self.__scaling_ux
+        input[2, :, :] /= self.__scaling_uz
+        output[0, :, :] /= self.__scaling_ux
+        output[1, :, :] /= self.__scaling_uz
+        output[2, :, :] /= self.__scaling_nut
 
-            # generate the input
-            is_wind_in = torch.from_numpy(wind_data.get('vtkValidPointMask').values.reshape([self.__nz, self.__nx]).astype(np.float32)).unsqueeze(0)
-
-            u_x_in = u_x_out[:,:,0].unsqueeze(-1).repeat(1, 1, u_x_out.size()[2])
-            u_z_in = u_z_out[:,:,0].unsqueeze(-1).repeat(1, 1, u_z_out.size()[2])
-
-            # alternative method, needs to be evaluated on the gpu which one is faster
-#             u_x_in = u_x_out.clone()
-#             u_z_in = u_z_out.clone()
-#              
-#             for i in range(1, self.__nx):
-#                u_x_in[:,:,i] = u_x_in[:,:,0] 
-#                u_z_in[:,:,i] = u_z_in[:,:,0] 
-
-            input = torch.cat((is_wind_in, u_x_in, u_z_in), 0)
-
-            return input, label
+        return input, output
 
     def __len__(self):
-        return len(self.__nameslist)
+        return self.__num_files
