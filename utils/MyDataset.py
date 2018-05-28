@@ -3,43 +3,31 @@ import numpy as np
 import sys
 import tarfile
 import torch
+from torch.utils.data.dataset import Dataset
 
 '''
-TODO: try if it is feasable also to store the filedescriptors or how much faster it will make the dataloading
+TODO: try if it is feasable also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
 '''
-class MyDataset():
+class MyDataset(Dataset):
     def __init__(self, filename, scaling_ux = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
         try:
-            self.__tar = tarfile.open(filename, 'r')
+            tar = tarfile.open(filename, 'r')
         except IOError as e:
             print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, filename))
             sys.exit()
 
-        self.__num_files = len(self.__tar.getnames())
-        self.__memberslist = self.__tar.getmembers()
+        self.__filename = filename
+        self.__num_files = len(tar.getnames())
+        self.__memberslist = tar.getmembers()
 
         self.__scaling_ux = scaling_ux
         self.__scaling_uz = scaling_uz
         self.__scaling_nut = scaling_nut
 
-#         self.__fileslist = []
-#         for i in range(self.__num_files):
-#             self.__fileslist.append(self.__tar.extractfile(self.__memberslist[i]))
-
-    def __del__(self):
-        try:
-            self.__tar.close()
-        except:
-            pass
-
     def __getitem__(self, index):
-#         self.__fileslist[index].seek(0)
-#         data = torch.load(self.__fileslist[index])
-#         self.__fileslist[index].seek(0)
-
-        file = self.__tar.extractfile(self.__memberslist[index])
+        tar = tarfile.open(self.__filename, 'r')
+        file = tar.extractfile(self.__memberslist[index])
         data = torch.load(file)
-#         file.seek(0)
 
         # split into input output
         input = data[:3, :, :]

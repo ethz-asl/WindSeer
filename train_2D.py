@@ -21,7 +21,7 @@ evaluate_testset = True
 ux_scaling = 9.0
 uz_scaling = 2.5
 turbulence_scaling = 4.5
-num_workers = 1
+num_workers = 4
 
 # --------------------------------------------------------------------------
 

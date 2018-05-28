@@ -16,15 +16,15 @@ input_dataset = 'data/converted_train.tar'
 ux_scaling = 9.0
 uz_scaling = 2.5
 turbulence_scaling = 5.0
-plot_sample_num = 1242
-dataset_rounds = 3
+plot_sample_num = 0
+dataset_rounds = 30
 #-----------------------------------------------------
 
 
 db = utils.MyDataset(input_dataset,  scaling_ux = ux_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
 
-dbloader = torch.utils.data.DataLoader(db, batch_size=1,
-                                          shuffle=True, num_workers=0)
+dbloader = torch.utils.data.DataLoader(db, batch_size=32,
+                                          shuffle=True, num_workers=4)
 
 start_time = time.time()
 for j in range(dataset_rounds):
