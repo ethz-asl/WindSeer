@@ -2,27 +2,36 @@
 
 import matplotlib.pyplot as plt
 import models
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import utils
 
-# params
+# ---- Params --------------------------------------------------------------
 dataset = 'data/converted_test.tar'
 index = 3 # plot the prediction for the following sample in the set
-model = 'models/trained_models/ednn_2D_v1.model'
+model_name = 'ednn_2D_scaled_bilinear'
 
+# --------------------------------------------------------------------------
 
-# load sample
-testset = utils.MyDataset(dataset,  scaling_ux = 1.0, scaling_uz = 1, scaling_nut = 1.0)
-
+# check if gpu available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-net = models.ModelEDNN2D(3)
-net.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage))
-net.to(device)
-loss_fn = torch.nn.MSELoss()
 
+# load the model parameter
+params = np.load('models/trained_models/' + model_name + '_params.npy')
+params = params.item()
+
+# load dataset
+testset = utils.MyDataset(dataset, scaling_ux = params['ux_scaling'], scaling_uz = params['uz_scaling'], scaling_nut = params['turbulence_scaling'])
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
+# load the model and its learnt parameters
+net = models.ModelEDNN2D(params['number_input_layers'], params['interpolation_mode'], params['align_corners'])
+net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))
+net.to(device)
+
+# define loss function
+loss_fn = torch.nn.MSELoss()
 
 #Compute the average loss
 with torch.no_grad():

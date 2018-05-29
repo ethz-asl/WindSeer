@@ -10,22 +10,31 @@ from torch.utils.data import DataLoader
 import utils
 
 # ---- Params --------------------------------------------------------------
+# learning parameters
 learning_rate = 1e-3
 plot_every_n_batches = 10
 n_epochs = 10
 batchsize = 32
+num_workers = 4
+
+# options to store data
 save_model = True
 save_learning_curve = True
-modelname = 'ednn_2D_scaled_bilinear'
+evaluate_testset = True
+
+# dataset parameter
 trainset_name = 'data/converted_train.tar'
 validationset_name = 'data/converted_validation.tar'
 testset_name = 'data/converted_test.tar'
-evaluate_testset = True
+
+# model parameter
+model_name = 'ednn_2D_scaled_bilinear'
 ux_scaling = 9.0
 uz_scaling = 2.5
 turbulence_scaling = 4.5
-num_workers = 4
-
+interpolation_mode = 'bilinear'
+align_corners = True
+number_input_layers = 3
 # --------------------------------------------------------------------------
 
 # define dataset and dataloader
@@ -34,7 +43,7 @@ trainset = utils.MyDataset(trainset_name,  scaling_ux = ux_scaling, scaling_uz =
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=batchsize,
                                           shuffle=True, num_workers=num_workers)
 
-validationset = utils.MyDataset(trainset_name,  scaling_ux = ux_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+validationset = utils.MyDataset(validationset_name,  scaling_ux = ux_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
 
 validationloader = torch.utils.data.DataLoader(validationset, batch_size=1,
                                           shuffle=False, num_workers=num_workers)
@@ -45,20 +54,20 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('INFO: Start training on device %s' % device)
 
 # define model and move to gpu if available
-net = models.ModelEDNN2D(3)
+net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners)
 net.to(device)
 
 # define optimizer and objective
 optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 loss_fn = torch.nn.MSELoss()
 
+# initialize variable to store the learning curve
 learning_curve = np.zeros([n_epochs, 2])
 
 # start the training for n_epochs
 start_time = time.time()
 for epoch in range(n_epochs):  # loop over the dataset multiple times
 
-    epoch_loss = 0.0
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs
@@ -77,14 +86,21 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
 
         # print statistics
         running_loss += loss.item()
-        epoch_loss += loss.item()
         if i % plot_every_n_batches == (plot_every_n_batches - 1):    # print every plot_every_n_batches mini-batches
             print('[%d, %5d] averaged loss: %.3f' %
                   (epoch + 1, i + 1, running_loss / (plot_every_n_batches - 1)))
             running_loss = 0.0
 
     with torch.no_grad():
-        epoch_loss /= len(trainloader)
+        train_loss = 0.0
+        for data in trainloader:
+            inputs, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = net(inputs)
+            loss = loss_fn(outputs, labels)
+            train_loss += loss.item()
+        train_loss /= len(trainloader)
+
         validation_loss = 0.0
         for data in validationloader:
             inputs, labels = data
@@ -92,22 +108,34 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
             outputs = net(inputs)
             loss = loss_fn(outputs, labels)
             validation_loss += loss.item()
-
         validation_loss /= len(validationset)
-        learning_curve[epoch, 0] = epoch_loss
+
+        learning_curve[epoch, 0] = train_loss
         learning_curve[epoch, 1] = validation_loss
         print(('[%d] train loss: %.3f, validation loss: %.3f' %
-                      (epoch + 1, epoch_loss, validation_loss)))
+                      (epoch + 1, train_loss, validation_loss)))
 
 
 print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 
 # save the model parameter and learning curve if requested
 if (save_learning_curve):
-    np.save('models/trained_models/' + modelname + '_learningcurve.npy', learning_curve)
+    np.save('models/trained_models/' + model_name + '_learningcurve.npy', learning_curve)
 
 if (save_model):
-    torch.save(net.state_dict(), 'models/trained_models/' + modelname + '.model')
+    # save the model
+    torch.save(net.state_dict(), 'models/trained_models/' + model_name + '.model')
+
+    # save the model parameters
+    model_params = {
+        'ux_scaling': ux_scaling,
+        'uz_scaling': uz_scaling,
+        'turbulence_scaling': turbulence_scaling,
+        'interpolation_mode': interpolation_mode,
+        'align_corners': align_corners,
+        'number_input_layers': number_input_layers
+        }
+    np.save('models/trained_models/' + model_name + '_params.npy', model_params)
 
 # evaluate the model performance on the testset if requested
 if (evaluate_testset):

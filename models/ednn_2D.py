@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class ModelEDNN2D(nn.Module):
 
-    def __init__(self, n_input_layers):
+    def __init__(self, n_input_layers, interpolation_mode, align_corners):
         super(ModelEDNN2D, self).__init__()
 
         self.conv1 = nn.Conv2d(n_input_layers, 8, 3, padding = 1)
@@ -19,7 +19,7 @@ class ModelEDNN2D(nn.Module):
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 1024)
 
-        self.upsampling = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode, align_corners=align_corners)
         
         self.deconv5 = nn.Conv2d(128, 64, 3, padding = 1)
         self.deconv4 = nn.Conv2d(64, 32, 3, padding = 1)
