@@ -18,12 +18,20 @@ class ModelEDNN2D(nn.Module):
 
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 1024)
+
+        self.upsampling = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         
-        self.deconv5 = nn.ConvTranspose2d(128, 64, 3, stride=2, output_padding=1, padding = 1)
-        self.deconv4 = nn.ConvTranspose2d(64, 32, 3, stride=2, output_padding=1, padding = 1)
-        self.deconv3 = nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=1, padding = 1)
-        self.deconv2 = nn.ConvTranspose2d(16, 8, 3, stride=2, output_padding=1, padding = 1)
-        self.deconv1 = nn.ConvTranspose2d(8, 3, 3, stride=2, output_padding=1, padding = 1)
+        self.deconv5 = nn.Conv2d(128, 64, 3, padding = 1)
+        self.deconv4 = nn.Conv2d(64, 32, 3, padding = 1)
+        self.deconv3 = nn.Conv2d(32, 16, 3, padding = 1)
+        self.deconv2 = nn.Conv2d(16, 8, 3, padding = 1)
+        self.deconv1 = nn.Conv2d(8, 3, 3, padding = 1)
+        
+#         self.deconv5 = nn.ConvTranspose2d(128, 64, 3, stride=2, output_padding=1, padding = 1)
+#         self.deconv4 = nn.ConvTranspose2d(64, 32, 3, stride=2, output_padding=1, padding = 1)
+#         self.deconv3 = nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=1, padding = 1)
+#         self.deconv2 = nn.ConvTranspose2d(16, 8, 3, stride=2, output_padding=1, padding = 1)
+#         self.deconv1 = nn.ConvTranspose2d(8, 3, 3, stride=2, output_padding=1, padding = 1)
         
         self.mapping_layer = nn.Conv2d(3,3,1,groups=3) # for each channel a separate filter
 
@@ -40,11 +48,17 @@ class ModelEDNN2D(nn.Module):
         x = self.leakyrelu(self.fc2(x))
         x = x.view(shape)
         
-        x = self.deconv5(x)
-        x = self.deconv4(x)
-        x = self.deconv3(x)
-        x = self.deconv2(x)
-        x = self.deconv1(x)
+        x = self.deconv5(self.upsampling(x))
+        x = self.deconv4(self.upsampling(x))
+        x = self.deconv3(self.upsampling(x))
+        x = self.deconv2(self.upsampling(x))
+        x = self.deconv1(self.upsampling(x))
+
+#         x = self.deconv5(x)
+#         x = self.deconv4(x)
+#         x = self.deconv3(x)
+#         x = self.deconv2(x)
+#         x = self.deconv1(x)
         
         x = self.mapping_layer(x)
 
