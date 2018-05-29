@@ -87,7 +87,7 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
         # print statistics
         running_loss += loss.item()
         if i % plot_every_n_batches == (plot_every_n_batches - 1):    # print every plot_every_n_batches mini-batches
-            print('[%d, %5d] averaged loss: %.3f' %
+            print('[%d, %5d] averaged loss: %.5f' %
                   (epoch + 1, i + 1, running_loss / (plot_every_n_batches - 1)))
             running_loss = 0.0
 
@@ -112,7 +112,7 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
 
         learning_curve[epoch, 0] = train_loss
         learning_curve[epoch, 1] = validation_loss
-        print(('[%d] train loss: %.3f, validation loss: %.3f' %
+        print(('[%d] train loss: %.5f, validation loss: %.5f' %
                       (epoch + 1, train_loss, validation_loss)))
 
 

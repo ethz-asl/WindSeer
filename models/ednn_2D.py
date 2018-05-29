@@ -2,7 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+'''
+Encoder/Decoder Neural Network
 
+1. Five layers of convolution and max pooling up to 128 channels
+2. Two fully connected layers
+3. Five times upsampling followed by convolution
+4. Mapping layer with a separate filter for each output channel
+
+The first input layer is assumed to be is_wind. This value is true for all cells except the terrain.
+'''
 class ModelEDNN2D(nn.Module):
 
     def __init__(self, n_input_layers, interpolation_mode, align_corners):
@@ -36,6 +45,9 @@ class ModelEDNN2D(nn.Module):
         self.mapping_layer = nn.Conv2d(3,3,1,groups=3) # for each channel a separate filter
 
     def forward(self, x):
+        # store the terrain data
+        is_wind = x[:,0, :, :].unsqueeze(1).clone()
+
         x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
         x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
         x = F.max_pool2d(self.leakyrelu(self.conv3(x)), 2)
@@ -47,7 +59,7 @@ class ModelEDNN2D(nn.Module):
         x = self.leakyrelu(self.fc1(x))
         x = self.leakyrelu(self.fc2(x))
         x = x.view(shape)
-        
+
         x = self.deconv5(self.upsampling(x))
         x = self.deconv4(self.upsampling(x))
         x = self.deconv3(self.upsampling(x))
@@ -61,6 +73,9 @@ class ModelEDNN2D(nn.Module):
 #         x = self.deconv1(x)
         
         x = self.mapping_layer(x)
+
+        # multiply the outputs by the terrain boolean
+        x = torch.cat([is_wind, is_wind, is_wind], 1) * x
 
         return x
 
