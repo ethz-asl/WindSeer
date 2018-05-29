@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import models
+import numpy as np
 import time
 import torch
 import torch.nn as nn
@@ -14,8 +15,10 @@ plot_every_n_batches = 10
 n_epochs = 10
 batchsize = 32
 save_model = True
-savepath = 'models/trained_models/ednn_2D_v3_scaled.model'
+save_learning_curve = True
+modelname = 'ednn_2D_scaled_bilinear'
 trainset_name = 'data/converted_train.tar'
+validationset_name = 'data/converted_validation.tar'
 testset_name = 'data/converted_test.tar'
 evaluate_testset = True
 ux_scaling = 9.0
@@ -31,6 +34,12 @@ trainset = utils.MyDataset(trainset_name,  scaling_ux = ux_scaling, scaling_uz =
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=batchsize,
                                           shuffle=True, num_workers=num_workers)
 
+validationset = utils.MyDataset(trainset_name,  scaling_ux = ux_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+
+validationloader = torch.utils.data.DataLoader(validationset, batch_size=1,
+                                          shuffle=False, num_workers=num_workers)
+
+
 #check if gpu is available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('INFO: Start training on device %s' % device)
@@ -43,10 +52,13 @@ net.to(device)
 optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 loss_fn = torch.nn.MSELoss()
 
+learning_curve = np.zeros([n_epochs, 2])
+
 # start the training for n_epochs
 start_time = time.time()
 for epoch in range(n_epochs):  # loop over the dataset multiple times
 
+    epoch_loss = 0.0
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # get the inputs
@@ -65,16 +77,37 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
 
         # print statistics
         running_loss += loss.item()
+        epoch_loss += loss.item()
         if i % plot_every_n_batches == (plot_every_n_batches - 1):    # print every plot_every_n_batches mini-batches
-            print('[%d, %5d] loss: %.3f' %
+            print('[%d, %5d] averaged loss: %.3f' %
                   (epoch + 1, i + 1, running_loss / (plot_every_n_batches - 1)))
             running_loss = 0.0
 
+    with torch.no_grad():
+        epoch_loss /= len(trainloader)
+        validation_loss = 0.0
+        for data in validationloader:
+            inputs, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = net(inputs)
+            loss = loss_fn(outputs, labels)
+            validation_loss += loss.item()
+
+        validation_loss /= len(validationset)
+        learning_curve[epoch, 0] = epoch_loss
+        learning_curve[epoch, 1] = validation_loss
+        print(('[%d] train loss: %.3f, validation loss: %.3f' %
+                      (epoch + 1, epoch_loss, validation_loss)))
+
+
 print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 
-# save the model parameter if requested
+# save the model parameter and learning curve if requested
+if (save_learning_curve):
+    np.save('models/trained_models/' + modelname + '_learningcurve.npy', learning_curve)
+
 if (save_model):
-    torch.save(net.state_dict(), savepath)
+    torch.save(net.state_dict(), 'models/trained_models/' + modelname + '.model')
 
 # evaluate the model performance on the testset if requested
 if (evaluate_testset):
