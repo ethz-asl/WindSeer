@@ -13,7 +13,6 @@ Encoder/Decoder Neural Network
 The first input layer is assumed to be is_wind. This value is true for all cells except the terrain.
 '''
 class ModelEDNN2D(nn.Module):
-
     def __init__(self, n_input_layers, interpolation_mode, align_corners):
         super(ModelEDNN2D, self).__init__()
 
@@ -43,6 +42,20 @@ class ModelEDNN2D(nn.Module):
 #         self.deconv1 = nn.ConvTranspose2d(8, 3, 3, stride=2, output_padding=1, padding = 1)
         
         self.mapping_layer = nn.Conv2d(3,3,1,groups=3) # for each channel a separate filter
+
+    def init_params(self):
+        def printf(m):
+            if (type(m) != type(self)):
+                try:
+                    torch.nn.init.xavier_normal_(m.weight.data)
+                except:
+                    pass
+                try:
+                    torch.nn.init.normal_(m.bias, mean = 0.0, std = 0.02)
+                except:
+                    pass
+
+        self.apply(printf)
 
     def forward(self, x):
         # store the terrain data

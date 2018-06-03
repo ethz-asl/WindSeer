@@ -55,6 +55,7 @@ print('INFO: Start training on device %s' % device)
 
 # define model and move to gpu if available
 net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners)
+net.init_params()
 net.to(device)
 
 # define optimizer and objective
