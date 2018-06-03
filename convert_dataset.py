@@ -11,6 +11,7 @@ from math import trunc
 import numpy as np
 import os
 import pandas as pd
+from scipy import ndimage
 import shutil
 import sys
 import tarfile
@@ -92,13 +93,15 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, verbose = False):
                 turbelence_viscosity_out = wind_data.get('nut').values.reshape([nz, nx])
 
                 # generate the input
-                is_wind_in = wind_data.get('vtkValidPointMask').values.reshape([nz, nx]).astype(np.float32)
+                is_wind_in = ndimage.distance_transform_edt(wind_data.get('vtkValidPointMask').values.reshape([nz, nx])).astype(np.float32)
+
                 u_x_in = np.tile(u_x_out[:,0], [u_x_out.shape[1],1]).transpose()
                 u_z_in = np.tile(u_z_out[:,0], [u_z_out.shape[1],1]).transpose()
 
                 out = np.stack([is_wind_in, u_x_in, u_z_in, u_x_out, u_z_out, turbelence_viscosity_out])
 
                 out_tensor = torch.from_numpy(out)
+
                 torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '.tp')
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
@@ -129,7 +132,7 @@ def main():
     parser.add_argument('-nx', default=128, help='number of gridpoints in x-direction')
     parser.add_argument('-ny', default=128, help='number of gridpoints in y-direction')
     parser.add_argument('-nz', default=64, help='number of gridpoints in z-direction')
-    parser.add_argument('-3d', dest='d3', action='store_true', help='verbose')
+    parser.add_argument('-3d', dest='d3', action='store_true', help='3D input')
     args = parser.parse_args()
 
     if (args.d3):

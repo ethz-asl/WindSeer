@@ -60,6 +60,7 @@ class ModelEDNN2D(nn.Module):
     def forward(self, x):
         # store the terrain data
         is_wind = x[:,0, :, :].unsqueeze(1).clone()
+        is_wind.sign_()
 
         x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
         x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
