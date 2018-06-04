@@ -5,18 +5,25 @@
 |   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
-FoamFile
-{
-    version     2.0;
-    format      ascii;
-    class       dictionary;
-    object      surfaceFeatureExtractDict;
-}
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-bolund.stl
+TERRAIN_DICT
 {
-    #includeEtc "caseDicts/surface/surfaceFeatureExtractDict.cfg"
+    STL_FILE $STL_FILE;
+
+    MCONVERT $MCONVERT;
+
+    MINX $MINX;
+    MAXX $MAXX;
+    MINY $MINY;
+    MAXY $MAXY;
+    MINZ $MINZ;
+    MAXZ $MAXZ;
+
+    GRADE
+    {
+        X { N $NX; S $GX; }
+        Y { N $NY; S $GY; }
+        Z { N $NZ; S $GZ; }
+    }
 }
 
-// ************************************************************************* //

@@ -15,7 +15,7 @@ FoamFile
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 
-#include "terrainDict"
+#include "sliceDict"
 
 castellatedMesh true;
 snap            true;
@@ -23,10 +23,10 @@ addLayers       true;
 
 geometry
 {
-    bolund
+    hill_geometry
     {
         type triSurfaceMesh;
-        file $STL_FILE;
+        file $SLICE_DICT.STL_FILE;
     }
 
 };
@@ -69,7 +69,7 @@ castellatedMeshControls
     // This is a featureEdgeMesh, read from constant/triSurface for now.
     features
     (
-        { file  "bolund.eMesh"; level 2; }
+        // { file  "hill_geometry.eMesh"; level 2; }
     );
 
 
@@ -85,7 +85,7 @@ castellatedMeshControls
 
     refinementSurfaces
     {
-        bolund
+        hill_geometry
         {
             // Surface-wise min and max refinement level
             level (2 4);
@@ -194,7 +194,7 @@ addLayersControls
 
     layers
     {
-        bolund
+        hill_geometry
         {
             nSurfaceLayers 4;
         }

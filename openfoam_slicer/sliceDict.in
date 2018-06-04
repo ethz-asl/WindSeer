@@ -6,53 +6,40 @@
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 
-STL_FILE $STL_FILE;
-
-BLOCKDICT
-{
-    MINX $MINX;
-    MAXX $MAXX;
-    MINY $MINY;
-    MAXY $MAXY;
-    MINZ $MINZ;
-    MAXZ $MAXZ;
-
-    GRADE
-    {
-        X { N $BNX; S $BGX; }
-        Y { N $BNY; S $BGY; }
-        Z { N $BNZ; S $BGZ; }
-    }
-}
+#include "terrainDict"
+SLICEWIDTH 0.1;
 
 SLICEDICT
 {
-    SLICEWIDTH 0.1;
-    MINX $MINX;
-    MAXX $MAXX;
+    // These are mostly unneccessary copies, but make it a bit more readable
+    MCONVERT $TERRAIN_DICT.MCONVERT;
+    STL_FILE $TERRAIN_DICT.STL_FILE;
+
+    MINX $TERRAIN_DICT.MINX;
+    MAXX $TERRAIN_DICT.MAXX;
     MINY YSLICE;
-    MAXY #calc "$MINY+$SLICEWIDTH";
-    MINZ $MINZ;
-    MAXZ $MAXZ;
+    MAXY #calc "$TERRAIN_DICT.MINY+$SLICEWIDTH";
+    MINZ $TERRAIN_DICT.MINZ;
+    MAXZ $TERRAIN_DICT.MAXZ;
 
     GRADE
     {
-        X { N $NX; S $GX; }
+        X { N 300; S   1; }
         Y { N   1; S   1; }
-        Z { N $NZ; S $GZ; }
+        Z { N 128; S   6; }
     }
 
     INPOINT
     {
-        X #calc "($MINX+$MAXX)/2.0";
-        Y #calc "$MINY+$SLICEWIDTH/2.0";
+        X #calc "$SLICEDICT.MINX+$SLICEDICT.MAXX)/2.0";
+        Y #calc "$SLICEDICT.MINY+$SLICEWIDTH/2.0";
         Z #calc "$MAXZ-$SLICEWIDTH";
     }
 
     SUBGRADE
     {
-        X { N $SNX; S $SGX; }
-        Y { N    1; S    1; }
-        Z { N $SNZ; S $SGZ; }
+        X { N 127; S 1; }
+        Y { N   1; S 1; }
+        Z { N  63; S 1; }
     }
 }

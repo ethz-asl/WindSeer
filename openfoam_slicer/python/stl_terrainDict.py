@@ -6,7 +6,7 @@ from stl import mesh
 from string import Template
 
 
-def create_terrainDict(outfile, xyz_lims, nx=10, ny=10, nz=10, infile = './terrainDict.in',
+def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile = './terrainDict.in',
                          mconvert=1.0, in_buffer=0.0, gx=1, gy=1, gz=1, quiet=False):
     xyz_lims = np.array(xyz_lims)
     dx, dy, dz = [h - l for l, h in xyz_lims]
@@ -17,7 +17,8 @@ def create_terrainDict(outfile, xyz_lims, nx=10, ny=10, nz=10, infile = './terra
                 'MINY': '{0:0.4f}'.format(ly), 'MAXY': '{0:0.4f}'.format(hy),
                 'MINZ': '{0:0.4f}'.format(lz), 'MAXZ': '{0:0.4f}'.format(hz),
                 'NX': '{0:d}'.format(nx), 'NY': '{0:d}'.format(ny), 'NZ': '{0:d}'.format(nz),
-                'MCONVERT': '{0:0.2f}'.format(mconvert), 'GX': gx, 'GY': gy, 'GZ': gz}
+                'MCONVERT': '{0:0.2f}'.format(mconvert), 'GX': gx, 'GY': gy, 'GZ': gz,
+                'STL_FILE': stl_file}
 
     if not quiet:
         print "Creating outfile {0} from {1}".format(outfile, infile)
@@ -31,10 +32,10 @@ def create_terrainDict(outfile, xyz_lims, nx=10, ny=10, nz=10, infile = './terra
         out_fh.write(mesh_dict)
 
 
-def generate_terrainDict(stl_file, block_mesh, infile='terrainDict.in', nx=128, ny=128, nz=128, pad_z=3.0):
+def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', nx=128, ny=128, nz=128, pad_z=3.0):
 
-    if os.path.basename(block_mesh) is not 'terrainDict':
-        print "Warning: Specified output \"{0}\" should be a terrainDict file".format(block_mesh)
+    if os.path.basename(dict_out) is not 'terrainDict':
+        print "Warning: Specified output \"{0}\" should be a terrainDict file".format(dict_out)
 
     hill_mesh = mesh.Mesh.from_file(stl_file)
 
@@ -48,14 +49,16 @@ def generate_terrainDict(stl_file, block_mesh, infile='terrainDict.in', nx=128, 
     lims[2, 1] = lims[2, 0] + pad_z*(lims[2, 1] - lims[2, 0])
 
     bmesh_extras = {'nx': nx, 'ny': ny, 'nz': nz, 'infile': infile}
-    create_terrainDict(block_mesh, lims, **bmesh_extras)
+    create_terrainDict(dict_out, lims, stl_out, **bmesh_extras)
+    hill_mesh.save(stl_out)
     return lims
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate terrainDict from stl file')
-    parser.add_argument('-s', '--stl', required=True, help='Input stl file')
-    parser.add_argument('-o', '--block-mesh-out', required=True, help='Output block mesh file')
-    parser.add_argument('-in', '--block-mesh-in', default='terrainDict.in', help='Input block mesh file (usually .in)')
+    parser.add_argument('-si', '--stl-in', required=True, help='Input stl file')
+    parser.add_argument('-so', '--stl-out', required=False, default=None, help='Output stl file')
+    parser.add_argument('-do', '--dict-out', required=True, help='Output dictionary file')
+    parser.add_argument('-di', '--dict-in', default='terrainDict.in', help='Input dictionary file (usually .in)')
     parser.add_argument('-nx', type=int, default=128,
                         help='Number of points in x direction (uniform)')
     parser.add_argument('-ny', type=int, default=128,
@@ -63,7 +66,8 @@ if __name__ == "__main__":
     parser.add_argument('-nz', type=int, default=64,
                         help='Number of points in z direction (uniform)')
     parser.add_argument('-pz', '--pad-z', type=float, default=3.0, help='Multiples of terrain height to add above mesh')
-    parser.add_argument('-L', )
     args = parser.parse_args()
 
-    generate_terrainDict(args.stl, args.block_mesh_out, args.block_mesh_in, nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z)
+    generate_terrainDict(stl_file=args.stl_in, dict_out=args.dict_out,
+                         stl_out=args.stl_out,
+                         infile=args.dict_in, nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z)
