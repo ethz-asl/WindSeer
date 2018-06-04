@@ -93,16 +93,31 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, verbose = False):
                 turbelence_viscosity_out = wind_data.get('nut').values.reshape([nz, nx])
 
                 # generate the input
-                is_wind_in = ndimage.distance_transform_edt(wind_data.get('vtkValidPointMask').values.reshape([nz, nx])).astype(np.float32)
+                distance_field_in = ndimage.distance_transform_edt(wind_data.get('vtkValidPointMask').values.reshape([nz, nx])).astype(np.float32)
 
                 u_x_in = np.tile(u_x_out[:,0], [u_x_out.shape[1],1]).transpose()
                 u_z_in = np.tile(u_z_out[:,0], [u_z_out.shape[1],1]).transpose()
 
-                out = np.stack([is_wind_in, u_x_in, u_z_in, u_x_out, u_z_out, turbelence_viscosity_out])
+                out = np.stack([distance_field_in, u_x_in, u_z_in, u_x_out, u_z_out, turbelence_viscosity_out])
 
                 out_tensor = torch.from_numpy(out)
 
                 torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '.tp')
+
+                # generate the flipped flow
+                u_x_out_flipped = np.flip(u_x_out,1) * (-1.0)
+                u_z_out_flipped = np.flip(u_z_out,1)
+                turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,1)
+
+                u_x_in_flipped = np.flip(u_x_in,1) * (-1.0)
+                u_z_in_flipped = np.flip(u_z_in,1)
+                distance_field_in_flipped = np.flip(distance_field_in,1)
+
+                out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_z_in_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+
+                out_tensor_flipped = torch.from_numpy(out_flipped)
+
+                torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped.tp')
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
             print(trunc((i+1)/num_files*100), '%')
