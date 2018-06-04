@@ -1,12 +1,13 @@
 #!/usr/bin/python
 import os
+import sys
 import numpy as np
 import argparse
 from stl import mesh
 from string import Template
 
 
-def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile = './terrainDict.in',
+def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile='./terrainDict.in',
                          mconvert=1.0, in_buffer=0.0, gx=1, gy=1, gz=1, quiet=False):
     xyz_lims = np.array(xyz_lims)
     dx, dy, dz = [h - l for l, h in xyz_lims]
@@ -34,8 +35,8 @@ def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile 
 
 def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', nx=128, ny=128, nz=128, pad_z=3.0):
 
-    if os.path.basename(dict_out) is not 'terrainDict':
-        print "Warning: Specified output \"{0}\" should be a terrainDict file".format(dict_out)
+    # if os.path.basename(dict_out) is not 'terrainDict':
+    #     print "Warning: Specified output \"{0}\" should be a terrainDict file".format(dict_out)
 
     hill_mesh = mesh.Mesh.from_file(stl_file)
 
@@ -48,10 +49,11 @@ def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', n
     lims[:, 1] = hill_mesh.max_
     lims[2, 1] = lims[2, 0] + pad_z*(lims[2, 1] - lims[2, 0])
 
-    bmesh_extras = {'nx': nx, 'ny': ny, 'nz': nz, 'infile': infile}
+    bmesh_extras = {'nx': nx, 'ny': ny, 'nz': nz, 'infile': infile, 'quiet': True}
     create_terrainDict(dict_out, lims, stl_out, **bmesh_extras)
     hill_mesh.save(stl_out)
     return lims
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate terrainDict from stl file')
@@ -68,6 +70,6 @@ if __name__ == "__main__":
     parser.add_argument('-pz', '--pad-z', type=float, default=3.0, help='Multiples of terrain height to add above mesh')
     args = parser.parse_args()
 
-    generate_terrainDict(stl_file=args.stl_in, dict_out=args.dict_out,
-                         stl_out=args.stl_out,
-                         infile=args.dict_in, nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z)
+    lims = generate_terrainDict(stl_file=args.stl_in, dict_out=args.dict_out, stl_out=args.stl_out,
+                                infile=args.dict_in, nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z)
+    print '{0:0.2f} {1:0.2f}'.format(lims[1, 0], lims[1, 1])

@@ -4,149 +4,166 @@
 OPTIND=1
 
 # Default values
-stl_dir=stl
-base_directory="base_case/simpleFoam"
-NY=100
+stl_dir="stl/"
+base_directory="base_case/"
+NY=2
+DW=20
+HOMEDIR=$(pwd)
 
 usage() { echo "Usage: $0 [-s stl_dir -b base_dir -n n_slices]" 1>&2; exit 0; }
 
-while getopts "h?s:b:n:" opt; do
+while getopts ":s:b:n:" opt; do
     case "$opt" in
-        h?)
-            usage
-            ;;
         s)  stl_dir=$OPTARG
             ;;
         b)  base_directory=$OPTARG
             ;;
         n)  NY=$OPTARG
+            ;;
+        *)
+            usage
+            ;;
     esac
 done
 
-sys_dirs=(constant system)
 constant_files=(transportProperties turbulenceProperties)
 system_files=(controlDict fvSchemes fvSolution)
+BASECASES=$HOMEDIR/$base_directory
 
 create_base_case()
 {
     # Argument 1 is the case name directory, arg 2 is the file source
-    for d in ${sys_dirs[@]}; do
-        mkdir -p $1/${d}
-        s_files=${d}_files
-        for i in ${s_files[@]}; do
-            ln -s $2/${d}/${i} $1/${d}/${i}
-        done
+    mkdir -p $1/system
+    for i in ${system_files[@]}; do
+        ln -s $2/system/$i $1/system/$i
+    done
+    
+    mkdir -p $1/constant
+    for i in ${constant_files[@]}; do
+        ln -s $2/constant/$i $1/constant/$i
     done
 }
 
 # Loop over stl files, create new directory for each case
-for stl_file in "${stl_dir}/*.stl"; do
+for stl_file in ${stl_dir}/*.stl; do
     basename=$(basename -- "$stl_file")
     extension="${basename##*.}"
     casename="${basename%.*}"
     
     echo "Creating new case ${casename} based on ${stl_file}"
-    mkdir ${casename}
+    CASEDIR=${HOMEDIR}/${casename}
+    mkdir $CASEDIR
+
+    SIMPLEDIR="${CASEDIR}/simpleFoam"
+    SNAPPYDIR="${CASEDIR}/snappyHexMesh"
+    GRIDDIR="${CASEDIR}/reGrid"
 
     # Use python script to generate new stl file (reset origin) and terrainDict
-    python python/stl_terrainDict.py -si ${stl_file} -so ${casename}/${casename}.stl \
-        -do ${casename}/terrainDict --pad-z 3.0
+    # Y limits should be only thing printed (bit dodge though...)
+    YLIMS=$(python python/stl_terrainDict.py -si ${stl_file} -so ${CASEDIR}/${casename}.stl \
+        -do ${CASEDIR}/terrainDict --pad-z 3.0)
+    echo "YLIMS = ${YLIMS}"
+    YLIMS=($YLIMS)      #<- This converts string to array to access elements ${YLIMS[i]}
     
-    # Create snappy directory for generating mesh
-    create_base_case ${casename}/snappyHexMesh ${base_directory}
-    ln -s ${base_directory}/snappyHexMesh/system/blockMeshDict \
-        ${casename}/snappyHexMesh/system/blockMeshDict
-    ln -s ${base_directory}/snappyHexMesh/system/snappyHexMeshDict \
-        ${casename}/snappyHexMesh/system/snappyHexMeshDict
-
+    touch ${CASEDIR}/sliceDict
+    
     # Create simpleFoam directory for running simpleFoam
+    create_base_case $SIMPLEDIR $BASECASES/base
+    ln -s $BASECASES/simpleFoam/system/extrudeMeshDict \
+        $SIMPLEDIR/system/extrudeMeshDict
+    ln -s ${CASEDIR}/terrainDict $SIMPLEDIR/system/terrainDict
+    ln -s ${CASEDIR}/sliceDict $SIMPLEDIR/system/sliceDict
 
-    # Create system directories, symlink the constant files
-    for d in ${sys_dirs[@]}; do
-        mkdir -p ${casename}/${d}
-        s_files=${d}_files
-        for i in ${s_files[@]}; do
-            ln -s ${base_directory}/${d}/${i} ${casename}/${d}/${i}
-        done
-    done
+    # Create snappy directory for generating mesh
+    create_base_case $SNAPPYDIR $BASECASES/base
+    ln -s $BASECASES/snappyHexMesh/system/blockMeshDict \
+        $SNAPPYDIR/system/blockMeshDict
+    ln -s $BASECASES/snappyHexMesh/system/snappyHexMeshDict \
+        $SNAPPYDIR/system/snappyHexMeshDict
+    ln -s ${CASEDIR}/terrainDict $SNAPPYDIR/system/terrainDict
+    ln -s ${CASEDIR}/sliceDict $SNAPPYDIR/system/sliceDict
 
-done 
-YLO=-65.00
-YHI=45.00
-NY=110
-DW=1
+    # Create reGrid directory for output resampling onto regular grid
+    create_base_case $GRIDDIR $HOMEDIR/${base_directory}/base
+    ln -s $BASECASES/reGrid/system/blockMeshDict \
+        $GRIDDIR/system/blockMeshDict
 
-DY=$(echo "scale=2; ($YHI - $YLO) / $NY" | bc)
-CY=$YLO
-BASEDIR=$(pwd)
-echo "Running from BASEDIR:${BASEDIR}, NY=${NY}, DY=${DY}, DW=${DW}"
+   
+    # ------ SLICING ------#
+    # Now we have created all the base runs, start slicing
+    YLO=${YLIMS[0]}
+    YHI=${YLIMS[1]}
 
+    DY=$(echo "scale=2; ($YHI - $YLO) / $NY" | bc)
+    CY=$YLO
 
-SIMPLEDIR="${BASEDIR}/bolund_simpleFoam"
-SNAPPYDIR="${BASEDIR}/bolund_snappyHexMesh"
-GRIDDIR="${BASEDIR}/bolund_testgrid"
+    cd ${CASEDIR}
+    echo "Running from CASEDIR:${CASEDIR}, NY=${NY}, DY=${DY}, DW=${DW}"
 
-# Loop over CY positions
-for (( i=0; i<=$NY; i++))
-do
-    echo -n "Current slice: Y=$CY, building mesh..."
-    sed "s/YSLICE/${CY}/" $SIMPLEDIR/system/sliceDict.in > $SIMPLEDIR/system/sliceDict
-    cd $SNAPPYDIR
-    blockMesh > blockMesh.log
-    snappyHexMesh -overwrite > snappyHexMesh.log
-
-    cd $SIMPLEDIR
-    extrudeMesh > extrudeMesh.log
-
-    YDIR="${BASEDIR}/YS${CY}"
-
-    mkdir $YDIR
-    cd $YDIR
-    cp -r $SIMPLEDIR/constant/polyMesh $YDIR
-    echo " done."
-    
-    echo -n "Building resampled (regular) mesh for final output..."
-    cd $GRIDDIR
-    ./Allclean
-    blockMesh > blockMesh.log
-    touch testgrid.foam
-    echo " done."
-
-    # Loop over wind speeds
-    for (( w=1; w<=15; w+=$DW))
+    # Loop over CY positions
+    for (( i=0; i<=$NY; i++))
     do
-        WDIR="${YDIR}/W${w}"
-        # Create system folder, symlinks from base case
-        mkdir -p $WDIR/system
-        cd $WDIR/system
-        ln -s $SIMPLEDIR/system/controlDict controlDict
-        ln -s $SIMPLEDIR/system/fvSolution fvSolution
-        ln -s $SIMPLEDIR/system/fvSchemes fvSchemes
+        echo -n "Current slice: Y=$CY, building mesh..."
+        sed "s/YSLICE/${CY}/" $HOMEDIR/sliceDict.in > $CASEDIR/sliceDict
 
-        # Create constant, symlink control files and polymesh
-        mkdir -p $WDIR/constant
-        cd $WDIR/constant
-        ln -s $SIMPLEDIR/constant/transportProperties transportProperties
-        ln -s $SIMPLEDIR/constant/turbulenceProperties turbulenceProperties
-        ln -s $YDIR/polyMesh polyMesh
+        cd $SNAPPYDIR
+        blockMesh > blockMesh.log
+        snappyHexMesh -overwrite > snappyHexMesh.log
+
+        cd $SIMPLEDIR
+        extrudeMesh > extrudeMesh.log
+
+        YDIR="${CASEDIR}/YS${CY}"
+
+        mkdir $YDIR
+        cd $YDIR
+        cp -r $SIMPLEDIR/constant/polyMesh $YDIR
+        echo " done."
         
-        # Copy initial conditions, change wind speed
-        cd $WDIR
-        cp -r $SIMPLEDIR/0.orig $WDIR/0
-        sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
-        echo -n "Case setup complete: Y=$CY, W=$w, running simpleFoam..."
-        simpleFoam > simpleFoam.log
-        echo " done."
-        cd $WDIR
-        touch bolund.foam
-
-        echo -n "Resampling grid onto test grid..."
-        printf -v CSVFILE "Y%+04.0fW%02d.csv" $CY $w
-        python "${GRIDDIR}/resample.py" --case-dir $WDIR --mesh-dir $GRIDDIR --outfile $CSVFILE
+        echo -n "Building resampled (regular) mesh for final output..."
+        cd $GRIDDIR
+        ./Allclean
+        blockMesh > blockMesh.log
+        touch testgrid.foam
         echo " done."
 
+        # Loop over wind speeds
+        for (( w=1; w<=15; w+=$DW))
+        do
+            WDIR="${YDIR}/W${w}"
+            # Create system folder, symlinks from base case
+            mkdir -p $WDIR/system
+            cd $WDIR/system
+            ln -s $SIMPLEDIR/system/controlDict controlDict
+            ln -s $SIMPLEDIR/system/fvSolution fvSolution
+            ln -s $SIMPLEDIR/system/fvSchemes fvSchemes
+
+            # Create constant, symlink control files and polymesh
+            mkdir -p $WDIR/constant
+            cd $WDIR/constant
+            ln -s $SIMPLEDIR/constant/transportProperties transportProperties
+            ln -s $SIMPLEDIR/constant/turbulenceProperties turbulenceProperties
+            ln -s $YDIR/polyMesh polyMesh
+            
+            # Copy initial conditions, change wind speed
+            cd $WDIR
+            cp -r $SIMPLEDIR/0.orig $WDIR/0
+            sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
+            echo -n "Case setup complete: Y=$CY, W=$w, running simpleFoam..."
+            simpleFoam > simpleFoam.log
+            echo " done."
+            cd $WDIR
+            touch bolund.foam
+
+            echo -n "Resampling grid onto test grid..."
+            printf -v CSVFILE "Y%+04.0fW%02d.csv" $CY $w
+            python "${HOMEDIR}/python/resample.py" --case-dir $WDIR --mesh-dir $GRIDDIR --outfile $CSVFILE
+            echo " done."
+
+        done
+        CY=$(echo "scale=4; $CY + $DY" | bc)
+        cd $CASEDIR
     done
-    CY=$(echo "scale=4; $CY + $DY" | bc)
-    cd $BASEDIR
+    echo "All slices complete."
+    cd $HOMEDIR
 done
-echo "All slices complete."
