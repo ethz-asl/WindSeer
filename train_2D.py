@@ -21,6 +21,7 @@ num_workers = 4
 save_model = True
 save_learning_curve = True
 evaluate_testset = True
+warm_start = False
 
 # dataset parameter
 trainset_name = 'data/converted_train.tar'
@@ -55,7 +56,12 @@ print('INFO: Start training on device %s' % device)
 
 # define model and move to gpu if available
 net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners)
-net.init_params()
+
+if (warm_start):
+    net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))
+else:
+    net.init_params()
+
 net.to(device)
 
 # define optimizer and objective
