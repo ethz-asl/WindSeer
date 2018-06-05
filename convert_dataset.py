@@ -93,7 +93,10 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, verbose = False):
                 turbelence_viscosity_out = wind_data.get('nut').values.reshape([nz, nx])
 
                 # generate the input
-                distance_field_in = ndimage.distance_transform_edt(wind_data.get('vtkValidPointMask').values.reshape([nz, nx])).astype(np.float32)
+                is_wind = wind_data.get('vtkValidPointMask').values.reshape([nz, nx]).astype(np.float32)
+                is_wind = np.insert(is_wind, 0, np.zeros((1, nx)), axis = 0)
+                distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
+                distance_field_in = distance_field_in[1:,:]
 
                 u_x_in = np.tile(u_x_out[:,0], [u_x_out.shape[1],1]).transpose()
                 u_z_in = np.tile(u_z_out[:,0], [u_z_out.shape[1],1]).transpose()
