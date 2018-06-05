@@ -22,6 +22,7 @@ save_model = True
 save_learning_curve = True
 evaluate_testset = True
 warm_start = False
+custom_loss = False
 
 # dataset parameter
 trainset_name = 'data/converted_train.tar'
@@ -66,8 +67,11 @@ net.to(device)
 
 # define optimizer and objective
 optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
-#loss_fn = torch.nn.MSELoss()
-loss_fn = utils.MyLoss(device)
+
+if custom_loss:
+    loss_fn = utils.MyLoss(device)
+else:
+    loss_fn = torch.nn.MSELoss()
 
 # initialize variable to store the learning curve
 learning_curve = np.zeros([n_epochs, 2])
