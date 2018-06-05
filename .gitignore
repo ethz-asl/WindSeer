@@ -10,3 +10,5 @@ bolund2D/bolund_simpleFoam/system/sliceDict
 tf_test/data/
 tmp/
 tf_test/fig/
+openfoam_slicer/csv
+openfoam_slicer/cases

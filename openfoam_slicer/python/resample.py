@@ -11,7 +11,7 @@ parser.add_argument('-cf', '--case-foam', default='bolund.foam',
 parser.add_argument('-cm', '--mesh-foam', default='testgrid.foam',
     help='Test grid foam file (in mesh dir)')
 parser.add_argument('-o', '--outfile', default='structured_mesh.csv',
-    help='Output csv file (will be in case dir)')
+    help='Output csv file')
 args = parser.parse_args()
 
 # create a new 'OpenFOAMReader'
@@ -40,4 +40,4 @@ resampleWithDataset1 = ResampleWithDataset(Input=inputfoam,
 resampleWithDataset1.Tolerance = 2.22044604925031e-16
 
 # save data
-SaveData(os.path.join(args.case_dir, args.outfile), proxy=resampleWithDataset1)
+SaveData(args.outfile, proxy=resampleWithDataset1)

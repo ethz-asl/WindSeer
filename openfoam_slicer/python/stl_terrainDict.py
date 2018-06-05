@@ -19,7 +19,7 @@ def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile=
                 'MINZ': '{0:0.4f}'.format(lz), 'MAXZ': '{0:0.4f}'.format(hz),
                 'NX': '{0:d}'.format(nx), 'NY': '{0:d}'.format(ny), 'NZ': '{0:d}'.format(nz),
                 'MCONVERT': '{0:0.2f}'.format(mconvert), 'GX': gx, 'GY': gy, 'GZ': gz,
-                'STL_FILE': stl_file}
+                'STL_FILE': '"{0}"'.format(os.path.basename(stl_file))}
 
     if not quiet:
         print "Creating outfile {0} from {1}".format(outfile, infile)

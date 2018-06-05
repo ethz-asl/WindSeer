@@ -5,20 +5,25 @@ OPTIND=1
 
 # Default values
 stl_dir="stl/"
-base_directory="base_case/"
+base_dir="base_case/"
+csv_dir="csv/"
 NY=2
 DW=20
 HOMEDIR=$(pwd)
 
-usage() { echo "Usage: $0 [-s stl_dir -b base_dir -n n_slices]" 1>&2; exit 0; }
+usage() { echo "Usage: $0 [-s stl_dir -c csv_dir -b base_dir -n n_slices -w delta_wind]" 1>&2; exit 0; }
 
-while getopts ":s:b:n:" opt; do
+while getopts ":s:c:b:n:w:" opt; do
     case "$opt" in
         s)  stl_dir=$OPTARG
             ;;
-        b)  base_directory=$OPTARG
+        c)  csv_dir=$OPTARG
+            ;;
+        b)  base_dir=$OPTARG
             ;;
         n)  NY=$OPTARG
+            ;;
+        w)  DW=$OPTARG
             ;;
         *)
             usage
@@ -28,19 +33,21 @@ done
 
 constant_files=(transportProperties turbulenceProperties)
 system_files=(controlDict fvSchemes fvSolution)
-BASECASES=$HOMEDIR/$base_directory
+BASECASES=$HOMEDIR/$base_dir
+mkdir -p $csv_dir
 
 create_base_case()
 {
+    local f
     # Argument 1 is the case name directory, arg 2 is the file source
     mkdir -p $1/system
-    for i in ${system_files[@]}; do
-        ln -s $2/system/$i $1/system/$i
+    for f in ${system_files[@]}; do
+        ln -s $2/system/$f $1/system/$f
     done
     
     mkdir -p $1/constant
-    for i in ${constant_files[@]}; do
-        ln -s $2/constant/$i $1/constant/$i
+    for f in ${constant_files[@]}; do
+        ln -s $2/constant/$f $1/constant/$f
     done
 }
 
@@ -51,16 +58,17 @@ for stl_file in ${stl_dir}/*.stl; do
     casename="${basename%.*}"
     
     echo "Creating new case ${casename} based on ${stl_file}"
-    CASEDIR=${HOMEDIR}/${casename}
-    mkdir $CASEDIR
+    CASEDIR=${HOMEDIR}/cases/${casename}
+    mkdir -p $CASEDIR
 
     SIMPLEDIR="${CASEDIR}/simpleFoam"
     SNAPPYDIR="${CASEDIR}/snappyHexMesh"
     GRIDDIR="${CASEDIR}/reGrid"
+    STLOUT="${CASEDIR}/${casename}.stl"
 
     # Use python script to generate new stl file (reset origin) and terrainDict
     # Y limits should be only thing printed (bit dodge though...)
-    YLIMS=$(python python/stl_terrainDict.py -si ${stl_file} -so ${CASEDIR}/${casename}.stl \
+    YLIMS=$(python python/stl_terrainDict.py -si ${stl_file} -so ${STLOUT} \
         -do ${CASEDIR}/terrainDict --pad-z 3.0)
     echo "YLIMS = ${YLIMS}"
     YLIMS=($YLIMS)      #<- This converts string to array to access elements ${YLIMS[i]}
@@ -76,6 +84,8 @@ for stl_file in ${stl_dir}/*.stl; do
 
     # Create snappy directory for generating mesh
     create_base_case $SNAPPYDIR $BASECASES/base
+    mkdir -p $SNAPPYDIR/constant/triSurface
+    ln -s $STLOUT $SNAPPYDIR/constant/triSurface/${casename}.stl
     ln -s $BASECASES/snappyHexMesh/system/blockMeshDict \
         $SNAPPYDIR/system/blockMeshDict
     ln -s $BASECASES/snappyHexMesh/system/snappyHexMeshDict \
@@ -84,10 +94,12 @@ for stl_file in ${stl_dir}/*.stl; do
     ln -s ${CASEDIR}/sliceDict $SNAPPYDIR/system/sliceDict
 
     # Create reGrid directory for output resampling onto regular grid
-    create_base_case $GRIDDIR $HOMEDIR/${base_directory}/base
+    create_base_case $GRIDDIR $BASECASES/base
     ln -s $BASECASES/reGrid/system/blockMeshDict \
         $GRIDDIR/system/blockMeshDict
-
+    ln -s ${CASEDIR}/terrainDict $GRIDDIR/system/terrainDict
+    ln -s ${CASEDIR}/sliceDict $GRIDDIR/system/sliceDict
+    ln -s $BASECASES/reGrid/Allclean $GRIDDIR/Allclean
    
     # ------ SLICING ------#
     # Now we have created all the base runs, start slicing
@@ -101,9 +113,8 @@ for stl_file in ${stl_dir}/*.stl; do
     echo "Running from CASEDIR:${CASEDIR}, NY=${NY}, DY=${DY}, DW=${DW}"
 
     # Loop over CY positions
-    for (( i=0; i<=$NY; i++))
-    do
-        echo -n "Current slice: Y=$CY, building mesh..."
+    for (( yi=0; yi<$NY; yi++)); do
+        echo -n "Slice $(($yi+1))/$NY: Y=$CY, building mesh..."
         sed "s/YSLICE/${CY}/" $HOMEDIR/sliceDict.in > $CASEDIR/sliceDict
 
         cd $SNAPPYDIR
@@ -128,42 +139,33 @@ for stl_file in ${stl_dir}/*.stl; do
         echo " done."
 
         # Loop over wind speeds
-        for (( w=1; w<=15; w+=$DW))
-        do
+        for (( w=1; w<=15; w+=$DW)); do
             WDIR="${YDIR}/W${w}"
             # Create system folder, symlinks from base case
-            mkdir -p $WDIR/system
-            cd $WDIR/system
-            ln -s $SIMPLEDIR/system/controlDict controlDict
-            ln -s $SIMPLEDIR/system/fvSolution fvSolution
-            ln -s $SIMPLEDIR/system/fvSchemes fvSchemes
-
-            # Create constant, symlink control files and polymesh
-            mkdir -p $WDIR/constant
-            cd $WDIR/constant
-            ln -s $SIMPLEDIR/constant/transportProperties transportProperties
-            ln -s $SIMPLEDIR/constant/turbulenceProperties turbulenceProperties
-            ln -s $YDIR/polyMesh polyMesh
+            create_base_case $WDIR $BASECASES/base
+            ln -s $YDIR/polyMesh $WDIR/constant/polyMesh
             
             # Copy initial conditions, change wind speed
             cd $WDIR
-            cp -r $SIMPLEDIR/0.orig $WDIR/0
+            cp -r $BASECASES/simpleFoam/0.orig $WDIR/0
             sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
             echo -n "Case setup complete: Y=$CY, W=$w, running simpleFoam..."
             simpleFoam > simpleFoam.log
             echo " done."
             cd $WDIR
-            touch bolund.foam
+            touch hill.foam
 
             echo -n "Resampling grid onto test grid..."
-            printf -v CSVFILE "Y%+04.0fW%02d.csv" $CY $w
-            python "${HOMEDIR}/python/resample.py" --case-dir $WDIR --mesh-dir $GRIDDIR --outfile $CSVFILE
+            printf -v CSVFILE "%s_Y%+04.0fW%02d.csv" $casename $CY $w
+            python "${HOMEDIR}/python/resample.py" --case-dir $WDIR --mesh-dir $GRIDDIR \
+                --outfile "$HOMEDIR/$csv_dir/$CSVFILE"
             echo " done."
-
         done
+
         CY=$(echo "scale=4; $CY + $DY" | bc)
         cd $CASEDIR
     done
     echo "All slices complete."
     cd $HOMEDIR
 done
+

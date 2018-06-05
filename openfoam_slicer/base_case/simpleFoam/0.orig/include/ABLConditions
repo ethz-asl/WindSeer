@@ -11,7 +11,7 @@ Zref                 10;
 zDir                 (0 0 1);
 flowDir              (1 0 0);
 z0                   uniform 0.1;
-zGround              uniform 0.75;
+zGround              uniform 0.0;
 value                $internalField;
 
 // ************************************************************************* //

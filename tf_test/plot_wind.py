@@ -49,7 +49,7 @@ def plot_input_output(wind_in, wind_out):
 
 
 if __name__ == "__main__":
-    wind = rw.read_wind_csv('data/Y+001W150.csv')
+    wind = rw.read_wind_csv('/home/nick/src/intel_wind/openfoam_slicer/csv/hill1_downsized_Y+196W140.csv')
     wind_in = rw.build_input_from_output(wind)
 
     fig, ax = plot_data(wind)

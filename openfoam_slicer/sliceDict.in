@@ -7,20 +7,21 @@
 \*---------------------------------------------------------------------------*/
 
 #include "terrainDict"
-SLICEWIDTH 0.1;
 
 SLICEDICT
 {
+    SLICEWIDTH 0.1;
+    
     // These are mostly unneccessary copies, but make it a bit more readable
-    MCONVERT $TERRAIN_DICT.MCONVERT;
-    STL_FILE $TERRAIN_DICT.STL_FILE;
+    MCONVERT $:TERRAIN_DICT.MCONVERT;
+    STL_FILE $:TERRAIN_DICT.STL_FILE;
 
-    MINX $TERRAIN_DICT.MINX;
-    MAXX $TERRAIN_DICT.MAXX;
+    MINX $:TERRAIN_DICT.MINX;
+    MAXX $:TERRAIN_DICT.MAXX;
     MINY YSLICE;
-    MAXY #calc "$TERRAIN_DICT.MINY+$SLICEWIDTH";
-    MINZ $TERRAIN_DICT.MINZ;
-    MAXZ $TERRAIN_DICT.MAXZ;
+    MAXY #calc "$MINY+$SLICEWIDTH";
+    MINZ $:TERRAIN_DICT.MINZ;
+    MAXZ $:TERRAIN_DICT.MAXZ;
 
     GRADE
     {
@@ -31,8 +32,8 @@ SLICEDICT
 
     INPOINT
     {
-        X #calc "$SLICEDICT.MINX+$SLICEDICT.MAXX)/2.0";
-        Y #calc "$SLICEDICT.MINY+$SLICEWIDTH/2.0";
+        X #calc "($MINX+$MAXX)/2.0";
+        Y #calc "$MINY+$SLICEWIDTH/2.0";
         Z #calc "$MAXZ-$SLICEWIDTH";
     }
 
