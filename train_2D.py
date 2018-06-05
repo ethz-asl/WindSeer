@@ -66,7 +66,8 @@ net.to(device)
 
 # define optimizer and objective
 optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
-loss_fn = torch.nn.MSELoss()
+#loss_fn = torch.nn.MSELoss()
+loss_fn = utils.MyLoss(device)
 
 # initialize variable to store the learning curve
 learning_curve = np.zeros([n_epochs, 2])
