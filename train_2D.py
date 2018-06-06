@@ -30,13 +30,14 @@ validationset_name = 'data/converted_validation.tar'
 testset_name = 'data/converted_test.tar'
 
 # model parameter
-model_name = 'ednn_2D_scaled_bilinear'
+model_name = 'ednn_2D_scaled_bilinear_skipping'
 ux_scaling = 9.0
 uz_scaling = 2.5
 turbulence_scaling = 4.5
 interpolation_mode = 'bilinear'
 align_corners = True
 number_input_layers = 3
+skipping = True
 # --------------------------------------------------------------------------
 
 # define dataset and dataloader
@@ -56,7 +57,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('INFO: Start training on device %s' % device)
 
 # define model and move to gpu if available
-net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners)
+net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners, skipping = skipping)
 
 if (warm_start):
     net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))
@@ -145,7 +146,8 @@ if (save_model):
         'turbulence_scaling': turbulence_scaling,
         'interpolation_mode': interpolation_mode,
         'align_corners': align_corners,
-        'number_input_layers': number_input_layers
+        'number_input_layers': number_input_layers,
+        'skipping': skipping
         }
     np.save('models/trained_models/' + model_name + '_params.npy', model_params)
 

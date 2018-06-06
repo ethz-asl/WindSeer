@@ -13,7 +13,7 @@ Encoder/Decoder Neural Network
 The first input layer is assumed to be is_wind. This value is true for all cells except the terrain.
 '''
 class ModelEDNN2D(nn.Module):
-    def __init__(self, n_input_layers, interpolation_mode, align_corners):
+    def __init__(self, n_input_layers, interpolation_mode, align_corners, skipping):
         super(ModelEDNN2D, self).__init__()
 
         self.conv1 = nn.Conv2d(n_input_layers, 8, 3, padding = 1)
@@ -32,17 +32,24 @@ class ModelEDNN2D(nn.Module):
         else:
             self.upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode)
 
-        self.deconv5 = nn.Conv2d(128, 64, 3, padding = 1)
-        self.deconv4 = nn.Conv2d(64, 32, 3, padding = 1)
-        self.deconv3 = nn.Conv2d(32, 16, 3, padding = 1)
-        self.deconv2 = nn.Conv2d(16, 8, 3, padding = 1)
-        self.deconv1 = nn.Conv2d(8, 3, 3, padding = 1)
-
-#         self.deconv5 = nn.ConvTranspose2d(128, 64, 3, stride=2, output_padding=1, padding = 1)
-#         self.deconv4 = nn.ConvTranspose2d(64, 32, 3, stride=2, output_padding=1, padding = 1)
-#         self.deconv3 = nn.ConvTranspose2d(32, 16, 3, stride=2, output_padding=1, padding = 1)
-#         self.deconv2 = nn.ConvTranspose2d(16, 8, 3, stride=2, output_padding=1, padding = 1)
-#         self.deconv1 = nn.ConvTranspose2d(8, 3, 3, stride=2, output_padding=1, padding = 1)
+        self.skipping = skipping
+        if (skipping):
+            self.deconv51 = nn.Conv2d(256, 128, 3, padding = 1)
+            self.deconv52 = nn.Conv2d(128, 64, 3, padding = 1)
+            self.deconv41 = nn.Conv2d(128, 64, 3, padding = 1)
+            self.deconv42 = nn.Conv2d(64, 32, 3, padding = 1)
+            self.deconv31 = nn.Conv2d(64, 32, 3, padding = 1)
+            self.deconv32 = nn.Conv2d(32, 16, 3, padding = 1)
+            self.deconv21 = nn.Conv2d(32, 16, 3, padding = 1)
+            self.deconv22 = nn.Conv2d(16, 8, 3, padding = 1)
+            self.deconv11 = nn.Conv2d(16, 8, 3, padding = 1)
+            self.deconv12 = nn.Conv2d(8, 3, 3, padding = 1)
+        else:
+            self.deconv5 = nn.Conv2d(128, 64, 3, padding = 1)
+            self.deconv4 = nn.Conv2d(64, 32, 3, padding = 1)
+            self.deconv3 = nn.Conv2d(32, 16, 3, padding = 1)
+            self.deconv2 = nn.Conv2d(16, 8, 3, padding = 1)
+            self.deconv1 = nn.Conv2d(8, 3, 3, padding = 1)
 
         self.mapping_layer = nn.Conv2d(3,3,1,groups=3) # for each channel a separate filter
 
@@ -65,11 +72,23 @@ class ModelEDNN2D(nn.Module):
         is_wind = x[:,0, :, :].unsqueeze(1).clone()
         is_wind.sign_()
 
-        x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
-        x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
-        x = F.max_pool2d(self.leakyrelu(self.conv3(x)), 2)
-        x = F.max_pool2d(self.leakyrelu(self.conv4(x)), 2)
-        x = F.max_pool2d(self.leakyrelu(self.conv5(x)), 2)
+        if (self.skipping):
+            x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
+            x1 = x.clone()
+            x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
+            x2 = x.clone()
+            x = F.max_pool2d(self.leakyrelu(self.conv3(x)), 2)
+            x3 = x.clone()
+            x = F.max_pool2d(self.leakyrelu(self.conv4(x)), 2)
+            x4 = x.clone()
+            x = F.max_pool2d(self.leakyrelu(self.conv5(x)), 2)
+            x5 = x.clone()
+        else:
+            x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv3(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv4(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv5(x)), 2)
 
         shape = x.size()
         x = x.view(-1, self.num_flat_features(x))
@@ -77,18 +96,19 @@ class ModelEDNN2D(nn.Module):
         x = self.leakyrelu(self.fc2(x))
         x = x.view(shape)
 
-        x = self.deconv5(self.upsampling(x))
-        x = self.deconv4(self.upsampling(x))
-        x = self.deconv3(self.upsampling(x))
-        x = self.deconv2(self.upsampling(x))
-        x = self.deconv1(self.upsampling(x))
+        if (self.skipping):
+            x = self.deconv52(self.deconv51(self.upsampling(torch.cat([x5, x], 1))))
+            x = self.deconv42(self.deconv41(self.upsampling(torch.cat([x4, x], 1))))
+            x = self.deconv32(self.deconv31(self.upsampling(torch.cat([x3, x], 1))))
+            x = self.deconv22(self.deconv21(self.upsampling(torch.cat([x2, x], 1))))
+            x = self.deconv12(self.deconv11(self.upsampling(torch.cat([x1, x], 1))))
+        else:
+            x = self.deconv5(self.upsampling(x))
+            x = self.deconv4(self.upsampling(x))
+            x = self.deconv3(self.upsampling(x))
+            x = self.deconv2(self.upsampling(x))
+            x = self.deconv1(self.upsampling(x))
 
-#         x = self.deconv5(x)
-#         x = self.deconv4(x)
-#         x = self.deconv3(x)
-#         x = self.deconv2(x)
-#         x = self.deconv1(x)
-        
         x = self.mapping_layer(x)
 
         # multiply the outputs by the terrain boolean
