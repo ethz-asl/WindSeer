@@ -1,7 +1,7 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  5                                     |
+|  \\    /   O peration     | Version:  2.2.2                                 |
 |   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
@@ -11,35 +11,32 @@ FoamFile
     format      ascii;
     class       volScalarField;
     location    "0";
-    object      epsilon;
+    object      nut;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-epsilonInlet  0.02; // Cmu^0.75 * k^1.5 / L ; L =10
+dimensions      [0 2 -1 0 0 0 0];
 
-dimensions      [0 2 -3 0 0 0 0];
-
-internalField   uniform 1;
+internalField   uniform 0;
 
 boundaryField
 {
     inlet
     {
-        type            atmBoundaryLayerInletEpsilon;
-        #include        "include/ABLConditions"
+        type            calculated;
+        value           uniform 0;
     }
 
     outlet
     {
-        type            inletOutlet;
-        inletValue      uniform $epsilonInlet;
-        value           uniform $epsilonInlet;
+        type            calculated;
+        value           uniform 0;
     }
 
     wall
     {
-        type            epsilonWallFunction;
-        value           uniform $epsilonInlet;
+        type            nutkWallFunction;
+        value           uniform 0;
     }
     
     #includeEtc "caseDicts/setConstraintTypes"

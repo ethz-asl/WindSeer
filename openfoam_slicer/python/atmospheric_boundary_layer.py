@@ -27,3 +27,4 @@ ah[0].set_xlabel('Wind speed (m/s)')
 ah[1].set_xlabel('Epsilon')
 print 'U* = {1}, k = {0}'.format(k, U_star)
 plt.show(block=False)
+

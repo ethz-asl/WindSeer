@@ -34,6 +34,7 @@ done
 constant_files=(transportProperties turbulenceProperties)
 system_files=(controlDict fvSchemes fvSolution)
 BASECASES=$HOMEDIR/$base_dir
+PYDIR=$HOMEDIR/python
 mkdir -p $csv_dir
 
 create_base_case()
@@ -140,6 +141,10 @@ for stl_file in ${stl_dir}/*.stl; do
 
         # Loop over wind speeds
         for (( w=1; w<=15; w+=$DW)); do
+
+            # Calculate k, epsilon
+            K_EPS=($(python $PYDIR/abl_k_epsilon.py -U $w))
+
             WDIR="${YDIR}/W${w}"
             # Create system folder, symlinks from base case
             create_base_case $WDIR $BASECASES/base
@@ -147,8 +152,10 @@ for stl_file in ${stl_dir}/*.stl; do
             
             # Copy initial conditions, change wind speed
             cd $WDIR
-            cp -r $BASECASES/simpleFoam/0.orig $WDIR/0
+            cp -r $BASECASES/simpleFoam/0.orig.k_eps $WDIR/0
             sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
+            sed -i "s/INLETK/${K_EPS[0]}/" 0/k
+            sed -i "s/INLETEPSILON/${K_EPS[1]}/" 0/epsilon
             echo -n "Case setup complete: Y=$CY, W=$w, running simpleFoam..."
             simpleFoam > simpleFoam.log
             echo " done."
