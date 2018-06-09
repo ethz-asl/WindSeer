@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import glob
 import os
+import argparse
 
 WINDNX = 128
 WINDNZ = 64
@@ -80,7 +81,7 @@ def build_tf_dataset(directory):
 
 
 def move_junk_data(in_directory, junk_directory, thresh=1.0e4):
-    all_files = glob.glob(in_directory+'/Y*.csv')
+    all_files = glob.glob(in_directory+'/*.csv')
     n_files = len(all_files)
     junked_files = 0
     for i, wind_csv in enumerate(all_files):
@@ -114,4 +115,8 @@ def feeder_tf_dataset(directory):
 
 
 if __name__ == "__main__":
-    move_junk_data('data/train', 'data/junk')
+    parser = argparse.ArgumentParser(description='Generate terrainDict from stl file')
+    parser.add_argument('-i', '--input-dir', required=False, default='data/train', help='Input directory of csv files')
+    parser.add_argument('-j', '--junk-dir', required=False, default='data/junk', help='Destination directory for junk')
+    args = parser.parse_args()
+    move_junk_data(args.input_dir, args.junk_dir)

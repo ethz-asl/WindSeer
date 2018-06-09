@@ -15,7 +15,7 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-kInlet          INLETK;   // 0.375 // approx k = 1.5*(I*U)^2 ; I = 0.1
+kInlet          1.5;   // 0.375 // approx k = 1.5*(I*U)^2 ; I = 0.1
 
 dimensions      [0 2 -2 0 0 0 0];
 
@@ -23,16 +23,12 @@ internalField   uniform $kInlet;
 
 boundaryField
 {
-    /*inlet
-    {
-        type            atmBoundaryLayerInletK;
-        #include        "include/ABLConditions"
-    }*/
     inlet
     {
-        type            fixedValue;
+        type            inletOutlet;
+        inletValue      uniform $kInlet;
         value           uniform $kInlet;
-    }
+    }  
     outlet
     {
         type            inletOutlet;
