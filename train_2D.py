@@ -25,12 +25,12 @@ warm_start = False
 custom_loss = False
 
 # dataset parameter
-trainset_name = 'data/converted_train.tar'
-validationset_name = 'data/converted_validation.tar'
-testset_name = 'data/converted_test.tar'
+trainset_name = 'data/converted_train_new.tar'
+validationset_name = 'data/converted_validation_new.tar'
+testset_name = 'data/converted_test_new.tar'
 
 # model parameter
-model_name = 'ednn_2D_scaled_bilinear_skipping'
+model_name = 'ednn_2D_scaled_bilinear_skipping_new'
 ux_scaling = 9.0
 uz_scaling = 2.5
 turbulence_scaling = 4.5

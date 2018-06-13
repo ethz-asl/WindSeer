@@ -43,15 +43,15 @@ class ModelEDNN2D(nn.Module):
             self.deconv21 = nn.Conv2d(32, 16, 3, padding = 1)
             self.deconv22 = nn.Conv2d(16, 8, 3, padding = 1)
             self.deconv11 = nn.Conv2d(16, 8, 3, padding = 1)
-            self.deconv12 = nn.Conv2d(8, 3, 3, padding = 1)
+            self.deconv12 = nn.Conv2d(8, 2, 3, padding = 1)
         else:
             self.deconv5 = nn.Conv2d(128, 64, 3, padding = 1)
             self.deconv4 = nn.Conv2d(64, 32, 3, padding = 1)
             self.deconv3 = nn.Conv2d(32, 16, 3, padding = 1)
             self.deconv2 = nn.Conv2d(16, 8, 3, padding = 1)
-            self.deconv1 = nn.Conv2d(8, 3, 3, padding = 1)
+            self.deconv1 = nn.Conv2d(8, 2, 3, padding = 1)
 
-        self.mapping_layer = nn.Conv2d(3,3,1,groups=3) # for each channel a separate filter
+        self.mapping_layer = nn.Conv2d(2,2,1,groups=2) # for each channel a separate filter
 
     def init_params(self):
         def printf(m):
@@ -112,7 +112,8 @@ class ModelEDNN2D(nn.Module):
         x = self.mapping_layer(x)
 
         # multiply the outputs by the terrain boolean
-        x = torch.cat([is_wind, is_wind, is_wind], 1) * x
+        #x = torch.cat([is_wind, is_wind, is_wind], 1) * x
+        x = torch.cat([is_wind, is_wind], 1) * x
 
         return x
 

@@ -31,14 +31,14 @@ class MyDataset(Dataset):
 
         # split into input output
         input = data[:3, :, :]
-        output = data[3:, :, :]
+        output = data[3:5, :, :]
 
         # apply scaling
         input[1, :, :] /= self.__scaling_ux
         input[2, :, :] /= self.__scaling_uz
         output[0, :, :] /= self.__scaling_ux
         output[1, :, :] /= self.__scaling_uz
-        output[2, :, :] /= self.__scaling_nut
+        #output[2, :, :] /= self.__scaling_nut
 
         return input, output
 

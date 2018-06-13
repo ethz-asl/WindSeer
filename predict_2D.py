@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader
 import utils
 
 # ---- Params --------------------------------------------------------------
-dataset = 'data/converted_test.tar'
-index = 3 # plot the prediction for the following sample in the set
-model_name = 'ednn_2D_scaled_bilinear'
+dataset = 'data/converted_test_new.tar'
+index = 12 # plot the prediction for the following sample in the set
+model_name = 'ednn_2D_scaled_bilinear_skipping_new'
 
 # --------------------------------------------------------------------------
 
@@ -26,7 +26,7 @@ testset = utils.MyDataset(dataset, scaling_ux = params['ux_scaling'], scaling_uz
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
-net = models.ModelEDNN2D(params['number_input_layers'], params['interpolation_mode'], params['align_corners'])
+net = models.ModelEDNN2D(params['number_input_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'])
 net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))
 net.to(device)
 
@@ -46,12 +46,12 @@ with torch.no_grad():
         loss += loss_fn(outputs, labels)
         loss_ux += loss_fn(outputs[0,0,:,:], labels[0,0,:,:])
         loss_uz += loss_fn(outputs[0,1,:,:], labels[0,1,:,:])
-        loss_nut += loss_fn(outputs[0,2,:,:], labels[0,2,:,:])
+        #loss_nut += loss_fn(outputs[0,2,:,:], labels[0,2,:,:])
 
     print('INFO: Average loss on test set: %s' % (loss.item()/len(testset)))
     print('INFO: Average loss on test set for ux: %s' % (loss_ux.item()/len(testset)))
     print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(testset)))
-    print('INFO: Average loss on test set for turbulence: %s' % (loss_nut.item()/len(testset)))
+    #print('INFO: Average loss on test set for turbulence: %s' % (loss_nut.item()/len(testset)))
 
     # plot prediction
     input, label = testset[index]
@@ -62,12 +62,12 @@ with torch.no_grad():
 
     error = label - output
     
-    fh_in, ah_in = plt.subplots(3, 3)
+    fh_in, ah_in = plt.subplots(2, 3)
     fh_in.set_size_inches([6.2, 10.2])
 
     h_ux_lab = ah_in[0][0].imshow(label[0,:,:], origin='lower', vmin=label[0,:,:].min(), vmax=label[0,:,:].max())
     h_ux_out = ah_in[0][1].imshow(output[0,:,:], origin='lower', vmin=label[0,:,:].min(), vmax=label[0,:,:].max())
-    h_ux_err = ah_in[0][2].imshow(error[0,:,:], origin='lower', vmin=error[0,:,:].min(), vmax=error[0,:,:].max())
+    h_ux_err = ah_in[0][2].imshow(error[0,4:-4,4:-4], origin='lower', vmin=error[0,4:-4,4:-4].min(), vmax=error[0,4:-4,4:-4].max())
     ah_in[0][0].set_title('Ux in')
     ah_in[0][1].set_title('Ux predicted')
     ah_in[0][2].set_title('Ux error')
@@ -77,22 +77,22 @@ with torch.no_grad():
     
     h_uz_lab = ah_in[1][0].imshow(label[1,:,:], origin='lower', vmin=label[1,:,:].min(), vmax=label[1,:,:].max())
     h_uz_out = ah_in[1][1].imshow(output[1,:,:], origin='lower', vmin=label[1,:,:].min(), vmax=label[1,:,:].max())
-    h_uz_err = ah_in[1][2].imshow(error[1,:,:], origin='lower', vmin=error[1,:,:].min(), vmax=error[1,:,:].max())
+    h_uz_err = ah_in[1][2].imshow(error[1,4:-4,4:-4], origin='lower', vmin=error[1,4:-4,4:-4].min(), vmax=error[1,4:-4,4:-4].max())
     ah_in[1][0].set_title('Uz in')
     ah_in[1][1].set_title('Uz predicted')
-    ah_in[1][2].set_title('Uz predicted')
+    ah_in[1][2].set_title('Uz error')
     fh_in.colorbar(h_uz_lab, ax=ah_in[1][0])
     fh_in.colorbar(h_uz_out, ax=ah_in[1][1])
     fh_in.colorbar(h_uz_err, ax=ah_in[1][2])
     
-    h_turb_lab = ah_in[2][0].imshow(label[2,:,:], origin='lower', vmin=label[2,:,:].min(), vmax=label[2,:,:].max())
-    h_turb_out = ah_in[2][1].imshow(output[2,:,:], origin='lower', vmin=label[2,:,:].min(), vmax=label[2,:,:].max())
-    h_turb_err = ah_in[2][2].imshow(error[2,:,:], origin='lower', vmin=error[2,:,:].min(), vmax=error[2,:,:].max())
-    ah_in[2][0].set_title('Turbulence viscosity in')
-    ah_in[2][1].set_title('Turbulence viscosity predicted')
-    ah_in[2][2].set_title('Turbulence viscosity error')
-    fh_in.colorbar(h_turb_lab, ax=ah_in[2][0])
-    fh_in.colorbar(h_turb_out, ax=ah_in[2][1])
-    fh_in.colorbar(h_turb_err, ax=ah_in[2][2])
+#     h_turb_lab = ah_in[2][0].imshow(label[2,:,:], origin='lower', vmin=label[2,:,:].min(), vmax=label[2,:,:].max())
+#     h_turb_out = ah_in[2][1].imshow(output[2,:,:], origin='lower', vmin=label[2,:,:].min(), vmax=label[2,:,:].max())
+#     h_turb_err = ah_in[2][2].imshow(error[2,4:-4,4:-4], origin='lower', vmin=error[2,4:-4,4:-4].min(), vmax=error[2,4:-4,4:-4].max())
+#     ah_in[2][0].set_title('Turbulence viscosity in')
+#     ah_in[2][1].set_title('Turbulence viscosity predicted')
+#     ah_in[2][2].set_title('Turbulence viscosity error')
+#     fh_in.colorbar(h_turb_lab, ax=ah_in[2][0])
+#     fh_in.colorbar(h_turb_out, ax=ah_in[2][1])
+#     fh_in.colorbar(h_turb_err, ax=ah_in[2][2])
     
     plt.show()
