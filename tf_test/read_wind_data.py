@@ -4,6 +4,7 @@ import pandas as pd
 import glob
 import os
 import argparse
+from __future__ import print_function
 
 WINDNX = 128
 WINDNZ = 64
@@ -24,7 +25,7 @@ def read_wind_csv(infile):
              "Points:2": np.float32}
     wind_data = pd.read_csv(infile, dtype=types)
     if 'U:0' not in wind_data.keys():
-        print 'U:0 not in {0}'.format(infile)
+        print('U:0 not in {0}'.format(infile))
         raise IOError
     # wind_data.drop(['U:1', 'Points:1'], axis=1)     # Get rid of y data
     # For some reason the rename doesn't work
@@ -89,18 +90,18 @@ def move_junk_data(in_directory, junk_directory, thresh=1.0e4):
         try:
             wind_out = read_wind_csv(wind_csv)
         except IOError:
-            print "{0}: File read failed (IOError), moving to junk".format(fname)
-            os.rename(wind_csv, os.path.join(junk_directory, fname))
             junked_files += 1
+            print("{0}: File read failed (IOError), moving to junk. Junked ratio {n}/{t}".format(fname, n=junked_files, t=n_files))
+            os.rename(wind_csv, os.path.join(junk_directory, fname))
             continue
 
         data_max = wind_out.max()
         data_min = wind_out.min()
         if (data_max['U:0'] > thresh) or (data_max['U:2'] > thresh) or (data_min['U:0'] < -thresh) or (data_min['U:2'] < -thresh):
-            print "{0}: Value outside threshold, moving to junk.".format(fname)
-            os.rename(wind_csv, os.path.join(junk_directory, fname))
             junked_files += 1
-    print "{0} files processed, {1} sent to junk".format(n_files, junked_files)
+            print("{0}: Value outside threshold, moving to junk. Junked ratio {n}/{t}".format(fname, n=junked_files, t=n_files))
+            os.rename(wind_csv, os.path.join(junk_directory, fname))
+    print("{0} files processed, {1} sent to junk".format(n_files, junked_files))
 
 
         # get('U:0')

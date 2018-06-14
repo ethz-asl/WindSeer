@@ -1,5 +1,7 @@
+from __future__ import print_function
+
 #### import the simple module from the paraview
-from paraview.simple import *
+import paraview.simple as para
 import os.path
 import argparse
 
@@ -10,34 +12,32 @@ parser.add_argument('-cf', '--case-foam', default='bolund.foam',
     help='Input case foam file (in case dir)')
 parser.add_argument('-cm', '--mesh-foam', default='testgrid.foam',
     help='Test grid foam file (in mesh dir)')
-parser.add_argument('-o', '--outfile', default='structured_mesh.csv',
-    help='Output csv file')
+parser.add_argument('-o', '--outfile', default='structured_mesh',
+    help='Output csv file (without file extension)')
 args = parser.parse_args()
 
 # create a new 'OpenFOAMReader'
-inputfoam = OpenFOAMReader(FileName=os.path.join(args.case_dir, args.case_foam), SkipZeroTime=True)
-inputfoam.MeshRegions = ['internalMesh']
+inputfoam = para.OpenFOAMReader(FileName=os.path.join(args.case_dir, args.case_foam), SkipZeroTime=True)
+inputfoam.MeshRegions = ['north_face']
 inputfoam.CellArrays = ['U', 'epsilon', 'k', 'nut', 'p']
 
-# Properties modified on inputfoam
-inputfoam.MeshRegions = ['north_face']
-
 # create a new 'OpenFOAMReader'
-testgridfoam = OpenFOAMReader(FileName=os.path.join(args.mesh_dir, args.mesh_foam))
-testgridfoam.MeshRegions = ['internalMesh']
-
-# Properties modified on testgridfoam
+testgridfoam = para.OpenFOAMReader(FileName=os.path.join(args.mesh_dir, args.mesh_foam))
 testgridfoam.MeshRegions = ['south_face']
 
-# set active source
-SetActiveSource(inputfoam)
+for t in inputfoam.TimestepValues:
+    inputfoam.UpdatePipeline(time=t)
+    tfile = args.outfile+'_t{0:04.0f}.csv'.format(t)
+    print("Output file set to {0}".format(tfile))
 
-# create a new 'Resample With Dataset'
-resampleWithDataset1 = ResampleWithDataset(Input=inputfoam,
-    Source=testgridfoam)
+    # set active source
+    para.SetActiveSource(inputfoam)
 
-# Properties modified on resampleWithDataset1
-resampleWithDataset1.Tolerance = 2.22044604925031e-16
+    # create a new 'Resample With Dataset'
+    resampleWithDataset1 = para.ResampleWithDataset(Input=inputfoam, Source=testgridfoam)
 
-# save data
-SaveData(args.outfile, proxy=resampleWithDataset1)
+    # Properties modified on resampleWithDataset1
+    resampleWithDataset1.Tolerance = 2.22044604925031e-16
+
+    # save data
+    para.SaveData(tfile, proxy=resampleWithDataset1)

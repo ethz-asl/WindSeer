@@ -10,10 +10,24 @@ csv_dir="csv/"
 NY=2
 DW=20
 HOMEDIR=$(pwd)
+ENDITER=-1
+WRITEITER=-1
 
-usage() { echo "Usage: $0 [-s stl_dir -c csv_dir -b base_dir -n n_slices -w delta_wind]" 1>&2; exit 0; }
+usage() { 
+    echo -e "Usage: $0 [OPTION]"
+    echo -e "  -s stl_dir\n\tDirectory of stl files"
+    echo -e "  -c csv_dir\n\tDirectory to output csv files"
+    echo -e "  -b base_dir\n\tlocation of base case directory"
+    echo -e "  -n n_slices\n\tNumber of terrain slices per stl file"
+    echo -e "  -w delta_wind\n\tWind step size \(w=1:delta_wind:15\)"
+    echo -e "  -e end_time"
+    echo -e "\tendTime for simpleFoam (default to existing value from controlDict)"
+    echo -e "  -i write_interval"
+    echo -e "\twriteInterval for simpleFoam (default to existing value from controlDict)"
+    exit 0;
+}
 
-while getopts ":s:c:b:n:w:" opt; do
+while getopts ":s:c:b:n:w:e:i:" opt; do
     case "$opt" in
         s)  stl_dir=$OPTARG
             ;;
@@ -24,6 +38,10 @@ while getopts ":s:c:b:n:w:" opt; do
         n)  NY=$OPTARG
             ;;
         w)  DW=$OPTARG
+            ;;
+        e)  ENDITER=$OPTARG
+            ;;
+        i)  WRITEITER=$OPTARG
             ;;
         *)
             usage
@@ -149,9 +167,16 @@ for stl_file in ${stl_dir}/*.stl; do
             # Create system folder, symlinks from base case
             create_base_case $WDIR $BASECASES/base
             ln -s $YDIR/polyMesh $WDIR/constant/polyMesh
-            
+
             # Copy initial conditions, change wind speed
             cd $WDIR
+            if [ $ENDITER -gt 0 ]; then
+                sed -i -e "s/endTime\s\{1,\}[0-9]*/endTime\t${ENDITER}/g" system/controlDict
+            fi
+            if [ $WRITEITER -gt 0 ]; then
+                sed -i -e "s/writeInterval\s\{1,\}[0-9]*/writeInterval\t${WRITEITER}/g" system/controlDict
+            fi
+
             cp -r $BASECASES/simpleFoam/0.orig.k_eps $WDIR/0
             sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
             sed -i "s/INLETK/${K_EPS[0]}/" 0/k
@@ -163,9 +188,9 @@ for stl_file in ${stl_dir}/*.stl; do
             touch hill.foam
 
             echo -n "Resampling grid onto test grid..."
-            printf -v CSVFILE "%s_Y%+04.0fW%02d.csv" $casename $CY $w
+            printf -v CSVFILE "%s_Y%+04.0fW%02d" $casename $CY $w
             python "${HOMEDIR}/python/resample.py" --case-dir $WDIR --mesh-dir $GRIDDIR \
-                --outfile "$HOMEDIR/$csv_dir/$CSVFILE"
+                --case-foam hill.foam --outfile "$HOMEDIR/$csv_dir/$CSVFILE"
             echo " done."
         done
 
