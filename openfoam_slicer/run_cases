@@ -4,7 +4,6 @@
 OPTIND=1
 
 # Default values
-stl_dir="stl/"
 base_dir="base_case/"
 csv_dir="csv/"
 NY=2
@@ -14,8 +13,7 @@ ENDITER=-1
 WRITEITER=-1
 
 usage() { 
-    echo -e "Usage: $0 [OPTION] stl_file1 stl_file2 ..."
-    # echo -e "  -s stl_dir\n\tDirectory of stl files"
+    echo -e "Usage: $0 [OPTION] stl_dir0 stl_dir1 ..."
     echo -e "  -c csv_dir\n\tDirectory to output csv files"
     echo -e "  -b base_dir\n\tlocation of base case directory"
     echo -e "  -n n_slices\n\tNumber of terrain slices per stl file"
@@ -31,7 +29,6 @@ usage() {
 
 while getopts "c:b:n:w:e:i:h" opt; do
     case "$opt" in
-        # s)  stl_dir=$OPTARG ;;
         c)  csv_dir=$OPTARG
             ;;
         b)  base_dir=$OPTARG
@@ -56,7 +53,7 @@ if [ "$#" -lt 1 ]; then
     usage
 fi
 
-# The remaining arguments are the csv files
+# The remaining arguments are the stl files
 constant_files=(transportProperties turbulenceProperties)
 system_files=(controlDict fvSchemes fvSolution)
 BASECASES=$HOMEDIR/$base_dir
@@ -78,13 +75,34 @@ create_base_case()
     done
 }
 
-# Loop over stl files, create new directory for each case
-for stl_file in "$@"; do
-    basename=$(basename -- "$stl_file")
-    extension="${basename##*.}"
-    casename="${basename%.*}"
+check_files()
+{
+    local return_value
+    return_value=0
     
-    echo "Creating new case ${casename} based on ${stl_file}"
+    for file in "$@"; do
+        if [ ! -f $file ]; then
+            echo "Required file $file not found."
+            return_value=1
+        fi
+    done
+    return $return_value
+}
+
+# Loop over case_directories, create new directory for each case
+for stl_dir in "$@"; do
+    casename=$(basename -- "$stl_dir")
+    stl_file=${stl_dir}/${casename}.stl
+    terrainDict_file=${stl_dir}/terrainDict
+    ylim_file=${stl_dir}/YLIMS
+    
+    check_files $stl_file $terrainDict_file $ylim_file
+    if [ $? -gt 0 ]; then
+        echo "Case file not found, skipping case $casename"
+        continue
+    fi
+    
+    echo "Creating new case ${casename} based on ${stl_dir}"
     CASEDIR=${HOMEDIR}/cases/${casename}
     mkdir -p $CASEDIR
 
@@ -93,12 +111,11 @@ for stl_file in "$@"; do
     GRIDDIR="${CASEDIR}/reGrid"
     STLOUT="${CASEDIR}/${casename}.stl"
 
-    # Use python script to generate new stl file (reset origin) and terrainDict
-    # Y limits should be only thing printed (bit dodge though...)
-    YLIMS=$(python python/stl_terrainDict.py -si ${stl_file} -so ${STLOUT} \
-        -do ${CASEDIR}/terrainDict --pad-z 3.0)
-    echo "YLIMS = ${YLIMS}"
-    YLIMS=($YLIMS)      #<- This converts string to array to access elements ${YLIMS[i]}
+    cp $stl_file $STLOUT
+    cp $terrainDict_file ${CASEDIR}/terrainDict
+    
+    # Get YLIMS as an array to access elements ${YLIMS[i]}
+    YLIMS=( $( < $ylim_file ) )    
     
     touch ${CASEDIR}/sliceDict
     

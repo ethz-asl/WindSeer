@@ -1,0 +1,177 @@
+#!/bin/bash
+
+# Set up some stuff for getopts
+OPTIND=1
+
+# Default values
+stl_dir="stl/"
+base_dir="base_case3d/"
+csv_dir="csv3d/"
+DW=20
+HOMEDIR=$(pwd)
+ENDITER=-1
+WRITEITER=-1
+
+usage() { 
+    echo -e "Usage: $0 [OPTION] stl_file1 stl_file2 ..."
+    # echo -e "  -s stl_dir\n\tDirectory of stl files"
+    echo -e "  -c csv_dir\n\tDirectory to output csv files"
+    echo -e "  -b base_dir\n\tlocation of base case directory"
+    echo -e "  -w delta_wind\n\tWind step size \(w=1:delta_wind:15\)"
+    echo -e "  -e end_time"
+    echo -e "\tendTime for simpleFoam (default to existing value from controlDict)"
+    echo -e "  -i write_interval"
+    echo -e "\twriteInterval for simpleFoam (default to existing value from controlDict)"
+    echo -e "  -h"
+    echo -e "\tprint this help and exit"
+    exit 0;
+}
+
+while getopts "c:b:w:e:i:h" opt; do
+    case "$opt" in
+        # s)  stl_dir=$OPTARG ;;
+        c)  csv_dir=$OPTARG
+            ;;
+        b)  base_dir=$OPTARG
+            ;;
+        w)  DW=$OPTARG
+            ;;
+        e)  ENDITER=$OPTARG
+            ;;
+        i)  WRITEITER=$OPTARG
+            ;;
+        h | *)
+            usage
+            ;;
+    esac
+done
+shift $(expr $OPTIND - 1 )
+
+if [ "$#" -lt 1 ]; then
+    echo "ERROR: No stl files supplied"
+    usage
+fi
+
+# The remaining arguments are the csv files
+constant_files=(transportProperties turbulenceProperties)
+system_files=(controlDict fvSchemes fvSolution)
+BASECASES=$HOMEDIR/$base_dir
+PYDIR=$HOMEDIR/python
+mkdir -p $csv_dir
+
+create_base_case()
+{
+    local f
+    # Argument 1 is the case name directory, arg 2 is the file source
+    mkdir -p $1/system
+    for f in ${system_files[@]}; do
+        ln -s $2/system/$f $1/system/$f
+    done
+    
+    mkdir -p $1/constant
+    for f in ${constant_files[@]}; do
+        ln -s $2/constant/$f $1/constant/$f
+    done
+}
+
+# Loop over stl files, create new directory for each case
+for stl_file in "$@"; do
+    basename=$(basename -- "$stl_file")
+    extension="${basename##*.}"
+    casename="${basename%.*}"
+    
+    echo "Creating new case ${casename} based on ${stl_file}"
+    CASEDIR=${HOMEDIR}/cases3d/${casename}
+    mkdir -p $CASEDIR
+
+    SIMPLEDIR="${CASEDIR}/simpleFoam"
+    GRIDDIR="${CASEDIR}/reGrid"
+    STLOUT="${CASEDIR}/${casename}.stl"
+
+    # Use python script to generate new stl file (reset origin) and terrainDict
+    # Y limits should be only thing printed (bit dodge though...)
+    YLIMS=$(python python/stl_terrainDict.py -si ${stl_file} -so ${STLOUT} \
+        -do ${CASEDIR}/terrainDict --pad-z 3.0)
+    echo "YLIMS = ${YLIMS}"
+    YLIMS=($YLIMS)      #<- This converts string to array to access elements ${YLIMS[i]}
+    
+    
+    # Create simpleFoam directory for running simpleFoam
+    create_base_case $SIMPLEDIR $BASECASES/base
+    ln -s ${CASEDIR}/terrainDict $SIMPLEDIR/system/terrainDict
+
+    mkdir -p $SIMPLEDIR/constant/triSurface
+    ln -s $STLOUT $SIMPLEDIR/constant/triSurface/${casename}.stl
+    ln -s $BASECASES/simpleFoam/system/blockMeshDict \
+        $SIMPLEDIR/system/blockMeshDict
+    ln -s $BASECASES/simpleFoam/system/snappyHexMeshDict \
+        $SIMPLEDIR/system/snappyHexMeshDict
+
+    # Create reGrid directory for output resampling onto regular grid
+    create_base_case $GRIDDIR $BASECASES/base
+    ln -s $BASECASES/reGrid/system/blockMeshDict \
+        $GRIDDIR/system/blockMeshDict
+    ln -s ${CASEDIR}/terrainDict $GRIDDIR/system/terrainDict
+    ln -s $BASECASES/reGrid/Allclean $GRIDDIR/Allclean
+   
+
+    # Build mesh
+    echo -ne "\tBuilding mesh..."
+    cd $SIMPLEDIR
+
+    blockMesh > blockMesh.log 2> blockMesh.err
+    snappyHexMesh -overwrite > snappyHexMesh.log 
+
+    echo " done."
+
+    echo -en "\tBuilding resampled (regular) mesh for final output..."
+    cd $GRIDDIR
+    ./Allclean
+    blockMesh > blockMesh.log 2> blockMesh.err
+    touch testgrid.foam
+    echo " done."
+
+    # Loop over wind speeds
+    for (( w=1; w<=15; w+=$DW )); do
+
+        # Calculate k, epsilon
+        K_EPS=($(python $PYDIR/abl_k_epsilon.py -U $w))
+
+        WDIR="${CASEDIR}/W${w}"
+        # Create system folder, symlinks from base case
+        create_base_case $WDIR $BASECASES/base
+        ln -s ${SIMPLEDIR}/constant/polyMesh $WDIR/constant/polyMesh
+
+        # Copy initial conditions, change wind speed
+        cd $WDIR
+        if [ $ENDITER -gt 0 ]; then
+            sed -i -e "s/endTime\s\{1,\}[0-9]*/endTime\t${ENDITER}/g" system/controlDict
+        fi
+        if [ $WRITEITER -gt 0 ]; then
+            sed -i -e "s/writeInterval\s\{1,\}[0-9]*/writeInterval\t${WRITEITER}/g" system/controlDict
+        fi
+
+        cp -r $BASECASES/simpleFoam/0.orig.k_eps $WDIR/0
+        sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
+        sed -i "s/INLETK/${K_EPS[0]}/" 0/k
+        sed -i "s/INLETEPSILON/${K_EPS[1]}/" 0/epsilon
+        echo -en "\tCase setup complete: W=$w, running simpleFoam..."
+        simpleFoam > simpleFoam.log 2> simpleFoam.err
+        if [ "$?" -gt 0 ]; then
+            echo " failed. Moving to next case"
+        else
+            echo " done."
+            cd $WDIR
+            touch hill.foam
+
+            echo -n "Resampling grid onto test grid..."
+            printf -v CSVFILE "%s_W%02d" $casename $w
+            python "${HOMEDIR}/python/resample.py" --three-d --case-dir $WDIR --mesh-dir $GRIDDIR \
+                --case-foam hill.foam --outfile "$HOMEDIR/$csv_dir/$CSVFILE"
+            echo " done."
+        fi
+    done
+
+    cd $HOMEDIR
+done
+

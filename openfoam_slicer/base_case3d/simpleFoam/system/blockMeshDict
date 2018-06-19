@@ -48,7 +48,7 @@ boundary
 (
     north_face
     {
-        type empty;
+        type symmetryPlane;
         inGroups (frontAndBack);
         faces
         (
@@ -75,7 +75,7 @@ boundary
     }
     south_face
     {
-        type empty;
+        type symmetryPlane;
         inGroups (frontAndBack);
         faces
         (
