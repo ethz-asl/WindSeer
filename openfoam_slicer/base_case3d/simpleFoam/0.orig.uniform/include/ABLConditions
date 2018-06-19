@@ -6,31 +6,12 @@
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 
-TERRAIN_DICT
-{
-    STL_FILE $STL_FILE;
+Uref                 WINDSPEED;
+Zref                 20.0;
+zDir                 (0 0 1);
+flowDir              (1 0 0);
+z0                   uniform 0.1;
+zGround              uniform 0.0;
+value                $internalField;
 
-    MCONVERT $MCONVERT;
-
-    MINX $MINX;
-    MAXX $MAXX;
-    MINY $MINY;
-    MAXY $MAXY;
-    MINZ $MINZ;
-    MAXZ $MAXZ;
-
-    GRADE
-    {
-        X { N $NX; S $GX; }
-        Y { N $NY; S $GY; }
-        Z { N $NZ; S $GZ; }
-    }
-    
-    SUBGRADE
-    {
-        X { N 127; S 1; }
-        Y { N 127; S 1; }
-        Z { N  63; S 1; }
-    }
-}
-
+// ************************************************************************* //

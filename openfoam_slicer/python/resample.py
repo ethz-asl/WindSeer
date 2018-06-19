@@ -7,6 +7,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Resample onto new mesh using paraview')
 parser.add_argument('-cd', '--case-dir', default=None, required=True, help='Case directory')
+parser.add_argument('-3d', '--three-d', default=False, reqired=False, help='Resample as a 3D case')
 parser.add_argument('-md', '--mesh-dir', default=None, required=True, help='Source mesh directory')
 parser.add_argument('-cf', '--case-foam', default='bolund.foam',
     help='Input case foam file (in case dir)')
@@ -16,19 +17,26 @@ parser.add_argument('-o', '--outfile', default='structured_mesh',
     help='Output csv file (without file extension)')
 args = parser.parse_args()
 
+if args.three_d:
+    input_region = 'internalMesh'
+    test_region = input_region
+else:
+    input_region = 'north_face'
+    test_region = 'south_face'
+
 # create a new 'OpenFOAMReader'
 inputfoam = para.OpenFOAMReader(FileName=os.path.join(args.case_dir, args.case_foam), SkipZeroTime=True)
-inputfoam.MeshRegions = ['north_face']
+inputfoam.MeshRegions = [input_region]
 inputfoam.CellArrays = ['U', 'epsilon', 'k', 'nut', 'p']
 
 # create a new 'OpenFOAMReader'
 testgridfoam = para.OpenFOAMReader(FileName=os.path.join(args.mesh_dir, args.mesh_foam))
-testgridfoam.MeshRegions = ['south_face']
+testgridfoam.MeshRegions = [test_region]
 
 for t in inputfoam.TimestepValues:
     inputfoam.UpdatePipeline(time=t)
     tfile = args.outfile+'_t{0:04.0f}.csv'.format(t)
-    print("Output file set to {0}".format(tfile))
+    # print("Output file set to {0}".format(tfile))
 
     # set active source
     para.SetActiveSource(inputfoam)

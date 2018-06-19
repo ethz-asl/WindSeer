@@ -14,8 +14,8 @@ ENDITER=-1
 WRITEITER=-1
 
 usage() { 
-    echo -e "Usage: $0 [OPTION]"
-    echo -e "  -s stl_dir\n\tDirectory of stl files"
+    echo -e "Usage: $0 [OPTION] stl_file1 stl_file2 ..."
+    # echo -e "  -s stl_dir\n\tDirectory of stl files"
     echo -e "  -c csv_dir\n\tDirectory to output csv files"
     echo -e "  -b base_dir\n\tlocation of base case directory"
     echo -e "  -n n_slices\n\tNumber of terrain slices per stl file"
@@ -24,13 +24,14 @@ usage() {
     echo -e "\tendTime for simpleFoam (default to existing value from controlDict)"
     echo -e "  -i write_interval"
     echo -e "\twriteInterval for simpleFoam (default to existing value from controlDict)"
+    echo -e "  -h"
+    echo -e "\tprint this help and exit"
     exit 0;
 }
 
-while getopts ":s:c:b:n:w:e:i:" opt; do
+while getopts "c:b:n:w:e:i:h" opt; do
     case "$opt" in
-        s)  stl_dir=$OPTARG
-            ;;
+        # s)  stl_dir=$OPTARG ;;
         c)  csv_dir=$OPTARG
             ;;
         b)  base_dir=$OPTARG
@@ -43,12 +44,19 @@ while getopts ":s:c:b:n:w:e:i:" opt; do
             ;;
         i)  WRITEITER=$OPTARG
             ;;
-        *)
+        h | *)
             usage
             ;;
     esac
 done
+shift $(expr $OPTIND - 1 )
 
+if [ "$#" -lt 1 ]; then
+    echo "ERROR: No stl files supplied"
+    usage
+fi
+
+# The remaining arguments are the csv files
 constant_files=(transportProperties turbulenceProperties)
 system_files=(controlDict fvSchemes fvSolution)
 BASECASES=$HOMEDIR/$base_dir
@@ -71,7 +79,7 @@ create_base_case()
 }
 
 # Loop over stl files, create new directory for each case
-for stl_file in ${stl_dir}/*.stl; do
+for stl_file in "$@"; do
     basename=$(basename -- "$stl_file")
     extension="${basename##*.}"
     casename="${basename%.*}"
@@ -132,16 +140,16 @@ for stl_file in ${stl_dir}/*.stl; do
     echo "Running from CASEDIR:${CASEDIR}, NY=${NY}, DY=${DY}, DW=${DW}"
 
     # Loop over CY positions
-    for (( yi=0; yi<$NY; yi++)); do
+    for (( yi=0; yi<$NY; yi++ )); do
         echo -n "Slice $(($yi+1))/$NY: Y=$CY, building mesh..."
         sed "s/YSLICE/${CY}/" $HOMEDIR/sliceDict.in > $CASEDIR/sliceDict
 
         cd $SNAPPYDIR
-        blockMesh > blockMesh.log
-        snappyHexMesh -overwrite > snappyHexMesh.log
+        blockMesh > blockMesh.log 2> blockMesh.err
+        snappyHexMesh -overwrite > snappyHexMesh.log 
 
         cd $SIMPLEDIR
-        extrudeMesh > extrudeMesh.log
+        extrudeMesh > extrudeMesh.log 
 
         YDIR="${CASEDIR}/YS${CY}"
 
@@ -153,12 +161,12 @@ for stl_file in ${stl_dir}/*.stl; do
         echo -n "Building resampled (regular) mesh for final output..."
         cd $GRIDDIR
         ./Allclean
-        blockMesh > blockMesh.log
+        blockMesh > blockMesh.log 2> blockMesh.err
         touch testgrid.foam
         echo " done."
 
         # Loop over wind speeds
-        for (( w=1; w<=15; w+=$DW)); do
+        for (( w=1; w<=15; w+=$DW )); do
 
             # Calculate k, epsilon
             K_EPS=($(python $PYDIR/abl_k_epsilon.py -U $w))
@@ -182,16 +190,20 @@ for stl_file in ${stl_dir}/*.stl; do
             sed -i "s/INLETK/${K_EPS[0]}/" 0/k
             sed -i "s/INLETEPSILON/${K_EPS[1]}/" 0/epsilon
             echo -n "Case setup complete: Y=$CY, W=$w, running simpleFoam..."
-            simpleFoam > simpleFoam.log
-            echo " done."
-            cd $WDIR
-            touch hill.foam
+            simpleFoam > simpleFoam.log 2> simpleFoam.err
+            if [ "$?" -gt 0 ]; then
+                echo " failed. Moving to next case"
+            else
+                echo " done."
+                cd $WDIR
+                touch hill.foam
 
-            echo -n "Resampling grid onto test grid..."
-            printf -v CSVFILE "%s_Y%+04.0fW%02d" $casename $CY $w
-            python "${HOMEDIR}/python/resample.py" --case-dir $WDIR --mesh-dir $GRIDDIR \
-                --case-foam hill.foam --outfile "$HOMEDIR/$csv_dir/$CSVFILE"
-            echo " done."
+                echo -n "Resampling grid onto test grid..."
+                printf -v CSVFILE "%s_Y%+04.0fW%02d" $casename $CY $w
+                python "${HOMEDIR}/python/resample.py" --case-dir $WDIR --mesh-dir $GRIDDIR \
+                    --case-foam hill.foam --outfile "$HOMEDIR/$csv_dir/$CSVFILE"
+                echo " done."
+            fi
         done
 
         CY=$(echo "scale=4; $CY + $DY" | bc)

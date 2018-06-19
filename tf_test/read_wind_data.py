@@ -1,10 +1,10 @@
+from __future__ import print_function
 import tensorflow as tf
 import numpy as np
 import pandas as pd
 import glob
 import os
 import argparse
-from __future__ import print_function
 
 WINDNX = 128
 WINDNZ = 64
@@ -99,7 +99,7 @@ def move_junk_data(in_directory, junk_directory, thresh=1.0e4):
         data_min = wind_out.min()
         if (data_max['U:0'] > thresh) or (data_max['U:2'] > thresh) or (data_min['U:0'] < -thresh) or (data_min['U:2'] < -thresh):
             junked_files += 1
-            print("{0}: Value outside threshold, moving to junk. Junked ratio {n}/{t}".format(fname, n=junked_files, t=n_files))
+            print("{0}: Value outside threshold, moving to junk. Junked ratio {n}/{t}".format(fname, n=junked_files, t=i))
             os.rename(wind_csv, os.path.join(junk_directory, fname))
     print("{0} files processed, {1} sent to junk".format(n_files, junked_files))
 
@@ -119,5 +119,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate terrainDict from stl file')
     parser.add_argument('-i', '--input-dir', required=False, default='data/train', help='Input directory of csv files')
     parser.add_argument('-j', '--junk-dir', required=False, default='data/junk', help='Destination directory for junk')
+    parser.add_argument('-t', '--threshold', required=False, default=1000.0, type=float, help='')
     args = parser.parse_args()
-    move_junk_data(args.input_dir, args.junk_dir)
+    move_junk_data(args.input_dir, args.junk_dir, thresh=args.threshold)

@@ -5,32 +5,17 @@
 |   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
-
-TERRAIN_DICT
+FoamFile
 {
-    STL_FILE $STL_FILE;
-
-    MCONVERT $MCONVERT;
-
-    MINX $MINX;
-    MAXX $MAXX;
-    MINY $MINY;
-    MAXY $MAXY;
-    MINZ $MINZ;
-    MAXZ $MAXZ;
-
-    GRADE
-    {
-        X { N $NX; S $GX; }
-        Y { N $NY; S $GY; }
-        Z { N $NZ; S $GZ; }
-    }
-    
-    SUBGRADE
-    {
-        X { N 127; S 1; }
-        Y { N 127; S 1; }
-        Z { N  63; S 1; }
-    }
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      transportProperties;
 }
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
+transportModel  Newtonian;
+
+nu              [0 2 -1 0 0 0 0] 1.5e-05;
+
+// ************************************************************************* //

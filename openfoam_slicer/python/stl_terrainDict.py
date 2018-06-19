@@ -67,7 +67,7 @@ if __name__ == "__main__":
                         help='Number of points in y direction (uniform)')
     parser.add_argument('-nz', type=int, default=64,
                         help='Number of points in z direction (uniform)')
-    parser.add_argument('-pz', '--pad-z', type=float, default=3.0, help='Multiples of terrain height to add above mesh')
+    parser.add_argument('-pz', '--pad-z', type=float, default=2.0, help='Multiples of terrain height to add above mesh')
     args = parser.parse_args()
 
     lims = generate_terrainDict(stl_file=args.stl_in, dict_out=args.dict_out, stl_out=args.stl_out,

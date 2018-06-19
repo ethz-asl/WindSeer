@@ -1,0 +1,3 @@
+#! /bin/bash
+rm -f -r constant/
+rm -f -r dynamicCode/
