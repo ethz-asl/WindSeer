@@ -111,8 +111,8 @@ for stl_dir in "$@"; do
     GRIDDIR="${CASEDIR}/reGrid"
     STLOUT="${CASEDIR}/${casename}.stl"
 
-    cp $stl_file $STLOUT
-    cp $terrainDict_file ${CASEDIR}/terrainDict
+    ln -s $stl_file $STLOUT
+    ln -s $terrainDict_file ${CASEDIR}/terrainDict
     
     # Get YLIMS as an array to access elements ${YLIMS[i]}
     YLIMS=( $( < $ylim_file ) )    
