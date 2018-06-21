@@ -15,3 +15,5 @@ openfoam_batch/csv
 openfoam_batch/cases
 openfoam_batch/cases3d
 *.swp
+.*
+*__pycache__*
