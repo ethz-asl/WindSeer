@@ -21,7 +21,7 @@ internalField   uniform (0 0 0);
 
 boundaryField
 {
-    inlet
+    "inlet.*"
     {
         type atmBoundaryLayerInletVelocity;
         #include "include/ABLConditions"

@@ -48,8 +48,8 @@ boundary
 (
     north_face
     {
-        type symmetryPlane;
-        inGroups (frontAndBack);
+        type patch;
+        inGroups (outlet);
         faces
         (
             (3 7 6 2)
@@ -58,7 +58,7 @@ boundary
     west_face
     {
         type patch;
-        inGroups (inlet);
+        inGroups (inlet);       // Switch this to inlet_atm to use atm k, eps
         faces
         (
             (0 4 7 3)
@@ -75,8 +75,8 @@ boundary
     }
     south_face
     {
-        type symmetryPlane;
-        inGroups (frontAndBack);
+        type patch;
+        inGroups (outlet);
         faces
         (
             (1 5 4 0)

@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import read_wind_data as rw
+import read_wind_csv as rw
+import sys
 
 def plot_data(wind_data, sp='p', sUx='U:0', sUz='U:2'):
     fh, ah = plt.subplots(2, 1)     # , {'aspect':'equal'})
@@ -12,9 +13,13 @@ def plot_data(wind_data, sp='p', sUx='U:0', sUz='U:2'):
     Ux = wind_data.get(sUx).values.reshape([rw.WINDNZ, rw.WINDNX])
     Uz = wind_data.get(sUz).values.reshape([rw.WINDNZ, rw.WINDNX])
 
-    ah[0].imshow(p, origin='lower')
-    ah[1].quiver(Ux, Uz, np.sqrt(Ux**2 + Uz**2))
+    h_press = ah[0].imshow(p, origin='lower')
+    ah[0].set_title('Pressure')
+    fh.colorbar(h_press, ax=ah[0])
+
+    ah[1].quiver(Ux[::5, ::5], Uz[::5, ::5], np.sqrt(Ux[::5, ::5]**2 + Uz[::5, ::5]**2))
     ah[1].set_aspect('equal')
+    ah[1].set_title('Velocity vectors')
     return fh, ah
 
 
@@ -49,11 +54,14 @@ def plot_input_output(wind_in, wind_out):
 
 
 if __name__ == "__main__":
-    wind = rw.read_wind_csv('/intel_share/data/hill1/hill1_downsized_Y+946W120.csv')
-    wind_in = rw.build_input_from_output(wind)
+    if len(sys.argv) < 2:
+        print("Please specify csv file[s] to plot")
+        exit(1)
 
-    fig, ax = plot_data(wind)
+    for file in sys.argv[1:]:
+        wind = rw.read_wind_csv(file)
+        wind_in = rw.build_input_from_output(wind)
+        fig, ax = plot_data(wind)
+        f_in, a_in = plot_input_output(wind_in, wind)
 
-    # f_in, a_in = plot_data(wind_in, sp='isWind', sUx='Ux', sUz='Uz')
-    f_in, a_in = plot_input_output(wind_in, wind)
-    plt.show(block=False)
+    plt.show(block=False)      # block=False

@@ -49,11 +49,11 @@ done
 shift $(expr $OPTIND - 1 )
 
 if [ "$#" -lt 1 ]; then
-    echo "ERROR: No stl files supplied"
+    echo "ERROR: No stl directories supplied"
     usage
 fi
 
-# The remaining arguments are the stl files
+# The remaining arguments are the stl directories
 constant_files=(transportProperties turbulenceProperties)
 system_files=(controlDict fvSchemes fvSolution)
 BASECASES=$HOMEDIR/$base_dir
@@ -92,9 +92,9 @@ check_files()
 # Loop over case_directories, create new directory for each case
 for stl_dir in "$@"; do
     casename=$(basename -- "$stl_dir")
-    stl_file=${stl_dir}/${casename}.stl
-    terrainDict_file=${stl_dir}/terrainDict
-    ylim_file=${stl_dir}/YLIMS
+    stl_file=${HOMEDIR}/${stl_dir}/${casename}.stl
+    terrainDict_file=${HOMEDIR}/${stl_dir}/terrainDict
+    ylim_file=${HOMEDIR}/${stl_dir}/YLIMS
     
     check_files $stl_file $terrainDict_file $ylim_file
     if [ $? -gt 0 ]; then

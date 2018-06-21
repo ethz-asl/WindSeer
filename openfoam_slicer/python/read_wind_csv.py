@@ -1,5 +1,4 @@
 from __future__ import print_function
-import tensorflow as tf
 import numpy as np
 import pandas as pd
 import glob
@@ -9,7 +8,6 @@ import argparse
 WINDNX = 128
 WINDNZ = 64
 NRECORDS = WINDNX*WINDNZ
-
 
 def read_wind_csv(infile):
     types = {"p": np.float32,
@@ -52,35 +50,6 @@ def build_input_from_output(wind_data):
     return input_data
 
 
-def build_tf_dataset(directory):
-    # Load data from csv files:
-    all_files = glob.glob(directory+'/Y*.csv')
-    n_files = len(all_files)
-    train_input = {'isWind': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32),
-                  'Ux_in': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32),
-                  'Uz_in': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32)}
-    train_labels = {'Ux_out': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32),
-                    'Uz_out': np.zeros([n_files, WINDNZ, WINDNX], dtype=np.float32)}
-
-    for i, wind_csv in enumerate(all_files):
-        try:
-            wind_out = read_wind_csv(wind_csv)
-        except IOError:
-            continue
-
-        train_labels['Ux_out'][i, :, :] = wind_out.get('U:0').values.reshape([WINDNZ, WINDNX])
-        train_labels['Uz_out'][i, :, :] = wind_out.get('U:2').values.reshape([WINDNZ, WINDNX])
-
-        wind_in = build_input_from_output(wind_out)
-        train_input['isWind'][i, :, :] = wind_in.get('isWind').values.reshape([WINDNZ, WINDNX]).astype(np.float32)
-        train_input['Ux_in'][i, :, :] = wind_in.get('Ux').values.reshape([WINDNZ, WINDNX])
-        train_input['Uz_in'][i, :, :] = wind_in.get('Uz').values.reshape([WINDNZ, WINDNX])
-
-    tf_train_features = tf.data.Dataset.from_tensor_slices(train_input)
-    tf_train_labels   = tf.data.Dataset.from_tensor_slices(train_labels)
-    return tf.data.Dataset.zip((tf_train_features, tf_train_labels))
-
-
 def move_junk_data(in_directory, junk_directory, thresh=1.0e4):
     all_files = glob.glob(in_directory+'/*.csv')
     n_files = len(all_files)
@@ -102,17 +71,6 @@ def move_junk_data(in_directory, junk_directory, thresh=1.0e4):
             print("{0}: Value outside threshold, moving to junk. Junked ratio {n}/{t}".format(fname, n=junked_files, t=i))
             os.rename(wind_csv, os.path.join(junk_directory, fname))
     print("{0} files processed, {1} sent to junk".format(n_files, junked_files))
-
-
-        # get('U:0')
-        # train_labels['Uz_out'][i, :, :] = wind_out.get('U:2').values.reshape([WINDNZ, WINDNX])
-
-
-
-def feeder_tf_dataset(directory):
-    # Load data from csv files:
-    file_list = tf.train.match_filenames_once(directory + '/Y*.csv')
-    file_reader = tf.train.string_input_producer(file_list, shuffle=True)
 
 
 if __name__ == "__main__":

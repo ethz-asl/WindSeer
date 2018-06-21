@@ -21,7 +21,7 @@ internalField   uniform 0;
 
 boundaryField
 {
-    inlet
+    "inlet.*"
     {
         type            calculated;
         value           uniform 0;
