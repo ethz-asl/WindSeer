@@ -14,3 +14,4 @@ tf_test/fig/
 openfoam_slicer/csv
 openfoam_slicer/cases
 openfoam_slicer/cases3d
+*.swp

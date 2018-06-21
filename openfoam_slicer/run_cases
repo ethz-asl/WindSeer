@@ -6,11 +6,11 @@ OPTIND=1
 # Default values
 base_dir="base_case/"
 csv_dir="csv/"
-NY=2
-DW=20
-HOMEDIR=$(pwd)
-ENDITER=-1
-WRITEITER=-1
+n_slices=2
+wind_delta=20
+home_dir=$(pwd)
+end_iter=-1
+write_iter=-1
 
 usage() { 
     echo -e "Usage: $0 [OPTION] stl_dir0 stl_dir1 ..."
@@ -24,7 +24,6 @@ usage() {
     echo -e "\twriteInterval for simpleFoam (default to existing value from controlDict)"
     echo -e "  -h"
     echo -e "\tprint this help and exit"
-    exit 0;
 }
 
 while getopts "c:b:n:w:e:i:h" opt; do
@@ -33,31 +32,57 @@ while getopts "c:b:n:w:e:i:h" opt; do
             ;;
         b)  base_dir=$OPTARG
             ;;
-        n)  NY=$OPTARG
+        n)  n_slices=$OPTARG
             ;;
-        w)  DW=$OPTARG
+        w)  wind_delta=$OPTARG
             ;;
-        e)  ENDITER=$OPTARG
+        e)  end_iter=$OPTARG
             ;;
-        i)  WRITEITER=$OPTARG
+        i)  write_iter=$OPTARG
             ;;
-        h | *)
+        h)
             usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            exit 1
             ;;
     esac
 done
 shift $(expr $OPTIND - 1 )
 
 if [ "$#" -lt 1 ]; then
-    echo "ERROR: No stl directories supplied"
-    usage
+    echo "ERROR: No stl directories supplied" >&2
+    usage >&2
+    exit 1
 fi
+
+# Check openFOAM version
+if ! type simpleFoam &> /dev/null 
+then
+    echo "ERROR: command simpleFoam not found, have you sourced OpenFOAM bashrc?" >&2
+    exit 1
+fi
+openfoam_build=$(simpleFoam -help | sed -n -e '/Build:\s/{s/.*://p}')
+openfoam_major_version=$(echo $openfoam_build | head -c 1) 
+echo "OpenFOAM version $openfoam_major_version found, build $openfoam_build"
+case "$openfoam_major_version" in
+    5) snappy_dict="snappyHexMeshDict"
+        ;;
+    4) snappy_dict="snappyHexMeshDict_v4"
+        ;;
+    *)
+        echo "ERROR: OpenFOAM major version not supported/recognized." >&2
+        exit 1
+        ;;
+esac
 
 # The remaining arguments are the stl directories
 constant_files=(transportProperties turbulenceProperties)
 system_files=(controlDict fvSchemes fvSolution)
-BASECASES=$HOMEDIR/$base_dir
-PYDIR=$HOMEDIR/python
+base_case=$home_dir/$base_dir
+python_directory=$home_dir/python
 mkdir -p $csv_dir
 
 create_base_case()
@@ -92,9 +117,9 @@ check_files()
 # Loop over case_directories, create new directory for each case
 for stl_dir in "$@"; do
     casename=$(basename -- "$stl_dir")
-    stl_file=${HOMEDIR}/${stl_dir}/${casename}.stl
-    terrainDict_file=${HOMEDIR}/${stl_dir}/terrainDict
-    ylim_file=${HOMEDIR}/${stl_dir}/YLIMS
+    stl_file=${home_dir}/${stl_dir}/${casename}.stl
+    terrainDict_file=${home_dir}/${stl_dir}/terrainDict
+    ylim_file=${home_dir}/${stl_dir}/YLIMS
     
     check_files $stl_file $terrainDict_file $ylim_file
     if [ $? -gt 0 ]; then
@@ -103,130 +128,131 @@ for stl_dir in "$@"; do
     fi
     
     echo "Creating new case ${casename} based on ${stl_dir}"
-    CASEDIR=${HOMEDIR}/cases/${casename}
-    mkdir -p $CASEDIR
+    case_dir=${home_dir}/cases/${casename}
+    mkdir -p $case_dir
 
-    SIMPLEDIR="${CASEDIR}/simpleFoam"
-    SNAPPYDIR="${CASEDIR}/snappyHexMesh"
-    GRIDDIR="${CASEDIR}/reGrid"
-    STLOUT="${CASEDIR}/${casename}.stl"
+    simpleFoam_dir="${case_dir}/simpleFoam"
+    snappyHex_dir="${case_dir}/snappyHexMesh"
+    reGrid_dir="${case_dir}/reGrid"
+    stl_case_file="${case_dir}/${casename}.stl"
 
-    ln -s $stl_file $STLOUT
-    ln -s $terrainDict_file ${CASEDIR}/terrainDict
+    ln -s $stl_file $stl_case_file
+    ln -s $terrainDict_file ${case_dir}/terrainDict
     
-    # Get YLIMS as an array to access elements ${YLIMS[i]}
-    YLIMS=( $( < $ylim_file ) )    
+    # Get y_limits as an array to access elements ${y_limits[i]}
+    y_limits=( $( < $ylim_file ) )    
     
-    touch ${CASEDIR}/sliceDict
+    touch ${case_dir}/sliceDict
     
     # Create simpleFoam directory for running simpleFoam
-    create_base_case $SIMPLEDIR $BASECASES/base
-    ln -s $BASECASES/simpleFoam/system/extrudeMeshDict \
-        $SIMPLEDIR/system/extrudeMeshDict
-    ln -s ${CASEDIR}/terrainDict $SIMPLEDIR/system/terrainDict
-    ln -s ${CASEDIR}/sliceDict $SIMPLEDIR/system/sliceDict
+    create_base_case $simpleFoam_dir $base_case/base
+    ln -s $base_case/simpleFoam/system/extrudeMeshDict \
+        $simpleFoam_dir/system/extrudeMeshDict
+    ln -s ${case_dir}/terrainDict $simpleFoam_dir/system/terrainDict
+    ln -s ${case_dir}/sliceDict $simpleFoam_dir/system/sliceDict
 
     # Create snappy directory for generating mesh
-    create_base_case $SNAPPYDIR $BASECASES/base
-    mkdir -p $SNAPPYDIR/constant/triSurface
-    ln -s $STLOUT $SNAPPYDIR/constant/triSurface/${casename}.stl
-    ln -s $BASECASES/snappyHexMesh/system/blockMeshDict \
-        $SNAPPYDIR/system/blockMeshDict
-    ln -s $BASECASES/snappyHexMesh/system/snappyHexMeshDict \
-        $SNAPPYDIR/system/snappyHexMeshDict
-    ln -s ${CASEDIR}/terrainDict $SNAPPYDIR/system/terrainDict
-    ln -s ${CASEDIR}/sliceDict $SNAPPYDIR/system/sliceDict
+    create_base_case $snappyHex_dir $base_case/base
+    mkdir -p $snappyHex_dir/constant/triSurface
+    ln -s $stl_case_file $snappyHex_dir/constant/triSurface/${casename}.stl
+    ln -s $base_case/snappyHexMesh/system/blockMeshDict \
+        $snappyHex_dir/system/blockMeshDict
+    ln -s $base_case/snappyHexMesh/system/${snappy_dict} \
+        $snappyHex_dir/system/snappyHexMeshDict
+    ln -s ${case_dir}/terrainDict $snappyHex_dir/system/terrainDict
+    ln -s ${case_dir}/sliceDict $snappyHex_dir/system/sliceDict
 
     # Create reGrid directory for output resampling onto regular grid
-    create_base_case $GRIDDIR $BASECASES/base
-    ln -s $BASECASES/reGrid/system/blockMeshDict \
-        $GRIDDIR/system/blockMeshDict
-    ln -s ${CASEDIR}/terrainDict $GRIDDIR/system/terrainDict
-    ln -s ${CASEDIR}/sliceDict $GRIDDIR/system/sliceDict
-    ln -s $BASECASES/reGrid/Allclean $GRIDDIR/Allclean
+    create_base_case $reGrid_dir $base_case/base
+    ln -s $base_case/reGrid/system/blockMeshDict \
+        $reGrid_dir/system/blockMeshDict
+    ln -s ${case_dir}/terrainDict $reGrid_dir/system/terrainDict
+    ln -s ${case_dir}/sliceDict $reGrid_dir/system/sliceDict
+    ln -s $base_case/reGrid/Allclean $reGrid_dir/Allclean
    
     # ------ SLICING ------#
     # Now we have created all the base runs, start slicing
-    YLO=${YLIMS[0]}
-    YHI=${YLIMS[1]}
+    y_step=$(echo "scale=2; (${y_limits[1]} - ${y_limits[0]}) / $n_slices" | bc)
+    current_y=${y_limits[0]}
 
-    DY=$(echo "scale=2; ($YHI - $YLO) / $NY" | bc)
-    CY=$YLO
+    cd ${case_dir}
+    echo "Running from case_dir:${case_dir}, n_slices=${n_slices}, y_step=${y_step}, wind_delta=${wind_delta}"
 
-    cd ${CASEDIR}
-    echo "Running from CASEDIR:${CASEDIR}, NY=${NY}, DY=${DY}, DW=${DW}"
+    # Loop over current_y positions
+    for (( yi=0; yi<$n_slices; yi++ )); do
+        echo -n "Slice $(($yi+1))/$n_slices: Y=$current_y, building mesh..."
+        sed "s/YSLICE/${current_y}/" $home_dir/sliceDict.in > $case_dir/sliceDict
 
-    # Loop over CY positions
-    for (( yi=0; yi<$NY; yi++ )); do
-        echo -n "Slice $(($yi+1))/$NY: Y=$CY, building mesh..."
-        sed "s/YSLICE/${CY}/" $HOMEDIR/sliceDict.in > $CASEDIR/sliceDict
-
-        cd $SNAPPYDIR
+        cd $snappyHex_dir
         blockMesh > blockMesh.log 2> blockMesh.err
         snappyHexMesh -overwrite > snappyHexMesh.log 
 
-        cd $SIMPLEDIR
+        cd $simpleFoam_dir
         extrudeMesh > extrudeMesh.log 
 
-        YDIR="${CASEDIR}/YS${CY}"
+        y_slice_dir="${case_dir}/YS${current_y}"
 
-        mkdir $YDIR
-        cd $YDIR
-        cp -r $SIMPLEDIR/constant/polyMesh $YDIR
+        mkdir $y_slice_dir
+        cd $y_slice_dir
+        cp -r $simpleFoam_dir/constant/polyMesh $y_slice_dir
         echo " done."
         
         echo -n "Building resampled (regular) mesh for final output..."
-        cd $GRIDDIR
+        cd $reGrid_dir
         ./Allclean
         blockMesh > blockMesh.log 2> blockMesh.err
         touch testgrid.foam
         echo " done."
 
         # Loop over wind speeds
-        for (( w=1; w<=15; w+=$DW )); do
+        for (( w=1; w<=15; w+=$wind_delta )); do
 
             # Calculate k, epsilon
-            K_EPS=($(python $PYDIR/abl_k_epsilon.py -U $w))
+            k_epsilon=($(python $python_directory/abl_k_epsilon.py -U $w))
 
-            WDIR="${YDIR}/W${w}"
+            wind_directory="${y_slice_dir}/W${w}"
             # Create system folder, symlinks from base case
-            create_base_case $WDIR $BASECASES/base
-            ln -s $YDIR/polyMesh $WDIR/constant/polyMesh
+            create_base_case $wind_directory $base_case/base
+            ln -s $y_slice_dir/polyMesh $wind_directory/constant/polyMesh
 
             # Copy initial conditions, change wind speed
-            cd $WDIR
-            if [ $ENDITER -gt 0 ]; then
-                sed -i -e "s/endTime\s\{1,\}[0-9]*/endTime\t${ENDITER}/g" system/controlDict
+            cd $wind_directory
+            if [ $end_iter -gt 0 ]; then
+                sed -i -e "s/endTime\s\{1,\}[0-9]*/endTime\t${end_iter}/g" system/controlDict
             fi
-            if [ $WRITEITER -gt 0 ]; then
-                sed -i -e "s/writeInterval\s\{1,\}[0-9]*/writeInterval\t${WRITEITER}/g" system/controlDict
+            if [ $write_iter -gt 0 ]; then
+                sed -i -e "s/writeInterval\s\{1,\}[0-9]*/writeInterval\t${write_iter}/g" system/controlDict
             fi
 
-            cp -r $BASECASES/simpleFoam/0.orig.k_eps $WDIR/0
+            cp -r $base_case/simpleFoam/0.orig.k_eps $wind_directory/0
             sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
-            sed -i "s/INLETK/${K_EPS[0]}/" 0/k
-            sed -i "s/INLETEPSILON/${K_EPS[1]}/" 0/epsilon
-            echo -n "Case setup complete: Y=$CY, W=$w, running simpleFoam..."
+            sed -i "s/INLETK/${k_epsilon[0]}/" 0/k
+            sed -i "s/INLETEPSILON/${k_epsilon[1]}/" 0/epsilon
+            echo -n "Case setup complete: Y=$current_y, W=$w, running simpleFoam..."
             simpleFoam > simpleFoam.log 2> simpleFoam.err
             if [ "$?" -gt 0 ]; then
                 echo " failed. Moving to next case"
             else
                 echo " done."
-                cd $WDIR
+                cd $wind_directory
                 touch hill.foam
 
                 echo -n "Resampling grid onto test grid..."
-                printf -v CSVFILE "%s_Y%+04.0fW%02d" $casename $CY $w
-                python "${HOMEDIR}/python/resample.py" --case-dir $WDIR --mesh-dir $GRIDDIR \
-                    --case-foam hill.foam --outfile "$HOMEDIR/$csv_dir/$CSVFILE"
-                echo " done."
+                printf -v csv_file "%s_Y%+04.0fW%02d" $casename $current_y $w
+                python "${home_dir}/python/resample.py" --case-dir $wind_directory --mesh-dir $reGrid_dir \
+                    --case-foam hill.foam --outfile "$home_dir/$csv_dir/$csv_file"
+                if [ "$?" -gt 0 ]; then
+                    echo " failed. Moving to next case."
+                else
+                    echo " done."
+                fi
             fi
         done
 
-        CY=$(echo "scale=4; $CY + $DY" | bc)
-        cd $CASEDIR
+        current_y=$(echo "scale=4; $current_y + $y_step" | bc)
+        cd $case_dir
     done
     echo "All slices complete."
-    cd $HOMEDIR
+    cd $home_dir
 done
 
