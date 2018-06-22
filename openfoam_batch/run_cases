@@ -11,6 +11,7 @@ wind_delta=20
 home_dir=$(pwd)
 end_iter=-1
 write_iter=-1
+regrid=1
 
 # Source shared functions ( 'create_base_case' and 'check_files' )
 source shared_functions.sh
@@ -25,11 +26,13 @@ usage() {
     echo -e "\tendTime for simpleFoam (default to existing value from controlDict)"
     echo -e "  -i write_interval"
     echo -e "\twriteInterval for simpleFoam (default to existing value from controlDict)"
+    echo -e "  -g [0/1]"
+    echo -e "\tgenerate regridded output (default 1)"
     echo -e "  -h"
     echo -e "\tprint this help and exit"
 }
 
-while getopts "c:b:n:w:e:i:h" opt; do
+while getopts "c:b:n:w:e:i:g:h" opt; do
     case "$opt" in
         c)  csv_dir=$OPTARG
             ;;
@@ -42,6 +45,8 @@ while getopts "c:b:n:w:e:i:h" opt; do
         e)  end_iter=$OPTARG
             ;;
         i)  write_iter=$OPTARG
+            ;;
+        g)  regrid=$OPTARG
             ;;
         h)
             usage
@@ -204,11 +209,15 @@ for stl_dir in "$@"; do
             simpleFoam > simpleFoam.log 2> simpleFoam.err
             if [ "$?" -gt 0 ]; then
                 echo " failed. Moving to next case"
-            else
-                echo " done."
-                cd $wind_directory
-                touch hill.foam
+                continue
+            fi
+            
+            echo " done."
+            cd $wind_directory
+            touch hill.foam
 
+            if [ $regrid -gt 0 ]
+            then
                 echo -ne "\tResampling results onto test grid..."
                 printf -v csv_file "%s_Y%+04.0fW%02d" $casename $current_y $w
                 python "${python_directory}/resample.py" --case-dir $wind_directory --mesh-dir $reGrid_dir \

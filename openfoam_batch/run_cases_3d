@@ -137,11 +137,17 @@ for stl_dir in "$@"; do
     cd $simpleFoam_dir
 
     blockMesh > blockMesh.log 2> blockMesh.err
-    snappyHexMesh -overwrite > snappyHexMesh.log 2> snappyHexMesh.err
-
     if [ $? -ne 0 ]
     then
-        echo " snappyHexMesh failed. Error report follows:"
+        echo " blockMesh failed. Skipping ${casename}. Error report:"
+        cat blockMesh.err
+        continue
+    fi
+
+    snappyHexMesh -overwrite > snappyHexMesh.log 2> snappyHexMesh.err
+    if [ $? -ne 0 ]
+    then
+        echo " snappyHexMesh failed. Skipping ${casename}. Error report:"
         cat snappyHexMesh.err
         continue
     else
@@ -156,7 +162,7 @@ for stl_dir in "$@"; do
 
     if [ $? -ne 0 ]
     then
-        echo " failed. Error report follows:"
+        echo " failed. Error report:"
         cat blockMesh.err
         echo -e "\tMoving to next case."
         continue
