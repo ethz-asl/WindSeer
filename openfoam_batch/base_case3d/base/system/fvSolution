@@ -43,7 +43,7 @@ SIMPLE
     }
     nNonOrthogonalCorrectors 0;
     pRefCell        0;
-    pRefValue       0;
+    pRefValue       82714;
 
 }
 
@@ -60,8 +60,8 @@ relaxationFactors
     }
     equations
     {
-        U               0.4;
-        "(k|omega|epsilon).*" 0.4;
+        U               0.7;
+        "(k|omega|epsilon).*" 0.7;
     }
 }
 

@@ -17,7 +17,9 @@ FoamFile
 
 dimensions      [0 2 -2 0 0 0 0];
 
-internalField   uniform 0;
+// OpenFOAM uses rho-normalised pressure, p* = p/rho
+// p0 = 101325, rho = 1.225, p* = p/rho =  82714
+internalField   uniform 82714;
 
 boundaryField
 {
@@ -25,14 +27,25 @@ boundaryField
     {
         type            zeroGradient;
 	}
-    
+    inlet_atm
+    {
+        type            zeroGradient;
+	}
+	
+	outlet
+	{
+	    type            fixedValue;
+	    value           $internalField;
+    }
+
+    /*
     outlet
     {
         type            totalPressure;
-        value           uniform 0;
+        value           $internalField;
 		gamma           1.4;
-		p0              uniform 0;
-	}
+		p0              $internalField;
+	}//*/
     
     wall
     {

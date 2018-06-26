@@ -31,6 +31,15 @@ gradSchemes
 
 divSchemes
 {
+    div(phi,U)      Gauss upwind;
+    div(phi,omega)  Gauss upwind;
+    div(phi,k)      Gauss upwind;
+    div((nuEff*dev2(T(grad(U)))))   Gauss linear;
+}
+
+/*
+divSchemes
+{
     default         none;
 
     div(phi,U)      bounded Gauss linearUpwind limited;
@@ -40,7 +49,7 @@ divSchemes
     div(phi,epsilon) $turbulence;
 
     div((nuEff*dev2(T(grad(U))))) Gauss linear;
-}
+}//*/
 
 laplacianSchemes
 {

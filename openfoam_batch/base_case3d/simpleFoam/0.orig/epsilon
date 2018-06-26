@@ -23,16 +23,16 @@ internalField   uniform 1;
 
 boundaryField
 {
-    inlet_atm
-    {
-        type            atmBoundaryLayerInletEpsilon;
-        #include        "include/ABLConditions"
-    }
     inlet
     {
         type            fixedValue;
         value           uniform $epsilonInlet;
     }    
+    inlet_atm
+    {
+        type            atmBoundaryLayerInletEpsilon;
+        #include        "include/ABLConditions"
+    }
 
     outlet
     {

@@ -23,15 +23,15 @@ internalField   uniform $kInlet;
 
 boundaryField
 {
-    inlet_atm
-    {
-        type            atmBoundaryLayerInletK;
-        #include        "include/ABLConditions"
-    }
     inlet
     {
         type            fixedValue;
         value           uniform $kInlet;
+    }
+    inlet_atm
+    {
+        type            atmBoundaryLayerInletK;
+        #include        "include/ABLConditions"
     }
     outlet
     {

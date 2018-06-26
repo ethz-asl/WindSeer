@@ -9,38 +9,39 @@ FoamFile
 {
     version     2.0;
     format      ascii;
-    class       volScalarField;
+    class       volVectorField;
     location    "0";
-    object      k;
+    object      U;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-kInlet          1.5;   // 0.375 // approx k = 1.5*(I*U)^2 ; I = 0.1
+dimensions      [0 1 -1 0 0 0 0];
 
-dimensions      [0 2 -2 0 0 0 0];
-
-internalField   uniform $kInlet;
+internalField   uniform (0 0 0);
 
 boundaryField
 {
     inlet
     {
-        type            inletOutlet;
-        inletValue      uniform $kInlet;
-        value           uniform $kInlet;
-    }  
+        type atmBoundaryLayerInletVelocity;
+        #include "include/ABLConditions"
+    }
+    inlet_atm
+    {
+        type atmBoundaryLayerInletVelocity;
+        #include "include/ABLConditions"
+    }    
     outlet
     {
-        type            inletOutlet;
-        inletValue      uniform $kInlet;
-        value           uniform $kInlet;
-    }    
+        type  pressureInletOutletVelocity;
+		value $internalField;
+    }
+    
     wall
     {
-        type            kqRWallFunction;
-        value           uniform $kInlet;
-    }    
-
+        type            noSlip;
+    }
+    
     #includeEtc "caseDicts/setConstraintTypes"
 }
 

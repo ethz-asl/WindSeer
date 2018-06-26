@@ -21,11 +21,15 @@ internalField   uniform 0;
 
 boundaryField
 {
-    "inlet.*"
+    inlet
     {
         type            zeroGradient;
 	}
-    
+    inlet_atm
+    {
+        type            zeroGradient;
+	}
+	
     outlet
     {
         type            totalPressure;

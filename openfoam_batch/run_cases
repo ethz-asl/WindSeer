@@ -208,7 +208,7 @@ for stl_dir in "$@"; do
             echo -ne "\tCase setup complete: Y=$current_y, W=$w, running simpleFoam..."
             simpleFoam > simpleFoam.log 2> simpleFoam.err
             if [ "$?" -gt 0 ]; then
-                echo " failed. Moving to next case"
+                echo " failed!"
                 continue
             fi
             

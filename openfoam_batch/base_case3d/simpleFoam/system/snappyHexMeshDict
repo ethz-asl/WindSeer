@@ -198,18 +198,18 @@ addLayersControls
     {
         hill_geometry
         {
-            nSurfaceLayers 4;
+            nSurfaceLayers 2;
         }
     }
 
     // Expansion factor for layer mesh
-    expansionRatio 1.5;
+    expansionRatio 2.0;
 
     //- Wanted thickness of final added cell layer. If multiple layers
     //  is the
     //  thickness of the layer furthest away from the wall.
     //  Relative to undistorted size of cell outside layer.
-    finalLayerThickness 0.5;
+    finalLayerThickness 0.6;
 
     //- Minimum thickness of cell layer. If for any reason layer
     //  cannot be above minThickness do not add layer.
