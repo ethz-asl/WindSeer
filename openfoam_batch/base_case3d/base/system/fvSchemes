@@ -29,13 +29,28 @@ gradSchemes
     grad(epsilon)     $limited;
 }
 
+/* First order (robust) scheme
 divSchemes
 {
-    div(phi,U)      Gauss upwind;
-    div(phi,omega)  Gauss upwind;
-    div(phi,k)      Gauss upwind;
+    default         Gauss upwind;
     div((nuEff*dev2(T(grad(U)))))   Gauss linear;
-}
+} //*/
+
+//* Second order (more accurate, still quite stable?) scheme
+divSchemes
+{
+    default         Gauss linearUpwind default;
+    div(phi,U)      Gauss linearUpwind grad(U);
+    div((nuEff*dev2(T(grad(U)))))   Gauss linear;
+} //*/
+
+/* Second order (even more accurate, oscillatory) scheme
+divSchemes
+{
+    default         Gauss linearUpwind default;
+    div(phi,U)      Gauss linear;
+    div((nuEff*dev2(T(grad(U)))))   Gauss linear;
+} //*/
 
 /*
 divSchemes
@@ -49,7 +64,7 @@ divSchemes
     div(phi,epsilon) $turbulence;
 
     div((nuEff*dev2(T(grad(U))))) Gauss linear;
-}//*/
+} //*/
 
 laplacianSchemes
 {
