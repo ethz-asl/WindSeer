@@ -9,7 +9,7 @@ def abl_k_eps(U_ref, z=100.0, Z_ref=20.0, z_0=0.1, z_ground=0.0, kappa=0.41, C_m
 
     return k, epsilon
 
-def default_k_eps()
+# def default_k_eps()
 
 
 if __name__ == "__main__":
