@@ -18,10 +18,11 @@ U = U_star/kappa*np.log((z-z_ground+z_0)/z_0)
 k = (U_star**2)/np.sqrt(C_mu)
 epsilon = (U_star**3)/(kappa*(z - z_ground + z_0))
 
-fh, ah = plt.subplots(1, 2)
+fh, ah = plt.subplots(1, 3)
 ah[0].plot(U, z)
 ah[0].plot([U_ref], [Z_ref], 'r.')
 ah[1].plot(epsilon, z)
+ah[1].set_x
 ah[0].set_ylabel('Height above ground (m)')
 ah[0].set_xlabel('Wind speed (m/s)')
 ah[1].set_xlabel('Epsilon')

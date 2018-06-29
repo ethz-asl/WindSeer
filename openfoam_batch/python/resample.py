@@ -7,7 +7,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Resample onto new mesh using paraview')
 parser.add_argument('-cd', '--case-dir', default=None, required=True, help='Case directory')
-parser.add_argument('-3d', '--three-d', default=False, required=False, help='Resample as a 3D case')
+parser.add_argument('-3d', '--three-d', action='store_true', required=False, help='Resample as a 3D case')
 parser.add_argument('-md', '--mesh-dir', default=None, required=True, help='Source mesh directory')
 parser.add_argument('-cf', '--case-foam', default='bolund.foam',
     help='Input case foam file (in case dir)')

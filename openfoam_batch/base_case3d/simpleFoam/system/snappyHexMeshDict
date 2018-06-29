@@ -21,15 +21,8 @@ castellatedMesh true;
 snap            true;
 addLayers       true;
 
-geometry
-{
-    hill_geometry
-    {
-        type triSurfaceMesh;
-        file $:TERRAIN_DICT.STL_FILE;
-    }
+STLGEOMETRY
 
-};
 // Settings for the castellatedMesh generation.
 castellatedMeshControls
 {
