@@ -5,7 +5,13 @@ import numpy as np
 import argparse
 from stl import mesh
 from string import Template
+from scipy.optimize import newton
 
+def grading_function(k, n, L, ds):
+    return L/ds - (np.power(k, n)-1)/(k-1)
+
+def dgrading_function_dk(k, n, *args, **kwargs):
+    return (np.power(k, n-1)*(k*(1-n)+n) - 1)/np.power(k-1, 2)
 
 def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile='./terrainDict.in',
                          mconvert=1.0, in_buffer=0.0, gx=1, gy=1, gz=1, quiet=False):
@@ -33,7 +39,7 @@ def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile=
         out_fh.write(mesh_dict)
 
 
-def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', nx=128, ny=128, nz=128, pad_z=3.0):
+def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', nx=128, ny=128, nz=128, pad_z=3.0, gz=False):
 
     # if os.path.basename(dict_out) is not 'terrainDict':
     #     print "Warning: Specified output \"{0}\" should be a terrainDict file".format(dict_out)
@@ -45,11 +51,30 @@ def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', n
     hill_mesh.update_min()
     hill_mesh.update_max()
     lims = np.zeros((3, 2), dtype='float')
+    dlims = hill_mesh.max_ - hill_mesh.min_
     lims[:, 0] = hill_mesh.min_
     lims[:, 1] = hill_mesh.max_
-    lims[2, 1] = lims[2, 0] + pad_z*(lims[2, 1] - lims[2, 0])
+    lims[2, 1] = lims[2, 0] + pad_z*(hill_mesh.max_[2] - hill_mesh.min_[2])
 
     bmesh_extras = {'nx': nx, 'ny': ny, 'nz': nz, 'infile': infile, 'quiet': True}
+
+    if gz:
+        # Would like to have enough points in z so that the terrain has roughly cubic blocks
+        # Assume x and y are already roughly similar, so we base on x cell size
+        xcell = dlims[0]/nx        # edge length of cells in x dir
+        zcell = dlims[2]/nz        # edge length of cells in z dir
+        if zcell > 1.5*xcell:
+            dz_terrain = hill_mesh.max_[2] - hill_mesh.min_[2]
+            ideal_nz_terrain = int(dz_terrain/xcell)
+            nz_terrain = min(0.65, ideal_nz_terrain/nz)
+        pzt=(1.0/(pad_z+1))
+
+        # Calculate new grading to match cell sizes
+
+        kn = newton
+
+        bmesh_extras['gz'] = '( ({pzt:0.3f} {nzt:0.3f} 1) ({pz:0.3f} {nz:0.3f} {gz}) )'.format(
+            pzt=pzt, nzt=nz_terrain, pz=(1.0-pzt), nz=(1.0-nz_terrain), gz=gz_air)
     create_terrainDict(dict_out, lims, stl_out, **bmesh_extras)
     hill_mesh.save(stl_out)
     return lims
@@ -68,8 +93,11 @@ if __name__ == "__main__":
     parser.add_argument('-nz', type=int, default=64,
                         help='Number of points in z direction (uniform)')
     parser.add_argument('-pz', '--pad-z', type=float, default=2.0, help='Multiples of terrain height to add above mesh')
+    parser.add_argument('-gz', '--autograde-z', action='store_true', required=False,
+                        help='Automatically grade z for cubic cells')
     args = parser.parse_args()
 
     lims = generate_terrainDict(stl_file=args.stl_in, dict_out=args.dict_out, stl_out=args.stl_out,
-                                infile=args.dict_in, nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z)
+                                infile=args.dict_in, nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z,
+                                gz=args.autograde_z)
     print '{0:0.2f} {1:0.2f}'.format(lims[1, 0], lims[1, 1])
