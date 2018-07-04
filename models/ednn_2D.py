@@ -17,19 +17,10 @@ class ModelEDNN2D(nn.Module):
         super(ModelEDNN2D, self).__init__()
 
         self.conv1 = nn.Conv2d(n_input_layers, 8, 3, padding = 1)
-        self.bn1 = nn.BatchNorm2d(8)
-
         self.conv2 = nn.Conv2d(8, 16, 3, padding = 1)
-        self.bn2 = nn.BatchNorm2d(16)
-
         self.conv3 = nn.Conv2d(16, 32, 3, padding = 1)
-        self.bn3 = nn.BatchNorm2d(32)
-
         self.conv4 = nn.Conv2d(32, 64, 3, padding = 1)
-        self.bn4 = nn.BatchNorm2d(64)
-
         self.conv5 = nn.Conv2d(64, 128, 3, padding = 1)
-        self.bn5 = nn.BatchNorm2d(128)
 
         self.leakyrelu = nn.LeakyReLU(0.1)
 
@@ -82,15 +73,15 @@ class ModelEDNN2D(nn.Module):
         is_wind.sign_()
 
         if (self.skipping):
-            x = F.max_pool2d(self.leakyrelu(self.bn1(self.conv1(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
             x1 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.bn2(self.conv2(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
             x2 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.bn3(self.conv3(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv3(x)), 2)
             x3 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.bn4(self.conv4(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv4(x)), 2)
             x4 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.bn5(self.conv5(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv5(x)), 2)
             x5 = x.clone()
         else:
             x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
