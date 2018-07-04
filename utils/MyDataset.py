@@ -6,7 +6,7 @@ import torch
 from torch.utils.data.dataset import Dataset
 
 '''
-TODO: try if it is feasable also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
+TODO: try if it is feasible also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
 '''
 class MyDataset(Dataset):
     def __init__(self, filename, scaling_ux = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):

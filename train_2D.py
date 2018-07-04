@@ -52,7 +52,7 @@ validationloader = torch.utils.data.DataLoader(validationset, batch_size=1,
                                           shuffle=False, num_workers=num_workers)
 
 
-#check if gpu is available
+# check if gpu is available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('INFO: Start training on device %s' % device)
 

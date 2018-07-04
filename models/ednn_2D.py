@@ -17,10 +17,19 @@ class ModelEDNN2D(nn.Module):
         super(ModelEDNN2D, self).__init__()
 
         self.conv1 = nn.Conv2d(n_input_layers, 8, 3, padding = 1)
+        self.bn1 = nn.BatchNorm2d(8)
+
         self.conv2 = nn.Conv2d(8, 16, 3, padding = 1)
+        self.bn2 = nn.BatchNorm2d(16)
+
         self.conv3 = nn.Conv2d(16, 32, 3, padding = 1)
+        self.bn3 = nn.BatchNorm2d(32)
+
         self.conv4 = nn.Conv2d(32, 64, 3, padding = 1)
+        self.bn4 = nn.BatchNorm2d(64)
+
         self.conv5 = nn.Conv2d(64, 128, 3, padding = 1)
+        self.bn5 = nn.BatchNorm2d(128)
 
         self.leakyrelu = nn.LeakyReLU(0.1)
 
@@ -51,7 +60,7 @@ class ModelEDNN2D(nn.Module):
             self.deconv2 = nn.Conv2d(16, 8, 3, padding = 1)
             self.deconv1 = nn.Conv2d(8, 2, 3, padding = 1)
 
-        self.mapping_layer = nn.Conv2d(2,2,1,groups=2) # for each channel a separate filter
+        self.mapping_layer = nn.Conv2d(2, 2, 1, groups=2) # for each channel a separate filter
 
     def init_params(self):
         def printf(m):
@@ -112,7 +121,7 @@ class ModelEDNN2D(nn.Module):
         x = self.mapping_layer(x)
 
         # multiply the outputs by the terrain boolean
-        #x = torch.cat([is_wind, is_wind, is_wind], 1) * x
+        # x = torch.cat([is_wind, is_wind, is_wind], 1) * x
         x = torch.cat([is_wind, is_wind], 1) * x
 
         return x
@@ -123,4 +132,3 @@ class ModelEDNN2D(nn.Module):
         for s in size:
             num_features *= s
         return num_features
-    
