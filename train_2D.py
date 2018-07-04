@@ -57,7 +57,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('INFO: Start training on device %s' % device)
 
 # define model and move to gpu if available
-net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners, skipping = skipping)
+net = models.ModelEDNN2D(number_input_layers, interpolation_mode=interpolation_mode, align_corners=align_corners, skipping=skipping)
 
 if (warm_start):
     net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))

@@ -82,15 +82,15 @@ class ModelEDNN2D(nn.Module):
         is_wind.sign_()
 
         if (self.skipping):
-            x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.bn1(self.conv1(x))), 2)
             x1 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.bn2(self.conv2(x))), 2)
             x2 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.conv3(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.bn3(self.conv3(x))), 2)
             x3 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.conv4(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.bn4(self.conv4(x))), 2)
             x4 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.conv5(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.bn5(self.conv5(x))), 2)
             x5 = x.clone()
         else:
             x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
