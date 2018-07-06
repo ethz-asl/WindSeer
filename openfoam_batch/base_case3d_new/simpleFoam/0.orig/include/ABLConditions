@@ -6,11 +6,14 @@
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 
+kappa                0.4;
+Cmu                  0.03;
+
 Uref                 WINDSPEED;
-Zref                 20;
+Zref                 10;
 zDir                 (0 0 1);
 flowDir              (1 0 0);
-z0                   uniform 0.1;
+z0                   uniform 0.01;
 zGround              uniform 0.0;
 value                $internalField;
 

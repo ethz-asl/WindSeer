@@ -7,14 +7,18 @@ from stl import mesh
 from string import Template
 from scipy.optimize import newton
 
+
 def grading_function(k, n, L, ds):
     return L/ds - (np.power(k, n)-1)/(k-1)
+
 
 def dgrading_function_dk(k, n, *args, **kwargs):
     return (np.power(k, n-1)*(k*(1-n)+n) - 1)/np.power(k-1, 2)
 
+
 def r_from_k(k, n):
     return np.power(k, n-1)
+
 
 def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile='./terrainDict.in',
                          mconvert=1.0, in_buffer=0.0, gx=1, gy=1, gz=1, quiet=False):
@@ -42,12 +46,9 @@ def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile=
         out_fh.write(mesh_dict)
 
 
-def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', nx=128, ny=128, nz=128, pad_z=3.0, gz=False):
+def process_stl(stl_in, dict_in, stl_out, dict_out, nx=128, ny=128, nz=128, pad_z=3.0, gz=False):
 
-    # if os.path.basename(dict_out) is not 'terrainDict':
-    #     print "Warning: Specified output \"{0}\" should be a terrainDict file".format(dict_out)
-
-    hill_mesh = mesh.Mesh.from_file(stl_file)
+    hill_mesh = mesh.Mesh.from_file(stl_in)
 
     # Shift origin to one corner
     hill_mesh.translate(-1.0*hill_mesh.min_)
@@ -61,7 +62,7 @@ def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', n
     if (lims[2, 1] - lims[2,0])/nz > 20.0:
         nz = int((lims[2, 1] - lims[2,0])/20.0)
 
-    bmesh_extras = {'nx': nx, 'ny': ny, 'nz': nz, 'infile': infile, 'quiet': True}
+    bmesh_extras = {'nx': nx, 'ny': ny, 'nz': nz, 'infile': dict_in, 'quiet': True}
 
     if gz:
         # Would like to have enough points in z so that the terrain has roughly cubic blocks
@@ -100,9 +101,9 @@ def generate_terrainDict(stl_file, dict_out, stl_out, infile='terrainDict.in', n
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate terrainDict from stl file')
     parser.add_argument('-si', '--stl-in', required=True, help='Input stl file')
-    parser.add_argument('-so', '--stl-out', required=False, default=None, help='Output stl file')
-    parser.add_argument('-do', '--dict-out', required=True, help='Output dictionary file')
+    parser.add_argument('-so', '--stl-out', required=True, default=None, help='Output stl file')
     parser.add_argument('-di', '--dict-in', default='terrainDict.in', help='Input dictionary file (usually .in)')
+    parser.add_argument('-do', '--dict-out', required=True, help='Output dictionary file')
     parser.add_argument('-nx', type=int, default=128,
                         help='Number of points in x direction (uniform)')
     parser.add_argument('-ny', type=int, default=128,
@@ -114,7 +115,7 @@ if __name__ == "__main__":
                         help='Automatically grade z for cubic cells')
     args = parser.parse_args()
 
-    lims = generate_terrainDict(stl_file=args.stl_in, dict_out=args.dict_out, stl_out=args.stl_out,
-                                infile=args.dict_in, nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z,
-                                gz=args.autograde_z)
-    print '{0:0.2f} {1:0.2f}'.format(lims[1, 0], lims[1, 1])
+    limits = process_stl(stl_in=args.stl_in, dict_in=args.dict_in, stl_out=args.stl_out, dict_out=args.dict_out,
+                       nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z,
+                       gz=args.autograde_z)
+    print '{0:0.2f} {1:0.2f}'.format(limits[1, 0], limits[1, 1])
