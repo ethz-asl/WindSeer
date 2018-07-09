@@ -81,9 +81,9 @@ openfoam_build=$(simpleFoam -help | sed -n -e '/Build:\s/{s/.*://p}')
 openfoam_major_version=$(echo $openfoam_build | head -c 1) 
 echo "OpenFOAM version $openfoam_major_version found, build $openfoam_build"
 case "$openfoam_major_version" in
-    5) stl_geometry='geometry\n{\n\t$:TERRAIN_DICT.STL_FILE\n\t{\n\t\ttype triSurfaceMesh;\n\t\tname hill_geometry;\n\t}\n};'
+    4) stl_geometry='geometry\n{\n\t$:TERRAIN_DICT.STL_FILE\n\t{\n\t\ttype triSurfaceMesh;\n\t\tname hill_geometry;\n\t}\n};'
         ;;
-    4) stl_geometry='geometry\n{\n\thill_geometry\n\t{\n\t\ttype triSurfaceMesh;\n\t\tfile $:TERRAIN_DICT.STL_FILE;\n\t}\n};'
+    5) stl_geometry='geometry\n{\n\thill_geometry\n\t{\n\t\ttype triSurfaceMesh;\n\t\tfile $:TERRAIN_DICT.STL_FILE;\n\t}\n};'
         ;;
     *)
         echo "ERROR: OpenFOAM major version not supported/recognized." >&2
