@@ -42,11 +42,12 @@ boundaryField
         type            slip;
     }
 
+    #include        "include/ABLConditions"
     "(hill_geometry|minZ)"
     {
         type            epsilonWallFunction;
-        Cmu             0.09;
-        kappa           0.4;
+        Cmu             $Cmu;
+        kappa           $kappa;
         E               9.8;
         value           $internalField;
     }

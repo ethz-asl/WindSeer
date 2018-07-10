@@ -47,7 +47,7 @@ for stl_file in "$@"; do
     # Use python script to generate new stl file (reset origin) and terrainDict
     # Y limits should be only thing printed (bit dodge though...)
     YLIMS=$(python python/stl_terrainDict.py -si ${stl_file} -so ${STLOUT} \
-        -do ${CASEDIR}/terrainDict --pad-z 3.0)
+        -do ${CASEDIR}/terrainDict --pad-z 3.0 --autograde-z)
     echo "YLIMS = ${YLIMS}"
     echo $YLIMS > ${CASEDIR}/YLIMS
 done
