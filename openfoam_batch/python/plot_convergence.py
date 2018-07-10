@@ -28,9 +28,14 @@ def plot_convergence(X, var_names):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plot OpenFOAM convergence residuals')
+    parser.add_argument('-s', '--save-fig', required=False, default='', help='Save output as pdf [file]')
     parser.add_argument('log_files', metavar='FILES', nargs='+', help='log files to plot')
+
     args = parser.parse_args()
 
     X, var_names = read_logs(args.log_files)
     fh, ah = plot_convergence(X, var_names)
-    plt.show()
+    if args.save_fig is not '':
+        fh.savefig(args.save_fig, bbox_inches='tight')
+    else:
+        plt.show()
