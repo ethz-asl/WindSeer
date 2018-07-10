@@ -9,7 +9,7 @@ def read_logs(filelist):
     X[:, 0:2] = loaded_data
     var_names = [os.path.basename(filelist[0])]
     for i, file in enumerate(filelist[1:]):
-        X[:, i+2] = np.loadtxt(file)[:,1]
+        X[:, i+2] = np.loadtxt(file)[:loaded_data.shape[0],1]
         var_names.append(os.path.basename(file))
     return X, var_names
 
@@ -20,7 +20,7 @@ def plot_convergence(X, var_names):
     for y in (X.T)[1:]:
         h_lines.extend(ah.plot((X.T)[0], y))
     ah.set_ylabel('Residual')
-    ah.legend(h_lines, var_names)
+    ah.legend(h_lines, var_names, loc='best')
     ah.set_yscale('log')
     ah.set_xlabel('Iteration')
     return fh, ah
