@@ -5,16 +5,17 @@
 |   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      transportProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-kappa                0.4;
-Cmu                  0.03;
+transportModel  Newtonian;
 
-Uref                 WINDSPEED;
-Zref                 10;
-zDir                 (0 0 1);
-flowDir              (1 0 0);
-z0                   uniform 0.01;
-zGround              uniform 0.0;
-value                $internalField;
+nu              [0 2 -1 0 0 0 0] 1.5e-05;
 
 // ************************************************************************* //

@@ -5,16 +5,43 @@
 |   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-kappa                0.4;
-Cmu                  0.03;
+application     simpleFoam;
 
-Uref                 WINDSPEED;
-Zref                 10;
-zDir                 (0 0 1);
-flowDir              (1 0 0);
-z0                   uniform 0.01;
-zGround              uniform 0.0;
-value                $internalField;
+startFrom       latestTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         5000;
+
+deltaT          1;
+
+writeControl    timeStep;
+
+writeInterval   5000;
+
+purgeWrite      0;
+
+writeFormat     binary;
+
+writePrecision  12;
+
+writeCompression uncompressed;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable yes;
 
 // ************************************************************************* //
