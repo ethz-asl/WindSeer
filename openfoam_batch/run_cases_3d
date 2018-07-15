@@ -211,7 +211,9 @@ for stl_dir in "$@"; do
 
         # Calculate k, epsilon
         k_epsilon=($(python $python_directory/abl_k_epsilon.py -U $w $abl_params))
-        echo "K_EPSILON: ${k_epsilon[0]} ${k_epsilon[1]}"
+        k_abl="${k_epsilon[0]}"
+        eps_abl="${k_epsilon[1]}"
+        echo "K_EPSILON: $k_abl $eps_abl"
 
         wind_directory="${case_dir}/W${w}"
         # Create system folder, symlinks from base case
@@ -229,8 +231,8 @@ for stl_dir in "$@"; do
         # Copy initial conditions, change wind speed
         cp -r $base_case/simpleFoam/0.orig $wind_directory/0
         sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
-        sed -i "s/INLETK/${k_epsilon[0]}/" 0/k
-        sed -i "s/INLETEPSILON/${k_epsilon[1]}/" 0/epsilon
+        sed -i "s/INLETK/${k_abl}/" 0/k
+        sed -i "s/INLETEPSILON/${eps_abl}/" 0/epsilon
         echo -en "\tCase setup complete: W=$w, running simpleFoam..."
         simpleFoam > simpleFoam.log 2> simpleFoam.err
         if [ "$?" -gt 0 ]; then
