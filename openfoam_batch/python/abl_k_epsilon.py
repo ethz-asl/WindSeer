@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import argparse
 
@@ -31,4 +32,4 @@ if __name__ == "__main__":
 
     k, eps = abl_k_eps(args.U_ref, z=args.z, Z_ref=args.Z_ref, z_0=args.z0, z_ground=args.z_ground, kappa=args.kappa,
                        C_mu=args.C_mu)
-    print '{0:0.6f} {1:0.6f}'.format(k, eps)
+    print('{0:0.6f} {1:0.6f}'.format(k, eps))
