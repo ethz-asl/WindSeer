@@ -30,7 +30,14 @@ addLayers       false;
 // - to specify refinement for any mesh cell inside/outside/near
 // - to 'snap' the mesh boundary to the surface
 
-STLGEOMETRY
+geometry
+{
+	$:TERRAIN_DICT.STL_FILE
+	{
+		type triSurfaceMesh;
+		name hill_geometry;
+	}
+};
 
 // Settings for the castellatedMesh generation.
 castellatedMeshControls
@@ -130,7 +137,11 @@ castellatedMeshControls
 
     refinementRegions
     {
-
+        hill_geometry
+        {                             
+            mode distance;            // refinement level 2 within 50.0 m
+            levels ((50.0 2)); // levels must be ordered nearest first
+        }
     }
 
 

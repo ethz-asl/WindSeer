@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from __future__ import print_function
 import os
 import sys
 import numpy as np
@@ -35,8 +36,8 @@ def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile=
                 'STL_FILE': '"{0}"'.format(os.path.basename(stl_file))}
 
     if not quiet:
-        print "Creating outfile {0} from {1}".format(outfile, infile)
-        print "Mesh limits: x in [{0}, {1}], y in [{2}, {3}], z in [{4}, {5}]".format(lx, hx, ly, hy, lz, hz)
+        print("Creating outfile {0} from {1}".format(outfile, infile))
+        print("Mesh limits: x in [{0}, {1}], y in [{2}, {3}], z in [{4}, {5}]".format(lx, hx, ly, hy, lz, hz))
 
     with open(infile, "r") as fh:
         src = Template(fh.read())
@@ -46,7 +47,7 @@ def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile=
         out_fh.write(mesh_dict)
 
 
-def process_stl(stl_in, dict_in, stl_out, dict_out, nx=128, ny=128, nz=128, pad_z=3.0, gz=False):
+def process_stl(stl_in, dict_in, stl_out, dict_out, nx=128, ny=128, nz=128, pad_z=3.0, gz=False, min_height=0.0):
 
     hill_mesh = mesh.Mesh.from_file(stl_in)
 
@@ -58,7 +59,7 @@ def process_stl(stl_in, dict_in, stl_out, dict_out, nx=128, ny=128, nz=128, pad_
     terrain_size = hill_mesh.max_ - hill_mesh.min_
     lims[:, 0] = hill_mesh.min_
     lims[:, 1] = hill_mesh.max_
-    lims[2, 1] = lims[2, 0] + pad_z*(hill_mesh.max_[2] - hill_mesh.min_[2])
+    lims[2, 1] = max(lims[2, 0] + pad_z*(hill_mesh.max_[2] - hill_mesh.min_[2]), min_height)
     if (lims[2, 1] - lims[2,0])/nz > 20.0:
         nz = int((lims[2, 1] - lims[2,0])/20.0)
 
@@ -67,18 +68,20 @@ def process_stl(stl_in, dict_in, stl_out, dict_out, nx=128, ny=128, nz=128, pad_
     if gz:
         # Would like to have enough points in z so that the terrain has roughly cubic blocks
         # Assume x and y are already roughly similar, so we base on x cell size
-        x_cell = max(terrain_size[0]/nx, terrain_size[1]/ny)              # max edge length of cells in x or y dir
-        z_cell = (lims[2, 1] - lims[2, 0])/nz               # edge length of cells in z dir
-        if z_cell > 1.5*x_cell:
-            height_terrain = terrain_size[2]                       # Height of terrain block (in real units)
+
+        z_range = (lims[2, 1] - lims[2, 0])
+        x_cell = max(terrain_size[0]/nx, terrain_size[1]/ny)        # max edge length of cells in x or y dir
+        z_cell = z_range/nz               # edge length of cells in z dir
+        if z_cell > 1.5*x_cell or z_cell < 0.5*x_cell:
+            height_terrain = terrain_size[2]                # Height of terrain block (in real units)
             nz_terrain = int(height_terrain/x_cell)         # Number of cells in terrain block z
             ppz_terrain = min(0.65, float(nz_terrain)/nz)   # Proportion of cells in terrain block z
             nz_terrain = int(ppz_terrain*nz)
-            phz_terrain = (1.0/(pad_z+1))                   # Proportion of total height in terrain z
+            phz_terrain = height_terrain/z_range  # Proportion of total height in terrain z
 
             # Calculate new grading to match cell sizes
             dz_terrain = height_terrain/nz_terrain      # Height of z cell in terrain block
-            height_air = pad_z*height_terrain           # Total height of air block
+            height_air = z_range - height_terrain       # Total height of air block
             dz_air = height_air/(nz-nz_terrain)         # Mean height of air cell (if uniform)
             nz_air = nz - nz_terrain
             if dz_terrain < dz_air:
@@ -110,6 +113,8 @@ if __name__ == "__main__":
                         help='Number of points in y direction (uniform)')
     parser.add_argument('-nz', type=int, default=64,
                         help='Number of points in z direction (uniform)')
+    parser.add_argument('-mh', type=float, default=0.0,
+                        help='Minimum block height in m')
     parser.add_argument('-pz', '--pad-z', type=float, default=2.0, help='Multiples of terrain height to add above mesh')
     parser.add_argument('-gz', '--autograde-z', action='store_true', required=False,
                         help='Automatically grade z for cubic cells')
@@ -117,5 +122,5 @@ if __name__ == "__main__":
 
     limits = process_stl(stl_in=args.stl_in, dict_in=args.dict_in, stl_out=args.stl_out, dict_out=args.dict_out,
                        nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z,
-                       gz=args.autograde_z)
-    print '{0:0.2f} {1:0.2f}'.format(limits[1, 0], limits[1, 1])
+                       gz=args.autograde_z, min_height=args.mh)
+    print('{0:0.2f} {1:0.2f}'.format(limits[1, 0], limits[1, 1]))

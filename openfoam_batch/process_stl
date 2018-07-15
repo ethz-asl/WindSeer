@@ -6,6 +6,7 @@ OPTIND=1
 # Default values
 OUTDIR="stl_processed/"
 HOMEDIR=$(pwd)
+MINH=300.0
 
 usage() { 
     echo -e "Usage: $0 [OPTION] stl_file1 stl_file2 ..."
@@ -47,7 +48,7 @@ for stl_file in "$@"; do
     # Use python script to generate new stl file (reset origin) and terrainDict
     # Y limits should be only thing printed (bit dodge though...)
     YLIMS=$(python python/stl_terrainDict.py -si ${stl_file} -so ${STLOUT} \
-        -do ${CASEDIR}/terrainDict --pad-z 3.0 --autograde-z)
+        -do ${CASEDIR}/terrainDict --pad-z 3.0 -mh "$MINH" --autograde-z)
     echo "YLIMS = ${YLIMS}"
     echo $YLIMS > ${CASEDIR}/YLIMS
 done
