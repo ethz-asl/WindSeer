@@ -13,6 +13,7 @@ end_iter=-1
 write_iter=-1
 regrid=1
 build_mesh=1
+output_dir=${home_dir}/cases3d/
 
 # Source shared functions ( 'create_base_case' and 'check_files' )
 source shared_functions.sh
@@ -22,6 +23,7 @@ usage() {
     # echo -e "  -s stl_dir\n\tDirectory of stl files"
     echo -e "  -c csv_dir\n\tDirectory to output csv files"
     echo -e "  -b base_dir\n\tlocation of base case directory"
+    echo -e "  -o output_dir\n\tOutput directory"
     echo -e "  -w delta_wind\n\tWind step size \(w=1:delta_wind:15\)"
     echo -e "  -e end_time"
     echo -e "\tendTime for simpleFoam (default to existing value from controlDict)"
@@ -36,7 +38,7 @@ usage() {
     echo -e "\tprint this help and exit"
 }
 
-while getopts "c:b:w:e:i:s:2:h" opt; do
+while getopts "c:b:w:e:i:s:2:o:h" opt; do
     case "$opt" in
         # s)  stl_dir=$OPTARG ;;
         c)  csv_dir=$OPTARG
@@ -53,6 +55,8 @@ while getopts "c:b:w:e:i:s:2:h" opt; do
             ;;
         2)  second_solver=$OPTARG
             ;;
+	o)  output_dir=$OPTARG
+	    ;;
         h)
             usage
             exit 0
@@ -112,7 +116,8 @@ for stl_dir in "$@"; do
     fi
     
     echo "Creating new case ${casename} based on ${stl_dir}"
-    case_dir=${home_dir}/cases3d/${casename}
+    case_dir=${output_dir}/${casename}
+    # case_dir=${home_dir}/cases3d/${casename}
     mkdir -p $case_dir
 
     simpleFoam_dir="${case_dir}/simpleFoam"
