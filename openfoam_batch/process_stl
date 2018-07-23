@@ -6,7 +6,7 @@ OPTIND=1
 # Default values
 OUTDIR="stl_processed/"
 HOMEDIR=$(pwd)
-MINH=300.0
+MINH=500.0
 
 usage() { 
     echo -e "Usage: $0 [OPTION] stl_file1 stl_file2 ..."

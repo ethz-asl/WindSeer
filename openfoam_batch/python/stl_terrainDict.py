@@ -87,8 +87,8 @@ def process_stl(stl_in, dict_in, stl_out, dict_out, nx=128, ny=128, nz=128, pad_
             if dz_terrain < dz_air:
                 k_air = newton(grading_function, 1.5, fprime=dgrading_function_dk,
                                args=(nz_air, height_air, dz_terrain))
-            elif dz_terrain < dz_air:
-                k_air = newton(grading_function, 0.5, fprime=dgrading_function_dk,
+            elif dz_terrain > dz_air:
+                k_air = newton(grading_function, 0.9, fprime=dgrading_function_dk,
                                args=(nz_air, height_air, dz_terrain))
             else:
                 k_air = 1

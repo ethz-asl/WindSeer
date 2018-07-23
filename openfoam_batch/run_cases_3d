@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This helps us trap the kill signal from a function that wants us to terminate
+trap "exit 1" TERM
+export TOP_PID=$$
+
 # Set up some stuff for getopts
 OPTIND=1
 
@@ -13,7 +17,7 @@ end_iter=-1
 write_iter=-1
 regrid=1
 build_mesh=1
-output_dir=${home_dir}/cases3d/
+output_dir="cases3d/"
 
 # Source shared functions ( 'create_base_case' and 'check_files' )
 source shared_functions.sh
@@ -55,14 +59,12 @@ while getopts "c:b:w:e:i:s:2:o:h" opt; do
             ;;
         2)  second_solver=$OPTARG
             ;;
-	o)  output_dir=$OPTARG
-	    ;;
-        h)
-            usage
+        o)  output_dir=$OPTARG
+            ;;
+        h)  usage
             exit 0
             ;;
-        *)
-            usage >&2
+        *)  usage >&2
             exit 1
             ;;
     esac
@@ -74,6 +76,10 @@ if [ "$#" -lt 1 ]; then
     usage >&2
     exit 1
 fi
+
+output_dir=$( check_path "$output_dir" "$home_dir" ) || exit 1
+csv_dir=$( check_path "$csv_dir" "$home_dir" ) || exit 1
+base_dir=$( check_path "$base_dir" "$home_dir" ) || exit 1
 
 # Check openFOAM version
 if ! type simpleFoam &> /dev/null 
@@ -97,9 +103,10 @@ esac
 snappy_dict="snappyHexMeshDict"
 
 # The remaining arguments are the stl directories
-base_case=$home_dir/$base_dir
+# base_case=$home_dir/$base_dir
+base_case="$base_dir"
 python_directory=$home_dir/python
-mkdir -p $csv_dir
+# mkdir -p $csv_dir
 
 
 # Loop over case_directories, create new directory for each case
@@ -266,7 +273,7 @@ for stl_dir in "$@"; do
         if [ $regrid -gt 0 ]
         then
             echo -en "\tResampling results onto test grid..."
-            printf -v csv_file "$home_dir/$csv_dir/%s_W%02d" $casename $w
+            printf -v csv_file "$csv_dir/%s_W%02d" $casename $w
             python "${python_directory}/resample.py" --three-d --case-dir $wind_directory \
                 --mesh-dir $reGrid_dir --case-foam hill.foam --outfile $csv_file
             if [ "$?" -gt 0 ]; then

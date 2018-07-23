@@ -56,7 +56,7 @@ castellatedMeshControls
     // Note that this is the number of cells before removing the part which
     // is not 'visible' from the keepPoint. The final number of cells might
     // actually be a lot less.
-    maxGlobalCells 2000000;
+    maxGlobalCells 4000000;
 
     // The surface refinement loop might spend lots of iterations
     // refining just a few cells. This setting will cause refinement
@@ -140,7 +140,7 @@ castellatedMeshControls
         hill_geometry
         {                             
             mode distance;            // refinement level 2 within 50.0 m
-            levels ((50.0 2)); // levels must be ordered nearest first
+            levels ((10.0 2) (50.0 1)); // levels must be ordered nearest first
         }
     }
 
