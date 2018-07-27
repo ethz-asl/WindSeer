@@ -1,0 +1,53 @@
+Take as input original wind speed
+orig_wind_speed
+latest_time=$( foamListTimes -case $original_case -latestTime )
+
+# Extract internalField values from first solve
+    foamDictionary -entry 'internalField' -value "$( foamListTimes -latestTime )/U" > "0/tempfield.txt"
+
+For each new wind speed $w
+    ratio = new_wind_speed / orig_wind_speed
+    wind_directory="${case_dir}/W${w}"
+    # Create system folder, symlinks from base case
+    create_base_case $wind_directory $base_case/base
+    ln -s ${simpleFoam_dir}/constant/polyMesh $wind_directory/constant/polyMesh
+    
+    cd $wind_directory
+    # Set to ascii write (first have to make file real, not symlink)
+    sed -i ';' system/controlDict
+    foamDictionary -entry 'writeFormat' -set "ascii" system/controlDict
+    
+    # Create new 0 from old one
+    mapFields -consistent -sourceTime 0 $old_wind_case
+    
+    foamDictionary -entry 'writeFormat' -set "ascii" system/controlDict
+    
+    # Update speeds
+    declare -a set_fields=("U" "epsilon" "k")
+    
+    for field in "${set_fields[@]}"; do
+        foamDictionary -entry 'boundaryField.west_face.Uref' -set "$w" "0/$field"
+    done
+    
+    # Get p, U, epsilon, k, nut from 1 case
+    
+    mapFields -consistent -sourceTime latestTime $old_case
+    
+    # U is special (vector)    
+    foamDictionary -entry 'internalField' -value "$( foamListTimes -latestTime )/U" > "0/tempfield.txt"
+    cd 0
+    awk '/\(.*\)/ {gsub(/[()]/,""); print "("$1*2, $2*2, $3*2")"; next} 1' tempfield.txt > tempmod.txt
+    foamDictionary -entry 'internalField' -set '#include "tempmod.txt"' "U" > /dev/null
+    
+
+    declare -a set_fields=("p" "k" "epsilon" "nut")
+    for field in "${set_fields[@]}"; do
+        foamDictionary -entry 'internalField' -value "$( foamListTimes -latestTime )/${field}" > "0/tempfield.txt"
+        cd 0
+        awk 'NR<=3 {print; next}; /^[^\)]/  { print $1*2; next; }; 1' tempfield.txt > tempmod.txt
+        foamDictionary -entry 'internalField' -set '#include "tempmod.txt"' "$field" > /dev/null
+        cd ..
+    done
+    rm tempfield.txt tempmod.txt    
+    
+

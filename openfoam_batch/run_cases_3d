@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# This helps us trap the kill signal from a function that wants us to terminate
-trap "exit 1" TERM
-export TOP_PID=$$
-
 # Set up some stuff for getopts
 OPTIND=1
 
@@ -45,22 +41,14 @@ usage() {
 while getopts "c:b:w:e:i:s:2:o:h" opt; do
     case "$opt" in
         # s)  stl_dir=$OPTARG ;;
-        c)  csv_dir=$OPTARG
-            ;;
-        b)  base_dir=$OPTARG
-            ;;
-        w)  wind_delta=$OPTARG
-            ;;
-        e)  end_iter=$OPTARG
-            ;;
-        i)  write_iter=$OPTARG
-            ;;
-        s)  build_mesh=$OPTARG
-            ;;
-        2)  second_solver=$OPTARG
-            ;;
-        o)  output_dir=$OPTARG
-            ;;
+        c)  csv_dir=$OPTARG ;;
+        b)  base_dir=$OPTARG ;;
+        w)  wind_delta=$OPTARG ;;
+        e)  end_iter=$OPTARG ;;
+        i)  write_iter=$OPTARG ;;
+        s)  build_mesh=$OPTARG ;;
+        2)  second_solver=$OPTARG ;;
+        o)  output_dir=$OPTARG ;;
         h)  usage
             exit 0
             ;;

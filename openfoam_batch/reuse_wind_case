@@ -1,0 +1,114 @@
+#!/bin/bash
+
+# Set up some stuff for getopts
+OPTIND=1
+home_dir=$(pwd)
+
+# Source shared functions ( 'create_base_case' and 'check_files' )
+source shared_functions.sh
+original_case="W1"
+original_speed="1"
+output_dir="$home_dir"
+base_case=""
+
+usage() { 
+    echo -e "Usage: $0 [OPTIONS] V1 V2 ..."
+    echo -e "  V1 V2 ... New velocity values"
+    echo -e "  -c CASE_DIR\n\tDirectory for original case [default W1]"
+    echo -e "  -v CASE_VEL"
+    echo -e "  -b BASE_CASE\n\tDirectory for base case [default CASE_DIR]"
+    echo -e "\tInflow wind speed of original case [default 1]"
+    echo -e "  -o OUT_DIR\n\tOutput directory [default ./]"
+    echo -e "  -h\n\tPrint this help and exit"
+    echo -e "\tNew cases will be created in OUT_DIR/WV1/, OUT_DIR/WV2/, etc"
+}
+
+while getopts "c:v:o:b:h" opt; do
+    case "$opt" in
+        c)  original_case=$OPTARG ;;
+        v)  original_speed=$OPTARG ;;
+        o)  output_dir=$OPTARG ;;
+        b)  base_case=$OPTARG ;;
+        h)  usage
+            exit 0
+            ;;
+    esac
+done
+shift $(expr $OPTIND - 1 )
+
+if [ "$#" -lt 1 ]; then
+    echo "ERROR: Not enough input arguments" >&2
+    usage >&2
+    exit 1
+fi
+
+
+original_case=$( check_path "$original_case" "$home_dir" ) || exit 1
+output_dir=$( check_path "$output_dir" "$home_dir" ) || exit 1
+[[ -z "$base_case" ]] && base_case=$original_case
+
+# Check openFOAM version
+if ! type simpleFoam &> /dev/null 
+then
+    echo "ERROR: command simpleFoam not found, have you sourced OpenFOAM bashrc?" >&2
+    exit 1
+fi
+
+# Get current U, p, k, epsilon, nut
+# First, convert case to ascii
+cd $original_case
+latest_time=$( foamListTimes -latestTime )
+foamDictionary -entry 'writeFormat' -set "ascii" system/controlDict
+foamFormatConvert -latestTime -noConstant
+
+declare -a set_fields=("U" "p" "k" "epsilon" "nut")
+for field in "${set_fields[@]}"; do
+    foamDictionary -entry 'internalField' -value "${latest_time}/U" > "${original_case}/temp${field}.txt"
+done
+
+for wind_speed in "$@"; do
+    wind_directory="${output_dir}/$w"
+    ratio=$( echo "scale=5; ${wind_speed}/${original_speed}" | bc )
+    ratio_sq=$( echo "$ratio*$ratio" | bc )
+    ratio_cu=$( echo "${ratio_sq}*$ratio" | bc )
+    
+    # Create case directory
+    create_base_case $wind_directory $base_case
+    ln -s ${base_case}/constant/polyMesh $wind_directory/constant/polyMesh
+    
+    cd $wind_directory
+    # Set to ascii write (first have to make file real, not symlink)
+    sed -i ';' system/controlDict
+    foamDictionary -entry 'writeFormat' -set "ascii" system/controlDict
+    
+    # Create new 0 from old one
+    mapFields -consistent -sourceTime 0 $original_case
+    
+    # Update speeds
+    declare -a set_fields=("U" "epsilon" "k")
+    for field in "${set_fields[@]}"; do
+        foamDictionary -entry 'boundaryField.west_face.Uref' -set "$wind_speed" "0/$field"
+    done
+    
+    cd "$wind_directory/0"
+    
+    # U is special (vector)    
+    awk '/\(.*\)/ {gsub(/[()]/,""); print "("$1*'"$ratio"', $2*'"$ratio"', $3*'"$ratio"'")"; next} 1' "${original_case}/tempU.txt" > Umod.txt
+    foamDictionary -entry 'internalField' -set '#include "Umod.txt"' "U" > /dev/null
+
+    # Set other fields 
+    declare -a set_fields=("p" "k" "epsilon" "nut")
+    for field in "${set_fields[@]}"; do
+        case "$field" in
+            nut) mult="$ratio" ;;
+            k|p) mult="$ratio_sq" ;;
+            epsilon) mult="$ratio_cu" ;;
+            *) echo "Multiplier not found for ${field}!"; exit 1 ;;
+        esac
+
+        ffile="${field}mod.txt"
+        awk 'NR<=3 {print; next}; /^[^\)]/  { print $1*'"$mult"'; next; }; 1' "${original_case}/temp${field}.txt" > "$ffile"
+        foamDictionary -entry 'internalField' -set "\#include \"${ffile}\"" "$field" > /dev/null
+        # rm "$ffile"
+    done
+done

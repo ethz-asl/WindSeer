@@ -47,9 +47,11 @@ def create_terrainDict(outfile, xyz_lims, stl_file, nx=10, ny=10, nz=10, infile=
         out_fh.write(mesh_dict)
 
 
-def process_stl(stl_in, dict_in, stl_out, dict_out, nx=128, ny=128, nz=128, pad_z=3.0, gz=False, min_height=0.0):
+def process_stl(stl_in, dict_in, stl_out, dict_out, nx=128, ny=128, nz=128, pad_z=3.0, gz=False, min_height=0.0, rotate=0):
 
     hill_mesh = mesh.Mesh.from_file(stl_in)
+    if rotate != 0:
+        hill_mesh.rotate(np.array([0,0,1]), rotate*np.pi/180.0)
 
     # Shift origin to one corner
     hill_mesh.translate(-1.0*hill_mesh.min_)
@@ -118,9 +120,11 @@ if __name__ == "__main__":
     parser.add_argument('-pz', '--pad-z', type=float, default=2.0, help='Multiples of terrain height to add above mesh')
     parser.add_argument('-gz', '--autograde-z', action='store_true', required=False,
                         help='Automatically grade z for cubic cells')
+    parser.add_argument('-r', '--rotate', default=0.0, type=float, required=False,
+                        help='Rotate stl mesh about z (vertical) axis')
     args = parser.parse_args()
 
     limits = process_stl(stl_in=args.stl_in, dict_in=args.dict_in, stl_out=args.stl_out, dict_out=args.dict_out,
                        nx=args.nx, ny=args.ny, nz=args.nz, pad_z=args.pad_z,
-                       gz=args.autograde_z, min_height=args.mh)
+                       gz=args.autograde_z, min_height=args.mh, rotate=args.rotate)
     print('{0:0.2f} {1:0.2f}'.format(limits[1, 0], limits[1, 1]))
