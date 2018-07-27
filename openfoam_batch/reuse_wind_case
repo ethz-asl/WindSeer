@@ -10,14 +10,14 @@ original_case="W1"
 original_speed="1"
 output_dir="$home_dir"
 base_case=""
+return_val=0
 
 usage() { 
     echo -e "Usage: $0 [OPTIONS] V1 V2 ..."
     echo -e "  V1 V2 ... New velocity values"
     echo -e "  -c CASE_DIR\n\tDirectory for original case [default W1]"
-    echo -e "  -v CASE_VEL"
+    echo -e "  -v CASE_VEL\n\tInflow wind speed of original case [default 1]"
     echo -e "  -b BASE_CASE\n\tDirectory for base case [default CASE_DIR]"
-    echo -e "\tInflow wind speed of original case [default 1]"
     echo -e "  -o OUT_DIR\n\tOutput directory [default ./]"
     echo -e "  -h\n\tPrint this help and exit"
     echo -e "\tNew cases will be created in OUT_DIR/WV1/, OUT_DIR/WV2/, etc"
@@ -55,19 +55,22 @@ then
 fi
 
 # Get current U, p, k, epsilon, nut
-# First, convert case to ascii
+# First, convert case to ascii (sed -i command replaces symlink with file)
 cd $original_case
 latest_time=$( foamListTimes -latestTime )
+sed -i '' system/controlDict
+existing_format=$( foamDictionary -entry 'writeFormat' -value system/controlDict)
 foamDictionary -entry 'writeFormat' -set "ascii" system/controlDict
 foamFormatConvert -latestTime -noConstant
+foamDictionary -entry 'writeFormat' -set "$existing_format" system/controlDict
 
 declare -a set_fields=("U" "p" "k" "epsilon" "nut")
 for field in "${set_fields[@]}"; do
-    foamDictionary -entry 'internalField' -value "${latest_time}/U" > "${original_case}/temp${field}.txt"
+    foamDictionary -entry 'internalField' -value "${latest_time}/${field}" > "${original_case}/temp${field}.txt"
 done
 
 for wind_speed in "$@"; do
-    wind_directory="${output_dir}/$w"
+    wind_directory="${output_dir}/W${wind_speed}"
     ratio=$( echo "scale=5; ${wind_speed}/${original_speed}" | bc )
     ratio_sq=$( echo "$ratio*$ratio" | bc )
     ratio_cu=$( echo "${ratio_sq}*$ratio" | bc )
@@ -103,12 +106,25 @@ for wind_speed in "$@"; do
             nut) mult="$ratio" ;;
             k|p) mult="$ratio_sq" ;;
             epsilon) mult="$ratio_cu" ;;
-            *) echo "Multiplier not found for ${field}!"; exit 1 ;;
+            *) echo "Multiplier not found for ${field}!" >&2; exit 1 ;;
         esac
 
         ffile="${field}mod.txt"
         awk 'NR<=3 {print; next}; /^[^\)]/  { print $1*'"$mult"'; next; }; 1' "${original_case}/temp${field}.txt" > "$ffile"
-        foamDictionary -entry 'internalField' -set "\#include \"${ffile}\"" "$field" > /dev/null
-        # rm "$ffile"
+        foamDictionary -entry 'internalField' -set "#include \"${ffile}\"" "$field" > /dev/null
+        rm "$ffile"
     done
+    
+    cd "$wind_directory"
+    echo -en "\tRunning simpleFoam for reuse case..."
+    simpleFoam > simpleFoam.log 2> simpleFoam.err
+    simple_success="$?"
+    if [ "$simple_success" -gt 0 ]; then
+        echo " failed!"
+    else
+        simple_iter=$(  foamListTimes -latestTime )
+        echo " converged in ${simple_iter} iterations."
+    fi
+    return_val=$( echo "${simple_success} + ${return_val}" | bc )
 done
+exit $return_val
