@@ -25,28 +25,29 @@ warm_start = False
 custom_loss = False
 
 # dataset parameter
-trainset_name = 'data/converted_train_new.tar'
-validationset_name = 'data/converted_validation_new.tar'
-testset_name = 'data/converted_test_new.tar'
+trainset_name = 'data/converted_train_new_boolean.tar'
+validationset_name = 'data/converted_validation_new_boolean.tar'
+testset_name = 'data/converted_test_new_boolean.tar'
 
 # model parameter
-model_name = 'ednn_2D_scaled_bilinear_skipping_new'
-ux_scaling = 9.0
+model_name = 'ednn_2D_scaled_nearest_skipping_new_boolean'
+uhor_scaling = 9.0
 uz_scaling = 2.5
 turbulence_scaling = 4.5
-interpolation_mode = 'bilinear'
-align_corners = True
+use_turbulence = False
+interpolation_mode = 'nearest'
+align_corners = False
 number_input_layers = 3
 skipping = True
 # --------------------------------------------------------------------------
 
 # define dataset and dataloader
-trainset = utils.MyDataset(trainset_name,  scaling_ux = ux_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+trainset = utils.MyDataset(trainset_name, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=batchsize,
                                           shuffle=True, num_workers=num_workers)
 
-validationset = utils.MyDataset(validationset_name,  scaling_ux = ux_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+validationset = utils.MyDataset(validationset_name, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
 
 validationloader = torch.utils.data.DataLoader(validationset, batch_size=1,
                                           shuffle=False, num_workers=num_workers)
@@ -141,19 +142,20 @@ if (save_model):
 
     # save the model parameters
     model_params = {
-        'ux_scaling': ux_scaling,
+        'uhor_scaling': uhor_scaling,
         'uz_scaling': uz_scaling,
         'turbulence_scaling': turbulence_scaling,
         'interpolation_mode': interpolation_mode,
         'align_corners': align_corners,
         'number_input_layers': number_input_layers,
-        'skipping': skipping
+        'skipping': skipping,
+        'use_turbulence': use_turbulence
         }
     np.save('models/trained_models/' + model_name + '_params.npy', model_params)
 
 # evaluate the model performance on the testset if requested
 if (evaluate_testset):
-    testset = utils.MyDataset(testset_name,  scaling_ux = ux_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+    testset = utils.MyDataset(testset_name, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=num_workers)
 

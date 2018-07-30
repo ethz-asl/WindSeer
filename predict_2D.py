@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader
 import utils
 
 # ---- Params --------------------------------------------------------------
-dataset = 'data/converted_test_new.tar'
+dataset = 'data/converted_test_new_boolean.tar'
 index = 12 # plot the prediction for the following sample in the set
-model_name = 'ednn_2D_scaled_bilinear_skipping_new'
+model_name = 'ednn_2D_scaled_nearest_skipping_new_boolean'
 
 # --------------------------------------------------------------------------
 
@@ -22,7 +22,7 @@ params = np.load('models/trained_models/' + model_name + '_params.npy')
 params = params.item()
 
 # load dataset
-testset = utils.MyDataset(dataset, scaling_ux = params['ux_scaling'], scaling_uz = params['uz_scaling'], scaling_nut = params['turbulence_scaling'])
+testset = utils.MyDataset(dataset, turbulence_label = params['use_turbulence'], scaling_uhor = params['uhor_scaling'], scaling_uz = params['uz_scaling'], scaling_nut = params['turbulence_scaling'])
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters

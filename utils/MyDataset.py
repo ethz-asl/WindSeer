@@ -9,7 +9,7 @@ from torch.utils.data.dataset import Dataset
 TODO: try if it is feasable also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
 '''
 class MyDataset(Dataset):
-    def __init__(self, filename, scaling_ux = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
+    def __init__(self, filename, turbulence_label, scaling_uhor = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
         try:
             tar = tarfile.open(filename, 'r')
         except IOError as e:
@@ -20,7 +20,8 @@ class MyDataset(Dataset):
         self.__num_files = len(tar.getnames())
         self.__memberslist = tar.getmembers()
 
-        self.__scaling_ux = scaling_ux
+        self.__turbulence_label = turbulence_label
+        self.__scaling_uhor = scaling_uhor
         self.__scaling_uz = scaling_uz
         self.__scaling_nut = scaling_nut
 
@@ -29,16 +30,40 @@ class MyDataset(Dataset):
         file = tar.extractfile(self.__memberslist[index])
         data = torch.load(file)
 
-        # split into input output
-        input = data[:3, :, :]
-        output = data[3:5, :, :]
+        if (len(list(data.size())) > 3):
+            # 3D data
+            input = data[:4, :, :, :]
 
-        # apply scaling
-        input[1, :, :] /= self.__scaling_ux
-        input[2, :, :] /= self.__scaling_uz
-        output[0, :, :] /= self.__scaling_ux
-        output[1, :, :] /= self.__scaling_uz
-        #output[2, :, :] /= self.__scaling_nut
+            if self.__turbulence_label:
+                output = data[4:, :, :]
+                output[3, :, :, :] /= self.__scaling_nut
+            else:
+                output = data[4:7, :, :]
+
+            # apply scaling
+            input[1, :, :, :] /= self.__scaling_uhor
+            input[2, :, :, :] /= self.__scaling_uhor
+            input[3, :, :, :] /= self.__scaling_uz
+            output[0, :, :, :] /= self.__scaling_uhor
+            output[1, :, :, :] /= self.__scaling_uhor
+            output[2, :, :, :] /= self.__scaling_uz
+
+        else:
+            # 2D data
+            input = data[[0,1,3], :, :]
+
+            if self.__turbulence_label:
+                output = data[[4,6,7], :, :]
+                output[2, :, :] /= self.__scaling_nut
+
+            else:
+                output = data[[4,6], :, :]
+
+            # apply scaling
+            input[1, :, :] /= self.__scaling_uhor
+            input[2, :, :] /= self.__scaling_uz
+            output[0, :, :] /= self.__scaling_uhor
+            output[1, :, :] /= self.__scaling_uz
 
         return input, output
 
