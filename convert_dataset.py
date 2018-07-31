@@ -144,7 +144,56 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain,
                 torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '.tp')
 
                 if d3:
-                    print('flipping not implemented yet for 3d')
+                    # flip in x direction
+                    u_x_out_flipped = np.flip(u_x_out,2) * (-1.0)
+                    u_y_out_flipped = np.flip(u_y_out,2)
+                    u_z_out_flipped = np.flip(u_z_out,2)
+                    turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,2)
+
+                    u_x_in_flipped = np.flip(u_x_in,2) * (-1.0)
+                    u_y_in_flipped = np.flip(u_y_in,2)
+                    u_z_in_flipped = np.flip(u_z_in,2)
+                    distance_field_in_flipped = np.flip(distance_field_in,2)
+
+                    out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+
+                    out_tensor_flipped = torch.from_numpy(out_flipped)
+
+                    torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_x.tp')
+
+                    # flip in y direction
+                    u_x_out_flipped = np.flip(u_x_out,1)
+                    u_y_out_flipped = np.flip(u_y_out,1) * (-1.0)
+                    u_z_out_flipped = np.flip(u_z_out,1)
+                    turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,1)
+
+                    u_x_in_flipped = np.flip(u_x_in,1)
+                    u_y_in_flipped = np.flip(u_y_in,1) * (-1.0)
+                    u_z_in_flipped = np.flip(u_z_in,1)
+                    distance_field_in_flipped = np.flip(distance_field_in,1)
+
+                    out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+
+                    out_tensor_flipped = torch.from_numpy(out_flipped)
+
+                    torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_y.tp')
+
+                    # flip in y direction
+                    u_x_out_flipped = np.flip(np.flip(u_x_out,1),2) * (-1.0)
+                    u_y_out_flipped = np.flip(np.flip(u_y_out,1),2) * (-1.0)
+                    u_z_out_flipped = np.flip(np.flip(u_z_out,1),2)
+                    turbelence_viscosity_out_flipped = np.flip(np.flip(turbelence_viscosity_out,1),2)
+
+                    u_x_in_flipped = np.flip(np.flip(u_x_in,1),2) * (-1.0)
+                    u_y_in_flipped = np.flip(np.flip(u_y_in,1),2) * (-1.0)
+                    u_z_in_flipped = np.flip(np.flip(u_z_in,1),2)
+                    distance_field_in_flipped = np.flip(np.flip(distance_field_in,1),2)
+
+                    out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+
+                    out_tensor_flipped = torch.from_numpy(out_flipped)
+
+                    torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_xy.tp')
                 else:
                     # generate the flipped flow
                     u_x_out_flipped = np.flip(u_x_out,1) * (-1.0)
