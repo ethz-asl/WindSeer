@@ -38,7 +38,7 @@ usage() {
     echo -e "\tprint this help and exit"
 }
 
-while getopts "c:b:w:e:i:s:2:o:h" opt; do
+while getopts "c:b:w:e:i:s:2:o:g:h" opt; do
     case "$opt" in
         # s)  stl_dir=$OPTARG ;;
         c)  csv_dir=$OPTARG ;;
@@ -49,6 +49,7 @@ while getopts "c:b:w:e:i:s:2:o:h" opt; do
         s)  build_mesh=$OPTARG ;;
         2)  second_solver=$OPTARG ;;
         o)  output_dir=$OPTARG ;;
+	g)  regrid=$OPTARG ;;
         h)  usage
             exit 0
             ;;
