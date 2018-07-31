@@ -13,8 +13,13 @@ Encoder/Decoder Neural Network
 The first input layer is assumed to be is_wind. This value is true for all cells except the terrain.
 '''
 class ModelEDNN2D(nn.Module):
-    def __init__(self, n_input_layers, interpolation_mode, align_corners, skipping):
+    def __init__(self, n_input_layers, interpolation_mode, align_corners, skipping, predict_turbulence):
         super(ModelEDNN2D, self).__init__()
+
+        if predict_turbulence:
+            self.__num_outputs = 3
+        else:
+            self.__num_outputs = 2
 
         self.conv1 = nn.Conv2d(n_input_layers, 8, 3, padding = 1)
         self.conv2 = nn.Conv2d(8, 16, 3, padding = 1)
@@ -43,15 +48,15 @@ class ModelEDNN2D(nn.Module):
             self.deconv21 = nn.Conv2d(32, 16, 3, padding = 1)
             self.deconv22 = nn.Conv2d(16, 8, 3, padding = 1)
             self.deconv11 = nn.Conv2d(16, 8, 3, padding = 1)
-            self.deconv12 = nn.Conv2d(8, 2, 3, padding = 1)
+            self.deconv12 = nn.Conv2d(8, self.__num_outputs, 3, padding = 1)
         else:
             self.deconv5 = nn.Conv2d(128, 64, 3, padding = 1)
             self.deconv4 = nn.Conv2d(64, 32, 3, padding = 1)
             self.deconv3 = nn.Conv2d(32, 16, 3, padding = 1)
             self.deconv2 = nn.Conv2d(16, 8, 3, padding = 1)
-            self.deconv1 = nn.Conv2d(8, 2, 3, padding = 1)
+            self.deconv1 = nn.Conv2d(8, self.__num_outputs, 3, padding = 1)
 
-        self.mapping_layer = nn.Conv2d(2,2,1,groups=2) # for each channel a separate filter
+        self.mapping_layer = nn.Conv2d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs)
 
     def init_params(self):
         def printf(m):
@@ -112,8 +117,10 @@ class ModelEDNN2D(nn.Module):
         x = self.mapping_layer(x)
 
         # multiply the outputs by the terrain boolean
-        #x = torch.cat([is_wind, is_wind, is_wind], 1) * x
-        x = torch.cat([is_wind, is_wind], 1) * x
+        if (self.__num_outputs == 2):
+            x = torch.cat([is_wind, is_wind], 1) * x
+        else:
+            x = torch.cat([is_wind, is_wind, is_wind], 1) * x
 
         return x
 

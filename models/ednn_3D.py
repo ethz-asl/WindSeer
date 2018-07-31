@@ -10,11 +10,16 @@ Encoder/Decoder Neural Network
 3. Five times upsampling followed by convolution
 4. Mapping layer with a separate filter for each output channel
 
-The first input layer is assumed to be is_wind. This value is true for all cells except the terrain.
+The first input layer is assumed to be terrain information. It should be zero in the terrain and nonzero elsewhere.
 '''
 class ModelEDNN3D(nn.Module):
-    def __init__(self, n_input_layers, interpolation_mode, align_corners, skipping, high_resolution):
+    def __init__(self, n_input_layers, interpolation_mode, align_corners, skipping, predict_turbulence):
         super(ModelEDNN3D, self).__init__()
+
+        if predict_turbulence:
+            self.__num_outputs = 4
+        else:
+            self.__num_outputs = 3
 
         self.conv1 = nn.Conv3d(n_input_layers, 8, 3, padding = 1)
         self.conv2 = nn.Conv3d(8, 16, 3, padding = 1)
@@ -24,12 +29,8 @@ class ModelEDNN3D(nn.Module):
 
         self.leakyrelu = nn.LeakyReLU(0.1)
 
-        if (high_resolution):
-            self.fc1 = nn.Linear(8192, 4096)
-            self.fc2 = nn.Linear(4096, 8192)
-        else:
-            self.fc1 = nn.Linear(1024, 512)
-            self.fc2 = nn.Linear(512, 1024)
+        self.fc1 = nn.Linear(4096, 2048)
+        self.fc2 = nn.Linear(2048, 4096)
 
         if (align_corners):
             self.upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode, align_corners=True)
@@ -47,15 +48,15 @@ class ModelEDNN3D(nn.Module):
             self.deconv21 = nn.Conv3d(32, 16, 3, padding = 1)
             self.deconv22 = nn.Conv3d(16, 8, 3, padding = 1)
             self.deconv11 = nn.Conv3d(16, 8, 3, padding = 1)
-            self.deconv12 = nn.Conv3d(8, 2, 3, padding = 1)
+            self.deconv12 = nn.Conv3d(8, self.__num_outputs, 3, padding = 1)
         else:
             self.deconv5 = nn.Conv3d(128, 64, 3, padding = 1)
             self.deconv4 = nn.Conv3d(64, 32, 3, padding = 1)
             self.deconv3 = nn.Conv3d(32, 16, 3, padding = 1)
             self.deconv2 = nn.Conv3d(16, 8, 3, padding = 1)
-            self.deconv1 = nn.Conv3d(8, 2, 3, padding = 1)
+            self.deconv1 = nn.Conv3d(8, self.__num_outputs, 3, padding = 1)
 
-        self.mapping_layer = nn.Conv3d(2,2,1,groups=2) # for each channel a separate filter
+        self.mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
 
     def init_params(self):
         def printf(m):
@@ -116,8 +117,10 @@ class ModelEDNN3D(nn.Module):
         x = self.mapping_layer(x)
 
         # multiply the outputs by the terrain boolean
-        #x = torch.cat([is_wind, is_wind, is_wind], 1) * x
-        x = torch.cat([is_wind, is_wind], 1) * x
+        if self.__num_outputs == 3:
+            x = torch.cat([is_wind, is_wind, is_wind], 1) * x
+        else:
+            x = torch.cat([is_wind, is_wind, is_wind, is_wind], 1) * x
 
         return x
 

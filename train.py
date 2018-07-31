@@ -13,15 +13,15 @@ import utils
 # learning parameters
 learning_rate = 1e-3
 plot_every_n_batches = 10
-n_epochs = 10
+n_epochs = 1
 batchsize = 32
-num_workers = 4
+num_workers = 8
 
 # options to store data
 save_model = True
 save_learning_curve = True
 evaluate_testset = True
-warm_start = False
+warm_start = True
 custom_loss = False
 
 # dataset parameter
@@ -39,6 +39,7 @@ interpolation_mode = 'nearest'
 align_corners = False
 number_input_layers = 3
 skipping = True
+d3 = False
 # --------------------------------------------------------------------------
 
 # define dataset and dataloader
@@ -52,13 +53,35 @@ validationset = utils.MyDataset(validationset_name, turbulence_label = use_turbu
 validationloader = torch.utils.data.DataLoader(validationset, batch_size=1,
                                           shuffle=False, num_workers=num_workers)
 
-
 #check if gpu is available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print('-----------------------------------------------------------------------------')
 print('INFO: Start training on device %s' % device)
+print(' ')
+print('Train Settings:')
+print('\tWarm start:\t\t', warm_start)
+print('\tLearning rate:\t\t', learning_rate)
+print('\tBatchsize:\t\t', batchsize)
+print('\tEpochs:\t\t\t', n_epochs)
+print(' ')
+print('Model Settings:')
+print('\tModel name:\t\t', model_name)
+print('\t3D:\t\t\t', d3)
+print('\tUse turbulence:\t\t', use_turbulence)
+print('\tInterpolation mode:\t', interpolation_mode)
+print('\tAlign corners:\t\t', align_corners)
+print('\tNumber of inputs:\t', number_input_layers)
+print('\tSkip connection:\t', skipping)
+print('\tUhor scaling:\t\t', uhor_scaling)
+print('\tUz scaling:\t\t', uz_scaling)
+print('\tTurbulence scaling:\t', turbulence_scaling)
+print('-----------------------------------------------------------------------------')
 
 # define model and move to gpu if available
-net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners, skipping = skipping)
+if d3:
+    net = models.ModelEDNN3D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners, skipping = skipping, predict_turbulence = use_turbulence)
+else:
+    net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners, skipping = skipping, predict_turbulence = use_turbulence)
 
 if (warm_start):
     net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))

@@ -36,7 +36,14 @@ except:
     print('The plot_sample_num needs to be a value between 0 and', len(db)-1, '->' , plot_sample_num, ' is invalid.')
     sys.exit()
 
+print(' ')
+print('----------------------------------')
+print('Input size:')
 print(input.size())
+print('Output size:')
 print(label.size())
+print('----------------------------------')
+print(' ')
 
+# plot the sample
 utils.plot_sample(input, label)
