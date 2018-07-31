@@ -71,6 +71,10 @@ done
 
 for wind_speed in "$@"; do
     wind_directory="${output_dir}/W${wind_speed}"
+    if [ "$wind_directory" == "$base_case" ]; then 
+        echo "Tried to rerun base case: ${base_case}, skipping."
+        continue
+    fi
     ratio=$( echo "scale=5; ${wind_speed}/${original_speed}" | bc )
     ratio_sq=$( echo "$ratio*$ratio" | bc )
     ratio_cu=$( echo "${ratio_sq}*$ratio" | bc )

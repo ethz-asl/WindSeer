@@ -49,7 +49,7 @@ while getopts "c:b:w:e:i:s:2:o:g:h" opt; do
         s)  build_mesh=$OPTARG ;;
         2)  second_solver=$OPTARG ;;
         o)  output_dir=$OPTARG ;;
-	g)  regrid=$OPTARG ;;
+        g)  regrid=$OPTARG ;;
         h)  usage
             exit 0
             ;;
@@ -246,6 +246,7 @@ for stl_dir in "$@"; do
 
     if [ -n "$second_solver" ]; then
         # We also have a higher-order case
+        # We will remove the first order solution if the second is successful
         echo -en "\tRunning second solver simpleFoam..."
         create_base_case $wind_directory $base_case/$second_solver -fn
         simpleFoam > simpleFoam2.log 2> simpleFoam2.err
@@ -254,6 +255,7 @@ for stl_dir in "$@"; do
         else
             second_converged=$(  foamListTimes -latestTime ) # ls -d */ | sed 's:\([0-9]\+\).*:\1:g' | sort -n | tail -1)
             echo " converged in ${second_converged} iterations."
+            rm -r "${wind_directory}/${first_converged}"
         fi
     fi
     
