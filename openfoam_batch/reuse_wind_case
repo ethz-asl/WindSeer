@@ -59,10 +59,13 @@ fi
 cd $original_case
 latest_time=$( foamListTimes -latestTime )
 sed -i '' system/controlDict
-existing_format=$( foamDictionary -entry 'writeFormat' -value system/controlDict)
-foamDictionary -entry 'writeFormat' -set "ascii" system/controlDict
-foamFormatConvert -latestTime -noConstant
-foamDictionary -entry 'writeFormat' -set "$existing_format" system/controlDict
+# existing_format=$( foamDictionary -entry 'writeFormat' -value system/controlDict)
+existing_format=$( foamDictionary -entry 'FoamFile.format' -value "${latest_time}/U" )
+if [ "$existing_format" != "ascii" ]; then
+    foamDictionary -entry 'writeFormat' -set "ascii" system/controlDict
+    foamFormatConvert -latestTime -noConstant
+fi
+foamDictionary -entry 'writeFormat' -set "binary" system/controlDict
 
 declare -a set_fields=("U" "p" "k" "epsilon" "nut")
 for field in "${set_fields[@]}"; do
@@ -81,9 +84,13 @@ for wind_speed in "$@"; do
     
     # Create case directory
     create_base_case $wind_directory $base_case
-    ln -s ${base_case}/constant/polyMesh $wind_directory/constant/polyMesh
     
     cd $wind_directory
+    if [ -d "../W${original_speed}/constant/polyMesh" ]; then
+        ln -s "../../W${original_speed}/constant/polyMesh" constant/polyMesh
+    else
+        ln -s ${base_case}/constant/polyMesh constant/polyMesh
+    fi
     # Set to ascii write (first have to make file real, not symlink)
     sed -i ';' system/controlDict
     foamDictionary -entry 'writeFormat' -set "ascii" system/controlDict
@@ -102,6 +109,7 @@ for wind_speed in "$@"; do
     # U is special (vector)    
     awk '/\(.*\)/ {gsub(/[()]/,""); print "("$1*'"$ratio"', $2*'"$ratio"', $3*'"$ratio"'")"; next} 1' "${original_case}/tempU.txt" > Umod.txt
     foamDictionary -entry 'internalField' -set '#include "Umod.txt"' "U" > /dev/null
+    rm Umod.txt
 
     # Set other fields 
     declare -a set_fields=("p" "k" "epsilon" "nut")

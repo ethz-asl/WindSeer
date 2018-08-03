@@ -252,6 +252,7 @@ for stl_dir in "$@"; do
         simpleFoam > simpleFoam2.log 2> simpleFoam2.err
         if [ "$?" -gt 0 ]; then
             echo " failed!"
+	    continue
         else
             second_converged=$(  foamListTimes -latestTime ) # ls -d */ | sed 's:\([0-9]\+\).*:\1:g' | sort -n | tail -1)
             echo " converged in ${second_converged} iterations."
