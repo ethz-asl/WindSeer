@@ -40,11 +40,14 @@ for dir in $@; do
     cd $base_dir
     for (( w=1; w<=15; w+=1 )); do
         wind_directory="$base_dir/W$w"
-        if [ -d "$wind_directory" ]; then
-            if [ -f "$wind_directory/simpleFoam.err" ] && [
+        if [ ! -d "$wind_directory" ] || [ -s "$wind_directory/simpleFoam2.err" ] || [ ! -f "$wind_directory/simpleFoam2.err" ] && [ -s "$wind_directory/simpleFoam.err" ]; then
+            # If we have no directory, a (non-empty) error file, we can't make a csv and too lazy to invert...
+            continue
+        fi
         cd "$wind_directory"
         touch hill.foam
         latest_time=$( foamListTimes -latestTime )
+        [ "$latest_time" == 0 ] && continue
         printf -v csv_file "$csv_dir/%s_W%02d" $casename $w
         echo -e "\tCreating csv for t=$latest_time to $csv_file..."
         python "${python_directory}/resample.py" --three-d --case-dir $wind_directory \
