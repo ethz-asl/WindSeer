@@ -10,7 +10,7 @@ import utils
 # ---- Params --------------------------------------------------------------
 dataset = 'data/converted_3d.tar'
 index = 0 # plot the prediction for the following sample in the set
-model_name = 'ednn_3D_scaled_nearest_new_boolean'
+model_name = 'ednn_3D_scaled_nearest_skipping_new_boolean'
 d3 = True
 compute_prediction_error = False
 # --------------------------------------------------------------------------

@@ -15,7 +15,7 @@ uhor_scaling = 9.0
 uz_scaling = 2.5
 turbulence_scaling = 5.0
 plot_sample_num = 0
-dataset_rounds = 1
+dataset_rounds = 0
 use_turbulence = True
 #-----------------------------------------------------
 
