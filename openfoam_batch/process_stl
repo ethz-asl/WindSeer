@@ -11,8 +11,8 @@ rotation=0
 
 usage() { 
     echo -e "Usage: $0 [OPTION] stl_file1 stl_file2 ..."
-    echo -e "  -o stl_out_dir\n\tDirectory of processed stl and terrainDict files"
-    echo -r "  -r angle\n\tRotate stl by ANGLE"
+    echo -e "  -o STL_OUT_DIR\n\tDirectory of processed stl and terrainDict files"
+    echo -e "  -r ANGLE\n\tRotate stl by ANGLE"
     echo -e "  -h"
     echo -e "\tprint this help and exit"
     exit 0;
