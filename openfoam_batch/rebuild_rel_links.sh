@@ -75,7 +75,7 @@ for dir in $@; do
 
     # Now replace all the polyMesh links to link to simpleFoam mesh
     for fd in ${dir}/W[0-9]*; do
-        [ ! -d "fd" ] && continue
+        [ ! -d "$fd" ] && continue
         wd=$( basename "$fd" )
         rebuild_poly_links $wd
         if [ "$wd" != 'W1' ]; then
