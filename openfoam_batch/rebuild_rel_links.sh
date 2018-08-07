@@ -63,7 +63,7 @@ for dir in $@; do
     removelink "simpleFoam/constant/transportProperties"
     removelink "simpleFoam/constant/turbulenceProperties"
 
-    
+
     # Replace links in W1
     removelink "W1/system/blockMeshDict"
     removelink "W1/system/controlDict"
@@ -75,9 +75,10 @@ for dir in $@; do
 
     # Now replace all the polyMesh links to link to simpleFoam mesh
     for fd in ${dir}/W[0-9]*; do
+        [ ! -d "fd" ] && continue
         wd=$( basename "$fd" )
         rebuild_poly_links $wd
-	if [ "$wd" != 'W1' ]; then
+        if [ "$wd" != 'W1' ]; then
             relativelink "../../W1/system/fvSchemes" "${wd}/system/fvSchemes"
             relativelink "../../W1/system/fvSolution" "${wd}/system/fvSolution"
             relativelink "../../W1/constant/transportProperties" "${wd}/constant/transportProperties"
