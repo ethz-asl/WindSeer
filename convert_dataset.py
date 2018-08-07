@@ -68,167 +68,168 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain,
 
             # quick sanity check if the csv has the expected format
             if 'U:0' not in wind_data.keys():
-                print('U:0 not in {0}'.format(member.name))
-                raise IOError
-
-            # check if the wind entries are fine (basically a check if the cfd simulation converged
-            max_0 = np.max(wind_data['U:0'])
-            min_0 = np.min(wind_data['U:0'])
-            max_1 = np.max(wind_data['U:1'])
-            min_1 = np.min(wind_data['U:1'])
-            max_2 = np.max(wind_data['U:2'])
-            min_2 = np.min(wind_data['U:2'])
-            max_nut = np.max(wind_data['nut'])
-            min_nut = np.min(wind_data['nut'])
-
-            if ((np.abs(max_0) > vlim) or
-                (np.abs(min_0) > vlim) or
-                (np.abs(min_1) > vlim) or
-                (np.abs(max_1) > vlim) or
-                (np.abs(max_2) > vlim) or
-                (np.abs(min_2) > vlim) or
-                (np.abs(max_nut) > nutlim) or
-                (np.abs(min_nut) > nutlim)):
-
                 rejection_counter += 1
-                if verbose:
-                    print('------------------------------------')
-                    print('Removing', member.name)
-                    print('Statistics: max U0: ', max_0, ', max U1: ', max_1, ', max U2:', max_2)
-                    print('            min U0: ', min_0, ', min U1: ', min_1, ', min U2:', min_2)
-                    print('            min nut:', min_nut, ', max nut:', max_nut)
-                    print('------------------------------------')
+                print('U:0 not in {0}'.format(member.name))
 
             else:
-                channel_shape = [nz, nx]
+                # check if the wind entries are fine (basically a check if the cfd simulation converged
+                max_0 = np.max(wind_data['U:0'])
+                min_0 = np.min(wind_data['U:0'])
+                max_1 = np.max(wind_data['U:1'])
+                min_1 = np.min(wind_data['U:1'])
+                max_2 = np.max(wind_data['U:2'])
+                min_2 = np.min(wind_data['U:2'])
+                max_nut = np.max(wind_data['nut'])
+                min_nut = np.min(wind_data['nut'])
 
-                if d3:
-                    channel_shape = [nz, ny, nx]
+                if ((np.abs(max_0) > vlim) or
+                    (np.abs(min_0) > vlim) or
+                    (np.abs(min_1) > vlim) or
+                    (np.abs(max_1) > vlim) or
+                    (np.abs(max_2) > vlim) or
+                    (np.abs(min_2) > vlim) or
+                    (np.abs(max_nut) > nutlim) or
+                    (np.abs(min_nut) > nutlim)):
 
-                # generate the labels
-                u_x_out = wind_data.get('U:0').values.reshape(channel_shape)
-                u_y_out = wind_data.get('U:1').values.reshape(channel_shape)
-                u_z_out = wind_data.get('U:2').values.reshape(channel_shape)
-                turbelence_viscosity_out = wind_data.get('nut').values.reshape(channel_shape)
-
-                # generate the input
-                is_wind = wind_data.get('vtkValidPointMask').values.reshape(channel_shape).astype(np.float32)
-
-                if d3:
-                    if boolean_terrain:
-                        distance_field_in = is_wind
-                    else:
-                        is_wind = np.insert(is_wind, 0, np.zeros((1, ny, nx)), axis = 0)
-                        distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
-                        distance_field_in = distance_field_in[1:, :, :]
-
-                    u_x_in = np.einsum('kij->ijk',np.tile(u_x_out[:, :, 0], [u_x_out.shape[2], 1, 1]))
-                    u_y_in = np.einsum('kij->ijk',np.tile(u_y_out[:, :, 0], [u_y_out.shape[2], 1, 1]))
-                    u_z_in = np.einsum('kij->ijk',np.tile(u_z_out[:, :, 0], [u_z_out.shape[2], 1, 1]))
+                    rejection_counter += 1
+                    if verbose:
+                        print('------------------------------------')
+                        print('Removing', member.name)
+                        print('Statistics: max U0: ', max_0, ', max U1: ', max_1, ', max U2:', max_2)
+                        print('            min U0: ', min_0, ', min U1: ', min_1, ', min U2:', min_2)
+                        print('            min nut:', min_nut, ', max nut:', max_nut)
+                        print('------------------------------------')
 
                 else:
-                    if boolean_terrain:
-                        distance_field_in = is_wind
+                    channel_shape = [nz, nx]
+
+                    if d3:
+                        channel_shape = [nz, ny, nx]
+
+                    # generate the labels
+                    u_x_out = wind_data.get('U:0').values.reshape(channel_shape)
+                    u_y_out = wind_data.get('U:1').values.reshape(channel_shape)
+                    u_z_out = wind_data.get('U:2').values.reshape(channel_shape)
+                    turbelence_viscosity_out = wind_data.get('nut').values.reshape(channel_shape)
+
+                    # generate the input
+                    is_wind = wind_data.get('vtkValidPointMask').values.reshape(channel_shape).astype(np.float32)
+
+                    if d3:
+                        if boolean_terrain:
+                            distance_field_in = is_wind
+                        else:
+                            is_wind = np.insert(is_wind, 0, np.zeros((1, ny, nx)), axis = 0)
+                            distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
+                            distance_field_in = distance_field_in[1:, :, :]
+
+                        u_x_in = np.einsum('kij->ijk',np.tile(u_x_out[:, :, 0], [u_x_out.shape[2], 1, 1]))
+                        u_y_in = np.einsum('kij->ijk',np.tile(u_y_out[:, :, 0], [u_y_out.shape[2], 1, 1]))
+                        u_z_in = np.einsum('kij->ijk',np.tile(u_z_out[:, :, 0], [u_z_out.shape[2], 1, 1]))
+
                     else:
-                        is_wind = np.insert(is_wind, 0, np.zeros((1, nx)), axis = 0)
-                        distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
-                        distance_field_in = distance_field_in[1:,:]
+                        if boolean_terrain:
+                            distance_field_in = is_wind
+                        else:
+                            is_wind = np.insert(is_wind, 0, np.zeros((1, nx)), axis = 0)
+                            distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
+                            distance_field_in = distance_field_in[1:,:]
 
-                    u_x_in = np.tile(u_x_out[:,0], [u_x_out.shape[1],1]).transpose()
-                    u_y_in = np.tile(u_y_out[:,0], [u_y_out.shape[1],1]).transpose()
-                    u_z_in = np.tile(u_z_out[:,0], [u_z_out.shape[1],1]).transpose()
+                        u_x_in = np.tile(u_x_out[:,0], [u_x_out.shape[1],1]).transpose()
+                        u_y_in = np.tile(u_y_out[:,0], [u_y_out.shape[1],1]).transpose()
+                        u_z_in = np.tile(u_z_out[:,0], [u_z_out.shape[1],1]).transpose()
 
-                # store the stacked data
-                out = np.stack([distance_field_in, u_x_in, u_y_in, u_z_in, u_x_out, u_y_out, u_z_out, turbelence_viscosity_out])
-                out_tensor = torch.from_numpy(out)
-                torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '.tp')
+                    # store the stacked data
+                    out = np.stack([distance_field_in, u_x_in, u_y_in, u_z_in, u_x_out, u_y_out, u_z_out, turbelence_viscosity_out])
+                    out_tensor = torch.from_numpy(out)
+                    torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '.tp')
 
-                if d3:
-                    # rotate the sample around the z-axis
-                    out_rot = np.stack([distance_field_in, -u_y_in, u_x_in, u_z_in, -u_y_out, u_x_out, u_z_out, turbelence_viscosity_out])
-                    out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
-                    out_tensor = torch.from_numpy(out_rot)
-                    torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '_rot.tp')
+                    if d3:
+                        # rotate the sample around the z-axis
+                        out_rot = np.stack([distance_field_in, -u_y_in, u_x_in, u_z_in, -u_y_out, u_x_out, u_z_out, turbelence_viscosity_out])
+                        out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
+                        out_tensor = torch.from_numpy(out_rot)
+                        torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '_rot.tp')
 
-                    # flip in x direction
-                    u_x_out_flipped = np.flip(u_x_out,2) * (-1.0)
-                    u_y_out_flipped = np.flip(u_y_out,2)
-                    u_z_out_flipped = np.flip(u_z_out,2)
-                    turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,2)
+                        # flip in x direction
+                        u_x_out_flipped = np.flip(u_x_out,2) * (-1.0)
+                        u_y_out_flipped = np.flip(u_y_out,2)
+                        u_z_out_flipped = np.flip(u_z_out,2)
+                        turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,2)
 
-                    u_x_in_flipped = np.flip(u_x_in,2) * (-1.0)
-                    u_y_in_flipped = np.flip(u_y_in,2)
-                    u_z_in_flipped = np.flip(u_z_in,2)
-                    distance_field_in_flipped = np.flip(distance_field_in,2)
+                        u_x_in_flipped = np.flip(u_x_in,2) * (-1.0)
+                        u_y_in_flipped = np.flip(u_y_in,2)
+                        u_z_in_flipped = np.flip(u_z_in,2)
+                        distance_field_in_flipped = np.flip(distance_field_in,2)
 
-                    out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                    out_tensor_flipped = torch.from_numpy(out_flipped)
-                    torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_x.tp')
+                        out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+                        out_tensor_flipped = torch.from_numpy(out_flipped)
+                        torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_x.tp')
 
-                    # rotate the flipped data
-                    out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                    out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
-                    out_tensor = torch.from_numpy(out_rot)
-                    torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '_flipped_x_rot.tp')
+                        # rotate the flipped data
+                        out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+                        out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
+                        out_tensor = torch.from_numpy(out_rot)
+                        torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '_flipped_x_rot.tp')
 
-                    # flip in y direction
-                    u_x_out_flipped = np.flip(u_x_out,1)
-                    u_y_out_flipped = np.flip(u_y_out,1) * (-1.0)
-                    u_z_out_flipped = np.flip(u_z_out,1)
-                    turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,1)
+                        # flip in y direction
+                        u_x_out_flipped = np.flip(u_x_out,1)
+                        u_y_out_flipped = np.flip(u_y_out,1) * (-1.0)
+                        u_z_out_flipped = np.flip(u_z_out,1)
+                        turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,1)
 
-                    u_x_in_flipped = np.flip(u_x_in,1)
-                    u_y_in_flipped = np.flip(u_y_in,1) * (-1.0)
-                    u_z_in_flipped = np.flip(u_z_in,1)
-                    distance_field_in_flipped = np.flip(distance_field_in,1)
+                        u_x_in_flipped = np.flip(u_x_in,1)
+                        u_y_in_flipped = np.flip(u_y_in,1) * (-1.0)
+                        u_z_in_flipped = np.flip(u_z_in,1)
+                        distance_field_in_flipped = np.flip(distance_field_in,1)
 
-                    out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                    out_tensor_flipped = torch.from_numpy(out_flipped)
-                    torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_y.tp')
+                        out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+                        out_tensor_flipped = torch.from_numpy(out_flipped)
+                        torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_y.tp')
 
-                    # rotate the flipped data
-                    out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                    out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
-                    out_tensor = torch.from_numpy(out_rot)
-                    torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '_flipped_y_rot.tp')
+                        # rotate the flipped data
+                        out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+                        out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
+                        out_tensor = torch.from_numpy(out_rot)
+                        torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '_flipped_y_rot.tp')
 
-                    # flip in y direction
-                    u_x_out_flipped = np.flip(np.flip(u_x_out,1),2) * (-1.0)
-                    u_y_out_flipped = np.flip(np.flip(u_y_out,1),2) * (-1.0)
-                    u_z_out_flipped = np.flip(np.flip(u_z_out,1),2)
-                    turbelence_viscosity_out_flipped = np.flip(np.flip(turbelence_viscosity_out,1),2)
+                        # flip in y direction
+                        u_x_out_flipped = np.flip(np.flip(u_x_out,1),2) * (-1.0)
+                        u_y_out_flipped = np.flip(np.flip(u_y_out,1),2) * (-1.0)
+                        u_z_out_flipped = np.flip(np.flip(u_z_out,1),2)
+                        turbelence_viscosity_out_flipped = np.flip(np.flip(turbelence_viscosity_out,1),2)
 
-                    u_x_in_flipped = np.flip(np.flip(u_x_in,1),2) * (-1.0)
-                    u_y_in_flipped = np.flip(np.flip(u_y_in,1),2) * (-1.0)
-                    u_z_in_flipped = np.flip(np.flip(u_z_in,1),2)
-                    distance_field_in_flipped = np.flip(np.flip(distance_field_in,1),2)
+                        u_x_in_flipped = np.flip(np.flip(u_x_in,1),2) * (-1.0)
+                        u_y_in_flipped = np.flip(np.flip(u_y_in,1),2) * (-1.0)
+                        u_z_in_flipped = np.flip(np.flip(u_z_in,1),2)
+                        distance_field_in_flipped = np.flip(np.flip(distance_field_in,1),2)
 
-                    out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                    out_tensor_flipped = torch.from_numpy(out_flipped)
-                    torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_xy.tp')
+                        out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+                        out_tensor_flipped = torch.from_numpy(out_flipped)
+                        torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped_xy.tp')
 
-                    # rotate the flipped data
-                    out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                    out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
-                    out_tensor = torch.from_numpy(out_rot)
-                    torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '_flipped_xy_rot.tp')
-                else:
-                    # generate the flipped flow
-                    u_x_out_flipped = np.flip(u_x_out,1) * (-1.0)
-                    u_y_out_flipped = np.flip(u_y_out,1)
-                    u_z_out_flipped = np.flip(u_z_out,1)
-                    turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,1)
+                        # rotate the flipped data
+                        out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+                        out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
+                        out_tensor = torch.from_numpy(out_rot)
+                        torch.save(out_tensor, 'tmp/' + member.name.replace('.csv','') + '_flipped_xy_rot.tp')
+                    else:
+                        # generate the flipped flow
+                        u_x_out_flipped = np.flip(u_x_out,1) * (-1.0)
+                        u_y_out_flipped = np.flip(u_y_out,1)
+                        u_z_out_flipped = np.flip(u_z_out,1)
+                        turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,1)
 
-                    u_x_in_flipped = np.flip(u_x_in,1) * (-1.0)
-                    u_y_in_flipped = np.flip(u_y_in,1)
-                    u_z_in_flipped = np.flip(u_z_in,1)
-                    distance_field_in_flipped = np.flip(distance_field_in,1)
+                        u_x_in_flipped = np.flip(u_x_in,1) * (-1.0)
+                        u_y_in_flipped = np.flip(u_y_in,1)
+                        u_z_in_flipped = np.flip(u_z_in,1)
+                        distance_field_in_flipped = np.flip(distance_field_in,1)
 
-                    out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
+                        out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
 
-                    out_tensor_flipped = torch.from_numpy(out_flipped)
+                        out_tensor_flipped = torch.from_numpy(out_flipped)
 
-                    torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped.tp')
+                        torch.save(out_tensor_flipped, 'tmp/' + member.name.replace('.csv','') + '_flipped.tp')
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
             print(trunc((i+1)/num_files*100), '%')
