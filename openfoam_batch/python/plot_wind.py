@@ -52,6 +52,15 @@ def plot_input_output(wind_in, wind_out):
 
     return [fh_in, fh], [ah_in, ah]
 
+def plot_inlet_wind(wind):
+    fh, ah = plt.subplots()  # , {'aspect':'equal'})
+    fh.set_size_inches([4.0, 5.4])
+
+    Ux = wind.get('U:0').values.reshape([rw.WINDNZ, rw.WINDNX])[:,0]
+    z = wind.get('Points:2').values.reshape([rw.WINDNZ, rw.WINDNX])[:,0]
+    ah.plot(Ux, z)
+
+    return fh, ah
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -63,5 +72,6 @@ if __name__ == "__main__":
         wind_in = rw.build_input_from_output(wind)
         fig, ax = plot_data(wind)
         f_in, a_in = plot_input_output(wind_in, wind)
+        f_i, h_i = plot_inlet_wind(wind)
 
     plt.show(block=False)      # block=False

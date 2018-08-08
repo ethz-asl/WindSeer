@@ -50,7 +50,7 @@ def build_input_from_output(wind_data):
     return input_data
 
 
-def move_junk_data(in_directory, junk_directory, thresh=1.0e4):
+def move_junk_data(in_directory, junk_directory, Uthresh=1.0e4, pthresh=5.0e3):
     all_files = glob.glob(in_directory+'/*.csv')
     n_files = len(all_files)
     junked_files = 0
@@ -66,7 +66,9 @@ def move_junk_data(in_directory, junk_directory, thresh=1.0e4):
 
         data_max = wind_out.max()
         data_min = wind_out.min()
-        if (data_max['U:0'] > thresh) or (data_max['U:2'] > thresh) or (data_min['U:0'] < -thresh) or (data_min['U:2'] < -thresh):
+        if ((data_max['U:0'] > Uthresh) or (data_max['U:2'] > Uthresh) or (data_min['U:0'] < -Uthresh) or (data_min['U:2'] < -Uthresh)
+                or (data_max['p'] > pthresh) or (data_max['p'] < -pthresh)
+                or (data_max['U:0'] - data_min['U:0'] < 0.1) or (data_max['p'] - data_min['p'] < 0.1)):
             junked_files += 1
             print("{0}: Value outside threshold, moving to junk. Junked ratio {n}/{t}".format(fname, n=junked_files, t=i))
             os.rename(wind_csv, os.path.join(junk_directory, fname))
@@ -77,6 +79,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate terrainDict from stl file')
     parser.add_argument('-i', '--input-dir', required=False, default='data/train', help='Input directory of csv files')
     parser.add_argument('-j', '--junk-dir', required=False, default='data/junk', help='Destination directory for junk')
-    parser.add_argument('-t', '--threshold', required=False, default=1000.0, type=float, help='')
+    parser.add_argument('-tU', '--threshold-U', required=False, default=1000.0, type=float, help='')
+    parser.add_argument('-tp', '--threshold-p', required=False, default=5000.0, type=float, help='')
     args = parser.parse_args()
-    move_junk_data(args.input_dir, args.junk_dir, thresh=args.threshold)
+    move_junk_data(args.input_dir, args.junk_dir, Uthresh=args.threshold_U, pthresh=args.threshold_p)

@@ -15,7 +15,7 @@ usage() {
     echo -e "  -h\n\tPrint this help and exit"
 }
 
-while getopts "c:v:o:b:h" opt; do
+while getopts "c:p:h" opt; do
     case "$opt" in
         c)  csv_dir=$OPTARG ;;
         p)  python_directory=$OPTARG ;;
@@ -40,10 +40,16 @@ for dir in $@; do
     cd $base_dir
     for (( w=1; w<=15; w+=1 )); do
         wind_directory="$base_dir/W$w"
-        if [ ! -d "$wind_directory" ] || [ -s "$wind_directory/simpleFoam2.err" ] || [ ! -f "$wind_directory/simpleFoam2.err" ] && [ -s "$wind_directory/simpleFoam.err" ]; then
-            # If we have no directory, a (non-empty) error file, we can't make a csv and too lazy to invert...
-            continue
+        # if no wind directory, go to next
+        [ ! -d "$wind_directory" ] && continue
+        # simepleFoam2.err is present and NOT empty, go to next
+        [ -s "$wind_directory/simpleFoam2.err" ] && continue
+
+        # if 2.err isn't here, and .err is not there or not empty, go to next
+        if [ ! -f "$wind_directory/simpleFoam2.err" ]; then
+            [ ! -f "$wind_directory/simpleFoam.err" ] || [ -s "$wind_directory/simpleFoam.err" ] && continue;
         fi
+
         cd "$wind_directory"
         touch hill.foam
         latest_time=$( foamListTimes -latestTime )
