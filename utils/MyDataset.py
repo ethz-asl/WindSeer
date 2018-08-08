@@ -9,7 +9,7 @@ from torch.utils.data.dataset import Dataset
 TODO: try if it is feasable also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
 '''
 class MyDataset(Dataset):
-    def __init__(self, filename, turbulence_label, scaling_uhor = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
+    def __init__(self, filename, stride_hor = 1, stride_vert = 1, turbulence_label = False, scaling_uhor = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
         try:
             tar = tarfile.open(filename, 'r')
         except IOError as e:
@@ -24,6 +24,9 @@ class MyDataset(Dataset):
         self.__scaling_uhor = scaling_uhor
         self.__scaling_uz = scaling_uz
         self.__scaling_nut = scaling_nut
+
+        self.__stride_hor = stride_hor
+        self.__stride_vert = stride_vert
 
     def __getitem__(self, index):
         tar = tarfile.open(self.__filename, 'r')
@@ -48,6 +51,9 @@ class MyDataset(Dataset):
             output[1, :, :, :] /= self.__scaling_uhor
             output[2, :, :, :] /= self.__scaling_uz
 
+            # scale the output if necessary
+            input = input[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
+            output = output[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
         else:
             # 2D data
             input = data[[0,1,3], :, :]
@@ -64,6 +70,10 @@ class MyDataset(Dataset):
             input[2, :, :] /= self.__scaling_uz
             output[0, :, :] /= self.__scaling_uhor
             output[1, :, :] /= self.__scaling_uz
+
+            # scale the output if necessary
+            input = input[:,::self.__stride_vert, ::self.__stride_hor]
+            output = output[:,::self.__stride_vert, ::self.__stride_hor]
 
         return input, output
 

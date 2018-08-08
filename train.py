@@ -21,13 +21,15 @@ num_workers = 8
 save_model = True
 save_learning_curve = True
 evaluate_testset = True
-warm_start = True
+warm_start = False
 custom_loss = False
 
 # dataset parameter
 trainset_name = 'data/converted_train_new_boolean.tar'
 validationset_name = 'data/converted_validation_new_boolean.tar'
 testset_name = 'data/converted_test_new_boolean.tar'
+stride_hor = 2
+stride_vert = 1
 
 # model parameter
 model_name = 'ednn_2D_scaled_nearest_skipping_new_boolean'
@@ -43,12 +45,12 @@ d3 = False
 # --------------------------------------------------------------------------
 
 # define dataset and dataloader
-trainset = utils.MyDataset(trainset_name, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+trainset = utils.MyDataset(trainset_name, stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=batchsize,
                                           shuffle=True, num_workers=num_workers)
 
-validationset = utils.MyDataset(validationset_name, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+validationset = utils.MyDataset(validationset_name, stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
 
 validationloader = torch.utils.data.DataLoader(validationset, batch_size=1,
                                           shuffle=False, num_workers=num_workers)
@@ -84,7 +86,11 @@ else:
     net = models.ModelEDNN2D(number_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners, skipping = skipping, predict_turbulence = use_turbulence)
 
 if (warm_start):
-    net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))
+    try:
+        net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))
+    except:
+        print('Warning: Failed to load the model parameter, initializing parameter.')
+        net.init_params()
 else:
     net.init_params()
 
@@ -172,13 +178,15 @@ if (save_model):
         'align_corners': align_corners,
         'number_input_layers': number_input_layers,
         'skipping': skipping,
-        'use_turbulence': use_turbulence
+        'use_turbulence': use_turbulence,
+        'stride_hor': stride_hor,
+        'stride_vert': stride_vert
         }
     np.save('models/trained_models/' + model_name + '_params.npy', model_params)
 
 # evaluate the model performance on the testset if requested
 if (evaluate_testset):
-    testset = utils.MyDataset(testset_name, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+    testset = utils.MyDataset(testset_name, stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=num_workers)
 

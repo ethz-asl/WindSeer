@@ -17,9 +17,11 @@ turbulence_scaling = 5.0
 plot_sample_num = 0
 dataset_rounds = 0
 use_turbulence = True
+stride_hor = 2
+stride_vert = 1
 #-----------------------------------------------------
 
-db = utils.MyDataset(input_dataset, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
+db = utils.MyDataset(input_dataset, stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling)
 
 dbloader = torch.utils.data.DataLoader(db, batch_size=32,
                                           shuffle=True, num_workers=4)

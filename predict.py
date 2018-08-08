@@ -23,7 +23,7 @@ params = np.load('models/trained_models/' + model_name + '_params.npy')
 params = params.item()
 
 # load dataset
-testset = utils.MyDataset(dataset, turbulence_label = params['use_turbulence'], scaling_uhor = params['uhor_scaling'], scaling_uz = params['uz_scaling'], scaling_nut = params['turbulence_scaling'])
+testset = utils.MyDataset(dataset, scaling_hor = params['scaling_hor'], scaling_vert = params['scaling_vert'], turbulence_label = params['use_turbulence'], scaling_uhor = params['uhor_scaling'], scaling_uz = params['uz_scaling'], scaling_nut = params['turbulence_scaling'])
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
