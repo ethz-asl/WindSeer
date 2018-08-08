@@ -3,7 +3,7 @@
 # Set up some stuff for getopts
 OPTIND=1
 home_dir=$(pwd)
-
+wind_delta=1
 csv_dir="/intel_share/data/cfd_3d_csv"
 python_directory="/home/nick/src/intel_wind/openfoam_batch/python"
 
@@ -12,13 +12,29 @@ usage() {
     echo -e "  DIR0 DIR1 ... Case directories"
     echo -e "  -c CSV_DIR\n\tOutput csv directory"
     echo -e "  -p PYTHON_DIR\n\tLocation of resample.py"
+    echo -e "  -w delta_wind\n\tWind step size \(w=1:delta_wind:15\)"
     echo -e "  -h\n\tPrint this help and exit"
 }
 
-while getopts "c:p:h" opt; do
+check_path() {
+    # This will check if the first input is a global path, if it is, return it, else
+    # return $2/$1
+    local output_path=""
+    [[ $1 == /* ]] && output_path=$1 || output_path="${2}/${1}"
+    if [[ -d "$output_path" ]]; then
+        echo "$output_path"
+        return 0
+    else
+        echo "Invalid path: $output_path" >&2
+        return 1
+    fi
+}
+
+while getopts "c:p:w:h" opt; do
     case "$opt" in
         c)  csv_dir=$OPTARG ;;
         p)  python_directory=$OPTARG ;;
+        w)  wind_delta=$OPTARG ;;
         h|*)  usage
             exit 0
             ;;
@@ -35,10 +51,10 @@ fi
 
 for dir in $@; do
     casename=$(basename "$dir")
-    base_dir="$home_dir/$dir"
+    base_dir=$( check_path "$dir" "$home_dir" ) || exit 1
     reGrid_dir="$base_dir/reGrid"
     cd $base_dir
-    for (( w=1; w<=15; w+=1 )); do
+    for (( w=1; w<=15; w+=$wind_delta )); do
         wind_directory="$base_dir/W$w"
         # if no wind directory, go to next
         [ ! -d "$wind_directory" ] && continue
