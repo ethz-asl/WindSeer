@@ -50,3 +50,16 @@ check_path() {
     fi
 }
 
+check_converged() {
+    local latest_write write_interval end_time last_write
+    latest_write=$( foamListTimes -latestTime )
+    write_interval=$( foamDictionary -entry 'writeInterval' -value system/controlDict )
+    end_time=$( foamDictionary -entry 'endTime' -value system/controlDict )
+    last_write=$( echo "$end_time/$write_interval*$write_interval" | bc )
+    if [ "$latest_write" -eq 0 ] || [ "$latest_write" -eq "$last_write" ]; then
+        echo "0"
+    else
+        echo "1"
+    fi
+}
+
