@@ -13,53 +13,74 @@ Encoder/Decoder Neural Network
 The first input layer is assumed to be terrain information. It should be zero in the terrain and nonzero elsewhere.
 '''
 class ModelEDNN3D(nn.Module):
-    def __init__(self, n_input_layers, interpolation_mode, align_corners, skipping, predict_turbulence):
+    def __init__(self, n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers, interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method):
         super(ModelEDNN3D, self).__init__()
 
-        if predict_turbulence:
-            self.__num_outputs = 4
+        self.__num_outputs = n_output_layers
+        self.__num_inputs = n_input_layers
+        self.__use_terrain_mask = use_terrain_mask
+        self.__n_downsample_layers = n_downsample_layers
+
+        self.__n_x = n_x
+        self.__n_y = n_y
+        self.__n_z = n_z
+
+        # convolution layers
+        self.__conv = []
+        for i in range(n_downsample_layers):
+            if i == 0:
+                self.__conv.append(nn.Conv3d(self.__num_inputs, 8, 3, padding = 1))
+            else:
+                self.__conv.append(nn.Conv3d(4*2**i, 8*2**i, 3, padding = 1))
+
+        # fully connected layers
+        n_features = int(8*2**(n_downsample_layers-1) * n_x * n_y * n_z / ((2**n_downsample_layers)**3))
+        self.__fc1 = nn.Linear(n_features, int(n_features/2))
+        self.__fc2 = nn.Linear(int(n_features/2), n_features)
+
+        # modules
+        self.__leakyrelu = nn.LeakyReLU(0.1)
+
+        if (pooling_method == 'averagepool'):
+            self.__pooling = nn.MaxPool3d(2)
+        elif (pooling_method == 'maxpool'):
+            self.__pooling = nn.MaxPool3d(2)
+        elif (pooling_method == 'striding'):
+            self.__pooling = nn.MaxPool3d(1, stride=2)
         else:
-            self.__num_outputs = 3
-
-        self.conv1 = nn.Conv3d(n_input_layers, 8, 3, padding = 1)
-        self.conv2 = nn.Conv3d(8, 16, 3, padding = 1)
-        self.conv3 = nn.Conv3d(16, 32, 3, padding = 1)
-        self.conv4 = nn.Conv3d(32, 64, 3, padding = 1)
-        self.conv5 = nn.Conv3d(64, 128, 3, padding = 1)
-
-        self.leakyrelu = nn.LeakyReLU(0.1)
-
-        self.fc1 = nn.Linear(4096, 2048)
-        self.fc2 = nn.Linear(2048, 4096)
+            raise ValueError('The pooling method value is invalid: ' + pooling_method)
 
         if (align_corners):
-            self.upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode, align_corners=True)
+            self.__upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode, align_corners=True)
         else:
-            self.upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode)
+            self.__upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode)
 
-        self.skipping = skipping
+        # upconvolution layers
+        self.__skipping = skipping
+        self.__deconv1 = []
+        self.__deconv2 = []
+
         if (skipping):
-            self.deconv51 = nn.Conv3d(256, 128, 3, padding = 1)
-            self.deconv52 = nn.Conv3d(128, 64, 3, padding = 1)
-            self.deconv41 = nn.Conv3d(128, 64, 3, padding = 1)
-            self.deconv42 = nn.Conv3d(64, 32, 3, padding = 1)
-            self.deconv31 = nn.Conv3d(64, 32, 3, padding = 1)
-            self.deconv32 = nn.Conv3d(32, 16, 3, padding = 1)
-            self.deconv21 = nn.Conv3d(32, 16, 3, padding = 1)
-            self.deconv22 = nn.Conv3d(16, 8, 3, padding = 1)
-            self.deconv11 = nn.Conv3d(16, 8, 3, padding = 1)
-            self.deconv12 = nn.Conv3d(8, self.__num_outputs, 3, padding = 1)
-        else:
-            self.deconv5 = nn.Conv3d(128, 64, 3, padding = 1)
-            self.deconv4 = nn.Conv3d(64, 32, 3, padding = 1)
-            self.deconv3 = nn.Conv3d(32, 16, 3, padding = 1)
-            self.deconv2 = nn.Conv3d(16, 8, 3, padding = 1)
-            self.deconv1 = nn.Conv3d(8, self.__num_outputs, 3, padding = 1)
+            for i in range(n_downsample_layers):
+                if i == 0:
+                    self.__deconv1.append(nn.Conv3d(16, 8, 3, padding = 1))
+                    self.__deconv2.append(nn.Conv3d(8, self.__num_outputs, 3, padding = 1))
+                else:
+                    self.__deconv1.append(nn.Conv3d(16*2**i, 8*2**i, 3, padding = 1))
+                    self.__deconv2.append(nn.Conv3d(8*2**i, 4*2**i, 3, padding = 1))
 
-        self.mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
+        else:
+            for i in range(n_downsample_layers):
+                if i == 0:
+                    self.__deconv1.append(nn.Conv3d(8, self.__num_outputs, 3, padding = 1))
+                else:
+                    self.__deconv1.append(nn.Conv3d(8*2**i, 4*2**i, 3, padding = 1))
+
+        # mapping layer
+        self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
 
     def init_params(self):
-        def printf(m):
+        def init_weights(m):
             if (type(m) != type(self)):
                 try:
                     torch.nn.init.xavier_normal_(m.weight.data)
@@ -70,57 +91,41 @@ class ModelEDNN3D(nn.Module):
                 except:
                     pass
 
-        self.apply(printf)
+        self.apply(init_weights)
 
     def forward(self, x):
-        # store the terrain data
-        is_wind = x[:,0, :, :].unsqueeze(1).clone()
-        is_wind.sign_()
+        if self.__use_terrain_mask:
+            # store the terrain data
+            is_wind = x[:,0, :, :].unsqueeze(1).clone()
+            is_wind.sign_()
 
-        if (self.skipping):
-            x = F.max_pool3d(self.leakyrelu(self.conv1(x)), 2)
-            x1 = x.clone()
-            x = F.max_pool3d(self.leakyrelu(self.conv2(x)), 2)
-            x2 = x.clone()
-            x = F.max_pool3d(self.leakyrelu(self.conv3(x)), 2)
-            x3 = x.clone()
-            x = F.max_pool3d(self.leakyrelu(self.conv4(x)), 2)
-            x4 = x.clone()
-            x = F.max_pool3d(self.leakyrelu(self.conv5(x)), 2)
-            x5 = x.clone()
+        x_skip = []
+        if (self.__skipping):
+            for i in range(self.__n_downsample_layers):
+                x = self.__pooling(self.__leakyrelu(self.__conv[i](x)))
+                x_skip.append(x.clone())
+
         else:
-            x = F.max_pool3d(self.leakyrelu(self.conv1(x)), 2)
-            x = F.max_pool3d(self.leakyrelu(self.conv2(x)), 2)
-            x = F.max_pool3d(self.leakyrelu(self.conv3(x)), 2)
-            x = F.max_pool3d(self.leakyrelu(self.conv4(x)), 2)
-            x = F.max_pool3d(self.leakyrelu(self.conv5(x)), 2)
+            for i in range(self.__n_downsample_layers):
+                x = self.__pooling(self.__leakyrelu(self.__conv[i](x)))
 
         shape = x.size()
         x = x.view(-1, self.num_flat_features(x))
-        x = self.leakyrelu(self.fc1(x))
-        x = self.leakyrelu(self.fc2(x))
+        x = self.__leakyrelu(self.__fc1(x))
+        x = self.__leakyrelu(self.__fc2(x))
         x = x.view(shape)
 
-        if (self.skipping):
-            x = self.deconv52(self.deconv51(self.upsampling(torch.cat([x5, x], 1))))
-            x = self.deconv42(self.deconv41(self.upsampling(torch.cat([x4, x], 1))))
-            x = self.deconv32(self.deconv31(self.upsampling(torch.cat([x3, x], 1))))
-            x = self.deconv22(self.deconv21(self.upsampling(torch.cat([x2, x], 1))))
-            x = self.deconv12(self.deconv11(self.upsampling(torch.cat([x1, x], 1))))
+        if (self.__skipping):
+            for i in range(self.__n_downsample_layers-1, -1, -1):
+                x = self.__deconv2[i](self.__deconv1[i](self.__upsampling(torch.cat([x_skip[i], x], 1))))
         else:
-            x = self.deconv5(self.upsampling(x))
-            x = self.deconv4(self.upsampling(x))
-            x = self.deconv3(self.upsampling(x))
-            x = self.deconv2(self.upsampling(x))
-            x = self.deconv1(self.upsampling(x))
+            for i in range(self.__n_downsample_layers-1, -1, -1):
+                x = self.__deconv1[i](self.__upsampling(x))
 
-        x = self.mapping_layer(x)
+        x = self.__mapping_layer(x)
 
-        # multiply the outputs by the terrain boolean
-        if self.__num_outputs == 3:
-            x = torch.cat([is_wind, is_wind, is_wind], 1) * x
-        else:
-            x = torch.cat([is_wind, is_wind, is_wind, is_wind], 1) * x
+        if self.__use_terrain_mask:
+            x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
 
         return x
 
