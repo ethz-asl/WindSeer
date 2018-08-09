@@ -16,19 +16,7 @@ usage() {
     echo -e "  -h\n\tPrint this help and exit"
 }
 
-check_path() {
-    # This will check if the first input is a global path, if it is, return it, else
-    # return $2/$1
-    local output_path=""
-    [[ $1 == /* ]] && output_path=$1 || output_path="${2}/${1}"
-    if [[ -d "$output_path" ]]; then
-        echo "$output_path"
-        return 0
-    else
-        echo "Invalid path: $output_path" >&2
-        return 1
-    fi
-}
+source shared_functions
 
 while getopts "c:p:w:h" opt; do
     case "$opt" in
@@ -68,8 +56,13 @@ for dir in $@; do
 
         cd "$wind_directory"
         touch hill.foam
+        solution_converged=$( check_converged )
+        if [ "$solution_converged" -eq 0 ]; then
+            echo "  $casename/W$w did not converge in max iterations."
+            continue
+        fi
+
         latest_time=$( foamListTimes -latestTime )
-        [ "$latest_time" == 0 ] && continue
         printf -v csv_file "$csv_dir/%s_W%02d" $casename $w
         echo -e "\tCreating csv for t=$latest_time to $csv_file..."
         python "${python_directory}/resample.py" --three-d --case-dir $wind_directory \
