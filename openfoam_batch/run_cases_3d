@@ -100,10 +100,11 @@ python_directory=$home_dir/python
 
 # Loop over case_directories, create new directory for each case
 for stl_dir in "$@"; do
+    stl_dir=$( check_path "$stl_dir" "$home_dir" ) || continue
     casename=$(basename -- "$stl_dir")
-    stl_file=${home_dir}/${stl_dir}/${casename}.stl
-    terrainDict_file=${home_dir}/${stl_dir}/terrainDict
-    ylim_file=${home_dir}/${stl_dir}/YLIMS
+    stl_file="${stl_dir}/${casename}.stl"
+    terrainDict_file="${stl_dir}/terrainDict"
+    ylim_file="${stl_dir}/YLIMS"
     
     check_files $stl_file $terrainDict_file $ylim_file
     if [ $? -gt 0 ]; then
