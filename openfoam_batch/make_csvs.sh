@@ -48,6 +48,7 @@ if [ "$#" -lt 1 ]; then
     exit 1
 fi
 
+python_directory=$( check_path "$python_directory" "$home_dir" )
 
 for dir in $@; do
     casename=$(basename "$dir")
