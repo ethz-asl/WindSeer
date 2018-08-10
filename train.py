@@ -23,6 +23,7 @@ save_learning_curve = True
 evaluate_testset = False
 warm_start = False
 custom_loss = False
+save_model_every_n_epoch = 2
 
 # dataset parameter
 trainset_name = 'data/converted_3d.tar'
@@ -103,6 +104,30 @@ else:
 # initialize variable to store the learning curve
 learning_curve = np.zeros([n_epochs, 2])
 
+# save the model parameter in the beginning
+if (save_model):
+    model_params = {
+        'n_input_layers': n_input_layers,
+        'n_output_layers': n_output_layers,
+        'n_x': n_x,
+        'n_y': n_y,
+        'n_z': n_z,
+        'n_downsample_layers': n_downsample_layers,
+        'interpolation_mode': interpolation_mode,
+        'align_corners': align_corners,
+        'skipping': skipping,
+        'use_terrain_mask': use_terrain_mask,
+        'pooling_method': pooling_method,
+        'uhor_scaling': uhor_scaling,
+        'uz_scaling': uz_scaling,
+        'turbulence_scaling': turbulence_scaling,
+        'stride_hor': stride_hor,
+        'stride_vert': stride_vert,
+        'use_turbulence': use_turbulence,
+        'd3': d3
+        }
+    np.save('models/trained_models/' + model_name + '_params.npy', model_params)
+
 print('-----------------------------------------------------------------------------')
 print('INFO: Start training on device %s' % device)
 print(' ')
@@ -162,6 +187,10 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
                   (epoch + 1, i + 1, running_loss / (plot_every_n_batches - 1)))
             running_loss = 0.0
 
+    if epoch % save_model_every_n_epoch == (save_model_every_n_epoch - 1):    # save model every save_model_every_n_epoch epochs
+        np.save('models/trained_models/' + model_name + '_learningcurve_{}.npy'.format(epoch+1), learning_curve)
+        torch.save(net.state_dict(), 'models/trained_models/' + model_name + '_{}.model'.format(epoch+1))
+
     with torch.no_grad():
         train_loss = 0.0
         for data in trainloader:
@@ -196,29 +225,6 @@ if (save_learning_curve):
 if (save_model):
     # save the model
     torch.save(net.state_dict(), 'models/trained_models/' + model_name + '.model')
-
-    # save the model parameters
-    model_params = {
-        'n_input_layers': n_input_layers,
-        'n_output_layers': n_output_layers,
-        'n_x': n_x,
-        'n_y': n_y,
-        'n_z': n_z,
-        'n_downsample_layers': n_downsample_layers,
-        'interpolation_mode': interpolation_mode,
-        'align_corners': align_corners,
-        'skipping': skipping,
-        'use_terrain_mask': use_terrain_mask,
-        'pooling_method': pooling_method,
-        'uhor_scaling': uhor_scaling,
-        'uz_scaling': uz_scaling,
-        'turbulence_scaling': turbulence_scaling,
-        'stride_hor': stride_hor,
-        'stride_vert': stride_vert,
-        'use_turbulence': use_turbulence,
-        'd3': d3
-        }
-    np.save('models/trained_models/' + model_name + '_params.npy', model_params)
 
 # evaluate the model performance on the testset if requested
 if (evaluate_testset):
