@@ -11,17 +11,17 @@ import utils
 
 # ---- Params --------------------------------------------------------------
 # learning parameters
-learning_rate = 1e-1
+learning_rate = 1e-3
 plot_every_n_batches = 10
-n_epochs = 10
+n_epochs = 20
 batchsize = 32
 num_workers = 8
 
 # options to store data
 save_model = True
 save_learning_curve = True
-evaluate_testset = True
-warm_start = True
+evaluate_testset = False
+warm_start = False
 custom_loss = False
 
 # dataset parameter
@@ -38,7 +38,7 @@ turbulence_scaling = 4.5
 d3 = True
 model_name = 'ednn_3D_scaled_nearest_skipping_boolean'
 n_input_layers = 4
-n_output_layers = 4
+n_output_layers = 3
 n_x = 64
 n_y = 64
 n_z = 64
@@ -51,12 +51,12 @@ pooling_method = 'maxpool'
 # --------------------------------------------------------------------------
 
 if d3:
-    if n_input_layers > 3:
+    if n_output_layers > 3:
         use_turbulence = True
     else:
         use_turbulence = False
 else:
-    if n_input_layers > 2:
+    if n_output_layers > 2:
         use_turbulence = True
     else:
         use_turbulence = False
@@ -214,7 +214,9 @@ if (save_model):
         'uz_scaling': uz_scaling,
         'turbulence_scaling': turbulence_scaling,
         'stride_hor': stride_hor,
-        'stride_vert': stride_vert
+        'stride_vert': stride_vert,
+        'use_turbulence': use_turbulence,
+        'd3': d3
         }
     np.save('models/trained_models/' + model_name + '_params.npy', model_params)
 

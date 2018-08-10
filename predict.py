@@ -10,8 +10,7 @@ import utils
 # ---- Params --------------------------------------------------------------
 dataset = 'data/converted_3d.tar'
 index = 0 # plot the prediction for the following sample in the set
-model_name = 'ednn_3D_scaled_nearest_skipping_new_boolean'
-d3 = True
+model_name = 'ednn_3D_scaled_nearest_skipping_boolean'
 compute_prediction_error = False
 # --------------------------------------------------------------------------
 
@@ -23,14 +22,14 @@ params = np.load('models/trained_models/' + model_name + '_params.npy')
 params = params.item()
 
 # load dataset
-testset = utils.MyDataset(dataset, scaling_hor = params['scaling_hor'], scaling_vert = params['scaling_vert'], turbulence_label = params['use_turbulence'], scaling_uhor = params['uhor_scaling'], scaling_uz = params['uz_scaling'], scaling_nut = params['turbulence_scaling'])
+testset = utils.MyDataset(dataset, stride_hor = params['stride_hor'], stride_vert = params['stride_vert'], turbulence_label = params['use_turbulence'], scaling_uhor = params['uhor_scaling'], scaling_uz = params['uz_scaling'], scaling_nut = params['turbulence_scaling'])
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
-if d3:
-    net = models.ModelEDNN3D(params['number_input_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], params['use_turbulence'])
+if params['d3']:
+    net = models.ModelEDNN3D(params['n_input_layers'], params['n_output_layers'], params['n_x'], params['n_y'], params['n_z'], params['n_downsample_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], params['use_terrain_mask'], params['pooling_method'])
 else:
-    net = models.ModelEDNN2D(params['number_input_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], params['use_turbulence'])
+    net = models.ModelEDNN2D(params['n_input_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], params['use_turbulence'])
 
 net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))
 net.to(device)
