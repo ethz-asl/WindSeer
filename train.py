@@ -14,12 +14,12 @@ import utils
 # ---- Params --------------------------------------------------------------
 # learning parameters
 plot_every_n_batches = 10
-n_epochs = 400
+n_epochs = 10000
 batchsize = 1
 num_workers = 1
 learning_rate_initial = 1e-3
 learning_rate_decay = 0.5
-learning_rate_decay_step_size = 100
+learning_rate_decay_step_size = 2000
 compute_validation_loss = False
 
 # options to store data
@@ -28,33 +28,33 @@ save_metadata = True
 evaluate_testset = False
 warm_start = False
 custom_loss = False
-save_model_every_n_epoch = 1000
-save_params_hist_every_n_epoch = 25
+save_model_every_n_epoch = 100000
+save_params_hist_every_n_epoch = 200
 
 # dataset parameter
 trainset_name = 'data/converted_3d.tar'
 validationset_name = 'data/converted_3d.tar'
 testset_name = 'data/converted_3d.tar'
-stride_hor = 2
-stride_vert = 1
+stride_hor = 4
+stride_vert = 2
 uhor_scaling = 6.0
 uz_scaling = 2.5
 turbulence_scaling = 4.5
 
 # model parameter
 d3 = True
-model_name = 'ednn_3D_scaled_nearest_skipping_boolean'
+model_name = 'ednn_3D_n_sb3s_10000epochs_noterrain'
 n_input_layers = 4
 n_output_layers = 3
-n_x = 64
-n_y = 64
-n_z = 64
+n_x = 32
+n_y = 32
+n_z = 32
 n_downsample_layers = 3
 interpolation_mode = 'nearest'
 align_corners = False
 skipping = True
-use_terrain_mask = True
-pooling_method = 'maxpool'
+use_terrain_mask = False
+pooling_method = 'striding'
 # --------------------------------------------------------------------------
 
 # decide if turbulence is used (somewhat a hack maybe there is something better in the future)
