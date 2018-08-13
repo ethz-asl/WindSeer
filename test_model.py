@@ -78,6 +78,7 @@ def test_ModelEDNN3D(batch_size, n_input_layers, n_output_layers, n_x, n_y, n_z,
         print(colored('\t\t\tinit failed', 'red'))
         error_counter += 1
         return error_counter, test_counter
+    output = net(input)
 
     try:
         output = net(input)

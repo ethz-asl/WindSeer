@@ -10,8 +10,8 @@ import utils
 # ---- Params --------------------------------------------------------------
 dataset = 'data/converted_3d.tar'
 index = 0 # plot the prediction for the following sample in the set
-model_name = 'ednn_3D_scaled_nearest_skipping_boolean'
-compute_prediction_error = False
+model_name = 'ednn_3D_n_sb3s_10000epochs'
+compute_prediction_error = True
 use_terrain_mask = True
 # --------------------------------------------------------------------------
 
@@ -65,7 +65,7 @@ with torch.no_grad():
     
         print('INFO: Average loss on test set: %s' % (loss.item()/len(testset)))
         print('INFO: Average loss on test set for ux: %s' % (loss_ux.item()/len(testset)))
-        if d3:
+        if params['d3']:
             print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(testset)))
         print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(testset)))
         if params['use_turbulence']:

@@ -29,9 +29,9 @@ class ModelEDNN3D(nn.Module):
         self.__conv = nn.ModuleList()
         for i in range(n_downsample_layers):
             if i == 0:
-                self.__conv += [nn.Conv3d(self.__num_inputs, 8, 3, padding = 1)]
+                self.__conv += [nn.Conv3d(self.__num_inputs, 8, 3)]
             else:
-                self.__conv += [nn.Conv3d(4*2**i, 8*2**i, 3, padding = 1)]
+                self.__conv += [nn.Conv3d(4*2**i, 8*2**i, 3)]
 
         # fully connected layers
         n_features = int(8*2**(n_downsample_layers-1) * n_x * n_y * n_z / ((2**n_downsample_layers)**3))
@@ -39,6 +39,8 @@ class ModelEDNN3D(nn.Module):
         self.__fc2 = nn.Linear(int(n_features/2), n_features)
 
         # modules
+        self.__pad = nn.ZeroPad3d(1)
+
         self.__leakyrelu = nn.LeakyReLU(0.1)
 
         if (pooling_method == 'averagepool'):
@@ -63,18 +65,18 @@ class ModelEDNN3D(nn.Module):
         if (skipping):
             for i in range(n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(16, 8, 3, padding = 1)]
-                    self.__deconv2 += [nn.Conv3d(8, self.__num_outputs, 3, padding = 1)]
+                    self.__deconv1 += [nn.Conv3d(16, 8, 3)]
+                    self.__deconv2 += [nn.Conv3d(8, self.__num_outputs, 3)]
                 else:
-                    self.__deconv1 += [nn.Conv3d(16*2**i, 8*2**i, 3, padding = 1)]
-                    self.__deconv2 += [nn.Conv3d(8*2**i, 4*2**i, 3, padding = 1)]
+                    self.__deconv1 += [nn.Conv3d(16*2**i, 8*2**i, 3)]
+                    self.__deconv2 += [nn.Conv3d(8*2**i, 4*2**i, 3)]
 
         else:
             for i in range(n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(8, self.__num_outputs, 3, padding = 1)]
+                    self.__deconv1 += [nn.Conv3d(8, self.__num_outputs, 3)]
                 else:
-                    self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, 3, padding = 1)]
+                    self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, 3)]
 
         # mapping layer
         self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
@@ -102,12 +104,12 @@ class ModelEDNN3D(nn.Module):
         x_skip = []
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
-                x = self.__pooling(self.__leakyrelu(self.__conv[i](x)))
+                x = self.__pooling(self.__leakyrelu(self.__conv[i](self.__pad(x))))
                 x_skip.append(x.clone())
 
         else:
             for i in range(self.__n_downsample_layers):
-                x = self.__pooling(self.__leakyrelu(self.__conv[i](x)))
+                x = self.__pooling(self.__leakyrelu(self.__conv[i](self.__pad(x))))
 
         shape = x.size()
         x = x.view(-1, self.num_flat_features(x))
@@ -117,10 +119,10 @@ class ModelEDNN3D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__deconv1[i](self.__upsampling(torch.cat([x_skip[i], x], 1))))
+                x = self.__deconv2[i](self.__pad(self.__deconv1[i](self.__pad(self.__upsampling(torch.cat([x_skip[i], x], 1))))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv1[i](self.__upsampling(x))
+                x = self.__deconv1[i](self.__pad(self.__upsampling(x)))
 
         x = self.__mapping_layer(x)
 
