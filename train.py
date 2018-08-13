@@ -12,7 +12,7 @@ import utils
 
 # ---- Params --------------------------------------------------------------
 # learning parameters
-learning_rate = 1e-2
+learning_rate = 1e-3
 plot_every_n_batches = 10
 n_epochs = 20
 batchsize = 32

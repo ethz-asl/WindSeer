@@ -26,12 +26,12 @@ class ModelEDNN3D(nn.Module):
         self.__n_z = n_z
 
         # convolution layers
-        self.__conv = []
+        self.__conv = nn.ModuleList()
         for i in range(n_downsample_layers):
             if i == 0:
-                self.__conv.append(nn.Conv3d(self.__num_inputs, 8, 3, padding = 1))
+                self.__conv += [nn.Conv3d(self.__num_inputs, 8, 3, padding = 1)]
             else:
-                self.__conv.append(nn.Conv3d(4*2**i, 8*2**i, 3, padding = 1))
+                self.__conv += [nn.Conv3d(4*2**i, 8*2**i, 3, padding = 1)]
 
         # fully connected layers
         n_features = int(8*2**(n_downsample_layers-1) * n_x * n_y * n_z / ((2**n_downsample_layers)**3))
@@ -57,24 +57,24 @@ class ModelEDNN3D(nn.Module):
 
         # upconvolution layers
         self.__skipping = skipping
-        self.__deconv1 = []
-        self.__deconv2 = []
+        self.__deconv1 = nn.ModuleList()
+        self.__deconv2 = nn.ModuleList()
 
         if (skipping):
             for i in range(n_downsample_layers):
                 if i == 0:
-                    self.__deconv1.append(nn.Conv3d(16, 8, 3, padding = 1))
-                    self.__deconv2.append(nn.Conv3d(8, self.__num_outputs, 3, padding = 1))
+                    self.__deconv1 += [nn.Conv3d(16, 8, 3, padding = 1)]
+                    self.__deconv2 += [nn.Conv3d(8, self.__num_outputs, 3, padding = 1)]
                 else:
-                    self.__deconv1.append(nn.Conv3d(16*2**i, 8*2**i, 3, padding = 1))
-                    self.__deconv2.append(nn.Conv3d(8*2**i, 4*2**i, 3, padding = 1))
+                    self.__deconv1 += [nn.Conv3d(16*2**i, 8*2**i, 3, padding = 1)]
+                    self.__deconv2 += [nn.Conv3d(8*2**i, 4*2**i, 3, padding = 1)]
 
         else:
             for i in range(n_downsample_layers):
                 if i == 0:
-                    self.__deconv1.append(nn.Conv3d(8, self.__num_outputs, 3, padding = 1))
+                    self.__deconv1 += [nn.Conv3d(8, self.__num_outputs, 3, padding = 1)]
                 else:
-                    self.__deconv1.append(nn.Conv3d(8*2**i, 4*2**i, 3, padding = 1))
+                    self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, 3, padding = 1)]
 
         # mapping layer
         self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
