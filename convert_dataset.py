@@ -64,7 +64,10 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain,
         f = tar.extractfile(member)
 
         if f is not None:
-            wind_data = pd.read_csv(f, header=0, dtype = types)
+            try:
+                wind_data = pd.read_csv(f, header=0, dtype = types)
+            except:
+                print('Reading the csv {0} failed'.format(member.name))
 
             # quick sanity check if the csv has the expected format
             if 'U:0' not in wind_data.keys():
