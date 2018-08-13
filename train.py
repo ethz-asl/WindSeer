@@ -8,15 +8,19 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import StepLR
 import utils
 
 # ---- Params --------------------------------------------------------------
 # learning parameters
-learning_rate = 1e-3
 plot_every_n_batches = 10
-n_epochs = 20
-batchsize = 32
-num_workers = 8
+n_epochs = 500
+batchsize = 1
+num_workers = 1
+learning_rate_initial = 1e-3
+learning_rate_decay = 0.5
+learning_rate_decay_step_size = 100
+compute_validation_loss = False
 
 # options to store data
 save_model = True
@@ -24,7 +28,7 @@ save_metadata = True
 evaluate_testset = False
 warm_start = False
 custom_loss = False
-save_model_every_n_epoch = 100
+save_model_every_n_epoch = 1000
 
 # dataset parameter
 trainset_name = 'data/converted_3d.tar'
@@ -96,7 +100,8 @@ else:
 net.to(device)
 
 # define optimizer and objective
-optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate_initial)
+scheduler = StepLR(optimizer, step_size=learning_rate_decay_step_size, gamma=learning_rate_decay)
 
 if custom_loss:
     loss_fn = utils.MyLoss(device)
@@ -135,7 +140,9 @@ print('INFO: Start training on device %s' % device)
 print(' ')
 print('Train Settings:')
 print('\tWarm start:\t\t', warm_start)
-print('\tLearning rate:\t\t', learning_rate)
+print('\tLearning rate initial:\t', learning_rate_initial)
+print('\tLearning rate step size:', learning_rate_decay_step_size)
+print('\tLearning rate decay:\t', learning_rate_decay)
 print('\tBatchsize:\t\t', batchsize)
 print('\tEpochs:\t\t\t', n_epochs)
 print(' ')
@@ -168,6 +175,9 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
+        # adjust the learning rate if necessary
+        scheduler.step()
+
         # get the inputs
         inputs, labels = data
 
@@ -203,19 +213,20 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
         train_loss /= len(trainloader)
 
         validation_loss = 0.0
-        for data in validationloader:
-            inputs, labels = data
-            inputs, labels = inputs.to(device), labels.to(device)
-            outputs = net(inputs)
-            loss = loss_fn(outputs, labels)
-            validation_loss += loss.item()
-        validation_loss /= len(validationset)
+        if compute_validation_loss:
+            for data in validationloader:
+                inputs, labels = data
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = net(inputs)
+                loss = loss_fn(outputs, labels)
+                validation_loss += loss.item()
+            validation_loss /= len(validationset)
 
         writer.add_scalar('Train/Loss', train_loss, epoch+1)
         writer.add_scalar('Summary/TrainLoss', train_loss, epoch+1)
         writer.add_scalar('Val/Loss', validation_loss, epoch+1)
         writer.add_scalar('Summary/ValidationLoss', validation_loss, epoch+1)
-        writer.add_scalar('Summary/LearningRate', learning_rate, epoch+1)
+        writer.add_scalar('Summary/LearningRate', scheduler.get_lr()[0], epoch+1)
 
         for tag, value in net.named_parameters():
             tag = tag.replace('.', '/')
