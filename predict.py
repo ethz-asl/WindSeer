@@ -76,5 +76,5 @@ with torch.no_grad():
     output = net(input.unsqueeze(0))
     input = input.squeeze()
     output = output.squeeze()
-    
+
     utils.plot_prediction(output, label)

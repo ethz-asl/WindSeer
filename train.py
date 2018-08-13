@@ -2,6 +2,7 @@
 
 import models
 import numpy as np
+from tensorboardX import SummaryWriter
 import time
 import torch
 import torch.nn as nn
@@ -11,7 +12,7 @@ import utils
 
 # ---- Params --------------------------------------------------------------
 # learning parameters
-learning_rate = 1e-3
+learning_rate = 1e-2
 plot_every_n_batches = 10
 n_epochs = 20
 batchsize = 32
@@ -19,18 +20,18 @@ num_workers = 8
 
 # options to store data
 save_model = True
-save_learning_curve = True
+save_metadata = True
 evaluate_testset = False
 warm_start = False
 custom_loss = False
-save_model_every_n_epoch = 2
+save_model_every_n_epoch = 100
 
 # dataset parameter
 trainset_name = 'data/converted_3d.tar'
 validationset_name = 'data/converted_3d.tar'
 testset_name = 'data/converted_3d.tar'
-stride_hor = 2
-stride_vert = 1
+stride_hor = 4
+stride_vert = 2
 uhor_scaling = 6.0
 uz_scaling = 2.5
 turbulence_scaling = 4.5
@@ -40,9 +41,9 @@ d3 = True
 model_name = 'ednn_3D_scaled_nearest_skipping_boolean'
 n_input_layers = 4
 n_output_layers = 3
-n_x = 64
-n_y = 64
-n_z = 64
+n_x = 32
+n_y = 32
+n_z = 32
 n_downsample_layers = 5
 interpolation_mode = 'nearest'
 align_corners = False
@@ -51,6 +52,7 @@ use_terrain_mask = True
 pooling_method = 'maxpool'
 # --------------------------------------------------------------------------
 
+# decide if turbulence is used (somewhat a hack maybe there is something better in the future)
 if d3:
     if n_output_layers > 3:
         use_turbulence = True
@@ -101,8 +103,8 @@ if custom_loss:
 else:
     loss_fn = torch.nn.MSELoss()
 
-# initialize variable to store the learning curve
-learning_curve = np.zeros([n_epochs, 2])
+# initialize the tensorboard writer
+writer = SummaryWriter('models/trained_models/' + model_name + '_learningcurve')
 
 # save the model parameter in the beginning
 if (save_model):
@@ -188,7 +190,6 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
             running_loss = 0.0
 
     if epoch % save_model_every_n_epoch == (save_model_every_n_epoch - 1):    # save model every save_model_every_n_epoch epochs
-        np.save('models/trained_models/' + model_name + '_learningcurve_{}.npy'.format(epoch+1), learning_curve)
         torch.save(net.state_dict(), 'models/trained_models/' + model_name + '_{}.model'.format(epoch+1))
 
     with torch.no_grad():
@@ -210,21 +211,29 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
             validation_loss += loss.item()
         validation_loss /= len(validationset)
 
-        learning_curve[epoch, 0] = train_loss
-        learning_curve[epoch, 1] = validation_loss
+        writer.add_scalar('Train/Loss', train_loss, epoch+1)
+        writer.add_scalar('Summary/TrainLoss', train_loss, epoch+1)
+        writer.add_scalar('Val/Loss', validation_loss, epoch+1)
+        writer.add_scalar('Summary/ValidationLoss', validation_loss, epoch+1)
+        writer.add_scalar('Summary/LearningRate', learning_rate, epoch+1)
+
+        for tag, value in net.named_parameters():
+            tag = tag.replace('.', '/')
+            writer.add_histogram(tag, value.data.cpu().numpy(), epoch+1)
+            writer.add_histogram(tag+'/grad', value.grad.data.cpu().numpy(), epoch+1)
+
         print(('[%d] train loss: %.5f, validation loss: %.5f' %
                       (epoch + 1, train_loss, validation_loss)))
 
 
 print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 
-# save the model parameter and learning curve if requested
-if (save_learning_curve):
-    np.save('models/trained_models/' + model_name + '_learningcurve.npy', learning_curve)
-
 if (save_model):
     # save the model
     torch.save(net.state_dict(), 'models/trained_models/' + model_name + '.model')
+
+#writer.add_graph(net.cpu(), inputs.cpu()) # do not save the graph by default as the visualization does not work anyway that well
+writer.close()
 
 # evaluate the model performance on the testset if requested
 if (evaluate_testset):
