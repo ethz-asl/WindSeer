@@ -14,12 +14,12 @@ import utils
 # ---- Params --------------------------------------------------------------
 # learning parameters
 plot_every_n_batches = 10
-n_epochs = 200
+n_epochs = 400
 batchsize = 1
 num_workers = 1
 learning_rate_initial = 1e-3
 learning_rate_decay = 0.5
-learning_rate_decay_step_size = 50
+learning_rate_decay_step_size = 100
 compute_validation_loss = False
 
 # options to store data
@@ -35,8 +35,8 @@ save_params_hist_every_n_epoch = 25
 trainset_name = 'data/converted_3d.tar'
 validationset_name = 'data/converted_3d.tar'
 testset_name = 'data/converted_3d.tar'
-stride_hor = 4
-stride_vert = 2
+stride_hor = 2
+stride_vert = 1
 uhor_scaling = 6.0
 uz_scaling = 2.5
 turbulence_scaling = 4.5
@@ -46,9 +46,9 @@ d3 = True
 model_name = 'ednn_3D_scaled_nearest_skipping_boolean'
 n_input_layers = 4
 n_output_layers = 3
-n_x = 32
-n_y = 32
-n_z = 32
+n_x = 64
+n_y = 64
+n_z = 64
 n_downsample_layers = 3
 interpolation_mode = 'nearest'
 align_corners = False
