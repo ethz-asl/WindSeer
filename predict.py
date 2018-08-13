@@ -12,6 +12,7 @@ dataset = 'data/converted_3d.tar'
 index = 0 # plot the prediction for the following sample in the set
 model_name = 'ednn_3D_scaled_nearest_skipping_boolean'
 compute_prediction_error = False
+use_terrain_mask = True
 # --------------------------------------------------------------------------
 
 # check if gpu available
@@ -27,7 +28,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
 if params['d3']:
-    net = models.ModelEDNN3D(params['n_input_layers'], params['n_output_layers'], params['n_x'], params['n_y'], params['n_z'], params['n_downsample_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], params['use_terrain_mask'], params['pooling_method'])
+    net = models.ModelEDNN3D(params['n_input_layers'], params['n_output_layers'], params['n_x'], params['n_y'], params['n_z'], params['n_downsample_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], use_terrain_mask, params['pooling_method'])
 else:
     net = models.ModelEDNN2D(params['n_input_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], params['use_turbulence'])
 

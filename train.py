@@ -14,12 +14,12 @@ import utils
 # ---- Params --------------------------------------------------------------
 # learning parameters
 plot_every_n_batches = 10
-n_epochs = 500
+n_epochs = 200
 batchsize = 1
 num_workers = 1
 learning_rate_initial = 1e-3
 learning_rate_decay = 0.5
-learning_rate_decay_step_size = 100
+learning_rate_decay_step_size = 50
 compute_validation_loss = False
 
 # options to store data
@@ -29,6 +29,7 @@ evaluate_testset = False
 warm_start = False
 custom_loss = False
 save_model_every_n_epoch = 1000
+save_params_hist_every_n_epoch = 25
 
 # dataset parameter
 trainset_name = 'data/converted_3d.tar'
@@ -48,7 +49,7 @@ n_output_layers = 3
 n_x = 32
 n_y = 32
 n_z = 32
-n_downsample_layers = 5
+n_downsample_layers = 3
 interpolation_mode = 'nearest'
 align_corners = False
 skipping = True
@@ -228,10 +229,11 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
         writer.add_scalar('Summary/ValidationLoss', validation_loss, epoch+1)
         writer.add_scalar('Summary/LearningRate', scheduler.get_lr()[0], epoch+1)
 
-        for tag, value in net.named_parameters():
-            tag = tag.replace('.', '/')
-            writer.add_histogram(tag, value.data.cpu().numpy(), epoch+1)
-            writer.add_histogram(tag+'/grad', value.grad.data.cpu().numpy(), epoch+1)
+        if epoch % save_params_hist_every_n_epoch == (save_params_hist_every_n_epoch - 1):
+            for tag, value in net.named_parameters():
+                tag = tag.replace('.', '/')
+                writer.add_histogram(tag, value.data.cpu().numpy(), epoch+1)
+                writer.add_histogram(tag+'/grad', value.grad.data.cpu().numpy(), epoch+1)
 
         print(('[%d] train loss: %.5f, validation loss: %.5f' %
                       (epoch + 1, train_loss, validation_loss)))
