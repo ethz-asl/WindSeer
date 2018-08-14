@@ -14,12 +14,12 @@ import utils
 # ---- Params --------------------------------------------------------------
 # learning parameters
 plot_every_n_batches = 10
-n_epochs = 10
-batchsize = 1
-num_workers = 1
-learning_rate_initial = 1e-3
+n_epochs = 10000
+batchsize = 8
+num_workers = 8
+learning_rate_initial = 5e-4
 learning_rate_decay = 0.5
-learning_rate_decay_step_size = 200
+learning_rate_decay_step_size = 2500
 compute_validation_loss = False
 custom_init = False
 
@@ -30,12 +30,12 @@ evaluate_testset = False
 warm_start = False
 custom_loss = False
 save_model_every_n_epoch = 100000
-save_params_hist_every_n_epoch = 200
+save_params_hist_every_n_epoch = 100
 
 # dataset parameter
-trainset_name = 'data/converted_3d.tar'
-validationset_name = 'data/converted_3d.tar'
-testset_name = 'data/converted_3d.tar'
+trainset_name = 'data/converted_3d_one.tar'
+validationset_name = 'data/converted_3d_one.tar'
+testset_name = 'data/converted_3d_one.tar'
 stride_hor = 4
 stride_vert = 2
 uhor_scaling = 6.0
@@ -44,21 +44,21 @@ turbulence_scaling = 4.5
 
 # model parameter
 d3 = True
-model_name = 'ednn_3D_n_sb3smf2mr'
+model_name = 'ednn_3D_n_sb4smf1_r_one'
 n_input_layers = 4
 n_output_layers = 3
 n_x = 32
 n_y = 32
 n_z = 32
-n_downsample_layers = 3
+n_downsample_layers = 4
 interpolation_mode = 'nearest'
 align_corners = False
 skipping = True
 use_terrain_mask = True
 pooling_method = 'striding'
 use_fc_layers = True
-fc_scaling = 2
-use_mapping_layer = True
+fc_scaling = 1
+use_mapping_layer = False
 # --------------------------------------------------------------------------
 
 # decide if turbulence is used (somewhat a hack maybe there is something better in the future)
@@ -114,8 +114,10 @@ scheduler = StepLR(optimizer, step_size=learning_rate_decay_step_size, gamma=lea
 
 if custom_loss:
     loss_fn = utils.MyLoss(device)
+    loss_fn_val = torch.nn.MSELoss()
 else:
     loss_fn = torch.nn.MSELoss()
+    loss_fn_val = torch.nn.MSELoss()
 
 # initialize the tensorboard writer
 writer = SummaryWriter('models/trained_models/' + model_name + '_learningcurve')
@@ -223,7 +225,7 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
-            loss = loss_fn(outputs, labels)
+            loss = loss_fn_val(outputs, labels)
             train_loss += loss.item()
         train_loss /= len(trainloader)
 
@@ -233,7 +235,7 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
                 inputs, labels = data
                 inputs, labels = inputs.to(device), labels.to(device)
                 outputs = net(inputs)
-                loss = loss_fn(outputs, labels)
+                loss = loss_fn_val(outputs, labels)
                 validation_loss += loss.item()
             validation_loss /= len(validationset)
 

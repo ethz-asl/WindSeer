@@ -10,7 +10,7 @@ import utils
 # ---- Params --------------------------------------------------------------
 dataset = 'data/converted_3d.tar'
 index = 0 # plot the prediction for the following sample in the set
-model_name = 'ednn_3D_n_sb3smf2mr'
+model_name = 'ednn_3D_n_sb4sm__mr'
 compute_prediction_error = True
 use_terrain_mask = True
 # --------------------------------------------------------------------------
