@@ -27,7 +27,7 @@ check_files()
     return_value=0
 
     for file in "$@"; do
-        if [ ! -f $file ]; then
+        if [[ ! -f $file ]]; then
             echo "Required file $file not found."
             return_value=1
         fi
@@ -56,7 +56,7 @@ check_converged() {
     write_interval=$( foamDictionary -entry 'writeInterval' -value system/controlDict )
     end_time=$( foamDictionary -entry 'endTime' -value system/controlDict )
     last_write=$( echo "$end_time/$write_interval*$write_interval" | bc )
-    if [ "$latest_write" -eq 0 ] || [ "$latest_write" -eq "$last_write" ]; then
+    if [[ -z "$latest_write" ]] || [[ "$latest_write" -eq "$last_write" ]]; then
         echo "0"
     else
         echo "1"
