@@ -10,7 +10,7 @@ import utils
 # ---- Params --------------------------------------------------------------
 dataset = 'data/converted_3d.tar'
 index = 0 # plot the prediction for the following sample in the set
-model_name = 'ednn_3D_n_sb3s_10000epochs'
+model_name = 'ednn_3D_n_sb3smf2mr'
 compute_prediction_error = True
 use_terrain_mask = True
 # --------------------------------------------------------------------------
@@ -28,7 +28,9 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
 if params['d3']:
-    net = models.ModelEDNN3D(params['n_input_layers'], params['n_output_layers'], params['n_x'], params['n_y'], params['n_z'], params['n_downsample_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], use_terrain_mask, params['pooling_method'])
+    net = models.ModelEDNN3D(params['n_input_layers'], params['n_output_layers'], params['n_x'], params['n_y'], params['n_z'],
+                             params['n_downsample_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'],
+                             use_terrain_mask, params['pooling_method'], params['use_mapping_layer'], params['use_fc_layers'], params['fc_scaling'])
 else:
     net = models.ModelEDNN2D(params['n_input_layers'], params['interpolation_mode'], params['align_corners'], params['skipping'], params['use_turbulence'])
 
@@ -51,7 +53,7 @@ with torch.no_grad():
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
             loss += loss_fn(outputs, labels)
-            if d3:
+            if params['d3']:
                 loss_ux += loss_fn(outputs[:,0,:,:,:], labels[:,0,:,:,:])
                 loss_uy += loss_fn(outputs[:,1,:,:,:], labels[:,1,:,:,:])
                 loss_uz += loss_fn(outputs[:,2,:,:,:], labels[:,2,:,:,:])

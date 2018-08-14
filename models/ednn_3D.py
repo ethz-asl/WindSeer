@@ -13,13 +13,18 @@ Encoder/Decoder Neural Network
 The first input layer is assumed to be terrain information. It should be zero in the terrain and nonzero elsewhere.
 '''
 class ModelEDNN3D(nn.Module):
-    def __init__(self, n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers, interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method):
+    def __init__(self, n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers,
+                 interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method,
+                 use_mapping_layer, use_fc_layers, fc_scaling):
         super(ModelEDNN3D, self).__init__()
 
         self.__num_outputs = n_output_layers
         self.__num_inputs = n_input_layers
         self.__use_terrain_mask = use_terrain_mask
         self.__n_downsample_layers = n_downsample_layers
+        self.__use_mapping_layer = use_mapping_layer
+        self.__use_fc_layers = use_fc_layers
+        self.__fc_scaling = fc_scaling
 
         self.__n_x = n_x
         self.__n_y = n_y
@@ -33,10 +38,11 @@ class ModelEDNN3D(nn.Module):
             else:
                 self.__conv += [nn.Conv3d(4*2**i, 8*2**i, 3)]
 
-        # fully connected layers
-        n_features = int(8*2**(n_downsample_layers-1) * n_x * n_y * n_z / ((2**n_downsample_layers)**3))
-        self.__fc1 = nn.Linear(n_features, int(n_features/2))
-        self.__fc2 = nn.Linear(int(n_features/2), n_features)
+        if self.__use_fc_layers:
+            # fully connected layers
+            n_features = int(8*2**(n_downsample_layers-1) * n_x * n_y * n_z / ((2**n_downsample_layers)**3))
+            self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
+            self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
 
         # modules
         self.__pad = nn.ReplicationPad3d(1)
@@ -78,8 +84,9 @@ class ModelEDNN3D(nn.Module):
                 else:
                     self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, 3)]
 
-        # mapping layer
-        self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
+        if self.__use_mapping_layer:
+            # mapping layer
+            self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
 
     def init_params(self):
         def init_weights(m):
@@ -111,11 +118,12 @@ class ModelEDNN3D(nn.Module):
             for i in range(self.__n_downsample_layers):
                 x = self.__pooling(self.__leakyrelu(self.__conv[i](self.__pad(x))))
 
-        shape = x.size()
-        x = x.view(-1, self.num_flat_features(x))
-        x = self.__leakyrelu(self.__fc1(x))
-        x = self.__leakyrelu(self.__fc2(x))
-        x = x.view(shape)
+        if self.__use_fc_layers:
+            shape = x.size()
+            x = x.view(-1, self.num_flat_features(x))
+            x = self.__leakyrelu(self.__fc1(x))
+            x = self.__leakyrelu(self.__fc2(x))
+            x = x.view(shape)
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
@@ -124,7 +132,8 @@ class ModelEDNN3D(nn.Module):
             for i in range(self.__n_downsample_layers-1, -1, -1):
                 x = self.__deconv1[i](self.__pad(self.__upsampling(x)))
 
-        x = self.__mapping_layer(x)
+        if self.__use_mapping_layer:
+            x = self.__mapping_layer(x)
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x

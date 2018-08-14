@@ -56,7 +56,9 @@ def test_ModelEDNN2D(skipping, batchsize, error_counter = 0, test_counter = 0):
     return error_counter, test_counter
 
 #@profile
-def test_ModelEDNN3D(batch_size, n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers, interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method, error_counter = 0, test_counter = 0):
+def test_ModelEDNN3D(batch_size, n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers,
+                     interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method,
+                     use_mapping_layer, use_fc_layers, fc_scaling, error_counter = 0, test_counter = 0):
     test_counter += 1
     loss_fn = torch.nn.MSELoss()
 
@@ -68,10 +70,12 @@ def test_ModelEDNN3D(batch_size, n_input_layers, n_output_layers, n_x, n_y, n_z,
     print('\t\t\tn_x: {}, n_y: {}, n_z: {}, n_downsample_layers: {}'.format(n_x, n_y, n_z, n_downsample_layers))
     print('\t\t\tinterpolation_mode: {}, align_corners: {}, skipping: {}'.format(interpolation_mode, align_corners, skipping))
     print('\t\t\tuse_terrain_mask: {}, pooling_method: {}, batchsize: {}'.format(use_terrain_mask, pooling_method, batch_size))
+    print('\t\t\tuse_mapping_layer: {}, use_fc_layers: {}, fc_scaling: {}'.format(use_mapping_layer, use_fc_layers, fc_scaling))
     print('\t\tResult:')
 
     try:
-        net = models.ModelEDNN3D(n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers, interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method).to(device)
+        net = models.ModelEDNN3D(n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers, interpolation_mode,
+                                 align_corners, skipping, use_terrain_mask, pooling_method, use_mapping_layer, use_fc_layers, fc_scaling).to(device)
         net.init_params()
 
     except:
@@ -127,16 +131,16 @@ if __name__ == "__main__":
 
             print("--------------------------------------------------------")
             print("ModelEDNN3D 64*128*128 tests")
-            ram = memory_usage((test_ModelEDNN3D, (1, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)), interval=0.001)
+            ram = memory_usage((test_ModelEDNN3D, (1, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)), interval=0.001)
             test_counter += 1
             print('\t\tmax ram: {} MB'.format(max(ram)))
-            ram = memory_usage((test_ModelEDNN3D, (16, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'averagepool', error_counter, test_counter)), interval=0.001)
+            ram = memory_usage((test_ModelEDNN3D, (16, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'averagepool', True, True, 2, error_counter, test_counter)), interval=0.001)
             test_counter += 1
             print('\t\tmax ram: {} MB'.format(max(ram)))
-            ram = memory_usage((test_ModelEDNN3D, (1, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'striding', error_counter, test_counter)), interval=0.001)
+            ram = memory_usage((test_ModelEDNN3D, (1, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'striding', True, True, 2, error_counter, test_counter)), interval=0.001)
             test_counter += 1
             print('\t\tmax ram: {} MB'.format(max(ram)))
-            ram = memory_usage((test_ModelEDNN3D, (8, 4, 4, 128, 128, 64, 4, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)), interval=0.001)
+            ram = memory_usage((test_ModelEDNN3D, (8, 4, 4, 128, 128, 64, 4, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)), interval=0.001)
             test_counter += 1
             print('\t\tmax ram: {} MB'.format(max(ram)))
 
@@ -150,10 +154,10 @@ if __name__ == "__main__":
 
             print("--------------------------------------------------------")
             print("ModelEDNN3D tests")
-            test_ModelEDNN3D(1, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-            test_ModelEDNN3D(64, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-            test_ModelEDNN3D(1, 4, 4, 128, 128, 64, 4, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-            test_ModelEDNN3D(8, 4, 4, 128, 128, 64, 4, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
+            test_ModelEDNN3D(1, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+            test_ModelEDNN3D(64, 4, 4, 64, 64, 64, 4, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+            test_ModelEDNN3D(1, 4, 4, 128, 128, 64, 4, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+            test_ModelEDNN3D(8, 4, 4, 128, 128, 64, 4, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
 
     elif args.mode == 1:
         print("--------------------------------------------------------")
@@ -165,33 +169,38 @@ if __name__ == "__main__":
 
         print("--------------------------------------------------------")
         print("ModelEDNN3D tests")
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 0, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 0, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+#         error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 0, 'nearest', False, True, True, 'maxpool', False, False, 2, error_counter, test_counter) #Backwards is expected to fail here because
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 0, 'nearest', False, True, True, 'maxpool', True, False, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 0, 'nearest', False, True, True, 'maxpool', False, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 0, 'nearest', False, True, True, 'maxpool', False, True, 1, error_counter, test_counter)
 
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, False, True, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, False, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, False, False, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(64, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(64, 4, 4, 8, 8, 8, 2, 'nearest', False, False, True, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(64, 4, 4, 8, 8, 8, 2, 'nearest', False, True, False, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(64, 4, 4, 8, 8, 8, 2, 'nearest', False, False, False, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'averagepool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'striding', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'trilinear', False, True, True, 'striding', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'trilinear', True, True, True, 'striding', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'trilinear', True, False, False, 'striding', error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, False, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(64, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(64, 4, 4, 8, 8, 8, 2, 'nearest', False, False, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(64, 4, 4, 8, 8, 8, 2, 'nearest', False, True, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(64, 4, 4, 8, 8, 8, 2, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'averagepool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'striding', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'trilinear', False, True, True, 'striding', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'trilinear', True, True, True, 'striding', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'trilinear', True, False, False, 'striding', True, True, 2, error_counter, test_counter)
 
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 1, 1, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 1, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 1, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(64, 10, 10, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 1, 1, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 1, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 1, 4, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(64, 10, 10, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(64, 10, 10, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 1, error_counter, test_counter)
 
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 128, 64, 6, 'nearest', False, False, False, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 64, 128, 6, 'nearest', False, False, False, 'maxpool', error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 64, 128, 128, 6, 'nearest', False, False, False, 'maxpool', error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 128, 64, 6, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 64, 128, 6, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 64, 128, 128, 6, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
 
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 128, 64, 5, 'nearest', False, True, True, 'maxpool', error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 128, 64, 5, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
 
         if (error_counter == 0):
             print(colored('{} out of {} test failed'.format(error_counter, test_counter), 'green'))

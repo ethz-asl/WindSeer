@@ -14,13 +14,14 @@ import utils
 # ---- Params --------------------------------------------------------------
 # learning parameters
 plot_every_n_batches = 10
-n_epochs = 10000
+n_epochs = 10
 batchsize = 1
 num_workers = 1
 learning_rate_initial = 1e-3
 learning_rate_decay = 0.5
-learning_rate_decay_step_size = 2000
+learning_rate_decay_step_size = 200
 compute_validation_loss = False
+custom_init = False
 
 # options to store data
 save_model = True
@@ -43,18 +44,21 @@ turbulence_scaling = 4.5
 
 # model parameter
 d3 = True
-model_name = 'ednn_3D_RP_n_sb4sm_10000epochs'
+model_name = 'ednn_3D_n_sb3smf2mr'
 n_input_layers = 4
 n_output_layers = 3
 n_x = 32
 n_y = 32
 n_z = 32
-n_downsample_layers = 4
+n_downsample_layers = 3
 interpolation_mode = 'nearest'
 align_corners = False
 skipping = True
 use_terrain_mask = True
 pooling_method = 'striding'
+use_fc_layers = True
+fc_scaling = 2
+use_mapping_layer = True
 # --------------------------------------------------------------------------
 
 # decide if turbulence is used (somewhat a hack maybe there is something better in the future)
@@ -85,7 +89,9 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define model and move to gpu if available
 if d3:
-    net = models.ModelEDNN3D(n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers, interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method)
+    net = models.ModelEDNN3D(n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers, interpolation_mode, 
+                             align_corners, skipping, use_terrain_mask, pooling_method, use_mapping_layer,
+                             use_fc_layers, fc_scaling)
 else:
     net = models.ModelEDNN2D(n_input_layers, interpolation_mode = interpolation_mode, align_corners = align_corners, skipping = skipping, predict_turbulence = use_turbulence)
 
@@ -94,9 +100,11 @@ if (warm_start):
         net.load_state_dict(torch.load('models/trained_models/' + model_name + '.model', map_location=lambda storage, loc: storage))
     except:
         print('Warning: Failed to load the model parameter, initializing parameter.')
-        net.init_params()
+        if custom_init:
+            net.init_params()
 else:
-    net.init_params()
+    if custom_init:
+        net.init_params()
 
 net.to(device)
 
@@ -132,7 +140,10 @@ if (save_model):
         'stride_hor': stride_hor,
         'stride_vert': stride_vert,
         'use_turbulence': use_turbulence,
-        'd3': d3
+        'd3': d3,
+        'use_fc_layers': use_fc_layers,
+        'fc_scaling': fc_scaling,
+        'use_mapping_layer': use_mapping_layer
         }
     np.save('models/trained_models/' + model_name + '_params.npy', model_params)
 
@@ -161,6 +172,9 @@ print('\tAlign corners:\t\t', align_corners)
 print('\tSkip connection:\t', skipping)
 print('\tUse terrain mask:\t', use_terrain_mask)
 print('\tPooling method:\t\t', pooling_method)
+print('\tUse fc layers:\t\t', use_fc_layers)
+print('\tFC layer scaling:\t', fc_scaling)
+print('\tUse mapping layer:\t', use_mapping_layer)
 print(' ')
 print('Dataset Settings:')
 print('\tUhor scaling:\t\t', uhor_scaling)
