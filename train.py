@@ -43,17 +43,17 @@ turbulence_scaling = 4.5
 
 # model parameter
 d3 = True
-model_name = 'ednn_3D_n_sb3s_10000epochs_noterrain'
+model_name = 'ednn_3D_RP_n_sb4sm_10000epochs'
 n_input_layers = 4
 n_output_layers = 3
 n_x = 32
 n_y = 32
 n_z = 32
-n_downsample_layers = 3
+n_downsample_layers = 4
 interpolation_mode = 'nearest'
 align_corners = False
 skipping = True
-use_terrain_mask = False
+use_terrain_mask = True
 pooling_method = 'striding'
 # --------------------------------------------------------------------------
 

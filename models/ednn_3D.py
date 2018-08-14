@@ -39,7 +39,7 @@ class ModelEDNN3D(nn.Module):
         self.__fc2 = nn.Linear(int(n_features/2), n_features)
 
         # modules
-        self.__pad = nn.ZeroPad3d(1)
+        self.__pad = nn.ReplicationPad3d(1)
 
         self.__leakyrelu = nn.LeakyReLU(0.1)
 
@@ -137,4 +137,4 @@ class ModelEDNN3D(nn.Module):
         for s in size:
             num_features *= s
         return num_features
-    
+
