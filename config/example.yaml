@@ -1,0 +1,49 @@
+run:
+    plot_every_n_batches: 10
+    n_epochs: 10
+    batchsize: 1
+    num_workers: 1
+    learning_rate_initial: 1.0E-3
+    learning_rate_decay: 0.5
+    learning_rate_decay_step_size: 3
+    compute_validation_loss: False
+    custom_init: False
+
+    # options to store data
+    save_model: True
+    save_metadata: True
+    evaluate_testset: False
+    warm_start: False
+    custom_loss: False
+    save_model_every_n_epoch: 2
+    save_params_hist_every_n_epoch: 2
+
+data:
+    # dataset parameter
+    trainset_name: 'data/converted_3d.tar'
+    validationset_name: 'data/converted_3d.tar'
+    testset_name: 'data/converted_3d.tar'
+    stride_hor: 4
+    stride_vert: 2
+    uhor_scaling: 6.0
+    uz_scaling: 2.5
+    turbulence_scaling: 4.5
+
+model:
+    # model parameter
+    d3: True
+    name_prefix: 'test_model'
+    n_input_layers: 4
+    n_output_layers: 3
+    n_x: 32
+    n_y: 32
+    n_z: 32
+    n_downsample_layers: 4
+    interpolation_mode: 'nearest'
+    align_corners: False
+    skipping: True
+    use_terrain_mask: False
+    pooling_method: 'striding'
+    use_fc_layers: True
+    fc_scaling: 1
+    use_mapping_layer: True

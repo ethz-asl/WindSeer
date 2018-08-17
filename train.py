@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
+import argparse
 import models
 import numpy as np
+import os
 from tensorboardX import SummaryWriter
 import time
 import torch
@@ -10,9 +12,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 import utils
-import time
-import argparse
-import os
 
 now_time = time.strftime("%Y_%m_%d-%H_%M")
 
