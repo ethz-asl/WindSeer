@@ -17,3 +17,4 @@ openfoam_batch/cases3d
 *.swp
 .*
 *__pycache__*
+mprofile*
