@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# Set up some stuff for getopts
+OPTIND=1
+
+# Default values
+axis="Z"
+min_max="MAX"
+
+usage() { 
+    echo -e "Usage: $0 [OPTION] RUNCASE_DIR"
+    echo -e "  RUNCASE_DIR Directory containing run cases"
+    echo -e "  -a axis\n\tAxis (X, Y, Z)"
+    echo -e "  -l Get low limits (default is high/max)"
+    echo -e "  -h"
+    echo -e "\tprint this help and exit"
+    exit 0;
+}
+
+while getopts "a:lh" opt; do
+    case "$opt" in
+        a)  axis=${OPTARG^^}
+            ;;
+        l)  min_max="MIN"
+            ;;
+        h)  usage
+            exit 0
+            ;;
+        *)  usage >&2
+            exit 1
+            ;;
+    esac
+done
+shift $(expr $OPTIND - 1 )
+
+if [ "$#" -lt 1 ]; then
+    echo "ERROR: No case directory specified" >&2
+    usage >&2
+    exit 1
+fi
+
+# Check openFOAM version
+if ! type simpleFoam &> /dev/null 
+then
+    echo "ERROR: command simpleFoam not found, have you sourced OpenFOAM bashrc?" >&2
+    exit 1
+fi
+
+# Loop over case directories
+for case_dir in $1/*/; do
+    val=$( foamDictionary -entry "TERRAIN_DICT.${min_max}${axis}" -value "${case_dir}/terrainDict" )
+    echo "$case_dir, ${min_max}${axis}: ${val}"
+done
+    
+

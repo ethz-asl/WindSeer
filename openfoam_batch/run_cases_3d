@@ -13,6 +13,7 @@ end_iter=-1
 write_iter=-1
 regrid=1
 build_mesh=1
+output_dir="cases3d/"
 
 # Source shared functions ( 'create_base_case' and 'check_files' )
 source shared_functions.sh
@@ -22,6 +23,7 @@ usage() {
     # echo -e "  -s stl_dir\n\tDirectory of stl files"
     echo -e "  -c csv_dir\n\tDirectory to output csv files"
     echo -e "  -b base_dir\n\tlocation of base case directory"
+    echo -e "  -o output_dir\n\tOutput directory"
     echo -e "  -w delta_wind\n\tWind step size \(w=1:delta_wind:15\)"
     echo -e "  -e end_time"
     echo -e "\tendTime for simpleFoam (default to existing value from controlDict)"
@@ -36,29 +38,22 @@ usage() {
     echo -e "\tprint this help and exit"
 }
 
-while getopts "c:b:w:e:i:s:2:h" opt; do
+while getopts "c:b:w:e:i:s:2:o:g:h" opt; do
     case "$opt" in
         # s)  stl_dir=$OPTARG ;;
-        c)  csv_dir=$OPTARG
-            ;;
-        b)  base_dir=$OPTARG
-            ;;
-        w)  wind_delta=$OPTARG
-            ;;
-        e)  end_iter=$OPTARG
-            ;;
-        i)  write_iter=$OPTARG
-            ;;
-        s)  build_mesh=$OPTARG
-            ;;
-        2)  second_solver=$OPTARG
-            ;;
-        h)
-            usage
+        c)  csv_dir=$OPTARG ;;
+        b)  base_dir=$OPTARG ;;
+        w)  wind_delta=$OPTARG ;;
+        e)  end_iter=$OPTARG ;;
+        i)  write_iter=$OPTARG ;;
+        s)  build_mesh=$OPTARG ;;
+        2)  second_solver=$OPTARG ;;
+        o)  output_dir=$OPTARG ;;
+        g)  regrid=$OPTARG ;;
+        h)  usage
             exit 0
             ;;
-        *)
-            usage >&2
+        *)  usage >&2
             exit 1
             ;;
     esac
@@ -70,6 +65,10 @@ if [ "$#" -lt 1 ]; then
     usage >&2
     exit 1
 fi
+
+output_dir=$( check_path "$output_dir" "$home_dir" ) || exit 1
+csv_dir=$( check_path "$csv_dir" "$home_dir" ) || exit 1
+base_dir=$( check_path "$base_dir" "$home_dir" ) || exit 1
 
 # Check openFOAM version
 if ! type simpleFoam &> /dev/null 
@@ -93,17 +92,19 @@ esac
 snappy_dict="snappyHexMeshDict"
 
 # The remaining arguments are the stl directories
-base_case=$home_dir/$base_dir
+# base_case=$home_dir/$base_dir
+base_case="$base_dir"
 python_directory=$home_dir/python
-mkdir -p $csv_dir
+# mkdir -p $csv_dir
 
 
 # Loop over case_directories, create new directory for each case
 for stl_dir in "$@"; do
+    stl_dir=$( check_path "$stl_dir" "$home_dir" ) || continue
     casename=$(basename -- "$stl_dir")
-    stl_file=${home_dir}/${stl_dir}/${casename}.stl
-    terrainDict_file=${home_dir}/${stl_dir}/terrainDict
-    ylim_file=${home_dir}/${stl_dir}/YLIMS
+    stl_file="${stl_dir}/${casename}.stl"
+    terrainDict_file="${stl_dir}/terrainDict"
+    ylim_file="${stl_dir}/YLIMS"
     
     check_files $stl_file $terrainDict_file $ylim_file
     if [ $? -gt 0 ]; then
@@ -112,7 +113,8 @@ for stl_dir in "$@"; do
     fi
     
     echo "Creating new case ${casename} based on ${stl_dir}"
-    case_dir=${home_dir}/cases3d/${casename}
+    case_dir=${output_dir}/${casename}
+    # case_dir=${home_dir}/cases3d/${casename}
     mkdir -p $case_dir
 
     simpleFoam_dir="${case_dir}/simpleFoam"
@@ -207,68 +209,83 @@ for stl_dir in "$@"; do
     echo "ABL_PARAMS: $abl_params"
 
     # Loop over wind speeds
-    for (( w=1; w<=15; w+=$wind_delta )); do
+    #for (( w=1; w<=15; w+=$wind_delta )); do
+    w=1
 
-        # Calculate k, epsilon
-        k_epsilon=($(python $python_directory/abl_k_epsilon.py -U $w $abl_params))
-        echo "K_EPSILON: ${k_epsilon[0]} ${k_epsilon[1]}"
+    # Calculate k, epsilon
+    k_epsilon=($(python $python_directory/abl_k_epsilon.py -U $w $abl_params))
+    k_abl="${k_epsilon[0]}"
+    eps_abl="${k_epsilon[1]}"
+    echo "K_EPSILON: $k_abl $eps_abl"
 
-        wind_directory="${case_dir}/W${w}"
-        # Create system folder, symlinks from base case
-        create_base_case $wind_directory $base_case/base
-        ln -s ${simpleFoam_dir}/constant/polyMesh $wind_directory/constant/polyMesh
+    wind_directory="${case_dir}/W${w}"
+    # Create system folder, symlinks from base case
+    create_base_case $wind_directory $base_case/base
+    ln -s ${simpleFoam_dir}/constant/polyMesh $wind_directory/constant/polyMesh
 
-        cd $wind_directory
-        if [ $end_iter -gt 0 ]; then
-            sed -i -e "s/endTime\s\{1,\}[0-9]*/endTime\t${end_iter}/g" system/controlDict
-        fi
-        if [ $write_iter -gt 0 ]; then
-            sed -i -e "s/writeInterval\s\{1,\}[0-9]*/writeInterval\t${write_iter}/g" system/controlDict
-        fi
+    cd $wind_directory
+    if [ $end_iter -gt 0 ]; then
+        sed -i -e "s/endTime\s\{1,\}[0-9]*/endTime\t${end_iter}/g" system/controlDict
+    fi
+    if [ $write_iter -gt 0 ]; then
+        sed -i -e "s/writeInterval\s\{1,\}[0-9]*/writeInterval\t${write_iter}/g" system/controlDict
+    fi
 
-        # Copy initial conditions, change wind speed
-        cp -r $base_case/simpleFoam/0.orig $wind_directory/0
-        sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
-        sed -i "s/INLETK/${k_epsilon[0]}/" 0/k
-        sed -i "s/INLETEPSILON/${k_epsilon[1]}/" 0/epsilon
-        echo -en "\tCase setup complete: W=$w, running simpleFoam..."
-        simpleFoam > simpleFoam.log 2> simpleFoam.err
+    # Copy initial conditions, change wind speed
+    cp -r $base_case/simpleFoam/0.orig $wind_directory/0
+    sed -i "s/WINDSPEED/$w/" 0/include/ABLConditions
+    sed -i "s/INLETK/${k_abl}/" 0/k
+    sed -i "s/INLETEPSILON/${eps_abl}/" 0/epsilon
+    echo -en "\tCase setup complete: W=$w, running simpleFoam..."
+    simpleFoam > simpleFoam.log 2> simpleFoam.err
+    if [ "$?" -gt 0 ]; then
+        echo " failed!"
+        continue
+    fi
+    first_iterations=$( foamListTimes -latestTime ) 
+    first_converged=$( check_converged )
+    if [ "$first_converged" -eq 0 ]; then
+        echo " did not converge in max iterations."
+        echo "unconverged" >> simpleFoam.err
+        # We still try second solver anyway if we have one
+        [ ! -n "$second_solver" ] && continue
+    fi
+    echo " converged in ${first_iterations} iterations."
+
+    if [ -n "$second_solver" ]; then
+        # We also have a higher-order case
+        # We will remove the first order solution if the second is successful
+        echo -en "\tRunning second solver simpleFoam..."
+        create_base_case $wind_directory $base_case/$second_solver -fn
+        simpleFoam > simpleFoam2.log 2> simpleFoam2.err
         if [ "$?" -gt 0 ]; then
             echo " failed!"
-            continue
-        fi
-        first_converged=$(ls -d */ | sed 's:\([0-9]\+\).*:\1:g' | sort -n | tail -1)
-        echo " converged in ${first_converged} iterations."
-
-        if [ -n "$second_solver" ]; then
-            # We also have a higher-order case
-            echo -en "\tRunning second solver simpleFoam..."
-            create_base_case $wind_directory $base_case/$second_solver -fn
-            simpleFoam > simpleFoam2.log 2> simpleFoam2.err
-            if [ "$?" -gt 0 ]; then
-                echo " failed!"
-            else
-                second_converged=$(ls -d */ | sed 's:\([0-9]\+\).*:\1:g' | sort -n | tail -1)
-                echo " converged in ${second_converged} iterations."
+	    continue
+        else
+            second_iterations=$(  foamListTimes -latestTime ) 
+            second_converged=$( check_converged )
+            if [ "$second_converged" -eq 0 ]; then
+                echo " did not converge in max iterations."
+                echo "unconverged" >> simpleFoam2.err
+                continue
             fi
+            echo " converged in ${second_iterations} iterations."
+            rm -r "${wind_directory}/${first_iterations}"
         fi
-        
-        cd $wind_directory
-        touch hill.foam
+    fi
+    touch "${wind_directory}/hill.foam"
 
-        if [ $regrid -gt 0 ]
-        then
-            echo -en "\tResampling results onto test grid..."
-            printf -v csv_file "$home_dir/$csv_dir/%s_W%02d" $casename $w
-            python "${python_directory}/resample.py" --three-d --case-dir $wind_directory \
-                --mesh-dir $reGrid_dir --case-foam hill.foam --outfile $csv_file
-            if [ "$?" -gt 0 ]; then
-                echo " failed!"
-            else
-                echo " done."
-            fi
-        fi
-    done
     cd $home_dir
+    w=$( echo "$w+$wind_delta" | bc )
+    wlist=''
+    for (( w=$w; w<=15; w+=$wind_delta )); do
+        wlist="${wlist} ${w}"
+    done
+    ./reuse_wind_case -c "${case_dir}/W1" -v 1 -o "$case_dir" $wlist
+    echo "\tReuse wind case returned: $? failures"
+
+    if [ "$regrid" -gt 0 ]; then
+        make_csvs.sh -c "$csv_dir" -p "$python_directory" -w "$wind_delta" "$case_dir"
+    fi
 done
 

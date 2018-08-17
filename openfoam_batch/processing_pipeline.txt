@@ -1,0 +1,51 @@
+BATCHNAME=batch01_F
+ROT_ANGLE=270
+
+1 - (asl-w14) Copy everything to Euler:
+scp -r "/intel_share/geotif/$BATCHNAME" lawrancn@euler.ethz.ch://cluster/scratch/lawrancn/geotif/
+
+2 - Log on to Euler
+ssh euler
+
+3 - (euler) Make stl files
+source ~/setup_euler.sh
+cd ~/intel_wind/openfoam_batch
+mkdir -p "${SCRATCH}/stl/${BATCHNAME}/processed"
+bsub -W 1:00 ./make_stl.sh "${SCRATCH}/geotif/${BATCHNAME}" "${SCRATCH}/stl/${BATCHNAME}"
+
+4 - (euler) Rotate and make terrainDict
+bsub -W 1:00 -R "rusage[mem=2048]" ./process_stl -r "$ROT_ANGLE" -o "${SCRATCH}/stl/${BATCHNAME}/processed/" "${SCRATCH}/stl/*.stl"
+
+5 - (euler) Copy to asl-w14 and leonhard:
+rsync -rlvz --update $SCRATCH/stl/$BATCHNAME nick@129.132.39.110:/media/intel_data/3d/stl/
+rsync -rlvz --update $SCRATCH/stl/$BATCHNAME/processed lawrancn@login.leonhard.ethz.ch:/cluster/scratch/lawrancn/stl/${BATCHNAME}
+
+6 - Log on to Leonhard
+ssh leonhard
+source ~/setup_leonhard.sh
+BATCHNAME=batch01_F
+mkdir "${SCRATCH}/openfoam_cases/${BATCHNAME}"
+mkdir "${SCRATCH}/csv/${BATCHNAME}"
+
+cd ~/intel_wind/openfoam_batch
+for cdir in $SCRATCH/stl/${BATCHNAME}/processed/*; do 
+    bsub -W 72:00 -n 1 -R "rusage[mem=6144]" ./run_cases_3d -c ${SCRATCH}/csv/${BATCHNAME} -o ${SCRATCH}/openfoam_cases/${BATCHNAME} -b base_case3d_new/ -w 1 -2 linearUpwind -g 0 "$cdir"
+done
+
+7 - (leonhard) When the jobs are done
+./rebuild_rel_links.sh $SCRATCH/openfoam_cases/${BATCHNAME}/*
+cd ${SCRATCH}/openfoam_cases/${BATCHNAME}
+find . -type d -name "W15" | sed 's:/W15::g' > solved_cases.txt
+
+8 - (euler) Make CSV files on Euler
+cd ~/intel_wind/openfoam_batch
+mkdir "${SCRATCH}/csv/${BATCHNAME}"
+bsub -W 4:00 -n 8 -R "rusage[mem=4096]" parallel -j 8 ./make_csvs.sh -c $SCRATCH/csv/${BATCHNAME} -p python/ -w 1  ::: $SCRATCH/openfoam_cases/${BATCHNAME}/[N,E,S,W]12x12_F_0[0-9] /cluster/scratch/lawrancn/batch01_F_cases/east_in/E12x12_F_12
+bsub -W 4:00 -n 8 -R "rusage[mem=4096]" parallel -j 8 ./make_csvs.sh -c $SCRATCH/csv/${BATCHNAME} -p python/ -w 1  ::: $SCRATCH/openfoam_cases/${BATCHNAME}/*
+
+(8b) - ASL-W14 Make CSV files on ASL
+bash --rcfile ~/.openfoamrc
+BATCHNAME='batch01_F/north_in'
+mkdir "/media/intel_data/3d/csv/${BATCHNAME}"
+cd ~/src/intel_wind/openfoam_batch/
+parallel -j 6 ./make_csvs.sh -c /media/intel_data/3d/csv/${BATCHNAME} -p python/ -w 1  ::: /media/intel_data/3d/openfoam_results/${BATCHNAME}/*

@@ -9,6 +9,7 @@ parser = argparse.ArgumentParser(description='Resample onto new mesh using parav
 parser.add_argument('-cd', '--case-dir', default=None, required=True, help='Case directory')
 parser.add_argument('-3d', '--three-d', action='store_true', required=False, help='Resample as a 3D case')
 parser.add_argument('-md', '--mesh-dir', default=None, required=True, help='Source mesh directory')
+parser.add_argument('-t', '--time', default=None, required=False, type=int, help='Specify a particular time')
 parser.add_argument('-cf', '--case-foam', default='bolund.foam',
     help='Input case foam file (in case dir)')
 parser.add_argument('-cm', '--mesh-foam', default='testgrid.foam',
@@ -32,9 +33,13 @@ inputfoam.CellArrays = ['U', 'epsilon', 'k', 'nut', 'p']
 # create a new 'OpenFOAMReader'
 testgridfoam = para.OpenFOAMReader(FileName=os.path.join(args.mesh_dir, args.mesh_foam))
 testgridfoam.MeshRegions = [test_region]
+print(inputfoam.TimestepValues)
 
 for t in inputfoam.TimestepValues:
-    if t is 0:
+    if args.time is not None:
+        if (t - args.time) != 0:
+            continue
+    elif t == 0:
         continue
     inputfoam.UpdatePipeline(time=t)
     tfile = args.outfile+'_t{0:04.0f}.csv'.format(t)

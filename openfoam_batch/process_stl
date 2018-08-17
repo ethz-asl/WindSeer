@@ -6,18 +6,22 @@ OPTIND=1
 # Default values
 OUTDIR="stl_processed/"
 HOMEDIR=$(pwd)
+MINH=500.0
+rotation=0
 
 usage() { 
     echo -e "Usage: $0 [OPTION] stl_file1 stl_file2 ..."
-    echo -e "  -o stl_out_dir\n\tDirectory of processed stl and terrainDict files"
+    echo -e "  -o STL_OUT_DIR\n\tDirectory of processed stl and terrainDict files"
+    echo -e "  -r ANGLE\n\tRotate stl by ANGLE"
     echo -e "  -h"
     echo -e "\tprint this help and exit"
     exit 0;
 }
 
-while getopts "o:h" opt; do
+while getopts "o:r:h" opt; do
     case "$opt" in
         o)  OUTDIR=$OPTARG ;;
+        r)  rotation=$OPTARG ;;
         h | *)
             usage
             ;;
@@ -47,7 +51,7 @@ for stl_file in "$@"; do
     # Use python script to generate new stl file (reset origin) and terrainDict
     # Y limits should be only thing printed (bit dodge though...)
     YLIMS=$(python python/stl_terrainDict.py -si ${stl_file} -so ${STLOUT} \
-        -do ${CASEDIR}/terrainDict --pad-z 3.0 --autograde-z)
+        -do ${CASEDIR}/terrainDict --pad-z 3.0 -mh "$MINH" --autograde-z -r "$rotation")
     echo "YLIMS = ${YLIMS}"
     echo $YLIMS > ${CASEDIR}/YLIMS
 done

@@ -30,7 +30,14 @@ addLayers       false;
 // - to specify refinement for any mesh cell inside/outside/near
 // - to 'snap' the mesh boundary to the surface
 
-STLGEOMETRY
+geometry
+{
+	$:TERRAIN_DICT.STL_FILE
+	{
+		type triSurfaceMesh;
+		name hill_geometry;
+	}
+};
 
 // Settings for the castellatedMesh generation.
 castellatedMeshControls
@@ -49,7 +56,7 @@ castellatedMeshControls
     // Note that this is the number of cells before removing the part which
     // is not 'visible' from the keepPoint. The final number of cells might
     // actually be a lot less.
-    maxGlobalCells 2000000;
+    maxGlobalCells 4000000;
 
     // The surface refinement loop might spend lots of iterations
     // refining just a few cells. This setting will cause refinement
@@ -130,7 +137,11 @@ castellatedMeshControls
 
     refinementRegions
     {
-
+        hill_geometry
+        {                             
+            mode distance;            // refinement level 2 within 50.0 m
+            levels ((10.0 2) (50.0 1)); // levels must be ordered nearest first
+        }
     }
 
 

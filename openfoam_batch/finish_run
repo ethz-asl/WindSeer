@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Set up some stuff for getopts
+OPTIND=1
+
+# Default values
+csv_dir="csv3d/"
+home_dir=$(pwd)
+run_foam=1
+run_grid=1
+
+# Source shared functions ( 'create_base_case' and 'check_files' )
+source shared_functions.sh
+
+usage() { 
+    echo -e "Usage: $0 [OPTION] stl_dir1 stl_dir2 ..."
+    # echo -e "  -s stl_dir\n\tDirectory of stl files"
+    echo -e "  -c csv_dir\n\tDirectory to output csv files"
+    echo -e "  -n \n\tDo not run simpleFoam again"
+    echo -e "  -h"
+    echo -e "\tprint this help and exit"
+}
+
+while getopts "c:o:nh" opt; do
+    case "$opt" in
+        c)  csv_dir=$OPTARG ;;
+        n)  run_foam=0 ;;
+        h)  usage
+            exit 0
+            ;;
+        *)  usage >&2
+            exit 1
+            ;;
+    esac
+done
+shift $(expr $OPTIND - 1 )
+
+if [ "$#" -lt 1 ]; then
+    echo "ERROR: No target directory supplied" >&2
+    usage >&2
+    exit 1
+fi
+
+csv_dir=$( check_path "$csv_dir" "$home_dir" ) || exit 1
+case_dir=$( check_path "$1" "$home_dir" ) || exit 1
+casename=$(basename -- "$case_dir")
+reGrid_dir="${case_dir}/reGrid"
+wind_dir="${case_dir}/W1"
+printf -v csv_file "$csv_dir/%s_W%02d" $casename "1"
+
+cd "$wind_dir"
+if [ "$run_foam" ] && [ $( find $wind_dir -type d -name "[1-9]*[0-9]" | wc -l) -lt 2 ]; then
+    echo -e "Running simpleFoam for case ${casename}"
+    simpleFoam > simpleFoam3.log 2> simpleFoam3.err
+	[[ "$?" -ne 0 ]] && run_grid=0
+fi    
+
+if [ "$run_grid" == 1 ]
+then
+    touch hill.foam
+    latest_time=$( foamListTimes -latestTime )
+    echo -e "Creating csv grid for ${casename}, t=$latest_time to $csv_file"
+    python "${home_dir}/python/resample.py" --three-d --case-dir $wind_dir \
+	--mesh-dir $reGrid_dir --case-foam hill.foam --outfile $csv_file --time $latest_time
+    if [ "$?" -gt 0 ]; then
+        echo " failed!"
+    else
+        echo " done."
+    fi
+fi
+cd "$home_dir"
+
