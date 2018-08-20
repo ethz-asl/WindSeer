@@ -91,6 +91,7 @@ print('-------------------------------------------------------------------------
 start_time = time.time()
 for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multiple times
 
+    train_loss = 0
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
         # adjust the learning rate if necessary
@@ -112,6 +113,7 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
 
         # print statistics
         running_loss += loss.item()
+        train_loss += loss.item()
 
         # print every plot_every_n_batches mini-batches
         if i % run_params.run['plot_every_n_batches'] == (run_params.run['plot_every_n_batches'] - 1):
@@ -124,14 +126,17 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
         torch.save(net.state_dict(), os.path.join(model_dir, 'e{}.model'.format(epoch+1)))
 
     with torch.no_grad():
-        train_loss = 0.0
-        for data in trainloader:
-            inputs, labels = data
-            inputs, labels = inputs.to(device), labels.to(device)
-            outputs = net(inputs)
-            loss = loss_fn_val(outputs, labels)
-            train_loss += loss.item()
-        train_loss /= len(trainloader)
+        if run_params.run['minibatch_epoch_loss']:
+            train_loss /= len(trainloader)
+        else:
+            train_loss = 0.0
+            for data in trainloader:
+                inputs, labels = data
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = net(inputs)
+                loss = loss_fn_val(outputs, labels)
+                train_loss += loss.item()
+            train_loss /= len(trainloader)
 
         validation_loss = 0.0
         if run_params.run['compute_validation_loss']:

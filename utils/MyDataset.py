@@ -28,6 +28,8 @@ class MyDataset(Dataset):
         self.__stride_hor = stride_hor
         self.__stride_vert = stride_vert
 
+        print('MyDataset: ' + filename + ' contains {} samples'.format(self.__num_files))
+
     def __getitem__(self, index):
         tar = tarfile.open(self.__filename, 'r')
         file = tar.extractfile(self.__memberslist[index])

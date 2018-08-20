@@ -1,13 +1,14 @@
 run:
-    plot_every_n_batches: 10
-    n_epochs: 10
-    batchsize: 1
-    num_workers: 1
+    plot_every_n_batches: 1
+    n_epochs: 400
+    batchsize: 60
+    num_workers: 20
     learning_rate_initial: 1.0E-3
     learning_rate_decay: 0.5
     learning_rate_decay_step_size: 3
     compute_validation_loss: False
     custom_init: False
+    minibatch_epoch_loss: True
 
     # options to store data
     save_model: True
@@ -15,14 +16,14 @@ run:
     evaluate_testset: False
     warm_start: False
     custom_loss: False
-    save_model_every_n_epoch: 2
-    save_params_hist_every_n_epoch: 2
+    save_model_every_n_epoch: 1000
+    save_params_hist_every_n_epoch: 1
 
 data:
     # dataset parameter
-    trainset_name: 'data/converted_3d.tar'
-    validationset_name: 'data/converted_3d.tar'
-    testset_name: 'data/converted_3d.tar'
+    trainset_name: 'data/converted_3d_one.tar'
+    validationset_name: 'data/converted_3d_one.tar'
+    testset_name: 'data/converted_3d_one.tar'
     stride_hor: 4
     stride_vert: 2
     uhor_scaling: 6.0
@@ -42,8 +43,8 @@ model:
     interpolation_mode: 'nearest'
     align_corners: False
     skipping: True
-    use_terrain_mask: False
+    use_terrain_mask: True
     pooling_method: 'striding'
     use_fc_layers: True
     fc_scaling: 1
-    use_mapping_layer: True
+    use_mapping_layer: False

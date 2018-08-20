@@ -101,6 +101,7 @@ class EDNNParameters(object):
         print('\tLearning rate decay:\t', self.run['learning_rate_decay'])
         print('\tBatchsize:\t\t', self.run['batchsize'])
         print('\tEpochs:\t\t\t', self.run['n_epochs'])
+        print('\tMinibatch epoch loss:\t', self.run['minibatch_epoch_loss'])
         print(' ')
         print('Model Settings:')
         print('\tModel name:\t\t', self.name)
