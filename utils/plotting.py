@@ -80,7 +80,7 @@ class PlotUtils():
         '''
         Callback for the slider to change the slice to display.
         '''
-        self.__n_slice = int(val)
+        self.__n_slice = int(round(val))
         self.update_images()
 
     def radio_callback(self, label):
