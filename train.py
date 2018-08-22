@@ -30,9 +30,9 @@ if run_params.run['save_model'] and (not os.path.exists(model_dir)):
 
 if (os.path.isdir("/cluster/scratch/")):
     print('Script is running on the cluster')
-    trainset_name = '/scratch/train1.tar'
-    validationset_name = '/scratch/validation1.tar'
-    testset_name = '/scratch/test1.tar'
+    trainset_name = '/scratch/train.tar'
+    validationset_name = '/scratch/validation.tar'
+    testset_name = '/scratch/test.tar'
     os.system('cp '  + run_params.data['trainset_name'] + ' ' + trainset_name)
     os.system('cp '  + run_params.data['validationset_name'] + ' ' + validationset_name)
     os.system('cp '  + run_params.data['testset_name'] + ' ' + testset_name)
@@ -202,3 +202,9 @@ if (run_params.run['evaluate_testset']):
             loss += loss_fn(outputs, labels)
 
         print('INFO: Average loss on test set: %s' % (loss.item()/len(testset)))
+
+# clean up the scratch folder of the cluster
+if (os.path.isdir("/cluster/scratch/")):
+    os.system('rm '  + trainset_name)
+    os.system('rm '  + validationset_name)
+    os.system('rm '  + testset_name)
