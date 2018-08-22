@@ -28,15 +28,29 @@ if run_params.run['save_model'] and (not os.path.exists(model_dir)):
     os.mkdir(model_dir)
 # --------------------------------------------------------------------------
 
+if (os.path.isdir("/cluster/scratch/")):
+    print('Script is running on the cluster')
+    trainset_name = '/scratch/train1.tar'
+    validationset_name = '/scratch/validation1.tar'
+    testset_name = '/scratch/test1.tar'
+    os.system('cp '  + run_params.data['trainset_name'] + ' ' + trainset_name)
+    os.system('cp '  + run_params.data['validationset_name'] + ' ' + validationset_name)
+    os.system('cp '  + run_params.data['testset_name'] + ' ' + testset_name)
+
+else:
+    print('Script is running on the a local machine')
+    trainset_name = run_params.data['trainset_name']
+    validationset_name = run_params.data['validationset_name']
+    testset_name = run_params.data['testset_name']
 
 
 # define dataset and dataloader
-trainset = utils.MyDataset(run_params.data['trainset_name'], **run_params.MyDataset_kwargs())
+trainset = utils.MyDataset(trainset_name, **run_params.MyDataset_kwargs())
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
                                           shuffle=True, num_workers=run_params.run['num_workers'])
 
-validationset = utils.MyDataset(run_params.data['validationset_name'], **run_params.MyDataset_kwargs())
+validationset = utils.MyDataset(validationset_name, **run_params.MyDataset_kwargs())
 
 validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
                                           num_workers=run_params.run['num_workers'])
@@ -175,7 +189,7 @@ writer.close()
 
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
-    testset = utils.MyDataset(run_params.data['testset_name'], **run_params.MyDataset_kwargs())
+    testset = utils.MyDataset(testset_name, **run_params.MyDataset_kwargs())
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=run_params.data['num_workers'])
 
