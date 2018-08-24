@@ -107,10 +107,11 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
 
     train_loss = 0
     running_loss = 0.0
-    for i, data in enumerate(trainloader, 0):
-        # adjust the learning rate if necessary
-        scheduler.step()
 
+    # adjust the learning rate if necessary
+    scheduler.step()
+
+    for i, data in enumerate(trainloader, 0):
         # get the inputs
         inputs, labels = data
 
