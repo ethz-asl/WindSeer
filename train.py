@@ -28,7 +28,7 @@ if run_params.run['save_model'] and (not os.path.exists(model_dir)):
     os.mkdir(model_dir)
 # --------------------------------------------------------------------------
 
-if (os.path.isdir("/cluster/scratch/")):
+if (os.path.isdir("/cluster/scratch/") and False):
     print('Script is running on the cluster')
     trainset_name = '/scratch/train.tar'
     validationset_name = '/scratch/validation.tar'
