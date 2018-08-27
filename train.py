@@ -28,14 +28,20 @@ if run_params.run['save_model'] and (not os.path.exists(model_dir)):
     os.mkdir(model_dir)
 # --------------------------------------------------------------------------
 
-if (os.path.isdir("/cluster/scratch/") and False):
+if (os.path.isdir("/cluster/scratch/")):
     print('Script is running on the cluster')
     trainset_name = '/scratch/train.tar'
     validationset_name = '/scratch/validation.tar'
     testset_name = '/scratch/test.tar'
+    t_start = time.time()
     os.system('cp '  + run_params.data['trainset_name'] + ' ' + trainset_name)
+    print("INFO: Finished copying trainset in %s seconds" % (time.time() - t_start))
+    t_intermediate = time.time()
     os.system('cp '  + run_params.data['validationset_name'] + ' ' + validationset_name)
+    print("INFO: Finished copying validationset in %s seconds" % (time.time() - t_intermediate))
+    t_intermediate = time.time()
     os.system('cp '  + run_params.data['testset_name'] + ' ' + testset_name)
+    print("INFO: Finished copying testset in %s seconds" % (time.time() - t_intermediate))
 
 else:
     print('Script is running on the a local machine')
@@ -45,12 +51,12 @@ else:
 
 
 # define dataset and dataloader
-trainset = utils.MyDataset(trainset_name, **run_params.MyDataset_kwargs())
+trainset = utils.MyDataset(trainset_name, compressed = run_params.data['compressed'], **run_params.MyDataset_kwargs())
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
                                           shuffle=True, num_workers=run_params.run['num_workers'])
 
-validationset = utils.MyDataset(validationset_name, **run_params.MyDataset_kwargs())
+validationset = utils.MyDataset(validationset_name, compressed = run_params.data['compressed'], **run_params.MyDataset_kwargs())
 
 validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
                                           num_workers=run_params.run['num_workers'])
@@ -190,7 +196,7 @@ writer.close()
 
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
-    testset = utils.MyDataset(testset_name, **run_params.MyDataset_kwargs())
+    testset = utils.MyDataset(testset_name, compressed = run_params.data['compressed'], **run_params.MyDataset_kwargs())
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=run_params.data['num_workers'])
 

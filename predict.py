@@ -8,10 +8,11 @@ from torch.utils.data import DataLoader
 import utils
 
 # ---- Params --------------------------------------------------------------
-dataset = 'data/converted_3d.tar'
+compressed = True
+dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set
-model_name = 'test_model_naKd4sF1MK'
-model_version = 'latest'
+model_name = 'run5v2_naKd3sF2mK'
+model_version = 'e95'
 compute_prediction_error = True
 use_terrain_mask = True
 # --------------------------------------------------------------------------
@@ -23,7 +24,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 params = utils.EDNNParameters('models/trained_models/' + model_name + '/params.yaml')
 
 # load dataset
-testset = utils.MyDataset(dataset, **params.MyDataset_kwargs())
+testset = utils.MyDataset(dataset, compressed = compressed, **params.MyDataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters

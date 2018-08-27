@@ -1,4 +1,5 @@
 from io import BytesIO
+import lz4.frame
 import numpy as np
 import sys
 import tarfile
@@ -9,7 +10,7 @@ from torch.utils.data.dataset import Dataset
 TODO: try if it is feasible also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
 '''
 class MyDataset(Dataset):
-    def __init__(self, filename, stride_hor = 1, stride_vert = 1, turbulence_label = False, scaling_uhor = 1.0, scaling_uz = 1.0, scaling_nut = 1.0):
+    def __init__(self, filename, stride_hor = 1, stride_vert = 1, turbulence_label = False, scaling_uhor = 1.0, scaling_uz = 1.0, scaling_nut = 1.0, compressed = True):
         try:
             tar = tarfile.open(filename, 'r')
         except IOError as e:
@@ -28,12 +29,19 @@ class MyDataset(Dataset):
         self.__stride_hor = stride_hor
         self.__stride_vert = stride_vert
 
+        self.__compressed = compressed
+
         print('MyDataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
     def __getitem__(self, index):
         tar = tarfile.open(self.__filename, 'r')
         file = tar.extractfile(self.__memberslist[index])
-        data = torch.load(file)
+
+        if self.__compressed:
+            data = torch.load(BytesIO(lz4.frame.decompress(file.read())))
+
+        else:
+            data = torch.load(file)
 
         if (len(list(data.size())) > 3):
             # 3D data

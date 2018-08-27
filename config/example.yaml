@@ -1,11 +1,11 @@
 run:
-    plot_every_n_batches: 1
+    plot_every_n_batches: 2
     n_epochs: 400
-    batchsize: 60
+    batchsize: 32
     num_workers: 20
     learning_rate_initial: 1.0E-3
     learning_rate_decay: 0.5
-    learning_rate_decay_step_size: 3
+    learning_rate_decay_step_size: 100
     compute_validation_loss: False
     custom_init: False
     minibatch_epoch_loss: True
@@ -16,14 +16,15 @@ run:
     evaluate_testset: False
     warm_start: False
     custom_loss: False
-    save_model_every_n_epoch: 1000
+    save_model_every_n_epoch: 5
     save_params_hist_every_n_epoch: 1
 
 data:
     # dataset parameter
-    trainset_name: 'data/converted_3d_one.tar'
-    validationset_name: 'data/converted_3d_one.tar'
-    testset_name: 'data/converted_3d_one.tar'
+    compressed: True
+    trainset_name: 'data/train.tar'
+    validationset_name: 'data/validation.tar'
+    testset_name: 'data/test.tar'
     stride_hor: 4
     stride_vert: 2
     uhor_scaling: 6.0
