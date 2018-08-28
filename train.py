@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import gc
 import models
 import numpy as np
 import os
@@ -49,6 +50,7 @@ else:
     validationset_name = run_params.data['validationset_name']
     testset_name = run_params.data['testset_name']
 
+gc.collect()
 
 # define dataset and dataloader
 trainset = utils.MyDataset(trainset_name, compressed = run_params.data['compressed'], **run_params.MyDataset_kwargs())
@@ -190,6 +192,7 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
         print(('[%d] train loss: %.5f, validation loss: %.5f' %
                       (epoch + 1, train_loss, validation_loss)))
 
+    gc.collect()
 
 print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 
