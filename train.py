@@ -120,6 +120,7 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
     for i, data in enumerate(trainloader, 0):
         # get the inputs
         inputs, labels = data
+        del data
 
         inputs, labels = inputs.to(device), labels.to(device)
 
@@ -128,6 +129,7 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
 
         # forward + backward + optimize
         outputs = net(inputs)
+        del inputs
         loss = loss_fn(outputs, labels)
         loss.backward()
         optimizer.step()
@@ -135,11 +137,12 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
         # print statistics
         running_loss += loss.item()
         train_loss += loss.item()
+        del loss
 
         # print every plot_every_n_batches mini-batches
         if i % run_params.run['plot_every_n_batches'] == (run_params.run['plot_every_n_batches'] - 1):
             print('[%d, %5d] averaged loss: %.5f' %
-                  (epoch + 1, i + 1, running_loss / (run_params.run['plot_every_n_batches'] - 1)))
+                  (epoch + 1, i + 1, running_loss / (run_params.run['plot_every_n_batches'])))
             running_loss = 0.0
 
     # save model every save_model_every_n_epoch epochs
@@ -158,6 +161,7 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
                 loss = loss_fn_val(outputs, labels)
                 train_loss += loss.item()
             train_loss /= len(trainloader)
+            del data, inputs, labels, outputs
 
         validation_loss = 0.0
         if run_params.run['compute_validation_loss']:
@@ -167,7 +171,8 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
                 outputs = net(inputs)
                 loss = loss_fn_val(outputs, labels)
                 validation_loss += loss.item()
-            validation_loss /= len(validationset)
+            validation_loss /= len(validationloader)
+            del data, inputs, labels, outputs
 
         writer.add_scalar('Train/Loss', train_loss, epoch+1)
         writer.add_scalar('Summary/TrainLoss', train_loss, epoch+1)
@@ -180,6 +185,7 @@ for epoch in range(run_params.run['n_epochs']):  # loop over the dataset multipl
                 tag = tag.replace('.', '/')
                 writer.add_histogram(tag, value.data.cpu().numpy(), epoch+1)
                 writer.add_histogram(tag+'/grad', value.grad.data.cpu().numpy(), epoch+1)
+            del tag, value
 
         print(('[%d] train loss: %.5f, validation loss: %.5f' %
                       (epoch + 1, train_loss, validation_loss)))

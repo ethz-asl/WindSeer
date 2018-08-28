@@ -43,27 +43,24 @@ class MyDataset(Dataset):
         else:
             data = torch.load(file)
 
+        tar.close()
+        del tar
+        del file
+
         if (len(list(data.size())) > 3):
-            # 3D data
-            input = data[:4, :, :, :]
+            data[1, :, :, :] /= self.__scaling_uhor # in u_x
+            data[2, :, :, :] /= self.__scaling_uhor # in u_y
+            data[3, :, :, :] /= self.__scaling_uz # in u_z
+            data[4, :, :, :] /= self.__scaling_uhor # label u_x
+            data[5, :, :, :] /= self.__scaling_uhor # label u_y
+            data[6, :, :, :] /= self.__scaling_uz # label u_z
+            data[7, :, :, :] /= self.__scaling_nut # label turbulence
 
             if self.__turbulence_label:
-                output = data[4:, :, :]
-                output[3, :, :, :] /= self.__scaling_nut
+                return data[:4,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], data[4:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
             else:
-                output = data[4:7, :, :]
+                return data[:4,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], data[4:7,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
 
-            # apply scaling
-            input[1, :, :, :] /= self.__scaling_uhor
-            input[2, :, :, :] /= self.__scaling_uhor
-            input[3, :, :, :] /= self.__scaling_uz
-            output[0, :, :, :] /= self.__scaling_uhor
-            output[1, :, :, :] /= self.__scaling_uhor
-            output[2, :, :, :] /= self.__scaling_uz
-
-            # scale the output if necessary
-            input = input[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
-            output = output[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
         else:
             # 2D data
             input = data[[0,1,3], :, :]
@@ -75,6 +72,8 @@ class MyDataset(Dataset):
             else:
                 output = data[[4,6], :, :]
 
+            del data
+
             # apply scaling
             input[1, :, :] /= self.__scaling_uhor
             input[2, :, :] /= self.__scaling_uz
@@ -85,7 +84,7 @@ class MyDataset(Dataset):
             input = input[:,::self.__stride_vert, ::self.__stride_hor]
             output = output[:,::self.__stride_vert, ::self.__stride_hor]
 
-        return input, output
+            return input, output
 
     def __len__(self):
         return self.__num_files
