@@ -112,6 +112,7 @@ class PlotUtils():
         if (len(list(self.__label.size())) > 3):
             # 3D data
             fh_in, ah_in = plt.subplots(3, 3)
+            fh_in.patch.set_facecolor('white')
             plt.tight_layout()
             plt.subplots_adjust(bottom=0.1)
             fh_in.delaxes(ah_in[2][2])
@@ -122,13 +123,17 @@ class PlotUtils():
             self.__in_images.append(ah_in[0][1].imshow(self.__input[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto')) #uy
             self.__in_images.append(ah_in[0][2].imshow(self.__input[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto')) #uz
             ah_in[2][0].set_title('Terrain')
-            ah_in[0][0].set_title('Ux in')
-            ah_in[0][1].set_title('Uy in')
-            ah_in[0][2].set_title('Uz in')
-            fh_in.colorbar(self.__in_images[1], ax=ah_in[0][0])
-            fh_in.colorbar(self.__in_images[2], ax=ah_in[0][1])
-            fh_in.colorbar(self.__in_images[3], ax=ah_in[0][2])
-            fh_in.colorbar(self.__in_images[0], ax=ah_in[2][0])
+            ah_in[0][0].set_title('Input Vel X')
+            ah_in[0][1].set_title('Input Vel Y')
+            ah_in[0][2].set_title('Input Vel Z')
+            chbar = fh_in.colorbar(self.__in_images[1], ax=ah_in[0][0])
+            chbar.set_label('[m/s]')
+            chbar = fh_in.colorbar(self.__in_images[2], ax=ah_in[0][1])
+            chbar.set_label('[m/s]')
+            chbar = fh_in.colorbar(self.__in_images[3], ax=ah_in[0][2])
+            chbar.set_label('[m/s]')
+            chbar = fh_in.colorbar(self.__in_images[0], ax=ah_in[2][0])
+            chbar.set_label('[-]')
 
             # plot the label data
             self.__out_images.append(ah_in[1][0].imshow(self.__label[0,:,self.__n_slice,:], origin='lower', vmin=self.__label[0,:,:,:].min(), vmax=self.__label[0,:,:,:].max(), aspect = 'auto')) #ux
@@ -137,15 +142,20 @@ class PlotUtils():
             try:
                 self.__out_images.append(ah_in[2][1].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto')) #turbulence viscosity
                 fh_in.colorbar(self.__out_images[3], ax=ah_in[2][1])
+                ah_in[2][1].set_title('Prediction Turbulence')
             except:
                 print('INFO: Turbulence viscosity not present as a label')
-            ah_in[1][0].set_title('Ux label')
-            ah_in[1][1].set_title('Uy label')
-            ah_in[1][2].set_title('Uz label')
-            ah_in[2][1].set_title('Turb. Viscosity label')
-            fh_in.colorbar(self.__out_images[0], ax=ah_in[1][0])
-            fh_in.colorbar(self.__out_images[1], ax=ah_in[1][1])
-            fh_in.colorbar(self.__out_images[2], ax=ah_in[1][2])
+                fh_in.delaxes(ah_in[2][1])
+
+            ah_in[1][0].set_title('Prediction Vel X')
+            ah_in[1][1].set_title('Prediction Vel Y')
+            ah_in[1][2].set_title('Prediction Vel Z')
+            chbar = fh_in.colorbar(self.__out_images[0], ax=ah_in[1][0])
+            chbar.set_label('[m/s]')
+            chbar = fh_in.colorbar(self.__out_images[1], ax=ah_in[1][1])
+            chbar.set_label('[m/s]')
+            chbar = fh_in.colorbar(self.__out_images[2], ax=ah_in[1][2])
+            chbar.set_label('[m/s]')
 
             # create slider to select the slice
             self.__ax_slider = plt.axes(self.__slider_location)
@@ -162,30 +172,40 @@ class PlotUtils():
         else:
             # 2D data
             fh_in, ah_in = plt.subplots(3, 2)
+            fh_in.patch.set_facecolor('white')
+            plt.tight_layout()
 
             h_ux_in = ah_in[0][0].imshow(self.__input[1,:,:], origin='lower', vmin=self.__label[0,:,:].min(), vmax=self.__label[0,:,:].max())
             h_uz_in = ah_in[0][1].imshow(self.__input[2,:,:], origin='lower', vmin=self.__label[1,:,:].min(), vmax=self.__label[1,:,:].max())
-            ah_in[0][0].set_title('Ux in')
-            ah_in[0][1].set_title('Uz in')
-            fh_in.colorbar(h_ux_in, ax=ah_in[0][0])
-            fh_in.colorbar(h_uz_in, ax=ah_in[0][1])
+            ah_in[0][0].set_title('Input Vel X')
+            ah_in[0][1].set_title('Input Vel Z')
+            chbar = fh_in.colorbar(h_ux_in, ax=ah_in[0][0])
+            chbar.set_label('[m/s]')
+            chbar = fh_in.colorbar(h_uz_in, ax=ah_in[0][1])
+            chbar.set_label('[m/s]')
 
             h_ux_in = ah_in[1][0].imshow(self.__label[0,:,:], origin='lower', vmin=self.__label[0,:,:].min(), vmax=self.__label[0,:,:].max())
             h_uz_in = ah_in[1][1].imshow(self.__label[1,:,:], origin='lower', vmin=self.__label[1,:,:].min(), vmax=self.__label[1,:,:].max())
-            ah_in[1][0].set_title('Ux label')
-            ah_in[1][1].set_title('Uz label')
-            fh_in.colorbar(h_ux_in, ax=ah_in[1][0])
-            fh_in.colorbar(h_uz_in, ax=ah_in[1][1])
+            ah_in[1][0].set_title('Prediction Vel X')
+            ah_in[1][1].set_title('Prediction Vel Z')
+            chbar = fh_in.colorbar(h_ux_in, ax=ah_in[1][0])
+            chbar.set_label('[m/s]')
+            chbar = fh_in.colorbar(h_uz_in, ax=ah_in[1][1])
+            chbar.set_label('[m/s]')
 
             h_ux_in = ah_in[2][0].imshow(self.__input[0,:,:], origin='lower', vmin=self.__input[0,:,:].min(), vmax=self.__input[0,:,:].max())
             try:
                 h_uz_in = ah_in[2][1].imshow(self.__label[2,:,:], origin='lower', vmin=self.__label[2,:,:].min(), vmax=self.__label[2,:,:].max())
+                ah_in[2][1].set_title('Turbulence viscosity label')
+                chbar = fh_in.colorbar(h_uz_in, ax=ah_in[2][1])
+                chbar.set_label('[???]')
             except:
+                fh_in.delaxes(ah_in[2][1])
                 print('INFO: Turbulence viscosity not present as a label')
+
             ah_in[2][0].set_title('Terrain')
-            ah_in[2][1].set_title('Turbulence viscosity label')
-            fh_in.colorbar(h_ux_in, ax=ah_in[2][0])
-            fh_in.colorbar(h_uz_in, ax=ah_in[2][1])
+            chbar = fh_in.colorbar(h_ux_in, ax=ah_in[2][0])
+            chbar.set_label('-')
 
         plt.show()
 
@@ -193,20 +213,25 @@ class PlotUtils():
         if (len(list(self.__label.size())) > 3):
             use_turbulence = self.__label.shape[0] > 3
             fh_in, ah_in = plt.subplots(3, self.__label.shape[0])
+            fh_in.patch.set_facecolor('white')
             plt.tight_layout()
             plt.subplots_adjust(bottom=0.12)
 
-            title = ['Ux', 'Uy','Uz', 'Turbulence']
+            title = ['Vel X', 'Vel Y','Vel Z', 'Turbulence']
+            units = ['m/s', 'm/s', 'm/s', '???']
             for i in range(self.__label.shape[0]):
                 self.__out_images.append(ah_in[0][i].imshow(self.__label[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto'))
                 self.__in_images.append(ah_in[1][i].imshow(self.__input[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto'))
                 self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,self.__n_slice,:], origin='lower', vmin=self.__error[i,:,:,:].min(), vmax=self.__error[i,:,:,:].max(), aspect = 'auto'))
-                ah_in[0][i].set_title(title[i] + ' Label')
+                ah_in[0][i].set_title(title[i] + ' CFD')
                 ah_in[1][i].set_title(title[i] + ' Prediction')
                 ah_in[2][i].set_title(title[i] + ' Error')
-                fh_in.colorbar(self.__out_images[i], ax=ah_in[0][i])
-                fh_in.colorbar(self.__in_images[i], ax=ah_in[1][i])
-                fh_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
+                chbar = fh_in.colorbar(self.__out_images[i], ax=ah_in[0][i])
+                chbar.set_label(units[i])
+                chbar = fh_in.colorbar(self.__in_images[i], ax=ah_in[1][i])
+                chbar.set_label(units[i])
+                chbar = fh_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
+                chbar.set_label(units[i])
 
             # create slider to select the slice
             self.__ax_slider = plt.axes(self.__slider_location)
@@ -223,18 +248,24 @@ class PlotUtils():
         else:
             use_turbulence = self.__label.shape[0] > 2
             fh_in, ah_in = plt.subplots(3, self.__label.shape[0])
+            fh_in.patch.set_facecolor('white')
+            plt.tight_layout()
 
-            title = ['Ux', 'Uz', 'Turbulence']
+            title = ['Vel X', 'Vel Z', 'Turbulence']
+            units = ['m/s', 'm/s', '???']
             for i in range(self.__label.shape[0]):
                 self.__in_images.append(ah_in[0][i].imshow(self.__label[i,:,:], origin='lower', vmin=self.__label[i,:,:].min(), vmax=self.__label[i,:,:].max(), aspect = 'auto'))
                 self.__out_images.append(ah_in[1][i].imshow(self.__input[i,:,:], origin='lower', vmin=self.__label[i,:,:].min(), vmax=self.__label[i,:,:].max(), aspect = 'auto'))
                 self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,:], origin='lower', vmin=self.__error[i,:,:].min(), vmax=self.__error[i,:,:].max(), aspect = 'auto'))
-                ah_in[0][i].set_title(title[i] + ' Label')
+                ah_in[0][i].set_title(title[i] + ' CFD')
                 ah_in[1][i].set_title(title[i] + ' Prediction')
                 ah_in[2][i].set_title(title[i] + ' Error')
-                fh_in.colorbar(self.__in_images[i], ax=ah_in[0][i])
-                fh_in.colorbar(self.__out_images[i], ax=ah_in[1][i])
-                fh_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
+                chbar = fh_in.colorbar(self.__in_images[i], ax=ah_in[0][i])
+                chbar.set_label(units[i])
+                chbar = fh_in.colorbar(self.__out_images[i], ax=ah_in[1][i])
+                chbar.set_label(units[i])
+                chbar = fh_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
+                chbar.set_label(units[i])
 
         plt.show()
 
