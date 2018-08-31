@@ -45,7 +45,8 @@ class ModelEDNN3D(nn.Module):
             self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
 
         # modules
-        self.__pad = nn.ReplicationPad3d(1)
+        self.__pad_conv = nn.ReplicationPad3d(1)
+        self.__pad_deconv = nn.ReplicationPad3d((1, 2, 1, 2, 1, 2))
 
         self.__leakyrelu = nn.LeakyReLU(0.1)
 
@@ -71,18 +72,18 @@ class ModelEDNN3D(nn.Module):
         if (skipping):
             for i in range(n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(16, 8, 3)]
-                    self.__deconv2 += [nn.Conv3d(8, self.__num_outputs, 3)]
+                    self.__deconv1 += [nn.Conv3d(16, 8, 4)]
+                    self.__deconv2 += [nn.Conv3d(8, self.__num_outputs, 4)]
                 else:
-                    self.__deconv1 += [nn.Conv3d(16*2**i, 8*2**i, 3)]
-                    self.__deconv2 += [nn.Conv3d(8*2**i, 4*2**i, 3)]
+                    self.__deconv1 += [nn.Conv3d(16*2**i, 8*2**i, 4)]
+                    self.__deconv2 += [nn.Conv3d(8*2**i, 4*2**i, 4)]
 
         else:
             for i in range(n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(8, self.__num_outputs, 3)]
+                    self.__deconv1 += [nn.Conv3d(8, self.__num_outputs, 4)]
                 else:
-                    self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, 3)]
+                    self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, 4)]
 
         if self.__use_mapping_layer:
             # mapping layer
@@ -111,13 +112,13 @@ class ModelEDNN3D(nn.Module):
         x_skip = []
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
-                x = self.__leakyrelu(self.__conv[i](self.__pad(x)))
+                x = self.__leakyrelu(self.__conv[i](self.__pad_conv(x)))
                 x_skip.append(x.clone())
                 x = self.__pooling(x)
 
         else:
             for i in range(self.__n_downsample_layers):
-                x = self.__pooling(self.__leakyrelu(self.__conv[i](self.__pad(x))))
+                x = self.__pooling(self.__leakyrelu(self.__conv[i](self.__pad_conv(x))))
 
         if self.__use_fc_layers:
             shape = x.size()
@@ -128,10 +129,10 @@ class ModelEDNN3D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__pad(self.__deconv1[i](self.__pad(torch.cat([self.__upsampling(x), x_skip[i]], 1)))))
+                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(torch.cat([self.__upsampling(x), x_skip[i]], 1)))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv1[i](self.__pad(self.__upsampling(x)))
+                x = self.__deconv1[i](self.__pad_deconv(self.__upsampling(x)))
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)

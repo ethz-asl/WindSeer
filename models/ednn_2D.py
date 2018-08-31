@@ -21,11 +21,14 @@ class ModelEDNN2D(nn.Module):
         else:
             self.__num_outputs = 2
 
-        self.conv1 = nn.Conv2d(n_input_layers, 8, 3, padding = 1)
-        self.conv2 = nn.Conv2d(8, 16, 3, padding = 1)
-        self.conv3 = nn.Conv2d(16, 32, 3, padding = 1)
-        self.conv4 = nn.Conv2d(32, 64, 3, padding = 1)
-        self.conv5 = nn.Conv2d(64, 128, 3, padding = 1)
+        self.conv1 = nn.Conv2d(n_input_layers, 8, 3)
+        self.conv2 = nn.Conv2d(8, 16, 3)
+        self.conv3 = nn.Conv2d(16, 32, 3)
+        self.conv4 = nn.Conv2d(32, 64, 3)
+        self.conv5 = nn.Conv2d(64, 128, 3)
+
+        self.pad_conv = nn.ReplicationPad2d(1)
+        self.pad_deconv = nn.ReplicationPad2d((1,2,1,2))
 
         self.leakyrelu = nn.LeakyReLU(0.1)
 
@@ -39,22 +42,22 @@ class ModelEDNN2D(nn.Module):
 
         self.skipping = skipping
         if (skipping):
-            self.deconv51 = nn.Conv2d(256, 128, 3, padding = 1)
-            self.deconv52 = nn.Conv2d(128, 64, 3, padding = 1)
-            self.deconv41 = nn.Conv2d(128, 64, 3, padding = 1)
-            self.deconv42 = nn.Conv2d(64, 32, 3, padding = 1)
-            self.deconv31 = nn.Conv2d(64, 32, 3, padding = 1)
-            self.deconv32 = nn.Conv2d(32, 16, 3, padding = 1)
-            self.deconv21 = nn.Conv2d(32, 16, 3, padding = 1)
-            self.deconv22 = nn.Conv2d(16, 8, 3, padding = 1)
-            self.deconv11 = nn.Conv2d(16, 8, 3, padding = 1)
-            self.deconv12 = nn.Conv2d(8, self.__num_outputs, 3, padding = 1)
+            self.deconv51 = nn.Conv2d(256, 128, 4)
+            self.deconv52 = nn.Conv2d(128, 64, 4)
+            self.deconv41 = nn.Conv2d(128, 64, 4)
+            self.deconv42 = nn.Conv2d(64, 32, 4)
+            self.deconv31 = nn.Conv2d(64, 32, 4)
+            self.deconv32 = nn.Conv2d(32, 16, 4)
+            self.deconv21 = nn.Conv2d(32, 16, 4)
+            self.deconv22 = nn.Conv2d(16, 8, 4)
+            self.deconv11 = nn.Conv2d(16, 8, 4)
+            self.deconv12 = nn.Conv2d(8, self.__num_outputs, 4)
         else:
-            self.deconv5 = nn.Conv2d(128, 64, 3, padding = 1)
-            self.deconv4 = nn.Conv2d(64, 32, 3, padding = 1)
-            self.deconv3 = nn.Conv2d(32, 16, 3, padding = 1)
-            self.deconv2 = nn.Conv2d(16, 8, 3, padding = 1)
-            self.deconv1 = nn.Conv2d(8, self.__num_outputs, 3, padding = 1)
+            self.deconv5 = nn.Conv2d(128, 64, 4)
+            self.deconv4 = nn.Conv2d(64, 32, 4)
+            self.deconv3 = nn.Conv2d(32, 16, 4)
+            self.deconv2 = nn.Conv2d(16, 8, 4)
+            self.deconv1 = nn.Conv2d(8, self.__num_outputs, 4)
 
         self.mapping_layer = nn.Conv2d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs)
 
@@ -78,27 +81,27 @@ class ModelEDNN2D(nn.Module):
         is_wind.sign_()
 
         if (self.skipping):
-            x = self.leakyrelu(self.conv1(x))
+            x = self.leakyrelu(self.conv1(self.pad_conv(x)))
             x1 = x.clone()
             x = F.max_pool2d(x, 2)
-            x = self.leakyrelu(self.conv2(x))
+            x = self.leakyrelu(self.conv2(self.pad_conv(x)))
             x2 = x.clone()
             x = F.max_pool2d(x, 2)
-            x = self.leakyrelu(self.conv3(x))
+            x = self.leakyrelu(self.conv3(self.pad_conv(x)))
             x3 = x.clone()
             x = F.max_pool2d(x, 2)
-            x = self.leakyrelu(self.conv4(x))
+            x = self.leakyrelu(self.conv4(self.pad_conv(x)))
             x4 = x.clone()
             x = F.max_pool2d(x, 2)
-            x = self.leakyrelu(self.conv5(x))
+            x = self.leakyrelu(self.conv5(self.pad_conv(x)))
             x5 = x.clone()
             x = F.max_pool2d(x, 2)
         else:
-            x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
-            x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
-            x = F.max_pool2d(self.leakyrelu(self.conv3(x)), 2)
-            x = F.max_pool2d(self.leakyrelu(self.conv4(x)), 2)
-            x = F.max_pool2d(self.leakyrelu(self.conv5(x)), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv1(self.pad_conv(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv2(self.pad_conv(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv3(self.pad_conv(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv4(self.pad_conv(x))), 2)
+            x = F.max_pool2d(self.leakyrelu(self.conv5(self.pad_conv(x))), 2)
 
         shape = x.size()
         x = x.view(-1, self.num_flat_features(x))
@@ -107,17 +110,17 @@ class ModelEDNN2D(nn.Module):
         x = x.view(shape)
 
         if (self.skipping):
-            x = self.deconv52(self.deconv51(torch.cat([x5, self.upsampling(x)], 1)))
-            x = self.deconv42(self.deconv41(torch.cat([x4, self.upsampling(x)], 1)))
-            x = self.deconv32(self.deconv31(torch.cat([x3, self.upsampling(x)], 1)))
-            x = self.deconv22(self.deconv21(torch.cat([x2, self.upsampling(x)], 1)))
-            x = self.deconv12(self.deconv11(torch.cat([x1, self.upsampling(x)], 1)))
+            x = self.deconv52(self.pad_deconv(self.deconv51(self.pad_deconv(torch.cat([x5, self.upsampling(x)], 1)))))
+            x = self.deconv42(self.pad_deconv(self.deconv41(self.pad_deconv(torch.cat([x4, self.upsampling(x)], 1)))))
+            x = self.deconv32(self.pad_deconv(self.deconv31(self.pad_deconv(torch.cat([x3, self.upsampling(x)], 1)))))
+            x = self.deconv22(self.pad_deconv(self.deconv21(self.pad_deconv(torch.cat([x2, self.upsampling(x)], 1)))))
+            x = self.deconv12(self.pad_deconv(self.deconv11(self.pad_deconv(torch.cat([x1, self.upsampling(x)], 1)))))
         else:
-            x = self.deconv5(self.upsampling(x))
-            x = self.deconv4(self.upsampling(x))
-            x = self.deconv3(self.upsampling(x))
-            x = self.deconv2(self.upsampling(x))
-            x = self.deconv1(self.upsampling(x))
+            x = self.deconv5(self.pad_deconv(self.upsampling(x)))
+            x = self.deconv4(self.pad_deconv(self.upsampling(x)))
+            x = self.deconv3(self.pad_deconv(self.upsampling(x)))
+            x = self.deconv2(self.pad_deconv(self.upsampling(x)))
+            x = self.deconv1(self.pad_deconv(self.upsampling(x)))
 
         x = self.mapping_layer(x)
 
