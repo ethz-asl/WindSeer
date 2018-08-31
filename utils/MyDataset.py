@@ -36,7 +36,6 @@ class MyDataset(Dataset):
     def __getitem__(self, index):
         tar = tarfile.open(self.__filename, 'r')
         file = tar.extractfile(self.__memberslist[index])
-        print(self.__memberslist[index].name)
 
         if self.__compressed:
             data = torch.load(BytesIO(lz4.frame.decompress(file.read())))

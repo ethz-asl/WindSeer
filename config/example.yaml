@@ -1,9 +1,9 @@
 run:
-    plot_every_n_batches: 2
-    n_epochs: 400
+    plot_every_n_batches: 5
+    n_epochs: 1000
     batchsize: 32
     num_workers: 20
-    learning_rate_initial: 1.0E-3
+    learning_rate_initial: 1.0E-4
     learning_rate_decay: 0.5
     learning_rate_decay_step_size: 100
     compute_validation_loss: False
@@ -15,13 +15,13 @@ run:
     save_metadata: True
     evaluate_testset: False
     warm_start: False
-    custom_loss: False
+    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: Custom, else: MSE
     save_model_every_n_epoch: 5
     save_params_hist_every_n_epoch: 1
 
 data:
     # dataset parameter
-    compressed: True
+    compressed: False
     trainset_name: 'data/train.tar'
     validationset_name: 'data/validation.tar'
     testset_name: 'data/test.tar'
@@ -37,9 +37,9 @@ model:
     name_prefix: 'test_model'
     n_input_layers: 4
     n_output_layers: 3
-    n_x: 32
-    n_y: 32
-    n_z: 32
+    n_x: 64
+    n_y: 64
+    n_z: 64
     n_downsample_layers: 4
     interpolation_mode: 'nearest'
     align_corners: False

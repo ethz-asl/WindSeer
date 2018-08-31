@@ -90,9 +90,15 @@ optimizer = torch.optim.Adam(net.parameters(), lr=run_params.run['learning_rate_
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 
-if run_params.run['custom_loss']:
+if run_params.run['loss_function'] == 1:
+    loss_fn = torch.nn.L1Loss()
+    loss_fn_val = torch.nn.L1Loss()
+elif run_params.run['loss_function'] == 2:
+    loss_fn = torch.nn.NLLLoss()
+    loss_fn_val = torch.nn.NLLLoss()
+elif run_params.run['loss_function'] == 3:
     loss_fn = utils.MyLoss(device)
-    loss_fn_val = torch.nn.MSELoss()
+    loss_fn_val = utils.MyLoss(device)
 else:
     loss_fn = torch.nn.MSELoss()
     loss_fn_val = torch.nn.MSELoss()

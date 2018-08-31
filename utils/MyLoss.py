@@ -12,11 +12,14 @@ class MyLoss(Module):
     def forward(self, input, label):
         loss = torch.zeros(1).to(self.__device)
 
-        num_features = int(np.ceil(0.5 * input.shape[2] * input.shape[3] * input.shape[4]))
-        for j in range(input.shape[0]):
-            for i in range(input.shape[1]):
-                val, idx = (input[j,i,:,:,:] - label[j,i,:,:,:]).abs().view(1, -1).topk(num_features, sorted = False)
-                loss += f.mse_loss(input[j,i,:,:,:].view(1, -1)[0, idx], label[j,i,:,:,:].view(1, -1)[0, idx])
+        if (len(list(input.size())) > 4):
+            for j in range(input.shape[0]):
+                for i in range(input.shape[1]):
+                    loss += f.mse_loss(input[j,i,:,:,:], label[j,i,:,:,:])/(input.shape[1] * label[j,i,:,:,:].abs().mean().item())
+        else:
+            for j in range(input.shape[0]):
+                for i in range(input.shape[1]):
+                    loss += f.mse_loss(input[j,i,:,:], label[j,i,:,:])/(input.shape[1] * label[j,i,:,:].abs().mean().item())
 
         loss /= input.shape[0]
 
