@@ -78,16 +78,21 @@ class ModelEDNN2D(nn.Module):
         is_wind.sign_()
 
         if (self.skipping):
-            x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
+            x = self.leakyrelu(self.conv1(x))
             x1 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
+            x = F.max_pool2d(x, 2)
+            x = self.leakyrelu(self.conv2(x))
             x2 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.conv3(x)), 2)
+            x = F.max_pool2d(x, 2)
+            x = self.leakyrelu(self.conv3(x))
             x3 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.conv4(x)), 2)
+            x = F.max_pool2d(x, 2)
+            x = self.leakyrelu(self.conv4(x))
             x4 = x.clone()
-            x = F.max_pool2d(self.leakyrelu(self.conv5(x)), 2)
+            x = F.max_pool2d(x, 2)
+            x = self.leakyrelu(self.conv5(x))
             x5 = x.clone()
+            x = F.max_pool2d(x, 2)
         else:
             x = F.max_pool2d(self.leakyrelu(self.conv1(x)), 2)
             x = F.max_pool2d(self.leakyrelu(self.conv2(x)), 2)
@@ -102,11 +107,11 @@ class ModelEDNN2D(nn.Module):
         x = x.view(shape)
 
         if (self.skipping):
-            x = self.deconv52(self.deconv51(self.upsampling(torch.cat([x5, x], 1))))
-            x = self.deconv42(self.deconv41(self.upsampling(torch.cat([x4, x], 1))))
-            x = self.deconv32(self.deconv31(self.upsampling(torch.cat([x3, x], 1))))
-            x = self.deconv22(self.deconv21(self.upsampling(torch.cat([x2, x], 1))))
-            x = self.deconv12(self.deconv11(self.upsampling(torch.cat([x1, x], 1))))
+            x = self.deconv52(self.deconv51(torch.cat([x5, self.upsampling(x)], 1)))
+            x = self.deconv42(self.deconv41(torch.cat([x4, self.upsampling(x)], 1)))
+            x = self.deconv32(self.deconv31(torch.cat([x3, self.upsampling(x)], 1)))
+            x = self.deconv22(self.deconv21(torch.cat([x2, self.upsampling(x)], 1)))
+            x = self.deconv12(self.deconv11(torch.cat([x1, self.upsampling(x)], 1)))
         else:
             x = self.deconv5(self.upsampling(x))
             x = self.deconv4(self.upsampling(x))

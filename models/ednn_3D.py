@@ -111,8 +111,9 @@ class ModelEDNN3D(nn.Module):
         x_skip = []
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
-                x = self.__pooling(self.__leakyrelu(self.__conv[i](self.__pad(x))))
+                x = self.__leakyrelu(self.__conv[i](self.__pad(x)))
                 x_skip.append(x.clone())
+                x = self.__pooling(x)
 
         else:
             for i in range(self.__n_downsample_layers):
@@ -127,7 +128,7 @@ class ModelEDNN3D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__pad(self.__deconv1[i](self.__pad(self.__upsampling(torch.cat([x_skip[i], x], 1))))))
+                x = self.__deconv2[i](self.__pad(self.__deconv1[i](self.__pad(torch.cat([self.__upsampling(x), x_skip[i]], 1)))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
                 x = self.__deconv1[i](self.__pad(self.__upsampling(x)))
