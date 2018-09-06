@@ -6,7 +6,7 @@ run:
     learning_rate_initial: 1.0E-4
     learning_rate_decay: 0.5
     learning_rate_decay_step_size: 100
-    compute_validation_loss: False
+    compute_validation_loss: True
     custom_init: False
     minibatch_epoch_loss: True
 
@@ -25,8 +25,8 @@ data:
     trainset_name: 'data/train.tar'
     validationset_name: 'data/validation.tar'
     testset_name: 'data/test.tar'
-    stride_hor: 4
-    stride_vert: 2
+    stride_hor: 1
+    stride_vert: 1
     uhor_scaling: 6.0
     uz_scaling: 2.5
     turbulence_scaling: 4.5
@@ -37,6 +37,7 @@ model:
     name_prefix: 'test_model'
     n_input_layers: 4
     n_output_layers: 3
+    predict_uncertainty: False
     n_x: 64
     n_y: 64
     n_z: 64

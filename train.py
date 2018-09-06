@@ -94,8 +94,8 @@ if run_params.run['loss_function'] == 1:
     loss_fn = torch.nn.L1Loss()
     loss_fn_val = torch.nn.L1Loss()
 elif run_params.run['loss_function'] == 2:
-    loss_fn = torch.nn.NLLLoss()
-    loss_fn_val = torch.nn.NLLLoss()
+    loss_fn = utils.GaussianLogLikelihoodLoss()
+    loss_fn_val = utils.GaussianLogLikelihoodLoss()
 elif run_params.run['loss_function'] == 3:
     loss_fn = utils.MyLoss(device)
     loss_fn_val = utils.MyLoss(device)
