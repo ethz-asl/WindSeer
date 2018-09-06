@@ -19,3 +19,5 @@ openfoam_batch/cases3d
 lsf.o*
 *__pycache__*
 mprofile*
+*.tp
+*_tmp.py
