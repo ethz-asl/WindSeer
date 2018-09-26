@@ -31,7 +31,7 @@ def save_data(tensor, name, compress):
     else:
         torch.save(tensor, name)
 
-def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain, verbose = False, compress = False):
+def convert_data(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain, verbose = False, compress = False):
     '''
     Function which loops through the files of the input tar file.
     The velocity is checked and files are rejected if a single dimension
@@ -46,7 +46,7 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain,
         nx: Number of points in x direction of the grid
         ny: Number of points in y direction of the grid
         nz: Number of points in z direction of the grid
-        nutlim: Maximum allowed turbulence viscosity
+        klim: Maximum allowed turbulence viscosity
         d3: If true the input is assumed to be 3d, else 2d
         boolean_terrain: If true the terrain is represented by a boolean variable, if false by a distance field
         verbose: Show the stats of the deleted files
@@ -100,8 +100,8 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain,
                 min_1 = np.min(wind_data['U:1'])
                 max_2 = np.max(wind_data['U:2'])
                 min_2 = np.min(wind_data['U:2'])
-                max_nut = np.max(wind_data['nut'])
-                min_nut = np.min(wind_data['nut'])
+                max_k = np.max(wind_data['k'])
+                min_k = np.min(wind_data['k'])
 
                 if ((np.abs(max_0) > vlim) or
                     (np.abs(min_0) > vlim) or
@@ -109,8 +109,8 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain,
                     (np.abs(max_1) > vlim) or
                     (np.abs(max_2) > vlim) or
                     (np.abs(min_2) > vlim) or
-                    (np.abs(max_nut) > nutlim) or
-                    (np.abs(min_nut) > nutlim)):
+                    (np.abs(max_k) > klim) or
+                    (np.abs(min_k) > klim)):
 
                     rejection_counter += 1
                     if verbose:
@@ -118,7 +118,7 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain,
                         print('Removing', member.name)
                         print('Statistics: max U0: ', max_0, ', max U1: ', max_1, ', max U2:', max_2)
                         print('            min U0: ', min_0, ', min U1: ', min_1, ', min U2:', min_2)
-                        print('            min nut:', min_nut, ', max nut:', max_nut)
+                        print('            min k:', min_k, ', max k:', max_k)
                         print('------------------------------------')
 
                 else:
@@ -131,7 +131,7 @@ def convert_data(infile, outfile, vlim, nx, ny, nz, nutlim, d3, boolean_terrain,
                     u_x_out = wind_data.get('U:0').values.reshape(channel_shape)
                     u_y_out = wind_data.get('U:1').values.reshape(channel_shape)
                     u_z_out = wind_data.get('U:2').values.reshape(channel_shape)
-                    turbelence_viscosity_out = wind_data.get('nut').values.reshape(channel_shape)
+                    turbelence_viscosity_out = wind_data.get('k').values.reshape(channel_shape)
 
                     # generate the input
                     is_wind = wind_data.get('vtkValidPointMask').values.reshape(channel_shape).astype(np.float32)
@@ -276,7 +276,7 @@ def main():
     parser.add_argument('-i', dest='infile', required=True, help='input tar file')
     parser.add_argument('-o', dest='outfile', help='output tar file, if none provided the input file name is prepended with "converted_"')
     parser.add_argument('-vlim', type=float, default=1000.0, help='limit of the velocity magnitude in one dimension')
-    parser.add_argument('-nutlim', type=float, default=1000.0, help='limit of the turbulent viscosity')
+    parser.add_argument('-klim', type=float, default=1000.0, help='limit of the turbulent viscosity')
     parser.add_argument('-v', dest='verbose', action='store_true', help='verbose')
     parser.add_argument('-nx', default=128, help='number of gridpoints in x-direction')
     parser.add_argument('-ny', default=128, help='number of gridpoints in y-direction')
@@ -303,7 +303,7 @@ def main():
             args.outfile = 'converted_' + args.infile
 
     start_time = time.time()
-    convert_data(args.infile, args.outfile, args.vlim, args.nx, args.ny, args.nz, args.nutlim, args.d3, args.boolean_terrain, args.verbose, args.compress)
+    convert_data(args.infile, args.outfile, args.vlim, args.nx, args.ny, args.nz, args.klim, args.d3, args.boolean_terrain, args.verbose, args.compress)
     print("INFO: Converting the database took %s seconds" % (time.time() - start_time))
 
 if __name__ == "__main__":
