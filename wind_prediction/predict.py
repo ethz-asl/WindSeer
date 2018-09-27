@@ -21,7 +21,7 @@ compute_prediction_error = False
 use_terrain_mask = True
 plot_worst_prediction = False
 compute_velocity_error = False # compute_prediction_error needs to be true
-uncertainty_predicted = True
+uncertainty_predicted = False
 # --------------------------------------------------------------------------
 
 # check if gpu available
