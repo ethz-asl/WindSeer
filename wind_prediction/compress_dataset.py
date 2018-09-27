@@ -83,9 +83,9 @@ def main():
     '''
     parser = argparse.ArgumentParser(description='Script to remove bad data from a database')
     parser.add_argument('-i', dest='infile', required=True, help='input tar file')
-    parser.add_argument('-o', dest='outfile', help='output tar file, if none provided the input file name is prepended with "converted_"')
-    parser.add_argument('-s_hor', default=1, type=int, help='number of gridpoints in x-direction')
-    parser.add_argument('-s_ver', default=1, type=int, help='number of gridpoints in y-direction')
+    parser.add_argument('-o', dest='outfile', help='output tar file, if none provided the input file name is prepended with "compressed_"')
+    parser.add_argument('-s_hor', default=1, type=int, help='stride in horizontal direction')
+    parser.add_argument('-s_ver', default=1, type=int, help='stride in vertical direction')
     parser.add_argument('-ic', dest='input_compressed', action='store_true', help='If true the input file is compressed')
     parser.add_argument('-c', dest='compress', action='store_true', help='compress the individual tensors')
     args = parser.parse_args()
