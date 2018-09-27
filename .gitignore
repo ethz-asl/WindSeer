@@ -21,3 +21,4 @@ lsf.o*
 mprofile*
 *.tp
 *_tmp.py
+*.npy

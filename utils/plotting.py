@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, RadioButtons
 
 # try importing mayavi
-mayavi_available = True
+mayavi_available = False # currently mayavi is disabled
 try:
     from mayavi import mlab
     from mayavi.tools.pipeline import streamline
@@ -15,9 +15,10 @@ class PlotUtils():
     '''
     Class providing the tools to plot the input and labels for the 2D and 3D case.
     '''
-    def __init__(self, input, label, design, title_fontsize = 30, label_fontsize = 23, tick_fontsize = 18):
+    def __init__(self, input, label, design, uncertainty_predicted = False, title_fontsize = 30, label_fontsize = 23, tick_fontsize = 18):
         self.__axis = 'x-z'
         self.__n_slice = 0
+        self.__uncertainty_predicted = uncertainty_predicted
 
         self.__title_fontsize = title_fontsize
         self.__label_fontsize = label_fontsize
@@ -41,7 +42,10 @@ class PlotUtils():
         self.__input = input
         self.__label = label
         if design == 1:
-            self.__error = label - input
+            if uncertainty_predicted:
+                self.__error = label - input[:3,:]
+            else:
+                self.__error = label - input
         else:
             self.__error = None # in this case the error plot will not be executed anyway
 
@@ -177,7 +181,7 @@ class PlotUtils():
                 self.__out_images.append(ah_in[2][1].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto')) #turbulence viscosity
                 chbar = fh_in.colorbar(self.__out_images[3], ax=ah_in[2][1])
                 ah_in[2][1].set_title('Prediction Turbulence', fontsize = self.__title_fontsize)
-                chbar.set_label('[???]', fontsize = self.__label_fontsize)
+                chbar.set_label('[J/kg]', fontsize = self.__label_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][1].get_xticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][1].get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -303,7 +307,7 @@ class PlotUtils():
                 h_uz_in = ah_in[2][1].imshow(self.__label[2,:,:], origin='lower', vmin=self.__label[2,:,:].min(), vmax=self.__label[2,:,:].max())
                 ah_in[2][1].set_title('Turbulence viscosity label', fontsize = self.__title_fontsize)
                 chbar = fh_in.colorbar(h_uz_in, ax=ah_in[2][1])
-                chbar.set_label('[???]', fontsize = self.__label_fontsize)
+                chbar.set_label('[J/kg]', fontsize = self.__label_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][1].get_xticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][1].get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -345,16 +349,19 @@ class PlotUtils():
 
     def plot_prediction(self):
         if (len(list(self.__label.size())) > 3):
-            use_turbulence = self.__label.shape[0] > 3
-            fh_in, ah_in = plt.subplots(3, self.__label.shape[0],figsize=(15,12))
+            if self.__uncertainty_predicted:
+                fh_in, ah_in = plt.subplots(3, self.__input.shape[0],figsize=(20,12))
+            else:
+                fh_in, ah_in = plt.subplots(3, self.__input.shape[0],figsize=(15,12))
             fh_in.patch.set_facecolor('white')
 
             title = ['Vel X', 'Vel Y','Vel Z', 'Turbulence']
-            units = ['[m/s]', '[m/s]', '[m/s]', '???']
+            units = ['[m/s]', '[m/s]', '[m/s]', '[J/kg]']
             for i in range(self.__label.shape[0]):
                 self.__out_images.append(ah_in[0][i].imshow(self.__label[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto'))
                 self.__in_images.append(ah_in[1][i].imshow(self.__input[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto'))
                 self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,self.__n_slice,:], origin='lower', vmin=self.__error[i,:,:,:].min(), vmax=self.__error[i,:,:,:].max(), aspect = 'auto'))
+
                 ah_in[0][i].set_title(title[i] + ' CFD', fontsize = self.__title_fontsize)
                 ah_in[1][i].set_title(title[i] + ' Prediction', fontsize = self.__title_fontsize)
                 ah_in[2][i].set_title(title[i] + ' Error', fontsize = self.__title_fontsize)
@@ -364,21 +371,36 @@ class PlotUtils():
                 plt.setp(ah_in[0][i].get_yticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[1][i].get_yticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+
                 chbar = fh_in.colorbar(self.__out_images[i], ax=ah_in[0][i])
-                chbar.set_label(units[i], fontsize = self.__label_fontsize)
-                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                chbar = fh_in.colorbar(self.__in_images[i], ax=ah_in[1][i])
                 chbar.set_label(units[i], fontsize = self.__label_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                 chbar = fh_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
                 chbar.set_label(units[i], fontsize = self.__label_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                chbar = fh_in.colorbar(self.__in_images[i], ax=ah_in[1][i])
+                chbar.set_label(units[i], fontsize = self.__label_fontsize)
+                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
                 ah_in[0][i].set_xlabel('x', fontsize=self.__label_fontsize)
-                ah_in[1][i].set_xlabel('x', fontsize=self.__label_fontsize)
                 ah_in[2][i].set_xlabel('x', fontsize=self.__label_fontsize)
                 ah_in[0][i].set_ylabel('z', fontsize=self.__label_fontsize)
-                ah_in[1][i].set_ylabel('z', fontsize=self.__label_fontsize)
                 ah_in[2][i].set_ylabel('z', fontsize=self.__label_fontsize)
+                ah_in[1][i].set_ylabel('z', fontsize=self.__label_fontsize)
+                ah_in[1][i].set_xlabel('x', fontsize=self.__label_fontsize)
+
+            if self.__uncertainty_predicted:
+                fh_in.delaxes(ah_in[2][3])
+                fh_in.delaxes(ah_in[0][3])
+                self.__in_images.append(ah_in[1][3].imshow(self.__input[3,:,self.__n_slice,:], origin='lower', vmin=self.__input[3,:,:,:].min(), vmax=self.__input[3,:,:,:].max(), aspect = 'auto'))
+                ah_in[1][3].set_title('log(variance)', fontsize = self.__title_fontsize)
+                plt.setp(ah_in[1][3].get_xticklabels(), fontsize=self.__tick_fontsize)
+                plt.setp(ah_in[1][3].get_yticklabels(), fontsize=self.__tick_fontsize)
+                chbar = fh_in.colorbar(self.__in_images[3], ax=ah_in[1][3])
+                chbar.set_label('[-]', fontsize = self.__label_fontsize)
+                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                ah_in[1][3].set_ylabel('z', fontsize=self.__label_fontsize)
+                ah_in[1][3].set_xlabel('x', fontsize=self.__label_fontsize)
 
             plt.tight_layout()
             plt.subplots_adjust(bottom=0.12)
@@ -401,7 +423,7 @@ class PlotUtils():
             fh_in.patch.set_facecolor('white')
 
             title = ['Vel X', 'Vel Z', 'Turbulence']
-            units = ['[m/s]', '[m/s]', '???']
+            units = ['[m/s]', '[m/s]', '[J/kg]']
             for i in range(self.__label.shape[0]):
                 self.__in_images.append(ah_in[0][i].imshow(self.__label[i,:,:], origin='lower', vmin=self.__label[i,:,:].min(), vmax=self.__label[i,:,:].max(), aspect = 'auto'))
                 self.__out_images.append(ah_in[1][i].imshow(self.__input[i,:,:], origin='lower', vmin=self.__label[i,:,:].min(), vmax=self.__label[i,:,:].max(), aspect = 'auto'))
@@ -444,6 +466,6 @@ def plot_sample(input, label):
     instance = PlotUtils(input, label, 0)
     instance.plot_sample()
 
-def plot_prediction(output, label):
-    instance = PlotUtils(output, label, 1)
+def plot_prediction(output, label, uncertainty_predicted):
+    instance = PlotUtils(output, label, 1, uncertainty_predicted)
     instance.plot_prediction()
