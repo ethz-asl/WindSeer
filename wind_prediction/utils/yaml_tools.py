@@ -20,15 +20,27 @@ class EDNNParameters(object):
 
         # decide if turbulence is used (somewhat a hack maybe there is something better in the future)
         if run_parameters['model']['d3']:
-            if run_parameters['model']['n_output_layers'] - run_parameters['model']['predict_uncertainty'] > 3:
-                run_parameters['model']['use_turbulence'] = True
+            if run_parameters['model']['predict_uncertainty']:
+                if run_parameters['model']['n_output_layers'] > 6:
+                    run_parameters['model']['use_turbulence'] = True
+                else:
+                    run_parameters['model']['use_turbulence'] = False
             else:
-                run_parameters['model']['use_turbulence'] = False
+                if run_parameters['model']['n_output_layers'] > 3:
+                    run_parameters['model']['use_turbulence'] = True
+                else:
+                    run_parameters['model']['use_turbulence'] = False
         else:
-            if run_parameters['model']['n_output_layers'] - run_parameters['model']['predict_uncertainty'] > 2:
-                run_parameters['model']['use_turbulence'] = True
+            if run_parameters['model']['predict_uncertainty']:
+                if run_parameters['model']['n_output_layers'] > 4:
+                    run_parameters['model']['use_turbulence'] = True
+                else:
+                    run_parameters['model']['use_turbulence'] = False
             else:
-                run_parameters['model']['use_turbulence'] = False
+                if run_parameters['model']['n_output_layers'] > 2:
+                    run_parameters['model']['use_turbulence'] = True
+                else:
+                    run_parameters['model']['use_turbulence'] = False
 
         return run_parameters
 
@@ -121,6 +133,7 @@ class EDNNParameters(object):
         print('\tFC layer scaling:\t', self.model['fc_scaling'])
         print('\tUse mapping layer:\t', self.model['use_mapping_layer'])
         print('\tPredict uncertainty:\t', self.model['predict_uncertainty'])
+        print('\tPredict turbulence:\t', self.model['use_turbulence'])
         print(' ')
         print('Dataset Settings:')
         print('\tUhor scaling:\t\t', self.data['uhor_scaling'])

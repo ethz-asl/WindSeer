@@ -15,7 +15,7 @@ class PlotUtils():
     '''
     Class providing the tools to plot the input and labels for the 2D and 3D case.
     '''
-    def __init__(self, input, label, design, uncertainty_predicted = False, title_fontsize = 30, label_fontsize = 23, tick_fontsize = 18):
+    def __init__(self, input, label, design, uncertainty_predicted = False, title_fontsize = 20, label_fontsize = 15, tick_fontsize = 10):
         self.__axis = 'x-z'
         self.__n_slice = 0
         self.__uncertainty_predicted = uncertainty_predicted
@@ -38,12 +38,20 @@ class PlotUtils():
         self.__in_images = []
         self.__out_images = []
         self.__error_images = []
+        self.__uncertainty_images = []
 
         self.__input = input
         self.__label = label
+        self.__uncertainty = None
+
+        num_channels = input.shape[0]
+        if uncertainty_predicted:
+            self.__uncertainty = input[int(num_channels/2):,:]
+
         if design == 1:
             if uncertainty_predicted:
-                self.__error = label - input[:3,:]
+
+                self.__error = label - input[:int(num_channels/2),:]
             else:
                 self.__error = label - input
         else:
@@ -57,58 +65,52 @@ class PlotUtils():
             for i, im in enumerate(self.__in_images):
                 im.set_data(self.__input[i, :, :, self.__n_slice])
                 im.set_extent([0, self.__input.shape[2], 0, self.__input.shape[1]])
-                im.axes.set_xlabel('y', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('z', fontsize=self.__label_fontsize)
 
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, :, :, self.__n_slice])
                 im.set_extent([0, self.__label.shape[2], 0, self.__label.shape[1]])
-                im.axes.set_xlabel('y', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('z', fontsize=self.__label_fontsize)
 
             for i, im in enumerate(self.__error_images):
                 im.set_data(self.__error[i, :, :, self.__n_slice])
                 im.set_extent([0, self.__error.shape[2], 0, self.__error.shape[1]])
-                im.axes.set_xlabel('y', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('z', fontsize=self.__label_fontsize)
+
+            for i, im in enumerate(self.__uncertainty_images):
+                im.set_data(self.__uncertainty[i, :, :, self.__n_slice])
+                im.set_extent([0, self.__uncertainty.shape[2], 0, self.__uncertainty.shape[1]])
 
         elif self.__axis == '  x-y':
             for i, im in enumerate(self.__in_images):
                 im.set_data(self.__input[i, self.__n_slice, :, :])
                 im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[2]])
-                im.axes.set_xlabel('x', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('y', fontsize=self.__label_fontsize)
 
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, self.__n_slice, :, :])
                 im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[2]])
-                im.axes.set_xlabel('x', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('y', fontsize=self.__label_fontsize)
 
             for i, im in enumerate(self.__error_images):
                 im.set_data(self.__error[i, self.__n_slice, :, :])
                 im.set_extent([0, self.__error.shape[3], 0, self.__error.shape[2]])
-                im.axes.set_xlabel('x', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('y', fontsize=self.__label_fontsize)
+
+            for i, im in enumerate(self.__uncertainty_images):
+                im.set_data(self.__uncertainty[i, self.__n_slice, :, :])
+                im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[2]])
 
         else:
             for i, im in enumerate(self.__in_images):
                 im.set_data(self.__input[i, :, self.__n_slice, :])
                 im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[1]])
-                im.axes.set_xlabel('x', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('z', fontsize=self.__label_fontsize)
 
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, :, self.__n_slice, :])
                 im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[1]])
-                im.axes.set_xlabel('x', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('z', fontsize=self.__label_fontsize)
 
             for i, im in enumerate(self.__error_images):
                 im.set_data(self.__error[i, :, self.__n_slice, :])
                 im.set_extent([0, self.__error.shape[3], 0, self.__error.shape[1]])
-                im.axes.set_xlabel('x', fontsize=self.__label_fontsize)
-                im.axes.set_ylabel('z', fontsize=self.__label_fontsize)
+
+            for i, im in enumerate(self.__uncertainty_images):
+                im.set_data(self.__uncertainty[i, :, self.__n_slice, :])
+                im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[1]])
 
         plt.draw()
 
@@ -147,7 +149,7 @@ class PlotUtils():
         '''
         if (len(list(self.__label.size())) > 3):
             # 3D data
-            fh_in, ah_in = plt.subplots(3, 3, figsize=(20,13))
+            fh_in, ah_in = plt.subplots(3, 3, figsize=(16,13))
             fh_in.patch.set_facecolor('white')
             fh_in.delaxes(ah_in[2][2])
 
@@ -161,16 +163,12 @@ class PlotUtils():
             ah_in[0][1].set_title('Input Vel Y', fontsize = self.__title_fontsize)
             ah_in[0][2].set_title('Input Vel Z', fontsize = self.__title_fontsize)
             chbar = fh_in.colorbar(self.__in_images[1], ax=ah_in[0][0])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
             chbar = fh_in.colorbar(self.__in_images[2], ax=ah_in[0][1])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
             chbar = fh_in.colorbar(self.__in_images[3], ax=ah_in[0][2])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
             chbar = fh_in.colorbar(self.__in_images[0], ax=ah_in[2][0])
-            chbar.set_label('[-]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
             # plot the label data
@@ -181,10 +179,11 @@ class PlotUtils():
                 self.__out_images.append(ah_in[2][1].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto')) #turbulence viscosity
                 chbar = fh_in.colorbar(self.__out_images[3], ax=ah_in[2][1])
                 ah_in[2][1].set_title('Prediction Turbulence', fontsize = self.__title_fontsize)
-                chbar.set_label('[J/kg]', fontsize = self.__label_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][1].get_xticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][1].get_yticklabels(), fontsize=self.__tick_fontsize)
+                ah_in[2][1].set_xticks([])
+                ah_in[2][1].set_yticks([])
 
             except:
                 print('INFO: Turbulence viscosity not present as a label')
@@ -194,44 +193,26 @@ class PlotUtils():
             ah_in[1][1].set_title('CFD Vel Y', fontsize = self.__title_fontsize)
             ah_in[1][2].set_title('CFD Vel Z', fontsize = self.__title_fontsize)
             chbar = fh_in.colorbar(self.__out_images[0], ax=ah_in[1][0])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
             chbar = fh_in.colorbar(self.__out_images[1], ax=ah_in[1][1])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
             chbar = fh_in.colorbar(self.__out_images[2], ax=ah_in[1][2])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
-            plt.setp(ah_in[0][0].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[0][1].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[0][2].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][0].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][1].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][2].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[2][0].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[0][0].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[0][1].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[0][2].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][0].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][1].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][2].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[2][0].get_yticklabels(), fontsize=self.__tick_fontsize)
-
-            ah_in[0][0].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[0][1].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[0][2].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[1][0].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[1][1].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[1][2].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[2][0].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[0][0].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[0][1].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[0][2].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[1][0].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[1][1].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[1][2].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[2][0].set_ylabel('z', fontsize=self.__label_fontsize)
+            ah_in[0][0].set_xticks([])
+            ah_in[0][0].set_yticks([])
+            ah_in[0][1].set_xticks([])
+            ah_in[0][1].set_yticks([])
+            ah_in[0][2].set_xticks([])
+            ah_in[0][2].set_yticks([])
+            ah_in[1][0].set_xticks([])
+            ah_in[1][0].set_yticks([])
+            ah_in[1][1].set_xticks([])
+            ah_in[1][1].set_yticks([])
+            ah_in[1][2].set_xticks([])
+            ah_in[1][2].set_yticks([])
+            ah_in[2][0].set_xticks([])
+            ah_in[2][0].set_yticks([])
 
             # create slider to select the slice
             self.__ax_slider = plt.axes(self.__slider_location)
@@ -276,6 +257,7 @@ class PlotUtils():
 
                 mlab.show()
         else:
+            print('Warning: The 2D plotting has not been used for some time, it might be not working')
             # 2D data
             fh_in, ah_in = plt.subplots(3, 2, figsize=(20,13))
             fh_in.patch.set_facecolor('white')
@@ -349,10 +331,19 @@ class PlotUtils():
 
     def plot_prediction(self):
         if (len(list(self.__label.size())) > 3):
+            turbulence_predicted = self.__label.shape[0] > 3
+
             if self.__uncertainty_predicted:
-                fh_in, ah_in = plt.subplots(3, self.__input.shape[0],figsize=(20,12))
+                if turbulence_predicted:
+                    fh_in, ah_in = plt.subplots(4, self.__label.shape[0],figsize=(15,12))
+                else:
+                    fh_in, ah_in = plt.subplots(4, self.__label.shape[0],figsize=(12,12))
             else:
-                fh_in, ah_in = plt.subplots(3, self.__input.shape[0],figsize=(15,12))
+                if turbulence_predicted:
+                    fh_in, ah_in = plt.subplots(3, self.__label.shape[0],figsize=(20,12))
+                else:
+                    fh_in, ah_in = plt.subplots(3, self.__label.shape[0],figsize=(15,12))
+
             fh_in.patch.set_facecolor('white')
 
             title = ['Vel X', 'Vel Y','Vel Z', 'Turbulence']
@@ -362,45 +353,38 @@ class PlotUtils():
                 self.__in_images.append(ah_in[1][i].imshow(self.__input[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto'))
                 self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,self.__n_slice,:], origin='lower', vmin=self.__error[i,:,:,:].min(), vmax=self.__error[i,:,:,:].max(), aspect = 'auto'))
 
-                ah_in[0][i].set_title(title[i] + ' CFD', fontsize = self.__title_fontsize)
-                ah_in[1][i].set_title(title[i] + ' Prediction', fontsize = self.__title_fontsize)
-                ah_in[2][i].set_title(title[i] + ' Error', fontsize = self.__title_fontsize)
-                plt.setp(ah_in[0][i].get_xticklabels(), fontsize=self.__tick_fontsize)
-                plt.setp(ah_in[1][i].get_xticklabels(), fontsize=self.__tick_fontsize)
-                plt.setp(ah_in[2][i].get_xticklabels(), fontsize=self.__tick_fontsize)
-                plt.setp(ah_in[0][i].get_yticklabels(), fontsize=self.__tick_fontsize)
-                plt.setp(ah_in[1][i].get_yticklabels(), fontsize=self.__tick_fontsize)
-                plt.setp(ah_in[2][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+                ah_in[0][i].set_title(title[i], fontsize = self.__title_fontsize)
+
+                ah_in[0][i].set_xticks([])
+                ah_in[0][i].set_yticks([])
+                ah_in[1][i].set_xticks([])
+                ah_in[1][i].set_yticks([])
+                ah_in[2][i].set_xticks([])
+                ah_in[2][i].set_yticks([])
 
                 chbar = fh_in.colorbar(self.__out_images[i], ax=ah_in[0][i])
-                chbar.set_label(units[i], fontsize = self.__label_fontsize)
-                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                chbar = fh_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
-                chbar.set_label(units[i], fontsize = self.__label_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                 chbar = fh_in.colorbar(self.__in_images[i], ax=ah_in[1][i])
-                chbar.set_label(units[i], fontsize = self.__label_fontsize)
+                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                chbar = fh_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
-                ah_in[0][i].set_xlabel('x', fontsize=self.__label_fontsize)
-                ah_in[2][i].set_xlabel('x', fontsize=self.__label_fontsize)
-                ah_in[0][i].set_ylabel('z', fontsize=self.__label_fontsize)
-                ah_in[2][i].set_ylabel('z', fontsize=self.__label_fontsize)
-                ah_in[1][i].set_ylabel('z', fontsize=self.__label_fontsize)
-                ah_in[1][i].set_xlabel('x', fontsize=self.__label_fontsize)
+                if self.__uncertainty_predicted:
+                    self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,self.__n_slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto'))
+                    chbar = fh_in.colorbar(self.__uncertainty_images[i], ax=ah_in[3][i])
+                    plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                    plt.setp(ah_in[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
+                    plt.setp(ah_in[3][i].get_yticklabels(), fontsize=self.__tick_fontsize)
 
-            if self.__uncertainty_predicted:
-                fh_in.delaxes(ah_in[2][3])
-                fh_in.delaxes(ah_in[0][3])
-                self.__in_images.append(ah_in[1][3].imshow(self.__input[3,:,self.__n_slice,:], origin='lower', vmin=self.__input[3,:,:,:].min(), vmax=self.__input[3,:,:,:].max(), aspect = 'auto'))
-                ah_in[1][3].set_title('log(variance)', fontsize = self.__title_fontsize)
-                plt.setp(ah_in[1][3].get_xticklabels(), fontsize=self.__tick_fontsize)
-                plt.setp(ah_in[1][3].get_yticklabels(), fontsize=self.__tick_fontsize)
-                chbar = fh_in.colorbar(self.__in_images[3], ax=ah_in[1][3])
-                chbar.set_label('[-]', fontsize = self.__label_fontsize)
-                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                ah_in[1][3].set_ylabel('z', fontsize=self.__label_fontsize)
-                ah_in[1][3].set_xlabel('x', fontsize=self.__label_fontsize)
+                    ah_in[3][i].set_xticks([])
+                    ah_in[3][i].set_yticks([])
+
+                if (i == 0):
+                    ah_in[0][i].set_ylabel('CFD', fontsize=self.__label_fontsize)
+                    ah_in[1][i].set_ylabel('Prediction', fontsize=self.__label_fontsize)
+                    ah_in[2][i].set_ylabel('Error', fontsize=self.__label_fontsize)
+                    if self.__uncertainty_predicted:
+                        ah_in[3][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)
 
             plt.tight_layout()
             plt.subplots_adjust(bottom=0.12)
@@ -418,6 +402,7 @@ class PlotUtils():
             self.__button.on_clicked(self.radio_callback)
 
         else:
+            print('Warning: The 2D plotting has not been used for some time, it might be not working')
             use_turbulence = self.__label.shape[0] > 2
             fh_in, ah_in = plt.subplots(3, self.__label.shape[0],figsize=(15,10))
             fh_in.patch.set_facecolor('white')

@@ -13,15 +13,14 @@ import utils
 
 # ---- Params --------------------------------------------------------------
 compressed = False
-dataset = 'data/test64.tar'
+dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'run12_naKd4sF8mK'
-model_version = 'e115'
+model_name = 'test'
+model_version = 'latest'
 compute_prediction_error = False
 use_terrain_mask = True
 plot_worst_prediction = False
 compute_velocity_error = False # compute_prediction_error needs to be true
-uncertainty_predicted = False
 # --------------------------------------------------------------------------
 
 # check if gpu available
@@ -66,8 +65,9 @@ with torch.no_grad():
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
 
-            if uncertainty_predicted:
-                dloss = loss_fn(outputs[:,:-1,:], labels)
+            if params.model['predict_uncertainty']:
+                num_channels = outputs.shape[1]
+                dloss = loss_fn(outputs[:,:int(num_channels/2),:], labels)
             else:
                 dloss = loss_fn(outputs, labels)
             if dloss > maxloss:
@@ -88,7 +88,7 @@ with torch.no_grad():
                     loss_nut += loss_fn(outputs[:,2,:,:], labels[:,2,:,:])
 
             if compute_velocity_error:
-                error_stats = utils.prediction_error.compute_prediction_error(labels, outputs, params.data['uhor_scaling'], params.data['uz_scaling'], uncertainty_predicted)
+                error_stats = utils.prediction_error.compute_prediction_error(labels, outputs, params.data['uhor_scaling'], params.data['uz_scaling'], params.model['predict_uncertainty'])
                 velocity_errors[0, i] = error_stats['avg_abs_error']
                 velocity_errors[1, i] = error_stats['avg_abs_error_x']
                 velocity_errors[2, i] = error_stats['avg_abs_error_y']
@@ -154,8 +154,9 @@ with torch.no_grad():
     input = input.squeeze()
     output = output.squeeze()
 
-    if uncertainty_predicted:
-        print('Plotting sample with loss: {}'.format(loss_fn(output[:-1,:], label)))
+    if params.model['predict_uncertainty']:
+        num_channels = output.shape[0]
+        print('Plotting sample with loss: {}'.format(loss_fn(output[:int(num_channels/2),:], label)))
     else:
         print('Plotting sample with loss: {}'.format(loss_fn(output, label)))
 
@@ -166,9 +167,13 @@ with torch.no_grad():
         label[0,:,:,:] *= params.data['uhor_scaling']
         label[1,:,:,:] *= params.data['uhor_scaling']
         label[2,:,:,:] *= params.data['uz_scaling']
+        if params.model['use_turbulence']:
+            output[3,:,:,:] *= params.data['turbulence_scaling']
+            label[3,:,:,:] *= params.data['turbulence_scaling']
+
     else:
         output[0,:,:] *= params.data['uhor_scaling']
         output[1,:,:] *= params.data['uz_scaling']
         label[0,:,:] *= params.data['uhor_scaling']
         label[1,:,:] *= params.data['uz_scaling']
-    utils.plot_prediction(output, label, uncertainty_predicted)
+    utils.plot_prediction(output, label, params.model['predict_uncertainty'])

@@ -10,14 +10,14 @@ from torch.utils.data import DataLoader
 import utils
 
 #------ Params to modidify ---------------------------
-compressed = True
+compressed = False
 input_dataset = 'data/test.tar'
 uhor_scaling = 1.0
 uz_scaling = 1.0
 turbulence_scaling = 1.0
 plot_sample_num = 0
 dataset_rounds = 0
-use_turbulence = True
+use_turbulence = False
 stride_hor = 1
 stride_vert = 1
 #-----------------------------------------------------
