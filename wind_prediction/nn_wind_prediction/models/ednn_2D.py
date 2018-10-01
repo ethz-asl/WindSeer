@@ -11,6 +11,8 @@ Encoder/Decoder Neural Network
 4. Mapping layer with a separate filter for each output channel
 
 The first input layer is assumed to be is_wind. This value is true for all cells except the terrain.
+
+TODO: Make it configurable similar to the 3D case
 '''
 class ModelEDNN2D(nn.Module):
     def __init__(self, n_input_layers, interpolation_mode, align_corners, skipping, predict_turbulence):

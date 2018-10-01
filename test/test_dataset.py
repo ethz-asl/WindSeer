@@ -3,15 +3,16 @@
 Script to test and benchmark the implementation of MyDataset
 '''
 
+import nn_wind_prediction.data as data
+import nn_wind_prediction.utils as utils
 import sys
 import time
 import torch
 from torch.utils.data import DataLoader
-import utils
 
 #------ Params to modidify ---------------------------
 compressed = False
-input_dataset = 'data/test.tar'
+input_dataset = 'test.tar'
 uhor_scaling = 1.0
 uz_scaling = 1.0
 turbulence_scaling = 1.0
@@ -22,7 +23,7 @@ stride_hor = 1
 stride_vert = 1
 #-----------------------------------------------------
 
-db = utils.MyDataset(input_dataset, stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling, compressed = compressed)
+db = data.MyDataset(input_dataset, stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_uz = uz_scaling, scaling_nut = turbulence_scaling, compressed = compressed)
 
 dbloader = torch.utils.data.DataLoader(db, batch_size=32,
                                           shuffle=True, num_workers=2)

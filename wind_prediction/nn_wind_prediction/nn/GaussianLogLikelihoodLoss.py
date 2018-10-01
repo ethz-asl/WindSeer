@@ -1,6 +1,5 @@
 import torch
 from torch.nn import Module
-from torch.nn.functional import mse_loss
 
 class GaussianLogLikelihoodLoss(Module):
     '''
@@ -21,6 +20,5 @@ class GaussianLogLikelihoodLoss(Module):
         mean_error =  output_mean - label
 
         loss = output[:,int(num_channels/2):,:] + (mean_error * mean_error) / output_variance
-#         pdb.set_trace()
 
         return loss.mean()

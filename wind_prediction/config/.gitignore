@@ -1,5 +1,6 @@
 # Ignore everything
 *
 
-# But gitignore
+# But gitignore and the example file
 !.gitignore
+!example.yaml

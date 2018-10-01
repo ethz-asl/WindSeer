@@ -1,5 +1,7 @@
-import yaml
+from __future__ import print_function
+
 import os
+import yaml
 
 class EDNNParameters(object):
 

@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from io import BytesIO
 import lz4.frame
 import numpy as np

@@ -6,76 +6,11 @@ Convert a dataset of csv files to serialized torch tensors.
 TODO: Investigate how to speed up the 3D case
 '''
 
+from __future__ import print_function
+
 import argparse
-import io
-import lz4.frame
-from math import trunc
-import numpy as np
-import os
-import pandas as pd
-from scipy import ndimage
-from subprocess import call
-import shutil
-import sys
-import tarfile
+from nn_wind_prediction.data import compress_dataset
 import time
-import torch
-
-def save_data(tensor, name, compress):
-    if compress:
-        bytes = io.BytesIO()
-        torch.save(tensor, bytes)
-        f = open(name, 'wb')
-        f.write(lz4.frame.compress(bytes.getvalue(), compression_level = -20))
-        f.close()
-    else:
-        torch.save(tensor, name)
-
-def compress_data(infile, outfile, s_hor, s_ver, input_compressed, compress):
-    # open the file
-    tar = tarfile.open(infile, 'r')
-    num_files = len(tar.getnames())
-
-    # create temp directory to store all serialized arrays
-    if (os.path.isdir("/cluster/scratch/")):
-        tempfolder = '/scratch/tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-    else:
-        tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-
-    os.makedirs(tempfolder)
-
-    print('INFO: Looping through all the files')
-    for i, member in enumerate(tar.getmembers()):
-        file = tar.extractfile(member)
-        
-        if input_compressed:
-            data = torch.load(io.BytesIO(lz4.frame.decompress(file.read())))
-
-        else:
-            data = torch.load(file)
-        
-        if (len(list(data.size())) > 3):
-            out = data[:,::s_ver,::s_hor, ::s_hor].clone()
-        else:
-            out = data[:,::s_ver, ::s_hor].clone()
-
-        save_data(out, tempfolder + member.name, compress)
-
-        if ((i % np.ceil(num_files/10.0)) == 0.0):
-            print(trunc((i+1)/num_files*100), '%')
-
-    print('INFO: Finished compressing all the files')
-
-    # collecting all files in the tmp folder to a tar
-    out_tar = tarfile.open(outfile, 'w')
-    for filename in os.listdir(tempfolder):
-        out_tar.add(tempfolder + filename, arcname = filename)
-
-    # cleaning up
-    out_tar.close()
-    tar.close()
-    shutil.rmtree(tempfolder)
-
 
 def main():
     '''
@@ -107,7 +42,7 @@ def main():
             args.outfile = 'compressed_' + args.infile
 
     start_time = time.time()
-    compress_data(args.infile, args.outfile, args.s_hor, args.s_ver, args.input_compressed, args.compress)
+    compress_dataset(args.infile, args.outfile, args.s_hor, args.s_ver, args.input_compressed, args.compress)
     print("INFO: Compressing the database took %s seconds" % (time.time() - start_time))
 
 if __name__ == "__main__":
