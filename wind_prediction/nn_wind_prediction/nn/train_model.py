@@ -95,7 +95,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
 
         # save model every save_model_every_n_epoch epochs
         if (epoch % save_model_every_n_epoch == (save_model_every_n_epoch - 1)) and save_model_every_n_epoch > 0:
-            torch.save(net.state_dict(), os.path.join(model_dir, 'e{}.model'.format(epoch+1)))
+            torch.save(net.state_dict(), os.path.join(model_directory, 'e{}.model'.format(epoch+1)))
 
         with torch.no_grad():
             if minibatch_loss:
