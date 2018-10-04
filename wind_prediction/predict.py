@@ -15,14 +15,14 @@ import pdb
 
 # ----  Default Params --------------------------------------------------------------
 compressed = False
-dataset = 'data/test.tar'
+dataset = 'data/test64.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'test'
-model_version = 'latest'
+model_name = 'turbulence_naKd4sF8mK'
+model_version = 'e95'
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
-plot_prediction = False
+plot_prediction = True
 # --------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(description='Script to plot a prediction of the network')

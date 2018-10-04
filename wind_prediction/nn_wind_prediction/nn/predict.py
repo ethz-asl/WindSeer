@@ -130,4 +130,4 @@ def predict_wind_and_turbulence(input, label, device, net, params, plotting_pred
                 label[0,:,:] *= params.data['uhor_scaling']
                 label[1,:,:] *= params.data['uz_scaling']
         
-            utils.plot_prediction(output, label, params.model['predict_uncertainty'])
+            utils.plot_prediction(output, label, input[0], params.model['predict_uncertainty'])
