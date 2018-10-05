@@ -89,6 +89,20 @@ class ModelEDNN3D(nn.Module):
             # mapping layer
             self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
 
+    def freeze_model(self):
+        def freeze_weights(m):
+            for params in m.parameters():
+                params.requires_grad = False
+
+        self.apply(freeze_weights)
+
+    def unfreeze_model(self):
+        def unfreeze_weights(m):
+            for params in m.parameters():
+                params.requires_grad = True
+
+        self.apply(unfreeze_weights)
+
     def init_params(self):
         def init_weights(m):
             if (type(m) != type(self)):

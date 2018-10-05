@@ -18,7 +18,7 @@ class PlotUtils():
     Class providing the tools to plot the input and labels for the 2D and 3D case.
     '''
     def __init__(self, input, label, terrain, design, uncertainty_predicted = False, title_fontsize = 20, label_fontsize = 15,
-                 tick_fontsize = 10, cmap=cm.viridis, terrain_color='grey'):
+                 tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
         # Input is the prediction, label is CFD
         self.__axis = 'x-z'
         self.__n_slice = 0
@@ -385,7 +385,7 @@ class PlotUtils():
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
                 if self.__uncertainty_predicted:
-                    self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,self.__n_slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto'), cmap=self.__cmap)
+                    self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,self.__n_slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
                     chbar = fh_in.colorbar(self.__uncertainty_images[i], ax=ah_in[3][i])
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                     plt.setp(ah_in[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)

@@ -11,24 +11,22 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-import pdb
-
 # ----  Default Params --------------------------------------------------------------
 compressed = False
-dataset = 'data/test64.tar'
+dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'turbulence_naKd4sF8mK'
-model_version = 'e95'
+model_name = 'pretrained2_naKd4sF8mK'
+model_version = 'latest'
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
 plot_prediction = True
-# --------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(description='Script to plot a prediction of the network')
 parser.add_argument('-c', dest='compressed', action='store_true', help='Input tar file compressed')
 parser.add_argument('-ds', dest='dataset', default=dataset, help='The test dataset')
-parser.add_argument('-i', dest='index', default=index, help='The index of the sample in the dataset')
+parser.add_argument('-i', dest='index', type=int, default=index, help='The index of the sample in the dataset')
 parser.add_argument('-model_name', dest='model_name', default=model_name, help='The model name')
 parser.add_argument('-model_version', dest='model_version', default=model_version, help='The model version')
 parser.add_argument('-cpe', dest='compute_prediction_error', action='store_true', help='If set the velocity prediction errors over the full dataset is computed')
@@ -53,9 +51,10 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
 if params.model['d3']:
-    net = models.ModelEDNN3D(params.model['n_input_layers'], params.model['n_output_layers'], params.model['n_x'], params.model['n_y'], params.model['n_z'],
-                             params.model['n_downsample_layers'], params.model['interpolation_mode'], params.model['align_corners'], params.model['skipping'],
-                             use_terrain_mask, params.model['pooling_method'], params.model['use_mapping_layer'], params.model['use_fc_layers'], params.model['fc_scaling'])
+    if params.model['predict_uncertainty']:
+        net = models.ModelEDNN3D_Twin(**params.model3d_kwargs())
+    else:
+        net = models.ModelEDNN3D(**params.model3d_kwargs())
 else:
     net = models.ModelEDNN2D(params.model['n_input_layers'], params.model['interpolation_mode'], params.model['align_corners'], params.model['skipping'], params.model['use_turbulence'])
 

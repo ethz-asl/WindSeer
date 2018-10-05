@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser(description='Training an EDNN for predicting wi
 parser.add_argument('-np', '--no-plots', dest='make_plots', action='store_false', help='Turn off plots (default False)')
 parser.add_argument('-y', '--yaml-config', required=True, help='YAML config file')
 parser.add_argument('-o', '--output-dir', default='trained_models/', help='Output directory')
-parser.add_argument('-w', '--writer', dest='use_writer', action='store_true', help='Use a SummaryWriter to log the learningcurve')
+parser.add_argument('-w', '--writer', dest='use_writer', default=True, action='store_false', help='Don\'t use a SummaryWriter to log the learningcurve')
 
 args = parser.parse_args()
 
@@ -70,7 +70,10 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define model and move to gpu if available
 if run_params.model['d3']:
-    net = models.ModelEDNN3D(**run_params.model3d_kwargs())
+    if run_params.model['predict_uncertainty']:
+        net = models.ModelEDNN3D_Twin(**run_params.model3d_kwargs())
+    else:
+        net = models.ModelEDNN3D(**run_params.model3d_kwargs())
 else:
     net = models.ModelEDNN2D(**run_params.model2d_kwargs())
 
@@ -115,7 +118,7 @@ net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optim
                        loss_fn, device, run_params.run['n_epochs'],
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
-                       run_params.run['compute_validation_loss'], model_dir, args.use_writer)
+                       run_params.run['compute_validation_loss'], model_dir, args.use_writer, run_params.model['predict_uncertainty'])
 
 # save the model if requested
 if (run_params.run['save_model']):

@@ -10,7 +10,7 @@ import torch
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
                 save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss,
-                model_directory, use_writer):
+                model_directory, use_writer, predict_uncertainty):
     '''
     Train the model according to the specified loss function and params
     
@@ -58,6 +58,14 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
     start_time = time.time()
     for epoch in range(n_epochs):  # loop over the dataset multiple times
 
+        if predict_uncertainty:
+            if epoch % 2 == 0:
+                net.freeze_uncertainty()
+                net.unfreeze_mean()
+            else:
+                net.unfreeze_uncertainty()
+                net.freeze_mean()
+
         train_loss = 0
         running_loss = 0.0
 
@@ -75,10 +83,16 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             optimizer.zero_grad()
 
             # forward + backward + optimize
-            outputs = net(inputs)
-            del inputs
+            if predict_uncertainty:
+                mean = net.predict_mean(inputs)
+                uncertainty = net.predict_uncertainty(inputs)
 
-            loss = loss_fn(outputs, labels)
+                loss = loss_fn.compute_loss(mean, uncertainty, labels)
+            else:
+                outputs = net(inputs)
+                loss = loss_fn(outputs, labels)
+
+            del inputs
             loss.backward()
             optimizer.step()
 
@@ -134,7 +148,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                     for tag, value in net.named_parameters():
                         tag = tag.replace('.', '/')
                         writer.add_histogram(tag, value.data.cpu().numpy(), epoch+1)
-                        writer.add_histogram(tag+'/grad', value.grad.data.cpu().numpy(), epoch+1)
+                        if value.requires_grad:
+                            writer.add_histogram(tag+'/grad', value.grad.data.cpu().numpy(), epoch+1)
                     del tag, value
 
             print(('[%d] train loss: %.5f, validation loss: %.5f' %

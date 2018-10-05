@@ -14,11 +14,14 @@ class GaussianLogLikelihoodLoss(Module):
         if (output.shape[1] != 2 * label.shape[1]) and (num_channels % 2 != 0):
             raise ValueError('The output has to have twice the number of channels of the labels')
 
-        output_mean = output[:,:int(num_channels/2),:]
-        output_variance = output[:,int(num_channels/2):,:].exp() # todo check if it really is the channels i am splitting
+        return self.compute_loss(output[:,:int(num_channels/2),:], output[:,int(num_channels/2):,:], label)
 
-        mean_error =  output_mean - label
+    def compute_loss(self, mean, log_variance, label):
+        if (mean.shape[1] != log_variance.shape[1]):
+            raise ValueError('The variance and the mean need to have the same number of channels')
 
-        loss = output[:,int(num_channels/2):,:] + (mean_error * mean_error) / output_variance
+        mean_error =  mean - label
+
+        loss = log_variance + (mean_error * mean_error) / log_variance.exp()
 
         return loss.mean()
