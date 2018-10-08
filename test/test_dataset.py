@@ -35,11 +35,12 @@ if compute_dataset_statistics:
     uy = []
     uz = []
     turb = []
+    reflow_ratio = []
     dataset_rounds = 1
 
 start_time = time.time()
 for j in range(dataset_rounds):
-    for data in dbloader:
+    for i, data in enumerate(dbloader):
         input, label = data
 
         if compute_dataset_statistics:
@@ -49,13 +50,38 @@ for j in range(dataset_rounds):
             if use_turbulence:
                 turb.append(label[:,3,:].abs().mean().item())
 
+            # compute if a reflow is happening in the simulated flow
+            if label[:,0,:].mean().abs().item() > label[:,1,:].mean().abs().item():
+                # general flow in x-direction
+                max_vel = label[:,0,:].max().item()
+                min_vel = label[:,0,:].min().item()
+            else:
+                # general flow in y-direction
+                max_vel = label[:,1,:].max().item()
+                min_vel = label[:,1,:].min().item()
+
+            max_v = max(abs(max_vel), abs(min_vel))
+            min_v = min(abs(max_vel), abs(min_vel))
+
+            if (max_vel * min_vel < 0):
+                reflow_ratio.append(min_v / max_v)
+            else:
+                reflow_ratio.append(0.0)
+
 if compute_dataset_statistics:
     print('INFO: Mean ux:   {}'.format(np.mean(ux)))
     print('INFO: Mean uy:   {}'.format(np.mean(uy)))
     print('INFO: Mean uz:   {}'.format(np.mean(uz)))
     if use_turbulence:
         print('INFO: Mean turb: {}'.format(np.mean(turb)))
-
+    print('INFO: Number of cases with a reflow ratio of > 0.05: {}'.format(sum(i > 0.05 for i in reflow_ratio)))
+    print('INFO: Number of cases with a reflow ratio of > 0.10: {}'.format(sum(i > 0.10 for i in reflow_ratio)))
+    print('INFO: Number of cases with a reflow ratio of > 0.20: {}'.format(sum(i > 0.20 for i in reflow_ratio)))
+    print('INFO: Number of cases with a reflow ratio of > 0.30: {}'.format(sum(i > 0.30 for i in reflow_ratio)))
+    print('INFO: Number of cases with a reflow ratio of > 0.40: {}'.format(sum(i > 0.40 for i in reflow_ratio)))
+    print('INFO: Number of cases with a reflow ratio of > 0.50: {}'.format(sum(i > 0.50 for i in reflow_ratio)))
+    print('INFO: Number of cases with a reflow ratio of > 0.75: {}'.format(sum(i > 0.75 for i in reflow_ratio)))
+    print('INFO: Number of cases with a reflow ratio of > 1.00: {}'.format(sum(i > 1.00 for i in reflow_ratio)))
 
 print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 
