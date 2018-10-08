@@ -14,15 +14,15 @@ import tarfile
 import time
 import torch
 
-def save_data(tensor, name, compress):
+def save_data(tensor, ds, name, compress):
     if compress:
         bytes = io.BytesIO()
-        torch.save(tensor, bytes)
+        torch.save((tensor, ds), bytes)
         f = open(name, 'wb')
         f.write(lz4.frame.compress(bytes.getvalue(), compression_level = -20))
         f.close()
     else:
-        torch.save(tensor, name)
+        torch.save((tensor, ds), name)
 
 def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
     # open the file
@@ -40,19 +40,19 @@ def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
     print('INFO: Looping through all the files')
     for i, member in enumerate(tar.getmembers()):
         file = tar.extractfile(member)
-        
+
         if input_compressed:
-            data = torch.load(io.BytesIO(lz4.frame.decompress(file.read())))
+            data, ds = torch.load(io.BytesIO(lz4.frame.decompress(file.read())))
 
         else:
-            data = torch.load(file)
-        
+            data, ds = torch.load(file)
+
         if (len(list(data.size())) > 3):
             out = data[:,::s_ver,::s_hor, ::s_hor].clone()
         else:
             out = data[:,::s_ver, ::s_hor].clone()
 
-        save_data(out, tempfolder + member.name, compress)
+        save_data(out, (ds[0]*s_hor, ds[1]*s_hor, ds[2]*s_ver), tempfolder + member.name, compress)
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
             print(trunc((i+1)/num_files*100), '%')
@@ -140,6 +140,13 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                 min_2 = np.min(wind_data['U:2'])
                 max_k = np.max(wind_data['k'])
                 min_k = np.min(wind_data['k'])
+                x = wind_data['Points:0'][:nx]
+                y = wind_data['Points:1'][::nx]
+                y = y[:ny]
+                z = wind_data['Points:2'][::nx*ny]
+                dx = np.mean(np.diff(x.values))
+                dy = np.mean(np.diff(y.values))
+                dz = np.mean(np.diff(z.values))
 
                 if ((np.abs(max_0) > vlim) or
                     (np.abs(min_0) > vlim) or
@@ -148,7 +155,12 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                     (np.abs(max_2) > vlim) or
                     (np.abs(min_2) > vlim) or
                     (np.abs(max_k) > klim) or
-                    (np.abs(min_k) > klim)):
+                    (np.abs(min_k) > klim) or
+                    (np.std(np.diff(x.values)) > 0.1) or
+                    (np.std(np.diff(y.values)) > 0.1) or
+                    (np.std(np.diff(z.values)) > 0.1)):
+                    import pdb
+                    pdb.set_trace()
 
                     rejection_counter += 1
                     if verbose:
@@ -157,6 +169,8 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                         print('Statistics: max U0: ', max_0, ', max U1: ', max_1, ', max U2:', max_2)
                         print('            min U0: ', min_0, ', min U1: ', min_1, ', min U2:', min_2)
                         print('            min k:', min_k, ', max k:', max_k)
+                        print('            regular grid:', 
+                              not ((np.std(np.diff(x.values)) > 0.1) or (np.std(np.diff(y.values)) > 0.1) or (np.std(np.diff(z.values)) > 0.1)))
                         print('------------------------------------')
 
                 else:
@@ -201,14 +215,14 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                     # store the stacked data
                     out = np.stack([distance_field_in, u_x_in, u_y_in, u_z_in, u_x_out, u_y_out, u_z_out, turbelence_viscosity_out])
                     out_tensor = torch.from_numpy(out)
-                    save_data(out_tensor, tempfolder + member.name.replace('.csv','') + '.tp', compress)
+                    save_data(out_tensor, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '.tp', compress)
 
                     if d3:
                         # rotate the sample around the z-axis
                         out_rot = np.stack([distance_field_in, -u_y_in, u_x_in, u_z_in, -u_y_out, u_x_out, u_z_out, turbelence_viscosity_out])
                         out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
                         out_tensor = torch.from_numpy(out_rot)
-                        save_data(out_tensor, tempfolder + member.name.replace('.csv','') + '_rot.tp', compress)
+                        save_data(out_tensor, (dy, dx, dz), tempfolder + member.name.replace('.csv','') + '_rot.tp', compress)
 
                         # flip in x direction
                         u_x_out_flipped = np.flip(u_x_out,2) * (-1.0)
@@ -223,13 +237,13 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
 
                         out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
                         out_tensor_flipped = torch.from_numpy(out_flipped)
-                        save_data(out_tensor_flipped, tempfolder + member.name.replace('.csv','') + '_flipped_x.tp', compress)
+                        save_data(out_tensor_flipped, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '_flipped_x.tp', compress)
 
                         # rotate the flipped data
                         out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
                         out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
                         out_tensor = torch.from_numpy(out_rot)
-                        save_data(out_tensor, tempfolder + member.name.replace('.csv','') + '_flipped_x_rot.tp', compress)
+                        save_data(out_tensor, (dy, dx, dz), tempfolder + member.name.replace('.csv','') + '_flipped_x_rot.tp', compress)
 
                         # flip in y direction
                         u_x_out_flipped = np.flip(u_x_out,1)
@@ -244,13 +258,13 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
 
                         out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
                         out_tensor_flipped = torch.from_numpy(out_flipped)
-                        save_data(out_tensor_flipped, tempfolder + member.name.replace('.csv','') + '_flipped_y.tp', compress)
+                        save_data(out_tensor_flipped, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '_flipped_y.tp', compress)
 
                         # rotate the flipped data
                         out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
                         out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
                         out_tensor = torch.from_numpy(out_rot)
-                        save_data(out_tensor, tempfolder + member.name.replace('.csv','') + '_flipped_y_rot.tp', compress)
+                        save_data(out_tensor, (dy, dx, dz), tempfolder + member.name.replace('.csv','') + '_flipped_y_rot.tp', compress)
 
                         # flip in y direction
                         u_x_out_flipped = np.flip(np.flip(u_x_out,1),2) * (-1.0)
@@ -265,13 +279,13 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
 
                         out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
                         out_tensor_flipped = torch.from_numpy(out_flipped)
-                        save_data(out_tensor_flipped, tempfolder + member.name.replace('.csv','') + '_flipped_xy.tp', compress)
+                        save_data(out_tensor_flipped, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '_flipped_xy.tp', compress)
 
                         # rotate the flipped data
                         out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
                         out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
                         out_tensor = torch.from_numpy(out_rot)
-                        save_data(out_tensor, tempfolder + member.name.replace('.csv','') + '_flipped_xy_rot.tp', compress)
+                        save_data(out_tensor, (dy, dx, dz), tempfolder + member.name.replace('.csv','') + '_flipped_xy_rot.tp', compress)
                     else:
                         # generate the flipped flow
                         u_x_out_flipped = np.flip(u_x_out,1) * (-1.0)
@@ -288,7 +302,7 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
 
                         out_tensor_flipped = torch.from_numpy(out_flipped)
 
-                        save_data(out_tensor_flipped, tempfolder + member.name.replace('.csv','') + '_flipped.tp', compress)
+                        save_data(out_tensor_flipped, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '_flipped.tp', compress)
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
             print(trunc((i+1)/num_files*100), '%')

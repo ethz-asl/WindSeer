@@ -10,7 +10,7 @@ import time
 
 def main():
     # convert the csv file to the tensor
-    convert_dataset('test_csv.tar', 'converted.tar', 200, 128, 128, 64, 1000, True, True, False, False)
+    convert_dataset('test_csv.tar', 'converted.tar', 200, 128, 128, 64, 1000, True, True, True, False)
 
     # reduce the resolution from 128x128x64 to 32x32x32
     compress_dataset('converted.tar', 'compressed.tar', 4, 2, False, False)
