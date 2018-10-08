@@ -79,7 +79,7 @@ else:
 
 if (run_params.run['warm_start']):
     try:
-        net.load_state_dict(torch.load(os.path.join(model_dir, 'latest.model'), map_location=lambda storage, loc: storage))
+        net.load_state_dict(torch.load(os.path.join(model_dir, 'pretrained.model'), map_location=lambda storage, loc: storage))
     except:
         print('Warning: Failed to load the model parameter, initializing parameter.')
         if run_params.run['custom_init']:

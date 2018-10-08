@@ -162,7 +162,7 @@ class PlotUtils():
         '''
         Creates the plots of a single sample according to the input and label data.
         '''
-        if (len(list(self.__label.size())) > 3):
+        if (len(list(self.__label.shape)) > 3):
             # 3D data
             fh_in, ah_in = plt.subplots(3, 3, figsize=(16,13))
             fh_in.patch.set_facecolor('white')
