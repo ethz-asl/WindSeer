@@ -23,6 +23,7 @@ use_turbulence = True
 stride_hor = 1
 stride_vert = 1
 compute_dataset_statistics = True
+plot_divergence = True
 #-----------------------------------------------------
 
 db = data.MyDataset(input_dataset, stride_hor = stride_hor, stride_vert = stride_vert,
@@ -39,6 +40,7 @@ if compute_dataset_statistics:
     uz = []
     turb = []
     reflow_ratio = []
+    mean_abs_div = []
     dataset_rounds = 1
     min_dx = float('inf')
     max_dx = float('-inf')
@@ -46,6 +48,7 @@ if compute_dataset_statistics:
     max_dy = float('-inf')
     min_dz = float('inf')
     max_dz = float('-inf')
+    max_abs_div = float('-inf')
 
 start_time = time.time()
 for j in range(dataset_rounds):
@@ -84,6 +87,10 @@ for j in range(dataset_rounds):
             max_dy = max(max_dy, ds[1].item())
             max_dz = max(max_dz, ds[2].item())
 
+            divergence = utils.divergence(label.squeeze()[:3], ds)
+            mean_abs_div.append(divergence.abs().mean())
+            max_abs_div = max(max_abs_div, divergence.max().item())
+
 if compute_dataset_statistics:
     print('------------------------------------------------------------------------------')
     print('INFO: Mean ux:   {} m/s'.format(np.mean(ux)))
@@ -106,12 +113,14 @@ if compute_dataset_statistics:
     print('INFO: Max dy:   {} m'.format(max_dy))
     print('INFO: Min dz:   {} m'.format(min_dz))
     print('INFO: Max dz:   {} m'.format(max_dz))
+    print('INFO: Average divergence: {}'.format(np.mean(mean_abs_div)))
+    print('INFO: Maximum divergence: {}'.format(max_abs_div))
     print('------------------------------------------------------------------------------')
 
 print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 
 try:
-    input, label = db[plot_sample_num]
+    input, label, ds = db[plot_sample_num]
 except:
     print('The plot_sample_num needs to be a value between 0 and', len(db)-1, '->' , plot_sample_num, ' is invalid.')
     sys.exit()
@@ -126,4 +135,4 @@ print('----------------------------------')
 print(' ')
 
 # plot the sample
-utils.plot_sample(input, label, input[0,:])
+utils.plot_sample(input, label, input[0,:], plot_divergence, ds)

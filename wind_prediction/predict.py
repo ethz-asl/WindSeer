@@ -74,4 +74,4 @@ if args.compute_prediction_error:
 
 # predict the wind, compute the loss and plot if requested
 input, label = testset[args.index]
-nn_custom.predict_wind_and_turbulence(input, label, device, net, params, args.plot_prediction, loss_fn)
+nn_custom.predict_wind_and_turbulence(input, label, device, net, params, args.plot_prediction, loss_fn, plot_divergence)

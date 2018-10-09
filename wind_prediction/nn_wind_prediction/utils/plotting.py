@@ -1,7 +1,9 @@
+from .divergence import divergence
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 from matplotlib.widgets import Slider, RadioButtons
+import torch
 
 # try importing mayavi
 mayavi_available = False # currently mayavi is disabled
@@ -17,12 +19,13 @@ class PlotUtils():
     '''
     Class providing the tools to plot the input and labels for the 2D and 3D case.
     '''
-    def __init__(self, input, label, terrain, design, uncertainty_predicted = False, title_fontsize = 20, label_fontsize = 15,
+    def __init__(self, input, label, terrain, design, uncertainty_predicted = False, plot_divergence = False, ds = None, title_fontsize = 20, label_fontsize = 15,
                  tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
         # Input is the prediction, label is CFD
         self.__axis = 'x-z'
         self.__n_slice = 0
         self.__uncertainty_predicted = uncertainty_predicted
+        self.__plot_divergence = plot_divergence
 
         self.__title_fontsize = title_fontsize
         self.__label_fontsize = label_fontsize
@@ -36,13 +39,18 @@ class PlotUtils():
             self.__button_location = [0.05, 0.01, 0.05, 0.08]
 
         else:
-            self.__slider_location = [0.09, 0.02, 0.82, 0.04]
-            self.__button_location = [0.80, 0.16, 0.05, 0.10]
+            self.__slider_location = [0.15, 0.025, 0.77, 0.04]#[0.09, 0.02, 0.82, 0.04]
+            self.__button_location = [0.05, 0.01, 0.05, 0.08]#[0.80, 0.16, 0.05, 0.10]
 
         self.__in_images = []
         self.__out_images = []
         self.__error_images = []
         self.__uncertainty_images = []
+
+        if self.__plot_divergence and ds and (len(list(label.shape)) > 3):
+            label = torch.cat([label, torch.tensor(divergence(label.squeeze()[:3], ds)).unsqueeze(0)])
+        else:
+            self.__plot_divergence = False
 
         # Set the input to be a masked array so that we specify a terrain colour
         self.__input = np.ma.MaskedArray(np.zeros(input.shape))
@@ -70,7 +78,6 @@ class PlotUtils():
                 self.__error = self.__label - self.__input
         else:
             self.__error = None # in this case the error plot will not be executed anyway
-
 
     def update_images(self):
         '''
@@ -166,7 +173,6 @@ class PlotUtils():
             # 3D data
             fh_in, ah_in = plt.subplots(3, 3, figsize=(16,13))
             fh_in.patch.set_facecolor('white')
-            fh_in.delaxes(ah_in[2][2])
 
             # plot the input data
             self.__in_images.append(ah_in[2][0].imshow(self.__input[0,:,self.__n_slice,:], origin='lower', vmin=self.__input[0,:,:,:].min(), vmax=self.__input[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #terrain
@@ -203,6 +209,18 @@ class PlotUtils():
             except:
                 print('INFO: Turbulence viscosity not present as a label')
                 fh_in.delaxes(ah_in[2][1])
+
+            if self.__plot_divergence:
+                self.__out_images.append(ah_in[2][2].imshow(self.__label[4,:,self.__n_slice,:], origin='lower', vmin=self.__label[4,:,:,:].min(), vmax=self.__label[4,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
+                chbar = fh_in.colorbar(self.__out_images[4], ax=ah_in[2][2])
+                ah_in[2][2].set_title('Velocity Divergence', fontsize = self.__title_fontsize)
+                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                plt.setp(ah_in[2][2].get_xticklabels(), fontsize=self.__tick_fontsize)
+                plt.setp(ah_in[2][2].get_yticklabels(), fontsize=self.__tick_fontsize)
+                ah_in[2][2].set_xticks([])
+                ah_in[2][2].set_yticks([])
+            else:
+                fh_in.delaxes(ah_in[2][2])
 
             ah_in[1][0].set_title('CFD Vel X', fontsize = self.__title_fontsize)
             ah_in[1][1].set_title('CFD Vel Y', fontsize = self.__title_fontsize)
@@ -456,14 +474,14 @@ class PlotUtils():
 
         plt.show()
 
-def plot_sample(input, label, terrain):
+def plot_sample(input, label, terrain, plot_divergence = False, ds = None):
     '''
     Creates the plots according to the input and label data.
     Can handle 2D as well as 3D input. For the 3D input only slices are shown.
     The axes along which the slices are made as well as the location of the slice
     can be set using sliders and buttons in the figure.
     '''
-    instance = PlotUtils(input, label, terrain, 0)
+    instance = PlotUtils(input, label, terrain, 0, False, plot_divergence, ds)
     instance.plot_sample()
 
 def plot_prediction(output, label, terrain, uncertainty_predicted):
