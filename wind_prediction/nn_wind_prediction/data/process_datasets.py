@@ -159,8 +159,6 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                     (np.std(np.diff(x.values)) > 0.1) or
                     (np.std(np.diff(y.values)) > 0.1) or
                     (np.std(np.diff(z.values)) > 0.1)):
-                    import pdb
-                    pdb.set_trace()
 
                     rejection_counter += 1
                     if verbose:

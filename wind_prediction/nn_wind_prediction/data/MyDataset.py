@@ -12,7 +12,7 @@ from torch.utils.data.dataset import Dataset
 TODO: try if it is feasible also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
 '''
 class MyDataset(Dataset):
-    def __init__(self, filename, stride_hor = 1, stride_vert = 1, turbulence_label = False, scaling_uhor = 1.0, scaling_uz = 1.0, scaling_nut = 1.0, compressed = True):
+    def __init__(self, filename, stride_hor = 1, stride_vert = 1, turbulence_label = False, scaling_uhor = 1.0, scaling_uz = 1.0, scaling_nut = 1.0, compressed = True, returnGridsize = False):
         try:
             tar = tarfile.open(filename, 'r')
         except IOError as e:
@@ -33,6 +33,8 @@ class MyDataset(Dataset):
 
         self.__compressed = compressed
 
+        self.__returnGridsize = returnGridsize
+
         print('MyDataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
     def __getitem__(self, index):
@@ -40,10 +42,10 @@ class MyDataset(Dataset):
         file = tar.extractfile(self.__memberslist[index])
 
         if self.__compressed:
-            data = torch.load(BytesIO(lz4.frame.decompress(file.read())))
+            data, ds = torch.load(BytesIO(lz4.frame.decompress(file.read())))
 
         else:
-            data = torch.load(file)
+            data, ds = torch.load(file)
 
         tar.close()
         del tar
@@ -59,9 +61,15 @@ class MyDataset(Dataset):
             data[7, :, :, :] /= self.__scaling_nut # label turbulence
 
             if self.__turbulence_label:
-                return data[:4,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], data[4:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
+                if self.__returnGridsize:
+                    return data[:4,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], data[4:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], ds
+                else:
+                    return data[:4,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], data[4:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
             else:
-                return data[:4,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], data[4:7,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
+                if self.__returnGridsize:
+                    return data[:4,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], data[4:7,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], ds
+                else:
+                    return data[:4,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], data[4:7,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
 
         else:
             # 2D data
@@ -86,7 +94,10 @@ class MyDataset(Dataset):
             input = input[:,::self.__stride_vert, ::self.__stride_hor]
             output = output[:,::self.__stride_vert, ::self.__stride_hor]
 
-            return input, output
+            if self.__returnGridsize:
+                return input, output, ds
+            else:
+                return input, output
 
     def __len__(self):
         return self.__num_files
