@@ -72,11 +72,12 @@ class EDNNParameters(object):
 
     def MyDataset_kwargs(self):
         return {'stride_hor': self.data['stride_hor'],
-                    'stride_vert': self.data['stride_vert'],
-                    'turbulence_label': self.model['use_turbulence'],
-                    'scaling_uhor': self.data['uhor_scaling'],
-                    'scaling_uz': self.data['uz_scaling'],
-                    'scaling_nut': self.data['turbulence_scaling']}
+                'stride_vert': self.data['stride_vert'],
+                'turbulence_label': self.model['use_turbulence'],
+                'scaling_uhor': self.data['uhor_scaling'],
+                'scaling_uz': self.data['uz_scaling'],
+                'scaling_nut': self.data['turbulence_scaling'],
+                'use_grid_size': self.data['use_grid_size']}
 
     def model3d_kwargs(self):
         return {'n_input_layers': self.model['n_input_layers'],

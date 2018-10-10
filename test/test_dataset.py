@@ -24,12 +24,13 @@ stride_hor = 1
 stride_vert = 1
 compute_dataset_statistics = True
 plot_divergence = True
+use_grid_size = True
 #-----------------------------------------------------
 
 db = data.MyDataset(input_dataset, stride_hor = stride_hor, stride_vert = stride_vert,
                     turbulence_label = use_turbulence, scaling_uhor = uhor_scaling,
                     scaling_uz = uz_scaling, scaling_nut = turbulence_scaling,
-                    compressed = compressed, returnGridsize = True)
+                    compressed = compressed, use_grid_size = use_grid_size, return_grid_size = True)
 
 dbloader = torch.utils.data.DataLoader(db, batch_size=1,
                                           shuffle=True, num_workers=0)
