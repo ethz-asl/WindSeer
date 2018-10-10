@@ -9,8 +9,8 @@ class ModelEDNN3D_Twin(nn.Module):
         super(ModelEDNN3D_Twin, self).__init__()
         
         # check if the number of output layers is divisible by 2
-        if (n_output_layers!= 2 * n_input_layers):
-            raise ValueError('The number of output channels has to be twice the input channels')
+        if (n_output_layers % 2 != 0):
+            raise ValueError('The number of output channels needs to be a multiple of 2')
         
         self._n_mean = int(n_output_layers/2)
         

@@ -211,7 +211,7 @@ class PlotUtils():
                 fh_in.delaxes(ah_in[2][1])
 
             if self.__plot_divergence:
-                self.__out_images.append(ah_in[2][2].imshow(self.__label[4,:,self.__n_slice,:], origin='lower', vmin=self.__label[4,:,:,:].min(), vmax=self.__label[4,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
+                self.__out_images.append(ah_in[2][2].imshow(self.__label[4,:,self.__n_slice,:], origin='lower', vmin=max(self.__label[4,:,:,:].min(), -0.5), vmax=min(self.__label[4,:,:,:].max(), 0.5), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
                 chbar = fh_in.colorbar(self.__out_images[4], ax=ah_in[2][2])
                 ah_in[2][2].set_title('Velocity Divergence', fontsize = self.__title_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
