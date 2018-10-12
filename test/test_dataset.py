@@ -48,6 +48,7 @@ if compute_dataset_statistics:
     dz = []
     max_div = []
     mean_div = []
+    terrain = []
 
 start_time = time.time()
 for j in range(dataset_rounds):
@@ -88,6 +89,12 @@ for j in range(dataset_rounds):
             mean_div.append(divergence.abs().mean())
             max_div.append(divergence.max().item())
 
+            idx = input.shape[2] - 1
+            while(idx >= 0 and input[0,0,idx,:,:].min() > 0):
+                idx -= 1
+
+            terrain.append(idx * ds[2].item())
+
 if compute_dataset_statistics:
     print('------------------------------------------------------------------------------')
     print('INFO: Mean ux:   {} m/s'.format(np.mean(ux)))
@@ -112,32 +119,55 @@ if compute_dataset_statistics:
     print('INFO: Max dz:   {} m'.format(np.max(dz)))
     print('INFO: Average divergence: {}'.format(np.mean(mean_div)))
     print('INFO: Maximum divergence: {}'.format(np.max(max_div)))
+    print('INFO: Min terrain height: {}'.format(np.min(terrain)))
+    print('INFO: Max terrain height: {}'.format(np.max(terrain)))
     print('------------------------------------------------------------------------------')
+
+    dataset_stats = {
+        'ux': ux,
+        'uy': uy,
+        'uz': uz,
+        'turb': turb,
+        'reflow_ratio': reflow_ratio,
+        'dx': dx,
+        'dy': dy,
+        'dz': dz,
+        'max_div': max_div,
+        'mean_div': mean_div,
+        'terrain': terrain
+        }
+    np.save('dataset_stats.npy', dataset_stats)
 
     # plotting of the statistics
     plt.figure()
-    plt.subplot(2, 2, 1)
+    plt.subplot(2, 3, 1)
     plt.hist(reflow_ratio, 10, facecolor='r')
     plt.grid(True)
     plt.xlabel('Reflow Ratio []')
     plt.ylabel('N')
 
-    plt.subplot(2, 2, 2)
+    plt.subplot(2, 3, 2)
     plt.hist(dx, 10, facecolor='g')
     plt.grid(True)
     plt.xlabel('dx [m]')
     plt.ylabel('N')
 
-    plt.subplot(2, 2, 3)
+    plt.subplot(2, 3, 3)
     plt.hist(dy, 10, facecolor='b')
     plt.grid(True)
     plt.xlabel('dy [m]')
     plt.ylabel('N')
 
-    plt.subplot(2, 2, 4)
+    plt.subplot(2, 3, 4)
     plt.hist(dz, 10, facecolor='y')
     plt.grid(True)
     plt.xlabel('dz [m]')
+    plt.ylabel('N')
+
+    plt.subplot(2, 3, 5)
+    plt.hist(terrain, 10, facecolor='y')
+    plt.grid(True)
+    plt.xlabel('Terrain height [m]')
     plt.ylabel('N')
 
     plt.figure()
