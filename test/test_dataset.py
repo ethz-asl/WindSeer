@@ -3,6 +3,7 @@
 Script to test and benchmark the implementation of MyDataset
 '''
 
+import matplotlib.pyplot as plt
 import nn_wind_prediction.data as data
 import nn_wind_prediction.utils as utils
 import numpy as np
@@ -41,15 +42,12 @@ if compute_dataset_statistics:
     uz = []
     turb = []
     reflow_ratio = []
-    mean_abs_div = []
     dataset_rounds = 1
-    min_dx = float('inf')
-    max_dx = float('-inf')
-    min_dy = float('inf')
-    max_dy = float('-inf')
-    min_dz = float('inf')
-    max_dz = float('-inf')
-    max_abs_div = float('-inf')
+    dx = []
+    dy = []
+    dz = []
+    max_div = []
+    mean_div = []
 
 start_time = time.time()
 for j in range(dataset_rounds):
@@ -60,6 +58,7 @@ for j in range(dataset_rounds):
             ux.append(label[:,0,:].abs().mean().item())
             uy.append(label[:,1,:].abs().mean().item())
             uz.append(label[:,2,:].abs().mean().item())
+
             if use_turbulence:
                 turb.append(label[:,3,:].abs().mean().item())
 
@@ -81,16 +80,13 @@ for j in range(dataset_rounds):
             else:
                 reflow_ratio.append(0.0)
 
-            min_dx = min(min_dx, ds[0].item())
-            min_dy = min(min_dy, ds[1].item())
-            min_dz = min(min_dz, ds[2].item())
-            max_dx = max(max_dx, ds[0].item())
-            max_dy = max(max_dy, ds[1].item())
-            max_dz = max(max_dz, ds[2].item())
+            dx.append(ds[0].item())
+            dy.append(ds[1].item())
+            dz.append(ds[2].item())
 
-            divergence = utils.divergence(label.squeeze()[:3], ds)
-            mean_abs_div.append(divergence.abs().mean())
-            max_abs_div = max(max_abs_div, divergence.max().item())
+            divergence = utils.divergence(label.squeeze()[:3], ds, input.squeeze()[0,:])
+            mean_div.append(divergence.abs().mean())
+            max_div.append(divergence.max().item())
 
 if compute_dataset_statistics:
     print('------------------------------------------------------------------------------')
@@ -108,15 +104,79 @@ if compute_dataset_statistics:
     print('INFO: Number of cases with a reflow ratio of > 0.75: {}'.format(sum(i > 0.75 for i in reflow_ratio)))
     print('INFO: Number of cases with a reflow ratio of > 1.00: {}'.format(sum(i > 1.00 for i in reflow_ratio)))
     print('INFO: Number of cases with a reflow ratio of > 1.00: {}'.format(sum(i > 1.00 for i in reflow_ratio)))
-    print('INFO: Min dx:   {} m'.format(min_dx))
-    print('INFO: Max dx:   {} m'.format(max_dx))
-    print('INFO: Min dy:   {} m'.format(min_dy))
-    print('INFO: Max dy:   {} m'.format(max_dy))
-    print('INFO: Min dz:   {} m'.format(min_dz))
-    print('INFO: Max dz:   {} m'.format(max_dz))
-    print('INFO: Average divergence: {}'.format(np.mean(mean_abs_div)))
-    print('INFO: Maximum divergence: {}'.format(max_abs_div))
+    print('INFO: Min dx:   {} m'.format(np.min(dx)))
+    print('INFO: Max dx:   {} m'.format(np.max(dx)))
+    print('INFO: Min dy:   {} m'.format(np.min(dy)))
+    print('INFO: Max dy:   {} m'.format(np.max(dy)))
+    print('INFO: Min dz:   {} m'.format(np.min(dz)))
+    print('INFO: Max dz:   {} m'.format(np.max(dz)))
+    print('INFO: Average divergence: {}'.format(np.mean(mean_div)))
+    print('INFO: Maximum divergence: {}'.format(np.max(max_div)))
     print('------------------------------------------------------------------------------')
+
+    # plotting of the statistics
+    plt.figure()
+    plt.subplot(2, 2, 1)
+    plt.hist(reflow_ratio, 10, facecolor='r')
+    plt.grid(True)
+    plt.xlabel('Reflow Ratio []')
+    plt.ylabel('N')
+
+    plt.subplot(2, 2, 2)
+    plt.hist(dx, 10, facecolor='g')
+    plt.grid(True)
+    plt.xlabel('dx [m]')
+    plt.ylabel('N')
+
+    plt.subplot(2, 2, 3)
+    plt.hist(dy, 10, facecolor='b')
+    plt.grid(True)
+    plt.xlabel('dy [m]')
+    plt.ylabel('N')
+
+    plt.subplot(2, 2, 4)
+    plt.hist(dz, 10, facecolor='y')
+    plt.grid(True)
+    plt.xlabel('dz [m]')
+    plt.ylabel('N')
+
+    plt.figure()
+    plt.subplot(2, 3, 1)
+    plt.hist(max_div, 10, facecolor='r')
+    plt.grid(True)
+    plt.xlabel('Maximum divergence')
+    plt.ylabel('N')
+
+    plt.subplot(2, 3, 2)
+    plt.hist(mean_div, 10, facecolor='g')
+    plt.grid(True)
+    plt.xlabel('Mean divergence')
+    plt.ylabel('N')
+
+    plt.subplot(2, 3, 3)
+    plt.hist(turb, 10, facecolor='y')
+    plt.grid(True)
+    plt.xlabel('Turb. kin. energy [J/kg]')
+    plt.ylabel('N')
+
+    plt.subplot(2, 3, 4)
+    plt.hist(ux, 10, facecolor='m')
+    plt.grid(True)
+    plt.xlabel('Ux [m/s]')
+    plt.ylabel('N')
+
+    plt.subplot(2, 3, 5)
+    plt.hist(uy, 10, facecolor='b')
+    plt.grid(True)
+    plt.xlabel('Uy [m/s]')
+    plt.ylabel('N')
+
+    plt.subplot(2, 3, 6)
+    plt.hist(uz, 10, facecolor='k')
+    plt.grid(True)
+    plt.xlabel('Uz [m/s]')
+    plt.ylabel('N')
+    plt.draw()
 
 print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 

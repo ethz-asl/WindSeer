@@ -48,7 +48,7 @@ class PlotUtils():
         self.__uncertainty_images = []
 
         if self.__plot_divergence and ds and (len(list(label.shape)) > 3):
-            label = torch.cat([label, torch.tensor(divergence(label.squeeze()[:3], ds)).unsqueeze(0)])
+            label = torch.cat([label, torch.tensor(divergence(label.squeeze()[:3], ds, terrain.squeeze())).unsqueeze(0)])
         else:
             self.__plot_divergence = False
 
