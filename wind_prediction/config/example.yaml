@@ -17,6 +17,7 @@ run:
     warm_start: False
     loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: Custom, else: MSE
     uncertainty_train_mode: 0 # 0: mean + uncertainty, 1: only mean, 2: only uncertainty
+    uncertainty_loss_eps: 1.0E-8
     save_model_every_n_epoch: 5
     save_params_hist_every_n_epoch: 1
 

@@ -101,7 +101,7 @@ scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step
 if run_params.run['loss_function'] == 1:
     loss_fn = torch.nn.L1Loss()
 elif run_params.run['loss_function'] == 2:
-    loss_fn = nn_custom.GaussianLogLikelihoodLoss()
+    loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
 elif run_params.run['loss_function'] == 3:
     loss_fn = utils.MyLoss(device)
 else:

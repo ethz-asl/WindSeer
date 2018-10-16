@@ -5,8 +5,10 @@ class GaussianLogLikelihoodLoss(Module):
     '''
     Gaussian Log Likelihood Loss according to https://arxiv.org/pdf/1705.07115.pdf
     '''
-    def __init__(self):
+    def __init__(self, eps = 1e-8):
         super(GaussianLogLikelihoodLoss, self).__init__()
+
+        self.__eps = eps
 
     def forward(self, output, label):
         num_channels = output.shape[1]
@@ -22,6 +24,6 @@ class GaussianLogLikelihoodLoss(Module):
 
         mean_error =  mean - label
 
-        loss = log_variance + (mean_error * mean_error) / log_variance.exp()
+        loss = log_variance + (mean_error * mean_error) / log_variance.exp().add(self.__eps)
 
         return loss.mean()
