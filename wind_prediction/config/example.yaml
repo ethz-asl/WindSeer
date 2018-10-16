@@ -20,6 +20,13 @@ run:
     save_model_every_n_epoch: 5
     save_params_hist_every_n_epoch: 1
 
+    # solver settings
+    beta1: 0.9
+    beta2: 0.999
+    eps: 1.0E-8
+    weight_decay: 0
+    amsgrad: False
+
 data:
     # dataset parameter
     compressed: False

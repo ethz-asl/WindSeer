@@ -91,7 +91,10 @@ else:
 net.to(device)
 
 # define optimizer and objective
-optimizer = torch.optim.Adam(net.parameters(), lr=run_params.run['learning_rate_initial'])
+optimizer = torch.optim.Adam(net.parameters(), lr=run_params.run['learning_rate_initial'],
+                             betas=(run_params.run['beta1'], run_params.run['beta2']),
+                             eps = run_params.run['eps'], weight_decay = run_params.run['weight_decay'],
+                             amsgrad = run_params.run['amsgrad'])
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 
