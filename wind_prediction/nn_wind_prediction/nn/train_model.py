@@ -86,6 +86,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
         train_avg_mean = 0.0
         train_avg_uncertainty = 0.0
         train_max_uncertainty = float('-inf')
+        train_min_uncertainty = float('inf')
 
         # adjust the learning rate if necessary
         scheduler_lr.step()
@@ -114,6 +115,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 uncertainty_exp = uncertainty.exp()
                 train_avg_uncertainty += uncertainty_exp.mean().item()
                 train_max_uncertainty = max(train_max_uncertainty, uncertainty_exp.max().item())
+                train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
             else:
                 outputs = net(inputs)
                 loss = loss_fn(outputs, labels)
@@ -141,6 +143,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_avg_mean = 0.0
                 train_avg_uncertainty = 0.0
                 train_max_uncertainty = float('-inf')
+                train_min_uncertainty = float('inf')
                 for data in loader_trainset:
                     inputs, labels = data
                     inputs, labels = inputs.to(device), labels.to(device)
@@ -160,6 +163,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         uncertainty_exp = uncertainty.exp()
                         train_avg_uncertainty += uncertainty_exp.mean().item()
                         train_max_uncertainty = max(train_max_uncertainty, uncertainty_exp.max().item()) 
+                        train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
                         loss = loss_fn(outputs, labels)
@@ -173,6 +177,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             validation_avg_mean = 0.0
             validation_avg_uncertainty = 0.0
             validation_max_uncertainty = float('-inf')
+            validation_min_uncertainty = float('inf')
             if compute_validation_loss:
                 for data in loader_validationset:
                     inputs, labels = data
@@ -193,6 +198,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         uncertainty_exp = uncertainty.exp()
                         validation_avg_uncertainty += uncertainty_exp.mean().item()
                         validation_max_uncertainty = max(validation_max_uncertainty, uncertainty_exp.max().item()) 
+                        validation_min_uncertainty = min(validation_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
                         loss = loss_fn(outputs, labels)
@@ -206,6 +212,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                     writer.add_scalar('Train/MeanMSELoss', train_avg_mean, epoch+1)
                     writer.add_scalar('Train/AverageUncertainty', train_avg_uncertainty, epoch+1)
                     writer.add_scalar('Train/MaxUncertainty', train_max_uncertainty, epoch+1)
+                    writer.add_scalar('Train/MinUncertainty', train_min_uncertainty, epoch+1)
 
                 if compute_validation_loss:
                     writer.add_scalar('Val/Loss', validation_loss, epoch+1)
@@ -213,6 +220,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         writer.add_scalar('Val/MeanMSELoss', validation_avg_mean, epoch+1)
                         writer.add_scalar('Val/AverageUncertainty', validation_avg_uncertainty, epoch+1)
                         writer.add_scalar('Val/MaxUncertainty', validation_max_uncertainty, epoch+1)
+                        writer.add_scalar('Val/MinUncertainty', validation_min_uncertainty, epoch+1)
 
                 writer.add_scalar('Training/LearningRate', scheduler_lr.get_lr()[0], epoch+1)
 
