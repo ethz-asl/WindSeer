@@ -51,7 +51,7 @@ class ModelEDNN3D(nn.Module):
         self.__leakyrelu = nn.LeakyReLU(0.1)
 
         if (pooling_method == 'averagepool'):
-            self.__pooling = nn.MaxPool3d(2)
+            self.__pooling = nn.AvgPool3d(2)
         elif (pooling_method == 'maxpool'):
             self.__pooling = nn.MaxPool3d(2)
         elif (pooling_method == 'striding'):
