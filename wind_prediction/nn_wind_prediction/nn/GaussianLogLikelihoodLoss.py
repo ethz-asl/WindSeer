@@ -24,6 +24,6 @@ class GaussianLogLikelihoodLoss(Module):
 
         mean_error =  mean - label
 
-        loss = log_variance + (mean_error * mean_error) / log_variance.exp().add(self.__eps)
+        loss = log_variance + (mean_error * mean_error) / log_variance.exp().clamp(self.__eps)
 
         return loss.mean()
