@@ -19,13 +19,14 @@ class PlotUtils():
     '''
     Class providing the tools to plot the input and labels for the 2D and 3D case.
     '''
-    def __init__(self, input, label, terrain, design, uncertainty_predicted = False, plot_divergence = False, ds = None, title_fontsize = 20, label_fontsize = 15,
-                 tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
+    def __init__(self, input, label, terrain, design, uncertainty_predicted = False, plot_divergence = False, plot_turbulence = False,
+                 ds = None, title_fontsize = 20, label_fontsize = 15, tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
         # Input is the prediction, label is CFD
         self.__axis = 'x-z'
         self.__n_slice = 0
         self.__uncertainty_predicted = uncertainty_predicted
         self.__plot_divergence = plot_divergence
+        self.__plot_turbulence = plot_turbulence
 
         self.__title_fontsize = title_fontsize
         self.__label_fontsize = label_fontsize
@@ -196,7 +197,7 @@ class PlotUtils():
             self.__out_images.append(ah_in[1][0].imshow(self.__label[0,:,self.__n_slice,:], origin='lower', vmin=self.__label[0,:,:,:].min(), vmax=self.__label[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #ux
             self.__out_images.append(ah_in[1][1].imshow(self.__label[1,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #uy
             self.__out_images.append(ah_in[1][2].imshow(self.__label[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #uz
-            try:
+            if self.__plot_turbulence:
                 self.__out_images.append(ah_in[2][1].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
                 chbar = fh_in.colorbar(self.__out_images[3], ax=ah_in[2][1])
                 ah_in[2][1].set_title('Prediction Turbulence', fontsize = self.__title_fontsize)
@@ -206,13 +207,17 @@ class PlotUtils():
                 ah_in[2][1].set_xticks([])
                 ah_in[2][1].set_yticks([])
 
-            except:
-                print('INFO: Turbulence viscosity not present as a label')
+            else:
                 fh_in.delaxes(ah_in[2][1])
 
             if self.__plot_divergence:
-                self.__out_images.append(ah_in[2][2].imshow(self.__label[4,:,self.__n_slice,:], origin='lower', vmin=max(self.__label[4,:,:,:].min(), -0.5), vmax=min(self.__label[4,:,:,:].max(), 0.5), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
-                chbar = fh_in.colorbar(self.__out_images[4], ax=ah_in[2][2])
+                if self.__plot_turbulence:
+                    idx_div = 4
+                else:
+                    idx_div = 3
+
+                self.__out_images.append(ah_in[2][2].imshow(self.__label[idx_div,:,self.__n_slice,:], origin='lower', vmin=max(self.__label[idx_div,:,:,:].min(), -0.5), vmax=min(self.__label[idx_div,:,:,:].max(), 0.5), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
+                chbar = fh_in.colorbar(self.__out_images[-1], ax=ah_in[2][2])
                 ah_in[2][2].set_title('Velocity Divergence', fontsize = self.__title_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][2].get_xticklabels(), fontsize=self.__tick_fontsize)
@@ -474,14 +479,14 @@ class PlotUtils():
 
         plt.show()
 
-def plot_sample(input, label, terrain, plot_divergence = False, ds = None):
+def plot_sample(input, label, terrain, plot_divergence = False, plot_turbulence = False, ds = None):
     '''
     Creates the plots according to the input and label data.
     Can handle 2D as well as 3D input. For the 3D input only slices are shown.
     The axes along which the slices are made as well as the location of the slice
     can be set using sliders and buttons in the figure.
     '''
-    instance = PlotUtils(input, label, terrain, 0, False, plot_divergence, ds)
+    instance = PlotUtils(input, label, terrain, 0, False, plot_divergence, plot_turbulence, ds)
     instance.plot_sample()
 
 def plot_prediction(output, label, terrain, uncertainty_predicted):

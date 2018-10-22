@@ -226,4 +226,4 @@ print('----------------------------------')
 print(' ')
 
 # plot the sample
-utils.plot_sample(input, label, input[0,:], plot_divergence, ds)
+utils.plot_sample(input, label, input[0,:], plot_divergence, use_turbulence, ds)

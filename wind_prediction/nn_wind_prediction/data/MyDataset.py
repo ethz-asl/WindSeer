@@ -54,10 +54,7 @@ class MyDataset(Dataset):
             data[1, :, :, :] /= self.__scaling_uhor # in u_x
             data[2, :, :, :] /= self.__scaling_uhor # in u_y
             data[3, :, :, :] /= self.__scaling_uz # in u_z
-            data[4, :, :, :] /= self.__scaling_uhor # label u_x
-            data[5, :, :, :] /= self.__scaling_uhor # label u_y
-            data[6, :, :, :] /= self.__scaling_uz # label u_z
-            data[7, :, :, :] /= self.__scaling_nut # label turbulence
+            data[4, :, :, :] /= self.__scaling_nut # label turbulence
 
             input = data[:4,:,:,:]
             if self.__use_grid_size:
@@ -67,9 +64,9 @@ class MyDataset(Dataset):
                 input = torch.cat([input, dx, dy, dz])
 
             if self.__turbulence_label:
-                output = data[4:,:,:,:]
+                output = data[1:,:,:,:]
             else:
-                output = data[4:7,:,:,:]
+                output = data[1:4,:,:,:]
 
             if self.__return_grid_size:
                 return input[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], output[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor], ds

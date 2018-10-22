@@ -69,7 +69,7 @@ def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
     tar.close()
     shutil.rmtree(tempfolder)
 
-def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain, verbose = False, compress = False):
+def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, compress = False):
     '''
     Function which loops through the files of the input tar file.
     The velocity is checked and files are rejected if a single dimension
@@ -81,11 +81,7 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
         infile: Input archive name
         outfile: Output archive name
         vlim: Maximum allowed velocity [m/s]
-        nx: Number of points in x direction of the grid
-        ny: Number of points in y direction of the grid
-        nz: Number of points in z direction of the grid
         klim: Maximum allowed turbulence viscosity
-        d3: If true the input is assumed to be 3d, else 2d
         boolean_terrain: If true the terrain is represented by a boolean variable, if false by a distance field
         verbose: Show the stats of the deleted files
     '''
@@ -131,6 +127,18 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                 print('U:0 not in {0}'.format(member.name))
 
             else:
+                # get dimensions of the grid
+                x = np.unique(wind_data['Points:0'])
+                y = np.unique(wind_data['Points:1'])
+                z = np.unique(wind_data['Points:2'])
+                nx = len(x)
+                ny = len(y)
+                nz = len(z)
+
+                d3 = False
+                if (ny > 1):
+                    d3 = True
+
                 # check if the wind entries are fine (basically a check if the cfd simulation converged
                 max_0 = np.max(wind_data['U:0'])
                 min_0 = np.min(wind_data['U:0'])
@@ -140,13 +148,9 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                 min_2 = np.min(wind_data['U:2'])
                 max_k = np.max(wind_data['k'])
                 min_k = np.min(wind_data['k'])
-                x = wind_data['Points:0'][:nx]
-                y = wind_data['Points:1'][::nx]
-                y = y[:ny]
-                z = wind_data['Points:2'][::nx*ny]
-                dx = np.mean(np.diff(x.values))
-                dy = np.mean(np.diff(y.values))
-                dz = np.mean(np.diff(z.values))
+                dx = np.mean(np.diff(x))
+                dy = np.mean(np.diff(y))
+                dz = np.mean(np.diff(z))
 
                 if ((np.abs(max_0) > vlim) or
                     (np.abs(min_0) > vlim) or
@@ -156,9 +160,12 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                     (np.abs(min_2) > vlim) or
                     (np.abs(max_k) > klim) or
                     (np.abs(min_k) > klim) or
-                    (np.std(np.diff(x.values)) > 0.1) or
-                    (np.std(np.diff(y.values)) > 0.1) or
-                    (np.std(np.diff(z.values)) > 0.1)):
+                    (np.std(np.diff(x)) > 0.1) or
+                    (np.std(np.diff(y)) > 0.1) or
+                    (np.std(np.diff(z)) > 0.1) or
+                    (nx > 256) or
+                    (ny > 256) or
+                    (nz > 256)):
 
                     rejection_counter += 1
                     if verbose:
@@ -168,139 +175,117 @@ def convert_dataset(infile, outfile, vlim, nx, ny, nz, klim, d3, boolean_terrain
                         print('            min U0: ', min_0, ', min U1: ', min_1, ', min U2:', min_2)
                         print('            min k:', min_k, ', max k:', max_k)
                         print('            regular grid:', 
-                              not ((np.std(np.diff(x.values)) > 0.1) or (np.std(np.diff(y.values)) > 0.1) or (np.std(np.diff(z.values)) > 0.1)))
+                              not ((np.std(np.diff(x)) > 0.1) or (np.std(np.diff(y)) > 0.1) or (np.std(np.diff(z)) > 0.1)))
+                        print('            nx: ', nx, ', ny: ', ny, ', nz: ', nz)
                         print('------------------------------------')
 
                 else:
                     channel_shape = [nz, nx]
+                    slice_shape = (1, nx)
 
                     if d3:
                         channel_shape = [nz, ny, nx]
+                        slice_shape = (1, ny, nx)
 
-                    # generate the labels
-                    u_x_out = wind_data.get('U:0').values.reshape(channel_shape)
-                    u_y_out = wind_data.get('U:1').values.reshape(channel_shape)
-                    u_z_out = wind_data.get('U:2').values.reshape(channel_shape)
-                    turbelence_viscosity_out = wind_data.get('k').values.reshape(channel_shape)
+                    # extract the cfd properties
+                    u_x = wind_data.get('U:0').values.reshape(channel_shape)
+                    u_y = wind_data.get('U:1').values.reshape(channel_shape)
+                    u_z = wind_data.get('U:2').values.reshape(channel_shape)
+                    turb = wind_data.get('k').values.reshape(channel_shape)
+                    terrain = np.less(wind_data.get('vtkValidPointMask').values.reshape(channel_shape), 0.5).astype(np.float32)
 
-                    # generate the input
-                    is_wind = wind_data.get('vtkValidPointMask').values.reshape(channel_shape).astype(np.float32)
+                    # filter out bad terrain pixels, paraview sometimes fails to interpolate the flow although it seems to be correct
+                    terrain = np.insert(terrain, 0, np.ones(slice_shape), axis = 0)
+                    terrain_old = np.zeros(terrain.shape)
+                    terrain_original = np.copy(terrain)
 
-                    if d3:
-                        if boolean_terrain:
-                            distance_field_in = is_wind
-                        else:
-                            is_wind = np.insert(is_wind, 0, np.zeros((1, ny, nx)), axis = 0)
-                            distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
-                            distance_field_in = distance_field_in[1:, :, :]
+                    # identify bad pixels
+                    iter = 0
+                    while((np.sum(terrain - terrain_old) > 0) and (iter < 256)):
+                        terrain_old = np.copy(terrain)
+                        terrain[1:,:] *= terrain[:-1,:]
+                        iter += 1
 
-                        u_x_in = np.einsum('kij->ijk',np.tile(u_x_out[:, :, 0], [u_x_out.shape[2], 1, 1]))
-                        u_y_in = np.einsum('kij->ijk',np.tile(u_y_out[:, :, 0], [u_y_out.shape[2], 1, 1]))
-                        u_z_in = np.einsum('kij->ijk',np.tile(u_z_out[:, :, 0], [u_z_out.shape[2], 1, 1]))
+                    # set the value of the bad pixels by interpolating the neighbor cells
+                    idx_z, idx_y, idx_x = np.nonzero(terrain[1:,:]-terrain_original[1:,:])
+                    idx_1D = idx_x + nx * idx_y + nx * ny * idx_z
+                    for ix, iy, iz in zip(idx_x, idx_y, idx_z):
+                        denom = 6.0
+                        mul = np.ones([6,])
 
+                        i1 = [iz+1, iy, ix]
+                        while(i1[0] * nx * ny + i1[1] * nx + i1[2] in idx_1D):
+                            i1[0] += 1
+                            if (i1[0] >= nz):
+                                i1[0] = nz -1
+                                mul[0] = 0.0
+                                denom -= 1.0
+
+                        i2 = [iz-1, iy, ix]
+                        while(i2[0] * nx * ny + i2[1] * nx + i2[2] in idx_1D):
+                            i2[0] -= 1
+                            if (i2[0] < 0):
+                                mul[1] = 0.0
+                                denom -= 1.0
+
+                        i3 = [iz, iy+1, ix]
+                        while(i3[0] * nx * ny + i3[1] * nx + i3[2] in idx_1D):
+                            i3[1] += 1
+                            if (i3[1] >= ny):
+                                i3[1] = ny -1
+                                mul[2] = 0.0
+                                denom -= 1.0
+
+                        i4 = [iz, iy-1, ix]
+                        while(i4[0] * nx * ny + i4[1] * nx + i4[2] in idx_1D):
+                            i4[1] -= 1
+                            if (i4[1] < 0):
+                                mul[3] = 0.0
+                                denom -= 1.0
+
+                        i5 = [iz, iy, ix+1]
+                        while(i5[0] * nx * ny + i5[1] * nx + i5[2] in idx_1D):
+                            i5[2] += 1
+                            if (i5[2] >= nx):
+                                i5[2] = nx -1
+                                mul[4] = 0.0
+                                denom -= 1.0
+
+                        i6 = [iz, iy, ix-1]
+                        while(i6[0] * nx * ny + i6[1] * nx + i6[2] in idx_1D):
+                            i6[2] -= 1
+                            if (i6[2] < 0):
+                                mul[5] = 0.0
+                                denom -= 1.0
+
+                        i1 = tuple(i1)
+                        i2 = tuple(i2)
+                        i3 = tuple(i3)
+                        i4 = tuple(i4)
+                        i5 = tuple(i5)
+                        i6 = tuple(i6)
+
+                        u_x[iz, iy, ix] = (mul[0]*u_x[i1] + mul[1]*u_x[i2] + mul[2]*u_x[i3] + mul[3]*u_x[i4] + mul[4]*u_x[i5] + mul[5]*u_x[i6]) / denom
+                        u_y[iz, iy, ix] = (mul[0]*u_y[i1] + mul[1]*u_y[i2] + mul[2]*u_y[i3] + mul[3]*u_y[i4] + mul[4]*u_y[i5] + mul[5]*u_y[i6]) / denom
+                        u_z[iz, iy, ix] = (mul[0]*u_z[i1] + mul[1]*u_z[i2] + mul[2]*u_z[i3] + mul[3]*u_z[i4] + mul[4]*u_z[i5] + mul[5]*u_z[i6]) / denom
+                        turb[iz, iy, ix] = (mul[0]*turb[i1] + mul[1]*turb[i2] + mul[2]*turb[i3] + mul[3]*turb[i4] + mul[4]*turb[i5] + mul[5]*turb[i6]) / denom
+
+                    if verbose:
+                        print('------------------------------------')
+                        print('File ', member.name, ' is ok, contains ', len(idx_1D), ' bad pixels.')
+
+                    is_wind = np.less(terrain, 0.5).astype(np.float32)
+
+                    if boolean_terrain:
+                        distance_field_in = is_wind[1:,:]
                     else:
-                        if boolean_terrain:
-                            distance_field_in = is_wind
-                        else:
-                            is_wind = np.insert(is_wind, 0, np.zeros((1, nx)), axis = 0)
-                            distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
-                            distance_field_in = distance_field_in[1:,:]
-
-                        u_x_in = np.tile(u_x_out[:,0], [u_x_out.shape[1],1]).transpose()
-                        u_y_in = np.tile(u_y_out[:,0], [u_y_out.shape[1],1]).transpose()
-                        u_z_in = np.tile(u_z_out[:,0], [u_z_out.shape[1],1]).transpose()
+                        distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
+                        distance_field_in = distance_field_in[1:, :]
 
                     # store the stacked data
-                    out = np.stack([distance_field_in, u_x_in, u_y_in, u_z_in, u_x_out, u_y_out, u_z_out, turbelence_viscosity_out])
+                    out = np.stack([distance_field_in, u_x, u_y, u_z, turb])
                     out_tensor = torch.from_numpy(out)
                     save_data(out_tensor, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '.tp', compress)
-
-                    if d3:
-                        # rotate the sample around the z-axis
-                        out_rot = np.stack([distance_field_in, -u_y_in, u_x_in, u_z_in, -u_y_out, u_x_out, u_z_out, turbelence_viscosity_out])
-                        out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
-                        out_tensor = torch.from_numpy(out_rot)
-                        save_data(out_tensor, (dy, dx, dz), tempfolder + member.name.replace('.csv','') + '_rot.tp', compress)
-
-                        # flip in x direction
-                        u_x_out_flipped = np.flip(u_x_out,2) * (-1.0)
-                        u_y_out_flipped = np.flip(u_y_out,2)
-                        u_z_out_flipped = np.flip(u_z_out,2)
-                        turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,2)
-
-                        u_x_in_flipped = np.flip(u_x_in,2) * (-1.0)
-                        u_y_in_flipped = np.flip(u_y_in,2)
-                        u_z_in_flipped = np.flip(u_z_in,2)
-                        distance_field_in_flipped = np.flip(distance_field_in,2)
-
-                        out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                        out_tensor_flipped = torch.from_numpy(out_flipped)
-                        save_data(out_tensor_flipped, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '_flipped_x.tp', compress)
-
-                        # rotate the flipped data
-                        out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                        out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
-                        out_tensor = torch.from_numpy(out_rot)
-                        save_data(out_tensor, (dy, dx, dz), tempfolder + member.name.replace('.csv','') + '_flipped_x_rot.tp', compress)
-
-                        # flip in y direction
-                        u_x_out_flipped = np.flip(u_x_out,1)
-                        u_y_out_flipped = np.flip(u_y_out,1) * (-1.0)
-                        u_z_out_flipped = np.flip(u_z_out,1)
-                        turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,1)
-
-                        u_x_in_flipped = np.flip(u_x_in,1)
-                        u_y_in_flipped = np.flip(u_y_in,1) * (-1.0)
-                        u_z_in_flipped = np.flip(u_z_in,1)
-                        distance_field_in_flipped = np.flip(distance_field_in,1)
-
-                        out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                        out_tensor_flipped = torch.from_numpy(out_flipped)
-                        save_data(out_tensor_flipped, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '_flipped_y.tp', compress)
-
-                        # rotate the flipped data
-                        out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                        out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
-                        out_tensor = torch.from_numpy(out_rot)
-                        save_data(out_tensor, (dy, dx, dz), tempfolder + member.name.replace('.csv','') + '_flipped_y_rot.tp', compress)
-
-                        # flip in y direction
-                        u_x_out_flipped = np.flip(np.flip(u_x_out,1),2) * (-1.0)
-                        u_y_out_flipped = np.flip(np.flip(u_y_out,1),2) * (-1.0)
-                        u_z_out_flipped = np.flip(np.flip(u_z_out,1),2)
-                        turbelence_viscosity_out_flipped = np.flip(np.flip(turbelence_viscosity_out,1),2)
-
-                        u_x_in_flipped = np.flip(np.flip(u_x_in,1),2) * (-1.0)
-                        u_y_in_flipped = np.flip(np.flip(u_y_in,1),2) * (-1.0)
-                        u_z_in_flipped = np.flip(np.flip(u_z_in,1),2)
-                        distance_field_in_flipped = np.flip(np.flip(distance_field_in,1),2)
-
-                        out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                        out_tensor_flipped = torch.from_numpy(out_flipped)
-                        save_data(out_tensor_flipped, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '_flipped_xy.tp', compress)
-
-                        # rotate the flipped data
-                        out_rot = np.stack([distance_field_in_flipped, -u_y_in_flipped, u_x_in_flipped, u_z_in_flipped, -u_y_out_flipped, u_x_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-                        out_rot = out_rot.swapaxes(-2,-1)[...,::-1].copy()
-                        out_tensor = torch.from_numpy(out_rot)
-                        save_data(out_tensor, (dy, dx, dz), tempfolder + member.name.replace('.csv','') + '_flipped_xy_rot.tp', compress)
-                    else:
-                        # generate the flipped flow
-                        u_x_out_flipped = np.flip(u_x_out,1) * (-1.0)
-                        u_y_out_flipped = np.flip(u_y_out,1)
-                        u_z_out_flipped = np.flip(u_z_out,1)
-                        turbelence_viscosity_out_flipped = np.flip(turbelence_viscosity_out,1)
-
-                        u_x_in_flipped = np.flip(u_x_in,1) * (-1.0)
-                        u_y_in_flipped = np.flip(u_y_in,1)
-                        u_z_in_flipped = np.flip(u_z_in,1)
-                        distance_field_in_flipped = np.flip(distance_field_in,1)
-
-                        out_flipped = np.stack([distance_field_in_flipped, u_x_in_flipped, u_y_in_flipped, u_z_in_flipped, u_x_out_flipped, u_y_out_flipped, u_z_out_flipped, turbelence_viscosity_out_flipped])
-
-                        out_tensor_flipped = torch.from_numpy(out_flipped)
-
-                        save_data(out_tensor_flipped, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '_flipped.tp', compress)
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
             print(trunc((i+1)/num_files*100), '%')

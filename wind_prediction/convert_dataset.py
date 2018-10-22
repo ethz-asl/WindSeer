@@ -22,10 +22,6 @@ def main():
     parser.add_argument('-vlim', type=float, default=1000.0, help='limit of the velocity magnitude in one dimension')
     parser.add_argument('-klim', type=float, default=1000.0, help='limit of the turbulent viscosity')
     parser.add_argument('-v', dest='verbose', action='store_true', help='verbose')
-    parser.add_argument('-nx', default=128, help='number of gridpoints in x-direction')
-    parser.add_argument('-ny', default=128, help='number of gridpoints in y-direction')
-    parser.add_argument('-nz', default=64, help='number of gridpoints in z-direction')
-    parser.add_argument('-3d', dest='d3', action='store_true', help='3D input')
     parser.add_argument('-c', dest='compress', action='store_true', help='compress the individual tensors')
     parser.add_argument('-b', dest='boolean_terrain', action='store_true', help='If flag is set the terrain is represented by a boolean variable, else by a distance field.')
     args = parser.parse_args()
@@ -47,7 +43,7 @@ def main():
             args.outfile = 'converted_' + args.infile
 
     start_time = time.time()
-    convert_dataset(args.infile, args.outfile, args.vlim, args.nx, args.ny, args.nz, args.klim, args.d3, args.boolean_terrain, args.verbose, args.compress)
+    convert_dataset(args.infile, args.outfile, args.vlim, args.klim, args.boolean_terrain, args.verbose, args.compress)
     print("INFO: Converting the database took %s seconds" % (time.time() - start_time))
 
 if __name__ == "__main__":
