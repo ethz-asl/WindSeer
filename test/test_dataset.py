@@ -15,6 +15,12 @@ from torch.utils.data import DataLoader
 #------ Params to modidify ---------------------------
 compressed = False
 input_dataset = 'test.tar'
+nx = 64
+ny = 64
+nz = 64
+input_mode = 1
+subsample = False
+augmentation = False
 uhor_scaling = 1
 uz_scaling = 1
 turbulence_scaling = 1
@@ -28,9 +34,10 @@ plot_divergence = True
 use_grid_size = True
 #-----------------------------------------------------
 
-db = data.MyDataset(input_dataset, stride_hor = stride_hor, stride_vert = stride_vert,
+db = data.MyDataset(input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
+                    stride_hor = stride_hor, stride_vert = stride_vert,
                     turbulence_label = use_turbulence, scaling_uhor = uhor_scaling,
-                    scaling_uz = uz_scaling, scaling_nut = turbulence_scaling,
+                    scaling_uz = uz_scaling, scaling_k = turbulence_scaling,
                     compressed = compressed, use_grid_size = use_grid_size, return_grid_size = True)
 
 dbloader = torch.utils.data.DataLoader(db, batch_size=1,
