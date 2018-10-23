@@ -302,3 +302,27 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
     tar.close()
     shutil.rmtree(tempfolder)
 
+
+def sample_dataset(dbloader, output_dataset, n_sampling_rounds, compressed):
+    # create temp directory to store all serialized arrays
+    if (os.path.isdir("/cluster/scratch/")):
+        tempfolder = '/scratch/tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
+    else:
+        tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
+
+    os.makedirs(tempfolder)
+
+    for j in range(n_sampling_rounds):
+        for i, data in enumerate(dbloader):
+            input, output, ds, name = data
+            data = torch.cat([input[0,:].unsqueeze(0), output[:4,:]])
+            save_data(data, ds, tempfolder + name + '_' + str(j), compressed)
+
+    # collecting all files in the tmp folder to a tar
+    out_tar = tarfile.open(output_dataset, 'w')
+    for filename in os.listdir(tempfolder):
+        out_tar.add(tempfolder + filename, arcname = filename)
+
+    # cleaning up
+    out_tar.close()
+    shutil.rmtree(tempfolder)
