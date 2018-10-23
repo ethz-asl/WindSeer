@@ -7,6 +7,9 @@ def divergence(x, ds, terrain):
     ds specifies the grid spacing of x.
     '''
 
+    # convert terrain to a binary terrain
+    terrain.sign_()
+
     # generate terrain mask
     terrain_mask = torch.zeros(terrain.shape)
     terrain_mask[1:-1,1:-1,:-1] = terrain[1:-1,1:-1,:-1] * terrain[:-2,1:-1,:-1] * terrain[2:,1:-1,:-1] * terrain[1:-1,:-2,:-1] * terrain[1:-1,2:,:-1] * terrain[1:-1,1:-1,1:]
