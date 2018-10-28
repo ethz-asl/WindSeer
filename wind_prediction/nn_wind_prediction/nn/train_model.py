@@ -94,7 +94,6 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
         for i, data in enumerate(loader_trainset, 0):
             # get the inputs
             inputs, labels = data
-
             inputs, labels = inputs.to(device), labels.to(device)
 
             # zero the parameter gradients

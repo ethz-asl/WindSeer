@@ -38,12 +38,12 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 loss_ux += loss_fn(outputs[:,0,:,:,:], labels[:,0,:,:,:])
                 loss_uy += loss_fn(outputs[:,1,:,:,:], labels[:,1,:,:,:])
                 loss_uz += loss_fn(outputs[:,2,:,:,:], labels[:,2,:,:,:])
-                if params.model['use_turbulence']:
+                if params.data['use_turbulence']:
                     loss_nut += loss_fn(outputs[:,3,:,:,:], labels[:,3,:,:,:])
             else:
                 loss_ux += loss_fn(outputs[:,0,:,:], labels[:,0,:,:])
                 loss_uz += loss_fn(outputs[:,1,:,:], labels[:,1,:,:])
-                if params.model['use_turbulence']:
+                if params.data['use_turbulence']:
                     loss_nut += loss_fn(outputs[:,2,:,:], labels[:,2,:,:])
 
             error_stats = utils.prediction_error.compute_prediction_error(labels, outputs, params.data['uhor_scaling'], params.data['uz_scaling'], params.model['predict_uncertainty'])
@@ -72,7 +72,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         if params.model['d3']:
             print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(loader_testset)))
         print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(loader_testset)))
-        if params.model['use_turbulence']:
+        if params.data['use_turbulence']:
             print('INFO: Average loss on test set for turbulence: %s' % (loss_nut.item()/len(loader_testset)))
 
         print('INFO: Average absolute error total:   %s [m/s]' % (np.mean(velocity_errors[0, :])))
@@ -120,7 +120,7 @@ def predict_wind_and_turbulence(input, label, device, net, params, plotting_pred
                 label[0,:,:,:] *= params.data['uhor_scaling']
                 label[1,:,:,:] *= params.data['uhor_scaling']
                 label[2,:,:,:] *= params.data['uz_scaling']
-                if params.model['use_turbulence']:
+                if params.data['use_turbulence']:
                     output[3,:,:,:] *= params.data['turbulence_scaling']
                     label[3,:,:,:] *= params.data['turbulence_scaling']
         

@@ -213,50 +213,56 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         denom = 6.0
                         mul = np.ones([6,])
 
-                        i1 = [iz+1, iy, ix]
+                        i1 = [iz, iy, ix]
                         while(i1[0] * nx * ny + i1[1] * nx + i1[2] in idx_1D):
                             i1[0] += 1
                             if (i1[0] >= nz):
                                 i1[0] = nz -1
                                 mul[0] = 0.0
                                 denom -= 1.0
+                                break
 
-                        i2 = [iz-1, iy, ix]
+                        i2 = [iz, iy, ix]
                         while(i2[0] * nx * ny + i2[1] * nx + i2[2] in idx_1D):
                             i2[0] -= 1
                             if (i2[0] < 0):
                                 mul[1] = 0.0
                                 denom -= 1.0
+                                break
 
-                        i3 = [iz, iy+1, ix]
+                        i3 = [iz, iy, ix]
                         while(i3[0] * nx * ny + i3[1] * nx + i3[2] in idx_1D):
                             i3[1] += 1
                             if (i3[1] >= ny):
                                 i3[1] = ny -1
                                 mul[2] = 0.0
                                 denom -= 1.0
+                                break
 
-                        i4 = [iz, iy-1, ix]
+                        i4 = [iz, iy, ix]
                         while(i4[0] * nx * ny + i4[1] * nx + i4[2] in idx_1D):
                             i4[1] -= 1
                             if (i4[1] < 0):
                                 mul[3] = 0.0
                                 denom -= 1.0
+                                break
 
-                        i5 = [iz, iy, ix+1]
+                        i5 = [iz, iy, ix]
                         while(i5[0] * nx * ny + i5[1] * nx + i5[2] in idx_1D):
                             i5[2] += 1
                             if (i5[2] >= nx):
                                 i5[2] = nx -1
                                 mul[4] = 0.0
                                 denom -= 1.0
+                                break
 
-                        i6 = [iz, iy, ix-1]
+                        i6 = [iz, iy, ix]
                         while(i6[0] * nx * ny + i6[1] * nx + i6[2] in idx_1D):
                             i6[2] -= 1
                             if (i6[2] < 0):
                                 mul[5] = 0.0
                                 denom -= 1.0
+                                break
 
                         i1 = tuple(i1)
                         i2 = tuple(i2)

@@ -34,7 +34,9 @@ plot_divergence = True
 use_grid_size = True
 #-----------------------------------------------------
 
-db = data.MyDataset(input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+db = data.MyDataset(device, input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
                     stride_hor = stride_hor, stride_vert = stride_vert,
                     turbulence_label = use_turbulence, scaling_uhor = uhor_scaling,
                     scaling_uz = uz_scaling, scaling_k = turbulence_scaling,

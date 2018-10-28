@@ -6,13 +6,14 @@ def divergence(x, ds, terrain):
     The first dimension of x is the three velocities, then x-, y-, and z-direction.
     ds specifies the grid spacing of x.
     '''
+    terrain_local = terrain.clone()
 
     # convert terrain to a binary terrain
-    terrain.sign_()
+    terrain_local.sign_()
 
     # generate terrain mask
-    terrain_mask = torch.zeros(terrain.shape)
-    terrain_mask[1:-1,1:-1,:-1] = terrain[1:-1,1:-1,:-1] * terrain[:-2,1:-1,:-1] * terrain[2:,1:-1,:-1] * terrain[1:-1,:-2,:-1] * terrain[1:-1,2:,:-1] * terrain[1:-1,1:-1,1:]
+    terrain_mask = torch.zeros(terrain_local.shape)
+    terrain_mask[1:-1,1:-1,:-1] = terrain_local[1:-1,1:-1,:-1] * terrain_local[:-2,1:-1,:-1] * terrain_local[2:,1:-1,:-1] * terrain_local[1:-1,:-2,:-1] * terrain_local[1:-1,2:,:-1] * terrain_local[1:-1,1:-1,1:]
 
     # compute the gradient with uniform grid size
     u_x = (x[0,:,:,1:] - x[0,:,:,:-1]) / float(ds[0])

@@ -31,12 +31,14 @@ class MyDataset(Dataset):
     - Reimplement the 2D data handling
     '''
 
-    def __init__(self, filename, nx, ny, nz, input_mode = 0, subsample = False, augmentation = False,
+    def __init__(self, device, filename, nx, ny, nz, input_mode = 0, subsample = False, augmentation = False,
                  stride_hor = 1, stride_vert = 1, turbulence_label = False,
                  scaling_uhor = 1.0, scaling_uz = 1.0, scaling_k = 1.0,
                  compressed = True, use_grid_size = False, return_grid_size = False, return_name = False):
         '''
         Params:
+            device:
+                Device (CPU or GPU) on which the tensor operations are executed
             filename:
                 The name of the tar file containing the dataset
             nx:
@@ -80,6 +82,8 @@ class MyDataset(Dataset):
             print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, filename))
             sys.exit()
 
+        self.__device = device
+
         self.__filename = filename
         self.__num_files = len(tar.getnames())
         self.__memberslist = tar.getmembers()
@@ -110,7 +114,7 @@ class MyDataset(Dataset):
         self.__rand = random.SystemRandom()
 
         # interpolator for the three input velocities
-        self.__interpolator = DataInterpolation(3, nx, ny, nz)
+        self.__interpolator = DataInterpolation(device, 3, nx, ny, nz)
 
         print('MyDataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
@@ -124,6 +128,8 @@ class MyDataset(Dataset):
 
         else:
             data, ds = torch.load(file)
+
+        data.to(self.__device)
 
         data_shape = data[0,:].shape
         if (len(data_shape) == 3):
@@ -192,7 +198,7 @@ class MyDataset(Dataset):
                     output = torch.from_numpy(output.numpy().swapaxes(-2,-1)[...,::-1].copy())
                     output = torch.cat([-output[1,:,:,:].unsqueeze(0), output[0,:,:,:].unsqueeze(0), output[2:,:,:,:]])
                     input = torch.from_numpy(input.numpy().swapaxes(-2,-1)[...,::-1].copy())
-                    input = torch.cat([input[0,:,:,:].unsqueeze(0), -input[2,:,:,:].unsqueeze(0), input[1,:,:,:].unsqueeze(0), input[2:,:,:,:]])
+                    input = torch.cat([input[0,:,:,:].unsqueeze(0), -input[2,:,:,:].unsqueeze(0), input[1,:,:,:].unsqueeze(0), input[3:,:,:,:]])
                     ds = (ds[1], ds[0], ds[2])
 
             if self.__return_grid_size:

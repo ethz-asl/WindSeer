@@ -2,15 +2,15 @@ import numpy as np
 import torch
 
 class DataInterpolation:
-    def __init__(self, num_channels, nx, ny, nz):
+    def __init__(self, device, num_channels, nx, ny, nz):
         self.__ny = ny
 
-        self.__fac_1_x = torch.from_numpy(np.linspace(1.0, 0.0, nx, dtype=np.float32)).unsqueeze(0).unsqueeze(0).expand(num_channels, -1, -1)
-        self.__fac_2_x = 1.0 - self.__fac_1_x
+        self.__fac_1_x = torch.from_numpy(np.linspace(1.0, 0.0, nx, dtype=np.float32)).unsqueeze(0).unsqueeze(0).expand(num_channels, -1, -1).to(device)
+        self.__fac_2_x = (1.0 - self.__fac_1_x).to(device)
 
         self.__fac_1_y = torch.from_numpy(
-            np.linspace(1.0, 0.0, ny, dtype=np.float32)).unsqueeze(0).unsqueeze(0).unsqueeze(-1).expand(num_channels, nz, -1, nx)
-        self.__fac_2_y = 1.0 - self.__fac_1_y
+            np.linspace(1.0, 0.0, ny, dtype=np.float32)).unsqueeze(0).unsqueeze(0).unsqueeze(-1).expand(num_channels, nz, -1, nx).to(device)
+        self.__fac_2_y = (1.0 - self.__fac_1_y).to(device)
 
     def edge_interpolation(self, input):
         '''

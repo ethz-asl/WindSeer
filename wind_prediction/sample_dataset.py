@@ -23,11 +23,14 @@ stride_hor = 1
 stride_vert = 1
 
 output_compressed = False
-n_sampling_rounds = 16
+n_sampling_rounds = 24
 
 #---------------- end of configurations ----------------------------------------------------------
 
-dbloader = data.MyDataset(input_dataset, nx, ny, nz, input_mode, subsample, augmentation, 
+# execute this operation only on the cpu
+device = "cpu"
+
+dbloader = data.MyDataset(device, input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
                     stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = True,
                     compressed = input_compressed, use_grid_size = False, return_grid_size = True,
                     return_name = True)

@@ -34,19 +34,21 @@ data:
     trainset_name: 'data/train.tar'
     validationset_name: 'data/validation.tar'
     testset_name: 'data/test.tar'
+    trainset_augmentation: True
+    trainset_subsample: True
+    input_mode: 0
     stride_hor: 1
     stride_vert: 1
     uhor_scaling: 6.0
     uz_scaling: 2.5
     turbulence_scaling: 4.5
-    use_grid_size: True
+    use_grid_size: False
+    use_turbulence: True
 
 model:
     # model parameter
     d3: True
     name_prefix: 'test_model'
-    n_input_layers: 7
-    n_output_layers: 4
     predict_uncertainty: False
     n_x: 64
     n_y: 64
