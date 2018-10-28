@@ -129,7 +129,7 @@ class MyDataset(Dataset):
         else:
             data, ds = torch.load(file)
 
-        data.to(self.__device)
+        data = data.to(self.__device)
 
         data_shape = data[0,:].shape
         if (len(data_shape) == 3):
@@ -167,9 +167,9 @@ class MyDataset(Dataset):
 
             # append the grid size
             if self.__use_grid_size:
-                dx = torch.full((self.__nz, self.__ny, self.__nx), float(ds[0])).unsqueeze(0)
-                dy = torch.full((self.__nz, self.__ny, self.__nx), float(ds[1])).unsqueeze(0)
-                dz = torch.full((self.__nz, self.__ny, self.__nx), float(ds[2])).unsqueeze(0)
+                dx = torch.full((self.__nz, self.__ny, self.__nx), float(ds[0])).unsqueeze(0).to(self.__device)
+                dy = torch.full((self.__nz, self.__ny, self.__nx), float(ds[1])).unsqueeze(0).to(self.__device)
+                dz = torch.full((self.__nz, self.__ny, self.__nx), float(ds[2])).unsqueeze(0).to(self.__device)
                 input = torch.cat([input, dx, dy, dz])
 
             if self.__turbulence_label:
@@ -181,23 +181,23 @@ class MyDataset(Dataset):
             if self.__augmentation:
                 # flip in x-direction
                 if (self.__rand.randint(0,1)):
-                    output = torch.from_numpy(np.flip(output.numpy(), 3).copy())
-                    input = torch.from_numpy(np.flip(input.numpy(), 3).copy())
+                    output = torch.from_numpy(np.flip(output.cpu().numpy(), 3).copy())
+                    input = torch.from_numpy(np.flip(input.cpu().numpy(), 3).copy())
                     output[0,:,:,:] *= -1.0
                     input[1,:,:,:] *= -1.0
 
                 # flip in y-direction
                 if (self.__rand.randint(0,1)):
-                    output = torch.from_numpy(np.flip(output.numpy(), 2).copy())
-                    input = torch.from_numpy(np.flip(input.numpy(), 2).copy())
+                    output = torch.from_numpy(np.flip(output.cpu().numpy(), 2).copy())
+                    input = torch.from_numpy(np.flip(input.cpu().numpy(), 2).copy())
                     output[1,:,:,:] *= -1.0
                     input[2,:,:,:] *= -1.0
 
                 # rotate 90 degrees
                 if (self.__rand.randint(0,1)):
-                    output = torch.from_numpy(output.numpy().swapaxes(-2,-1)[...,::-1].copy())
+                    output = torch.from_numpy(output.cpu().numpy().swapaxes(-2,-1)[...,::-1].copy())
                     output = torch.cat([-output[1,:,:,:].unsqueeze(0), output[0,:,:,:].unsqueeze(0), output[2:,:,:,:]])
-                    input = torch.from_numpy(input.numpy().swapaxes(-2,-1)[...,::-1].copy())
+                    input = torch.from_numpy(input.cpu().numpy().swapaxes(-2,-1)[...,::-1].copy())
                     input = torch.cat([input[0,:,:,:].unsqueeze(0), -input[2,:,:,:].unsqueeze(0), input[1,:,:,:].unsqueeze(0), input[3:,:,:,:]])
                     ds = (ds[1], ds[0], ds[2])
 
