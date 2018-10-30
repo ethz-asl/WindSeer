@@ -57,14 +57,14 @@ else:
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define dataset and dataloader
-trainset = data.MyDataset(device, trainset_name, compressed = run_params.data['compressed'],
+trainset = data.MyDataset(torch.device("cpu"), trainset_name, compressed = run_params.data['compressed'],
                           subsample = run_params.data['trainset_subsample'], augmentation = run_params.data['trainset_augmentation'],
                           **run_params.MyDataset_kwargs())
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
                                           shuffle=True, num_workers=run_params.run['num_workers'])
 
-validationset = data.MyDataset(device, validationset_name, compressed = run_params.data['compressed'],
+validationset = data.MyDataset(torch.device("cpu"), validationset_name, compressed = run_params.data['compressed'],
                                subsample = False, augmentation = False, **run_params.MyDataset_kwargs())
 
 validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
@@ -132,7 +132,7 @@ if (run_params.run['save_model']):
 
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
-    testset = utils.MyDataset(device, testset_name, compressed = run_params.data['compressed'],
+    testset = utils.MyDataset(torch.device("cpu"), testset_name, compressed = run_params.data['compressed'],
                               augmentation = False, subsample = False, **run_params.MyDataset_kwargs())
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=run_params.data['num_workers'])

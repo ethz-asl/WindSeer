@@ -46,7 +46,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yaml')
 
 # load dataset
-testset = data.MyDataset(device, args.dataset, compressed = args.compressed,
+testset = data.MyDataset(torch.device("cpu"), args.dataset, compressed = args.compressed,
                          augmentation = False, subsample = False, **params.MyDataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)

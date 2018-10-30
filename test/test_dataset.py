@@ -37,7 +37,7 @@ use_grid_size = True
 def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    db = nn_data.MyDataset(device, input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
+    db = nn_data.MyDataset(torch.device("cpu"), input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
                         stride_hor = stride_hor, stride_vert = stride_vert,
                         turbulence_label = use_turbulence, scaling_uhor = uhor_scaling,
                         scaling_uz = uz_scaling, scaling_k = turbulence_scaling,
@@ -52,6 +52,7 @@ def main():
         uz = []
         turb = []
         reflow_ratio = []
+        global dataset_rounds
         dataset_rounds = 1
         dx = []
         dy = []
@@ -239,8 +240,8 @@ def main():
     utils.plot_sample(input, label, input[0,:], plot_divergence, use_turbulence, ds)
 
 if __name__ == '__main__':
-    try:
-        torch.multiprocessing.set_start_method('spawn')
-    except RuntimeError:
-        pass
+#     try:
+#         torch.multiprocessing.set_start_method('spawn')
+#     except RuntimeError:
+#         pass
     main()

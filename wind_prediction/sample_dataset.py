@@ -27,10 +27,7 @@ n_sampling_rounds = 24
 
 #---------------- end of configurations ----------------------------------------------------------
 
-# execute this operation only on the cpu
-device = "cpu"
-
-dbloader = data.MyDataset(device, input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
+dbloader = data.MyDataset(torch.device("cpu"), input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
                     stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = True,
                     compressed = input_compressed, use_grid_size = False, return_grid_size = True,
                     return_name = True)
