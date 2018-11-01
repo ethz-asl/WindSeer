@@ -29,7 +29,7 @@ dataset_rounds = 0
 use_turbulence = True
 stride_hor = 1
 stride_vert = 1
-compute_dataset_statistics = True
+compute_dataset_statistics = False
 plot_divergence = True
 use_grid_size = True
 #-----------------------------------------------------
@@ -44,7 +44,7 @@ def main():
                         compressed = compressed, use_grid_size = use_grid_size, return_grid_size = True)
 
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
-                                              shuffle=True, num_workers=0)
+                                              shuffle=False, num_workers=0)
 
     if compute_dataset_statistics:
         ux = []
@@ -98,7 +98,7 @@ def main():
 
                 divergence = utils.divergence(label.squeeze()[:3], ds, input.squeeze()[0,:])
                 mean_div.append(divergence.abs().mean())
-                max_div.append(divergence.max().item())
+                max_div.append(divergence.abs().max().item())
 
                 idx = input.shape[2] - 1
                 while(idx >= 0 and input[0,0,idx,:,:].min() > 0):

@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 compressed = False
 dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'test_model_naKd4sF8mK'
+model_name = 'test'
 model_version = 'latest'
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
@@ -47,7 +47,7 @@ params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yam
 
 # load dataset
 testset = data.MyDataset(torch.device("cpu"), args.dataset, compressed = args.compressed,
-                         augmentation = False, subsample = False, **params.MyDataset_kwargs())
+                         augmentation = False, subsample = False, return_grid_size = True, **params.MyDataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
@@ -74,5 +74,5 @@ if args.compute_prediction_error:
         args.index = worst_index
 
 # predict the wind, compute the loss and plot if requested
-input, label = testset[args.index]
-nn_custom.predict_wind_and_turbulence(input, label, device, net, params, args.plot_prediction, loss_fn)
+input, label, ds = testset[args.index]
+nn_custom.predict_wind_and_turbulence(input, label, ds, device, net, params, args.plot_prediction, loss_fn)
