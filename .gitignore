@@ -16,5 +16,9 @@ openfoam_batch/cases
 openfoam_batch/cases3d
 *.swp
 .*
+lsf.o*
 *__pycache__*
 mprofile*
+*.tp
+*_tmp.py
+*.npy

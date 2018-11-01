@@ -1,5 +1,7 @@
-import yaml
+from __future__ import print_function
+
 import os
+import yaml
 
 class EDNNParameters(object):
 
@@ -20,15 +22,27 @@ class EDNNParameters(object):
 
         # decide if turbulence is used (somewhat a hack maybe there is something better in the future)
         if run_parameters['model']['d3']:
-            if run_parameters['model']['n_output_layers'] > 3:
-                run_parameters['model']['use_turbulence'] = True
+            if run_parameters['model']['predict_uncertainty']:
+                if run_parameters['model']['n_output_layers'] > 6:
+                    run_parameters['model']['use_turbulence'] = True
+                else:
+                    run_parameters['model']['use_turbulence'] = False
             else:
-                run_parameters['model']['use_turbulence'] = False
+                if run_parameters['model']['n_output_layers'] > 3:
+                    run_parameters['model']['use_turbulence'] = True
+                else:
+                    run_parameters['model']['use_turbulence'] = False
         else:
-            if run_parameters['model']['n_output_layers'] > 2:
-                run_parameters['model']['use_turbulence'] = True
+            if run_parameters['model']['predict_uncertainty']:
+                if run_parameters['model']['n_output_layers'] > 4:
+                    run_parameters['model']['use_turbulence'] = True
+                else:
+                    run_parameters['model']['use_turbulence'] = False
             else:
-                run_parameters['model']['use_turbulence'] = False
+                if run_parameters['model']['n_output_layers'] > 2:
+                    run_parameters['model']['use_turbulence'] = True
+                else:
+                    run_parameters['model']['use_turbulence'] = False
 
         return run_parameters
 
@@ -58,11 +72,12 @@ class EDNNParameters(object):
 
     def MyDataset_kwargs(self):
         return {'stride_hor': self.data['stride_hor'],
-                    'stride_vert': self.data['stride_vert'],
-                    'turbulence_label': self.model['use_turbulence'],
-                    'scaling_uhor': self.data['uhor_scaling'],
-                    'scaling_uz': self.data['uz_scaling'],
-                    'scaling_nut': self.data['turbulence_scaling']}
+                'stride_vert': self.data['stride_vert'],
+                'turbulence_label': self.model['use_turbulence'],
+                'scaling_uhor': self.data['uhor_scaling'],
+                'scaling_uz': self.data['uz_scaling'],
+                'scaling_nut': self.data['turbulence_scaling'],
+                'use_grid_size': self.data['use_grid_size']}
 
     def model3d_kwargs(self):
         return {'n_input_layers': self.model['n_input_layers'],
@@ -101,6 +116,7 @@ class EDNNParameters(object):
         print('\tLearning rate decay:\t', self.run['learning_rate_decay'])
         print('\tBatchsize:\t\t', self.run['batchsize'])
         print('\tEpochs:\t\t\t', self.run['n_epochs'])
+        print('\tMinibatch epoch loss:\t', self.run['minibatch_epoch_loss'])
         print(' ')
         print('Model Settings:')
         print('\tModel name:\t\t', self.name)
@@ -119,6 +135,8 @@ class EDNNParameters(object):
         print('\tUse fc layers:\t\t', self.model['use_fc_layers'])
         print('\tFC layer scaling:\t', self.model['fc_scaling'])
         print('\tUse mapping layer:\t', self.model['use_mapping_layer'])
+        print('\tPredict uncertainty:\t', self.model['predict_uncertainty'])
+        print('\tPredict turbulence:\t', self.model['use_turbulence'])
         print(' ')
         print('Dataset Settings:')
         print('\tUhor scaling:\t\t', self.data['uhor_scaling'])

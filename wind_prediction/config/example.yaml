@@ -1,0 +1,62 @@
+run:
+    plot_every_n_batches: 5
+    n_epochs: 1000
+    batchsize: 32
+    num_workers: 20
+    learning_rate_initial: 1.0E-4
+    learning_rate_decay: 0.5
+    learning_rate_decay_step_size: 100
+    compute_validation_loss: True
+    custom_init: False
+    minibatch_epoch_loss: True
+
+    # options to store data
+    save_model: True
+    save_metadata: True
+    evaluate_testset: False
+    warm_start: False
+    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: Custom, else: MSE
+    uncertainty_train_mode: 0 # 0: mean + uncertainty, 1: only mean, 2: only uncertainty
+    uncertainty_loss_eps: 1.0E-9
+    save_model_every_n_epoch: 5
+    save_params_hist_every_n_epoch: 1
+
+    # solver settings
+    beta1: 0.9
+    beta2: 0.999
+    eps: 1.0E-8
+    weight_decay: 0
+    amsgrad: False
+
+data:
+    # dataset parameter
+    compressed: False
+    trainset_name: 'data/train.tar'
+    validationset_name: 'data/validation.tar'
+    testset_name: 'data/test.tar'
+    stride_hor: 1
+    stride_vert: 1
+    uhor_scaling: 6.0
+    uz_scaling: 2.5
+    turbulence_scaling: 4.5
+    use_grid_size: True
+
+model:
+    # model parameter
+    d3: True
+    name_prefix: 'test_model'
+    n_input_layers: 7
+    n_output_layers: 4
+    predict_uncertainty: False
+    n_x: 64
+    n_y: 64
+    n_z: 64
+    n_downsample_layers: 4
+    interpolation_mode: 'nearest'
+    align_corners: False
+    skipping: True
+    use_terrain_mask: True
+    pooling_method: 'striding'
+    use_fc_layers: True
+    fc_scaling: 8
+    use_mapping_layer: False
