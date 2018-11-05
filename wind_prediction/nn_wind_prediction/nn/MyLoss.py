@@ -20,7 +20,7 @@ class MyLoss(Module):
         mse_loss = f.mse_loss(prediction, label, reduction='none')
         loss = torch.sum(mse_loss, [2,3,4]) / label.abs().mean(-1).mean(-1).mean(-1)
 
-        loss = loss.mean() / label.numel()
+        loss = loss.sum() / label.numel()
 
         if self.__use_turbulence_scaling:
             print('not implemented yet')
