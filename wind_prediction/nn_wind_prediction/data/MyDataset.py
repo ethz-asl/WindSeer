@@ -146,7 +146,10 @@ class MyDataset(Dataset):
             if self.__subsample:
                 start_x = self.__rand.randint(0,data_shape[2]-self.__nx)
                 start_y = self.__rand.randint(0,data_shape[1]-self.__ny)
-                start_z = self.__rand.randint(0,data_shape[0]-self.__nz)
+                # gauss distribution
+#                 start_z = int(min(np.abs(self.__rand.gauss(0.0,(data_shape[0]-self.__nz)/3.0)), (data_shape[0]-self.__nz)))
+                # triangle distribution
+                start_z = int(self.__rand.triangular(0,(data_shape[0]-self.__nz),0))
 
                 data = data[:, start_z:start_z+self.__nz,  start_y:start_y+self.__ny,  start_x:start_x+self.__nx]
             else:
