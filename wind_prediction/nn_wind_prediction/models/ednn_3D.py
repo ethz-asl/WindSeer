@@ -59,10 +59,11 @@ class ModelEDNN3D(nn.Module):
         else:
             raise ValueError('The pooling method value is invalid: ' + pooling_method)
 
-        if (align_corners):
-            self.__upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode, align_corners=True)
+        self.__interpolation_mode = interpolation_mode
+        if align_corners:
+            self.__align_corners = True
         else:
-            self.__upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode)
+            self.__align_corners = None
 
         # upconvolution layers
         self.__skipping = skipping
@@ -143,10 +144,13 @@ class ModelEDNN3D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(torch.cat([self.__upsampling(x), x_skip[i]], 1)))))
+                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(
+                    torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                               x_skip[i]], 1)))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv1[i](self.__pad_deconv(self.__upsampling(x)))
+                x = self.__deconv1[i](self.__pad_deconv(
+                    F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)

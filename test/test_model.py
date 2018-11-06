@@ -1,4 +1,4 @@
-import models
+import nn_wind_prediction.models as models
 import torch
 import argparse
 from termcolor import colored
@@ -196,11 +196,11 @@ if __name__ == "__main__":
         error_counter, test_counter = test_ModelEDNN3D(64, 10, 10, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
         error_counter, test_counter = test_ModelEDNN3D(64, 10, 10, 8, 8, 8, 2, 'nearest', False, True, True, 'maxpool', True, True, 1, error_counter, test_counter)
 
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 128, 64, 6, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 64, 128, 6, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 64, 128, 128, 6, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 64, 64, 32, 5, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 64, 32, 64, 5, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 32, 64, 64, 5, 'nearest', False, False, False, 'maxpool', True, True, 2, error_counter, test_counter)
 
-        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 128, 128, 64, 5, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
+        error_counter, test_counter = test_ModelEDNN3D(1, 4, 4, 64, 64, 32, 5, 'nearest', False, True, True, 'maxpool', True, True, 2, error_counter, test_counter)
 
         if (error_counter == 0):
             print(colored('{} out of {} test failed'.format(error_counter, test_counter), 'green'))
