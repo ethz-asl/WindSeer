@@ -161,6 +161,10 @@ class MyDataset(Dataset):
                 input = torch.cat([data[0,:,:,:].unsqueeze(0), data[1:4,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)])
 
             elif (self.__input_mode == 1):
+                # This interpolation is slower (at least on a cpu)
+#                 input = torch.cat([data[0,:,:,:].unsqueeze(0),
+#                                    self.__interpolator.edge_interpolation_batch(data[1:4,:,:,:].unsqueeze(0)).squeeze()])
+
                 # interpolating the vertical edges
                 input = torch.cat([data[0,:,:,:].unsqueeze(0), self.__interpolator.edge_interpolation(data[1:4,:,:,:])])
 
