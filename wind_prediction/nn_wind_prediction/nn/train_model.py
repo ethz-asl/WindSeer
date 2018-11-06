@@ -86,6 +86,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
     for epoch in range(n_epochs):  # loop over the dataset multiple times
         if should_exit:
             break
+        epoch_start = time.time()
 
         if predict_uncertainty:
             if uncertainty_train_mode == 1:
@@ -155,6 +156,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 print('[%d, %5d] averaged loss: %.5f' %
                       (epoch + 1, i + 1, running_loss / (plot_every_n_batches)))
                 running_loss = 0.0
+
+        print(('[%d] Training time: %.1f s' %
+                          (epoch + 1, time.time() - epoch_start)))
 
         # save model every save_model_every_n_epoch epochs
         if (epoch % save_model_every_n_epoch == (save_model_every_n_epoch - 1)) and save_model_every_n_epoch > 0:
@@ -260,8 +264,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                             writer.add_histogram(tag+'/grad', value.grad.data.cpu().numpy(), epoch+1)
                     del tag, value
 
-            print(('[%d] train loss: %.5f, validation loss: %.5f' %
-                          (epoch + 1, train_loss, validation_loss)))
+            print(('[%d] train loss: %.6f, validation loss: %.6f, epoch_time: %.2f s' %
+                          (epoch + 1, train_loss, validation_loss, time.time()-epoch_start)))
 
     print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 
