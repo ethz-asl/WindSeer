@@ -8,6 +8,8 @@ import nn_wind_prediction.models as models
 import nn_wind_prediction.nn as nn_custom
 import nn_wind_prediction.utils as utils
 import os
+import random
+import string
 import time
 import torch
 import torch.nn as nn
@@ -32,10 +34,12 @@ if run_params.run['save_model'] and (not os.path.exists(model_dir)):
 # --------------------------------------------------------------------------
 
 if (os.path.isdir("/cluster/scratch/")):
-    print('Script is running on the cluster')
-    trainset_name = '/scratch/train.tar'
-    validationset_name = '/scratch/validation.tar'
-    testset_name = '/scratch/test.tar'
+    tempfolder = '/scratch/tmp_' + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20)) + '/'
+    print('Script is running on the cluster, copying files to', tempfolder)
+    os.makedirs(tempfolder)
+    trainset_name = tempfolder + 'train.tar'
+    validationset_name = tempfolder + 'validation.tar'
+    testset_name = tempfolder + 'test.tar'
     t_start = time.time()
     os.system('cp '  + run_params.data['trainset_name'] + ' ' + trainset_name)
     print("INFO: Finished copying trainset in %s seconds" % (time.time() - t_start))
@@ -149,7 +153,4 @@ if (run_params.run['evaluate_testset']):
 
 # clean up the scratch folder of the cluster
 if (os.path.isdir("/cluster/scratch/")):
-    os.system('rm '  + trainset_name)
-    os.system('rm '  + validationset_name)
-    if run_params.run['evaluate_testset']:
-        os.system('rm '  + testset_name)
+    os.system('rm -r'  + tempfolder)
