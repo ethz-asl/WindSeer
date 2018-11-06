@@ -3,10 +3,22 @@
 from __future__ import print_function
 
 import os
+import signal
 from tensorboardX import SummaryWriter
 import time
 import torch
 from torch.nn.functional import mse_loss
+
+should_exit = False
+sig_dict = dict((k, v) for v, k in reversed(sorted(signal.__dict__.items())) if v.startswith('SIG') and not v.startswith('SIG_'))
+
+def signal_handler(sig, frame):
+    global should_exit
+    try:
+        print('INFO: Received signal: ', sig_dict[sig], ', exit training loop')
+    except:
+        print('INFO: Received signal: ', sig, ', exit training loop')
+    should_exit = True
 
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
@@ -57,6 +69,13 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
     Return:
         net: The trained network
     '''
+    # setup the signal handling
+    global should_exit
+    should_exit = False
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGUSR2, signal_handler)
+    signal.signal(signal.SIGQUIT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     if use_writer:
         # initialize the tensorboard writer
@@ -65,6 +84,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
     # start the training for n_epochs
     start_time = time.time()
     for epoch in range(n_epochs):  # loop over the dataset multiple times
+        if should_exit:
+            break
 
         if predict_uncertainty:
             if uncertainty_train_mode == 1:
@@ -92,6 +113,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
         scheduler_lr.step()
 
         for i, data in enumerate(loader_trainset, 0):
+            if should_exit:
+                break
+
             # get the inputs
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
@@ -144,6 +168,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_max_uncertainty = float('-inf')
                 train_min_uncertainty = float('inf')
                 for data in loader_trainset:
+                    if should_exit:
+                        break
+
                     inputs, labels = data
                     inputs, labels = inputs.to(device), labels.to(device)
 
@@ -179,6 +206,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             validation_min_uncertainty = float('inf')
             if compute_validation_loss:
                 for data in loader_validationset:
+                    if should_exit:
+                        break
+
                     inputs, labels = data
                     inputs, labels = inputs.to(device), labels.to(device)
 
@@ -204,8 +234,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         validation_loss += loss.item()
                 validation_loss /= len(loader_validationset)
 
-
-            if use_writer:
+            if use_writer and not should_exit:
                 writer.add_scalar('Train/Loss', train_loss, epoch+1)
                 if predict_uncertainty:
                     writer.add_scalar('Train/MeanMSELoss', train_avg_mean, epoch+1)
