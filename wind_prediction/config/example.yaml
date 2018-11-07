@@ -1,8 +1,8 @@
 run:
     plot_every_n_batches: 5
     n_epochs: 1000
-    batchsize: 32
-    num_workers: 20
+    batchsize: 45
+    num_workers: 6
     learning_rate_initial: 1.0E-4
     learning_rate_decay: 0.5
     learning_rate_decay_step_size: 100
@@ -18,8 +18,8 @@ run:
     loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: Custom, else: MSE
     uncertainty_train_mode: 0 # 0: mean + uncertainty, 1: only mean, 2: only uncertainty
     uncertainty_loss_eps: 1.0E-9
-    save_model_every_n_epoch: 5
-    save_params_hist_every_n_epoch: 1
+    save_model_every_n_epoch: 25
+    save_params_hist_every_n_epoch: 100
 
     # solver settings
     beta1: 0.9
@@ -36,12 +36,12 @@ data:
     testset_name: 'data/test.tar'
     trainset_augmentation: True
     trainset_subsample: True
-    input_mode: 0
+    input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    uhor_scaling: 6.0
-    uz_scaling: 2.5
-    turbulence_scaling: 4.5
+    uhor_scaling: 6.5
+    uz_scaling: 0.7
+    turbulence_scaling: 1.1
     use_grid_size: False
     use_turbulence: True
 
@@ -62,3 +62,4 @@ model:
     use_fc_layers: True
     fc_scaling: 8
     use_mapping_layer: False
+    potential_flow: True

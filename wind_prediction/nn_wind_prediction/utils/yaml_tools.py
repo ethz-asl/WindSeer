@@ -90,7 +90,8 @@ class EDNNParameters(object):
                 'pooling_method': self.model['pooling_method'],
                 'use_mapping_layer': self.model['use_mapping_layer'],
                 'use_fc_layers': self.model['use_fc_layers'],
-                'fc_scaling': self.model['fc_scaling']}
+                'fc_scaling': self.model['fc_scaling'],
+                'potential_flow': self.model['potential_flow']}
 
     def model2d_kwargs(self):
         return {'n_input_layers': self.model['n_input_layers'],
@@ -133,6 +134,7 @@ class EDNNParameters(object):
         print('\tFC layer scaling:\t', self.model['fc_scaling'])
         print('\tUse mapping layer:\t', self.model['use_mapping_layer'])
         print('\tPredict uncertainty:\t', self.model['predict_uncertainty'])
+        print('\tPotential flow:\t\t', self.model['potential_flow'])
         print('\tPredict turbulence:\t', self.data['use_turbulence'])
         print(' ')
         print('Dataset Settings:')
