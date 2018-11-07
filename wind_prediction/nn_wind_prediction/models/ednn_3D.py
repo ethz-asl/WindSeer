@@ -161,7 +161,7 @@ class ModelEDNN3D(nn.Module):
             x = self.__mapping_layer(x)
 
         if self.__potential_flow:
-            potential = self.__leakyrelu(self.__pf_convolution(self.__pf_pad(x[:,:3,:])))
+            potential = self.__pf_convolution(self.__pf_pad(x[:,:3,:]))
             x = torch.cat([(potential[:,:,:-1,:-1,1: ]-potential[:,:,:-1,:-1,:-1]), # U_x
                            (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
                            (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
