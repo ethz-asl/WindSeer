@@ -8,6 +8,8 @@ import nn_wind_prediction.models as models
 import nn_wind_prediction.nn as nn_custom
 import nn_wind_prediction.utils as utils
 import os
+import random
+import string
 import time
 import torch
 import torch.nn as nn
@@ -32,10 +34,12 @@ if run_params.run['save_model'] and (not os.path.exists(model_dir)):
 # --------------------------------------------------------------------------
 
 if (os.path.isdir("/cluster/scratch/")):
-    print('Script is running on the cluster')
-    trainset_name = '/scratch/train.tar'
-    validationset_name = '/scratch/validation.tar'
-    testset_name = '/scratch/test.tar'
+    tempfolder = '/scratch/tmp_' + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20)) + '/'
+    print('Script is running on the cluster, copying files to', tempfolder)
+    os.makedirs(tempfolder)
+    trainset_name = tempfolder + 'train.tar'
+    validationset_name = tempfolder + 'validation.tar'
+    testset_name = tempfolder + 'test.tar'
     t_start = time.time()
     os.system('cp '  + run_params.data['trainset_name'] + ' ' + trainset_name)
     print("INFO: Finished copying trainset in %s seconds" % (time.time() - t_start))
@@ -53,20 +57,22 @@ else:
     validationset_name = run_params.data['validationset_name']
     testset_name = run_params.data['testset_name']
 
+#check if gpu is available
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define dataset and dataloader
-trainset = data.MyDataset(trainset_name, compressed = run_params.data['compressed'], **run_params.MyDataset_kwargs())
+trainset = data.MyDataset(torch.device("cpu"), trainset_name, compressed = run_params.data['compressed'],
+                          subsample = run_params.data['trainset_subsample'], augmentation = run_params.data['trainset_augmentation'],
+                          **run_params.MyDataset_kwargs())
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
                                           shuffle=True, num_workers=run_params.run['num_workers'])
 
-validationset = data.MyDataset(validationset_name, compressed = run_params.data['compressed'], **run_params.MyDataset_kwargs())
+validationset = data.MyDataset(torch.device("cpu"), validationset_name, compressed = run_params.data['compressed'],
+                               subsample = False, augmentation = False, **run_params.MyDataset_kwargs())
 
 validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
                                           num_workers=run_params.run['num_workers'])
-
-#check if gpu is available
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define model and move to gpu if available
 if run_params.model['d3']:
@@ -103,7 +109,7 @@ if run_params.run['loss_function'] == 1:
 elif run_params.run['loss_function'] == 2:
     loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
 elif run_params.run['loss_function'] == 3:
-    loss_fn = utils.MyLoss(device)
+    loss_fn = nn_custom.MyLoss()
 else:
     loss_fn = torch.nn.MSELoss()
 
@@ -130,7 +136,8 @@ if (run_params.run['save_model']):
 
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
-    testset = utils.MyDataset(testset_name, compressed = run_params.data['compressed'], **run_params.MyDataset_kwargs())
+    testset = utils.MyDataset(torch.device("cpu"), testset_name, compressed = run_params.data['compressed'],
+                              augmentation = False, subsample = False, **run_params.MyDataset_kwargs())
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=run_params.data['num_workers'])
 
@@ -146,7 +153,4 @@ if (run_params.run['evaluate_testset']):
 
 # clean up the scratch folder of the cluster
 if (os.path.isdir("/cluster/scratch/")):
-    os.system('rm '  + trainset_name)
-    os.system('rm '  + validationset_name)
-    if run_params.run['evaluate_testset']:
-        os.system('rm '  + testset_name)
+    os.system('rm -r'  + tempfolder)

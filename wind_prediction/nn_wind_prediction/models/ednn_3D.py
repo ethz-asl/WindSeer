@@ -15,7 +15,7 @@ The first input layer is assumed to be terrain information. It should be zero in
 class ModelEDNN3D(nn.Module):
     def __init__(self, n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers,
                  interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method,
-                 use_mapping_layer, use_fc_layers, fc_scaling):
+                 use_mapping_layer, use_fc_layers, fc_scaling, potential_flow):
         super(ModelEDNN3D, self).__init__()
 
         self.__num_outputs = n_output_layers
@@ -25,6 +25,7 @@ class ModelEDNN3D(nn.Module):
         self.__use_mapping_layer = use_mapping_layer
         self.__use_fc_layers = use_fc_layers
         self.__fc_scaling = fc_scaling
+        self.__potential_flow = potential_flow
 
         self.__n_x = n_x
         self.__n_y = n_y
@@ -59,10 +60,11 @@ class ModelEDNN3D(nn.Module):
         else:
             raise ValueError('The pooling method value is invalid: ' + pooling_method)
 
-        if (align_corners):
-            self.__upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode, align_corners=True)
+        self.__interpolation_mode = interpolation_mode
+        if align_corners:
+            self.__align_corners = True
         else:
-            self.__upsampling = nn.Upsample(scale_factor=2, mode=interpolation_mode)
+            self.__align_corners = None
 
         # upconvolution layers
         self.__skipping = skipping
@@ -88,6 +90,10 @@ class ModelEDNN3D(nn.Module):
         if self.__use_mapping_layer:
             # mapping layer
             self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
+
+        if self.__potential_flow:
+            self.__pf_convolution = nn.Conv3d(3,1,1)
+            self.__pf_pad = nn.ReplicationPad3d((0, 1, 0, 1, 0, 1))
 
     def freeze_model(self):
         def freeze_weights(m):
@@ -143,13 +149,23 @@ class ModelEDNN3D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(torch.cat([self.__upsampling(x), x_skip[i]], 1)))))
+                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(
+                    torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                               x_skip[i]], 1)))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv1[i](self.__pad_deconv(self.__upsampling(x)))
+                x = self.__deconv1[i](self.__pad_deconv(
+                    F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)
+
+        if self.__potential_flow:
+            potential = self.__pf_convolution(self.__pf_pad(x[:,:3,:]))
+            x = torch.cat([(potential[:,:,:-1,:-1,1: ]-potential[:,:,:-1,:-1,:-1]), # U_x
+                           (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
+                           (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
+                            x[:,3:,:]], 1)
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x

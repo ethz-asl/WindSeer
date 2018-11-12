@@ -20,7 +20,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         velocity_errors = np.zeros((16, len(loader_testset)))
 
         for i, data in enumerate(loader_testset):
-            inputs, labels = data
+            inputs, labels, ds = data
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
 
@@ -38,12 +38,12 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 loss_ux += loss_fn(outputs[:,0,:,:,:], labels[:,0,:,:,:])
                 loss_uy += loss_fn(outputs[:,1,:,:,:], labels[:,1,:,:,:])
                 loss_uz += loss_fn(outputs[:,2,:,:,:], labels[:,2,:,:,:])
-                if params.model['use_turbulence']:
+                if params.data['use_turbulence']:
                     loss_nut += loss_fn(outputs[:,3,:,:,:], labels[:,3,:,:,:])
             else:
                 loss_ux += loss_fn(outputs[:,0,:,:], labels[:,0,:,:])
                 loss_uz += loss_fn(outputs[:,1,:,:], labels[:,1,:,:])
-                if params.model['use_turbulence']:
+                if params.data['use_turbulence']:
                     loss_nut += loss_fn(outputs[:,2,:,:], labels[:,2,:,:])
 
             error_stats = utils.prediction_error.compute_prediction_error(labels, outputs, params.data['uhor_scaling'], params.data['uz_scaling'], params.model['predict_uncertainty'])
@@ -72,7 +72,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         if params.model['d3']:
             print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(loader_testset)))
         print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(loader_testset)))
-        if params.model['use_turbulence']:
+        if params.data['use_turbulence']:
             print('INFO: Average loss on test set for turbulence: %s' % (loss_nut.item()/len(loader_testset)))
 
         print('INFO: Average absolute error total:   %s [m/s]' % (np.mean(velocity_errors[0, :])))
@@ -95,7 +95,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         
         return velocity_errors, worst_index, maxloss
 
-def predict_wind_and_turbulence(input, label, device, net, params, plotting_prediction, loss_fn = None):
+def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_prediction, loss_fn = None):
     with torch.no_grad():
         input, label = input.to(device), label.to(device)
         start_time = time.time()
@@ -120,14 +120,14 @@ def predict_wind_and_turbulence(input, label, device, net, params, plotting_pred
                 label[0,:,:,:] *= params.data['uhor_scaling']
                 label[1,:,:,:] *= params.data['uhor_scaling']
                 label[2,:,:,:] *= params.data['uz_scaling']
-                if params.model['use_turbulence']:
+                if params.data['use_turbulence']:
                     output[3,:,:,:] *= params.data['turbulence_scaling']
                     label[3,:,:,:] *= params.data['turbulence_scaling']
-        
+
             else:
                 output[0,:,:] *= params.data['uhor_scaling']
                 output[1,:,:] *= params.data['uz_scaling']
                 label[0,:,:] *= params.data['uhor_scaling']
                 label[1,:,:] *= params.data['uz_scaling']
-        
+
             utils.plot_prediction(output, label, input[0], params.model['predict_uncertainty'])

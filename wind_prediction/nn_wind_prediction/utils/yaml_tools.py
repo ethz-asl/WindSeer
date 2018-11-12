@@ -20,29 +20,22 @@ class EDNNParameters(object):
         with open(file, 'rt') as fh:
             run_parameters = yaml.safe_load(fh)
 
-        # decide if turbulence is used (somewhat a hack maybe there is something better in the future)
+        # build the number of inputs and outputs of the model based on the params
+        run_parameters['model']['n_input_layers'] = 3
+        run_parameters['model']['n_output_layers'] = 2
+
         if run_parameters['model']['d3']:
-            if run_parameters['model']['predict_uncertainty']:
-                if run_parameters['model']['n_output_layers'] > 6:
-                    run_parameters['model']['use_turbulence'] = True
-                else:
-                    run_parameters['model']['use_turbulence'] = False
-            else:
-                if run_parameters['model']['n_output_layers'] > 3:
-                    run_parameters['model']['use_turbulence'] = True
-                else:
-                    run_parameters['model']['use_turbulence'] = False
-        else:
-            if run_parameters['model']['predict_uncertainty']:
-                if run_parameters['model']['n_output_layers'] > 4:
-                    run_parameters['model']['use_turbulence'] = True
-                else:
-                    run_parameters['model']['use_turbulence'] = False
-            else:
-                if run_parameters['model']['n_output_layers'] > 2:
-                    run_parameters['model']['use_turbulence'] = True
-                else:
-                    run_parameters['model']['use_turbulence'] = False
+            run_parameters['model']['n_input_layers'] += 1
+            run_parameters['model']['n_output_layers'] += 1
+
+        if run_parameters['data']['use_turbulence']:
+            run_parameters['model']['n_output_layers'] += 1
+
+        if run_parameters['data']['use_grid_size']:
+            run_parameters['model']['n_input_layers'] += 3
+
+        if run_parameters['model']['predict_uncertainty']:
+            run_parameters['model']['n_output_layers'] *= 2
 
         return run_parameters
 
@@ -73,11 +66,15 @@ class EDNNParameters(object):
     def MyDataset_kwargs(self):
         return {'stride_hor': self.data['stride_hor'],
                 'stride_vert': self.data['stride_vert'],
-                'turbulence_label': self.model['use_turbulence'],
+                'turbulence_label': self.data['use_turbulence'],
                 'scaling_uhor': self.data['uhor_scaling'],
                 'scaling_uz': self.data['uz_scaling'],
-                'scaling_nut': self.data['turbulence_scaling'],
-                'use_grid_size': self.data['use_grid_size']}
+                'scaling_k': self.data['turbulence_scaling'],
+                'use_grid_size': self.data['use_grid_size'],
+                'input_mode': self.data['input_mode'],
+                'nx': self.model['n_x'],
+                'ny': self.model['n_y'],
+                'nz': self.model['n_z']}
 
     def model3d_kwargs(self):
         return {'n_input_layers': self.model['n_input_layers'],
@@ -93,14 +90,15 @@ class EDNNParameters(object):
                 'pooling_method': self.model['pooling_method'],
                 'use_mapping_layer': self.model['use_mapping_layer'],
                 'use_fc_layers': self.model['use_fc_layers'],
-                'fc_scaling': self.model['fc_scaling']}
+                'fc_scaling': self.model['fc_scaling'],
+                'potential_flow': self.model['potential_flow']}
 
     def model2d_kwargs(self):
         return {'n_input_layers': self.model['n_input_layers'],
                 'interpolation_mode': self.model['interpolation_mode'],
                 'align_corners': self.model['align_corners'],
                 'skipping': self.model['skipping'],
-                'predict_turbulence': self.model['use_turbulence']}
+                'predict_turbulence': self.data['use_turbulence']}
 
     def save(self, dir=None):
         if dir is None:
@@ -136,7 +134,8 @@ class EDNNParameters(object):
         print('\tFC layer scaling:\t', self.model['fc_scaling'])
         print('\tUse mapping layer:\t', self.model['use_mapping_layer'])
         print('\tPredict uncertainty:\t', self.model['predict_uncertainty'])
-        print('\tPredict turbulence:\t', self.model['use_turbulence'])
+        print('\tPotential flow:\t\t', self.model['potential_flow'])
+        print('\tPredict turbulence:\t', self.data['use_turbulence'])
         print(' ')
         print('Dataset Settings:')
         print('\tUhor scaling:\t\t', self.data['uhor_scaling'])

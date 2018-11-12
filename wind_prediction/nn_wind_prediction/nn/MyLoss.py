@@ -4,23 +4,25 @@ from torch.nn import Module
 import torch.nn.functional as f
 
 class MyLoss(Module):
-    def __init__(self, device, derivation_scaling = 3.0):
+    def __init__(self, use_turbulence_scaling = False, turbulence_factor = 1.0):
         super(MyLoss, self).__init__()
-        self.__derivation_scaling = derivation_scaling
-        self.__device = device
+        self.__turbulence_factor = turbulence_factor
+        self.__use_turbulence_scaling = use_turbulence_scaling
 
-    def forward(self, input, label):
-        loss = torch.zeros(1).to(self.__device)
+    def forward(self, prediction, label):
+        if (prediction.shape != label.shape):
+            raise ValueError('Prediction and label do not have the same shape')
 
-        if (len(list(input.size())) > 4):
-            for j in range(input.shape[0]):
-                for i in range(input.shape[1]):
-                    loss += f.mse_loss(input[j,i,:,:,:], label[j,i,:,:,:])/(input.shape[1] * label[j,i,:,:,:].abs().mean().item())
-        else:
-            for j in range(input.shape[0]):
-                for i in range(input.shape[1]):
-                    loss += f.mse_loss(input[j,i,:,:], label[j,i,:,:])/(input.shape[1] * label[j,i,:,:].abs().mean().item())
+        if (len(prediction.shape) != 5):
+            raise ValueError('The loss is only defined for 5D data')
 
-        loss /= input.shape[0]
+        # compute mse loss for each channel for each batch
+        mse_loss = f.mse_loss(prediction, label, reduction='none')
+        loss = torch.sum(mse_loss, [2,3,4]) / label.abs().mean(-1).mean(-1).mean(-1)
+
+        loss = loss.sum() / label.numel()
+
+        if self.__use_turbulence_scaling:
+            print('not implemented yet')
 
         return loss

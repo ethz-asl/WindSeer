@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 compressed = False
 dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'pretrained2_naKd4sF8mK'
+model_name = 'test'
 model_version = 'latest'
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
@@ -46,7 +46,8 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yaml')
 
 # load dataset
-testset = data.MyDataset(args.dataset, compressed = args.compressed, **params.MyDataset_kwargs())
+testset = data.MyDataset(torch.device("cpu"), args.dataset, compressed = args.compressed,
+                         augmentation = False, subsample = False, return_grid_size = True, **params.MyDataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
@@ -56,7 +57,7 @@ if params.model['d3']:
     else:
         net = models.ModelEDNN3D(**params.model3d_kwargs())
 else:
-    net = models.ModelEDNN2D(params.model['n_input_layers'], params.model['interpolation_mode'], params.model['align_corners'], params.model['skipping'], params.model['use_turbulence'])
+    net = models.ModelEDNN2D(params.model['n_input_layers'], params.model['interpolation_mode'], params.model['align_corners'], params.model['skipping'], params.data['use_turbulence'])
 
 net.load_state_dict(torch.load('trained_models/' + args.model_name + '/' + args.model_version + '.model', map_location=lambda storage, loc: storage))
 net.to(device)
@@ -73,5 +74,5 @@ if args.compute_prediction_error:
         args.index = worst_index
 
 # predict the wind, compute the loss and plot if requested
-input, label = testset[args.index]
-nn_custom.predict_wind_and_turbulence(input, label, device, net, params, args.plot_prediction, loss_fn)
+input, label, ds = testset[args.index]
+nn_custom.predict_wind_and_turbulence(input, label, ds, device, net, params, args.plot_prediction, loss_fn)
