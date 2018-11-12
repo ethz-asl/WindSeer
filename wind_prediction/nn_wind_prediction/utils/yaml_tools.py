@@ -77,21 +77,7 @@ class EDNNParameters(object):
                 'nz': self.model['n_z']}
 
     def model3d_kwargs(self):
-        return {'n_input_layers': self.model['n_input_layers'],
-                'n_output_layers': self.model['n_output_layers'],
-                'n_x': self.model['n_x'],
-                'n_y': self.model['n_y'],
-                'n_z': self.model['n_z'],
-                'n_downsample_layers': self.model['n_downsample_layers'],
-                'interpolation_mode': self.model['interpolation_mode'],
-                'align_corners': self.model['align_corners'],
-                'skipping': self.model['skipping'],
-                'use_terrain_mask': self.model['use_terrain_mask'],
-                'pooling_method': self.model['pooling_method'],
-                'use_mapping_layer': self.model['use_mapping_layer'],
-                'use_fc_layers': self.model['use_fc_layers'],
-                'fc_scaling': self.model['fc_scaling'],
-                'potential_flow': self.model['potential_flow']}
+        return self.model
 
     def model2d_kwargs(self):
         return {'n_input_layers': self.model['n_input_layers'],
