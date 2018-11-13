@@ -13,10 +13,14 @@ Encoder/Decoder Neural Network
 The first input layer is assumed to be terrain information. It should be zero in the terrain and nonzero elsewhere.
 '''
 class ModelEDNN3D(nn.Module):
+    __default_activation = nn.LeakyReLU
+    __default_activation_kwargs = {'negative_slope': 0.1}
+
     def __init__(self, n_input_layers, n_output_layers, n_x, n_y, n_z, n_downsample_layers,
                  interpolation_mode, align_corners, skipping, use_terrain_mask, pooling_method,
-                 use_mapping_layer, use_fc_layers, fc_scaling, potential_flow):
+                 use_mapping_layer, use_fc_layers, fc_scaling, potential_flow, **kwargs):
         super(ModelEDNN3D, self).__init__()
+
 
         self.__num_outputs = n_output_layers
         self.__num_inputs = n_input_layers
@@ -49,7 +53,13 @@ class ModelEDNN3D(nn.Module):
         self.__pad_conv = nn.ReplicationPad3d(1)
         self.__pad_deconv = nn.ReplicationPad3d((1, 2, 1, 2, 1, 2))
 
-        self.__leakyrelu = nn.LeakyReLU(0.1)
+        # Check if we have defined a specific activation layer
+        try:
+            activation = getattr(nn, kwargs['activation_type'])
+            self.__activation = activation(**kwargs['activation_args'])
+        except KeyError as e:
+            print('Activation function not specified or not found, using default: {0}'.format(self.__default_activation))
+            self.__activation = self.__default_activation(**self.__default_activation_kwargs)
 
         if (pooling_method == 'averagepool'):
             self.__pooling = nn.AvgPool3d(2)
@@ -132,19 +142,19 @@ class ModelEDNN3D(nn.Module):
         x_skip = []
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
-                x = self.__leakyrelu(self.__conv[i](self.__pad_conv(x)))
+                x = self.__activation(self.__conv[i](self.__pad_conv(x)))
                 x_skip.append(x.clone())
                 x = self.__pooling(x)
 
         else:
             for i in range(self.__n_downsample_layers):
-                x = self.__pooling(self.__leakyrelu(self.__conv[i](self.__pad_conv(x))))
+                x = self.__pooling(self.__activation(self.__conv[i](self.__pad_conv(x))))
 
         if self.__use_fc_layers:
             shape = x.size()
             x = x.view(-1, self.num_flat_features(x))
-            x = self.__leakyrelu(self.__fc1(x))
-            x = self.__leakyrelu(self.__fc2(x))
+            x = self.__activation(self.__fc1(x))
+            x = self.__activation(self.__fc2(x))
             x = x.view(shape)
 
         if (self.__skipping):

@@ -63,3 +63,5 @@ model:
     fc_scaling: 8
     use_mapping_layer: False
     potential_flow: True
+    activation_type: 'LeakyReLU'
+    activation_args: {negative_slope: 0.1}
