@@ -1,20 +1,36 @@
 BATCHNAME=batch01_F
 ROT_ANGLE=270
+(180 east, 90 south, 0 west, 270 north)
+0 - For renaming from swissTopo(n).tif:
+ for file in *.tif; do 
+    num=$( echo $file | cut -d "(" -f2 | cut -d ")" -f1)
+    newfile=$( printf "S12x12_%02d.tif" $num )
+    mv "$file" "$newfile"
+done
 
 1 - (asl-w14) Copy everything to Euler:
-scp -r "/intel_share/geotif/$BATCHNAME" lawrancn@euler.ethz.ch://cluster/scratch/lawrancn/geotif/
+scp -r "/media/intel_data/3d/geotif/$BATCHNAME" lawrancn@euler.ethz.ch://cluster/scratch/lawrancn/geotif/
 
 2 - Log on to Euler
 ssh euler
 
 3 - (euler) Make stl files
 source ~/setup_euler.sh
-cd ~/intel_wind/openfoam_batch
+cd ~/intel_wind/data_generation/openfoam_batch
 mkdir -p "${SCRATCH}/stl/${BATCHNAME}/processed"
 bsub -W 1:00 ./make_stl.sh "${SCRATCH}/geotif/${BATCHNAME}" "${SCRATCH}/stl/${BATCHNAME}"
 
 4 - (euler) Rotate and make terrainDict
-bsub -W 1:00 -R "rusage[mem=2048]" ./process_stl -r "$ROT_ANGLE" -o "${SCRATCH}/stl/${BATCHNAME}/processed/" "${SCRATCH}/stl/*.stl"
+bsub -W 2:00 -R "rusage[mem=2048]" ./process_stl -r "$ROT_ANGLE" -o "${SCRATCH}/stl/${BATCHNAME}/processed/" "${SCRATCH}/stl/${BATCHNAME}/*.stl"
+OR (cardinal directions)
+bsub -W 2:00 -R "rusage[mem=2048]" ./process_stl -r "0" -o "${SCRATCH}/stl/${BATCHNAME}/processed/" "${SCRATCH}/stl/${BATCHNAME}/*W15x15.stl"
+bsub -W 2:00 -R "rusage[mem=2048]" ./process_stl -r "90" -o "${SCRATCH}/stl/${BATCHNAME}/processed/" "${SCRATCH}/stl/${BATCHNAME}/*S15x15.stl"
+bsub -W 2:00 -R "rusage[mem=2048]" ./process_stl -r "180" -o "${SCRATCH}/stl/${BATCHNAME}/processed/" "${SCRATCH}/stl/${BATCHNAME}/*E15x15.stl"
+bsub -W 2:00 -R "rusage[mem=2048]" ./process_stl -r "270" -o "${SCRATCH}/stl/${BATCHNAME}/processed/" "${SCRATCH}/stl/${BATCHNAME}/*N15x15.stl"
+
+# Get heights
+for dir in $SCRATCH/stl/${BATCHNAME}/processed/*/; do MH=$(foamDictionary -value -entry 'TERRAIN_DICT:MAXZ' $dir/terrainDict); echo "$MH/4" |  bc;  done > $SCRATCH/stl/${BATCHNAME}/heights.txt
+
 
 5 - (euler) Copy to asl-w14 and leonhard:
 rsync -rlvz --update $SCRATCH/stl/$BATCHNAME nick@129.132.39.110:/media/intel_data/3d/stl/
@@ -27,7 +43,7 @@ BATCHNAME=batch01_F
 mkdir "${SCRATCH}/openfoam_cases/${BATCHNAME}"
 mkdir "${SCRATCH}/csv/${BATCHNAME}"
 
-cd ~/intel_wind/openfoam_batch
+cd ~/intel_wind/data_generation/openfoam_batch
 for cdir in $SCRATCH/stl/${BATCHNAME}/processed/*; do 
     bsub -W 72:00 -n 1 -R "rusage[mem=6144]" ./run_cases_3d -c ${SCRATCH}/csv/${BATCHNAME} -o ${SCRATCH}/openfoam_cases/${BATCHNAME} -b base_case3d_new/ -w 1 -2 linearUpwind -g 0 "$cdir"
 done
@@ -38,7 +54,7 @@ cd ${SCRATCH}/openfoam_cases/${BATCHNAME}
 find . -type d -name "W15" | sed 's:/W15::g' > solved_cases.txt
 
 8 - (euler) Make CSV files on Euler
-cd ~/intel_wind/openfoam_batch
+cd ~/intel_wind/data_generation/openfoam_batch
 mkdir "${SCRATCH}/csv/${BATCHNAME}"
 bsub -W 4:00 -n 8 -R "rusage[mem=4096]" parallel -j 8 ./make_csvs.sh -c $SCRATCH/csv/${BATCHNAME} -p python/ -w 1  ::: $SCRATCH/openfoam_cases/${BATCHNAME}/[N,E,S,W]12x12_F_0[0-9] /cluster/scratch/lawrancn/batch01_F_cases/east_in/E12x12_F_12
 bsub -W 4:00 -n 8 -R "rusage[mem=4096]" parallel -j 8 ./make_csvs.sh -c $SCRATCH/csv/${BATCHNAME} -p python/ -w 1  ::: $SCRATCH/openfoam_cases/${BATCHNAME}/*
@@ -47,5 +63,5 @@ bsub -W 4:00 -n 8 -R "rusage[mem=4096]" parallel -j 8 ./make_csvs.sh -c $SCRATCH
 bash --rcfile ~/.openfoamrc
 BATCHNAME='batch01_F/north_in'
 mkdir "/media/intel_data/3d/csv/${BATCHNAME}"
-cd ~/src/intel_wind/openfoam_batch/
+cd ~/src/intel_wind/data_generation/openfoam_batch/
 parallel -j 6 ./make_csvs.sh -c /media/intel_data/3d/csv/${BATCHNAME} -p python/ -w 1  ::: /media/intel_data/3d/openfoam_results/${BATCHNAME}/*
