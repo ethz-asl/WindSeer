@@ -75,13 +75,8 @@ validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, bat
                                           num_workers=run_params.run['num_workers'])
 
 # define model and move to gpu if available
-if run_params.model['d3']:
-    if run_params.model['predict_uncertainty']:
-        net = models.ModelEDNN3D_Twin(**run_params.model3d_kwargs())
-    else:
-        net = models.ModelEDNN3D(**run_params.model3d_kwargs())
-else:
-    net = models.ModelEDNN2D(**run_params.model2d_kwargs())
+NetworkType = getattr(models, run_params.model['model_type'])
+net = NetworkType(**run_params.model_kwargs())
 
 if (run_params.run['warm_start']):
     try:
@@ -122,13 +117,19 @@ print(' ')
 run_params.print()
 print('-----------------------------------------------------------------------------')
 
+try:
+    predict_uncertainty = run_params.model['model_args']['predict_uncertainty']
+except KeyError as e:
+    predict_uncertainty = False
+    print('train.py: predict_uncertainty key not available, setting default value: False')
+
 # start the actual training
 net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer,
                        loss_fn, device, run_params.run['n_epochs'],
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
                        run_params.run['compute_validation_loss'], model_dir, args.use_writer,
-                       run_params.model['predict_uncertainty'], run_params.run['uncertainty_train_mode'])
+                       predict_uncertainty, run_params.run['uncertainty_train_mode'])
 
 # save the model if requested
 if (run_params.run['save_model']):

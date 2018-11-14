@@ -19,12 +19,18 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         loss_nut = 0.0
         velocity_errors = np.zeros((16, len(loader_testset)))
 
+        try:
+            predict_uncertainty = params.model['model_args']['predict_uncertainty']
+        except KeyError as e:
+            predict_uncertainty = False
+            print('predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False')
+
         for i, data in enumerate(loader_testset):
             inputs, labels, ds = data
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
 
-            if params.model['predict_uncertainty']:
+            if predict_uncertainty:
                 num_channels = outputs.shape[1]
                 dloss = loss_fn(outputs[:,:int(num_channels/2),:], labels)
             else:
@@ -34,19 +40,24 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 worst_index = i
 
             loss += dloss
-            if params.model['d3']:
+            if len(outputs.shape) == 5:
                 loss_ux += loss_fn(outputs[:,0,:,:,:], labels[:,0,:,:,:])
                 loss_uy += loss_fn(outputs[:,1,:,:,:], labels[:,1,:,:,:])
                 loss_uz += loss_fn(outputs[:,2,:,:,:], labels[:,2,:,:,:])
                 if params.data['use_turbulence']:
                     loss_nut += loss_fn(outputs[:,3,:,:,:], labels[:,3,:,:,:])
-            else:
+
+            elif len(outputs.shape) == 4:
                 loss_ux += loss_fn(outputs[:,0,:,:], labels[:,0,:,:])
                 loss_uz += loss_fn(outputs[:,1,:,:], labels[:,1,:,:])
                 if params.data['use_turbulence']:
                     loss_nut += loss_fn(outputs[:,2,:,:], labels[:,2,:,:])
 
-            error_stats = utils.prediction_error.compute_prediction_error(labels, outputs, params.data['uhor_scaling'], params.data['uz_scaling'], params.model['predict_uncertainty'])
+            else:
+                print('dataset_prediction_error: unknown dimension of the data:', len(output.shape))
+                raise ValueError
+
+            error_stats = utils.prediction_error.compute_prediction_error(labels, outputs, params.data['uhor_scaling'], params.data['uz_scaling'], predict_uncertainty)
             velocity_errors[0, i] = error_stats['avg_abs_error']
             velocity_errors[1, i] = error_stats['avg_abs_error_x']
             velocity_errors[2, i] = error_stats['avg_abs_error_y']
@@ -69,7 +80,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
 
         print('INFO: Average loss on test set: %s' % (loss.item()/len(loader_testset)))
         print('INFO: Average loss on test set for ux: %s' % (loss_ux.item()/len(loader_testset)))
-        if params.model['d3']:
+        if len(outputs.shape) == 5:
             print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(loader_testset)))
         print('INFO: Average loss on test set for uz: %s' % (loss_uz.item()/len(loader_testset)))
         if params.data['use_turbulence']:
@@ -77,7 +88,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
 
         print('INFO: Average absolute error total:   %s [m/s]' % (np.mean(velocity_errors[0, :])))
         print('INFO: Average absolute error x:       %s [m/s]' % (np.mean(velocity_errors[1, :])))
-        if params.model['d3']:
+        if len(outputs.shape) == 5:
             print('INFO: Average absolute error y:       %s [m/s]' % (np.mean(velocity_errors[2, :])))
         print('INFO: Average absolute error z:       %s [m/s]' % (np.mean(velocity_errors[3, :])))
         print('INFO: Close terrain error hor:        %s [m/s]' % (np.mean(velocity_errors[4, :])))
@@ -103,8 +114,14 @@ def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_
         print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
         input = input.squeeze()
         output = output.squeeze()
-    
-        if params.model['predict_uncertainty']:
+
+        try:
+            predict_uncertainty = params.model['model_args']['predict_uncertainty']
+        except KeyError as e:
+            predict_uncertainty = False
+            print('predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False')
+
+        if predict_uncertainty:
             num_channels = output.shape[0]
             if loss_fn:
                 print('Loss: {}'.format(loss_fn(output[:int(num_channels/2),:], label)))
@@ -113,7 +130,7 @@ def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_
                 print('Loss: {}'.format(loss_fn(output, label)))
     
         if plotting_prediction:
-            if params.model['d3']:
+            if len(output.shape) == 4:
                 output[0,:,:,:] *= params.data['uhor_scaling']
                 output[1,:,:,:] *= params.data['uhor_scaling']
                 output[2,:,:,:] *= params.data['uz_scaling']
@@ -124,10 +141,13 @@ def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_
                     output[3,:,:,:] *= params.data['turbulence_scaling']
                     label[3,:,:,:] *= params.data['turbulence_scaling']
 
-            else:
+            elif len(output.shape) == 3:
                 output[0,:,:] *= params.data['uhor_scaling']
                 output[1,:,:] *= params.data['uz_scaling']
                 label[0,:,:] *= params.data['uhor_scaling']
                 label[1,:,:] *= params.data['uz_scaling']
 
-            utils.plot_prediction(output, label, input[0], params.model['predict_uncertainty'])
+            else:
+                print('predict_wind_and_turbulence: Unknown dimension of the output:', len(output.shape))
+
+            utils.plot_prediction(output, label, input[0], predict_uncertainty)
