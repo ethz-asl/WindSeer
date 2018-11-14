@@ -1,6 +1,6 @@
 #!/bin/bash
-# ./make_stl.sh DIRECTORY_WITH_TIFS DIRECTORY_FOR_STLS
-for file in $1/*.tif; do 
+# ./make_stl.sh PHSTL_DIR DIRECTORY_WITH_TIFS DIRECTORY_FOR_STLS
+for file in $2/*.tif; do 
 	base_file=$( basename $file .tif); 
-	python phstl/phstl.py "${file}" "${2}/${base_file}.stl"
+	python "${1}/phstl.py" "${file}" "${3}/${base_file}.stl"
 done
