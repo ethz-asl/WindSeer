@@ -8,7 +8,7 @@ run:
     learning_rate_decay_step_size: 100
     compute_validation_loss: True
     custom_init: False
-    minibatch_epoch_loss: True
+    minibatch_epoch_loss: False
 
     # options to store data
     save_model: True
@@ -67,5 +67,7 @@ model:
         predict_uncertainty: False,
         verbose: True,
         submodel_type: 'ModelEDNN3D',
-        n_stacked: 3
+        n_stacked: 3,
+        pass_full_output: False,
+        submodel_terrain_mask: False
     }
