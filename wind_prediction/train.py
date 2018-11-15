@@ -123,13 +123,19 @@ except KeyError as e:
     predict_uncertainty = False
     print('train.py: predict_uncertainty key not available, setting default value: False')
 
+try:
+    uncertainty_train_mode = run_params.model['model_args']['uncertainty_train_mode']
+except KeyError as e:
+    uncertainty_train_mode = 'alternating'
+    print('train.py: predict_uncertainty key not available, setting default value: alternating')
+
 # start the actual training
 net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer,
                        loss_fn, device, run_params.run['n_epochs'],
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
                        run_params.run['compute_validation_loss'], model_dir, args.use_writer,
-                       predict_uncertainty, run_params.run['uncertainty_train_mode'])
+                       predict_uncertainty, uncertainty_train_mode)
 
 # save the model if requested
 if (run_params.run['save_model']):

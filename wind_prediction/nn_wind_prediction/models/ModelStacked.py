@@ -33,6 +33,12 @@ class ModelStacked(nn.Module):
             sys.exit()
 
         try:
+            n_epochs = kwargs['n_epochs']
+        except KeyError:
+            print('ModelStacked ERROR: The key "n_epochs" was not defined in the model args, setting it to: ')
+            n_epochs = N
+
+        try:
             self.__pass_full_output = kwargs['pass_full_output']
         except KeyError:
             self.__pass_full_output = self.__default_pass_full_output
@@ -40,29 +46,22 @@ class ModelStacked(nn.Module):
                 print('ModelStacked WARNING: pass_full_output not present in kwargs, using default value:', self.__default_pass_full_output)
 
         try:
-            self.__submodel_terrain_mask = kwargs['submodel_terrain_mask']
+            submodel_terrain_mask = kwargs['submodel_terrain_mask']
         except KeyError:
-            self.__submodel_terrain_mask = self.__default_submodel_terrain_mask
+            submodel_terrain_mask = self.__default_submodel_terrain_mask
             if verbose:
                 print('ModelStacked WARNING: submodel_terrain_mask not present in kwargs, using default value:', self.__default_submodel_terrain_mask)
 
         try:
-            self.__submodel_terrain_mask = kwargs['submodel_terrain_mask']
+            use_terrain_mask = kwargs['use_terrain_mask']
         except KeyError:
-            self.__submodel_terrain_mask = self.__default_submodel_terrain_mask
-            if verbose:
-                print('ModelStacked WARNING: submodel_terrain_mask not present in kwargs, using default value:', self.__default_submodel_terrain_mask)
-
-        try:
-            self.__use_terrain_mask = kwargs['use_terrain_mask']
-        except KeyError:
-            self.__use_terrain_mask = self.__default_use_terrain_mask
+            use_terrain_mask = self.__default_use_terrain_mask
             if verbose:
                 print('ModelStacked WARNING: use_terrain_mask not present in kwargs, using default value:', self.__default_use_terrain_mask)
 
         # generate the stacked models based on the input params
         self.__models = nn.ModuleList()
-        kwargs['use_terrain_mask'] = self.__submodel_terrain_mask
+        kwargs['use_terrain_mask'] = submodel_terrain_mask
         self.__models += [Model(**kwargs)]
 
         if self.__pass_full_output:
@@ -74,8 +73,46 @@ class ModelStacked(nn.Module):
 
         for i in range(1, N):
             if i == (N -1):
-                kwargs['use_terrain_mask'] = self.__use_terrain_mask
+                kwargs['use_terrain_mask'] = use_terrain_mask
             self.__models += [Model(**kwargs)]
+
+        # the prediction level is by default the full model
+        self.__prediction_level = N
+
+        # freeze all the submodels by default except the first one
+        self.__train_level = 0
+        self.__train_epoch_step = max(1, int(n_epochs / N))
+        self.__warning_printed = False
+
+    def set_prediction_level(self, N):
+        self.__prediction_level = N
+
+    def new_epoch_callback(self, epoch):
+        if self.__train_level < len(self.__models):
+            if (epoch >= self.__train_level * self.__train_epoch_step):
+                # freeze all the model weights except for the one to train
+                for model in self.__models:
+                    model.freeze_model()
+
+                self.__models[self.__train_level].unfreeze_model()
+                print('ModelStacked INFO: Training submodel at idx', self.__train_level)
+                self.__train_level += 1
+
+            elif (epoch == 0):
+                # freeze all the model weights except for the one to train
+                for model in self.__models:
+                    model.freeze_model()
+
+                self.__models[self.__train_level].unfreeze_model()
+                print('ModelStacked INFO: Training submodel at idx', self.__train_level)
+                self.__train_level += 1
+
+        else:
+            if (not self.__warning_printed):
+                self.__warning_printed = True
+                print('ModelStacked WARNING: Maximum train level reached, continue to train last submodel')
+
+        self.__prediction_level = self.__train_level
 
     def init_params(self):
         for model in self.__models:
@@ -104,15 +141,15 @@ class ModelStacked(nn.Module):
     def forward(self, x):
         input = x.clone()
         first_iter = True
-        for model in self.__models:
+        for i in range(self.__prediction_level):
             if first_iter:
-                x = model(x)
+                x = self.__models[i](x)
                 first_iter = False
             else:
                 if self.__pass_full_output:
-                    x = model(torch.cat((x, input),1))
+                    x = self.__models[i](torch.cat((x, input),1))
                 else:
                     # only pass the terrain information
-                    x = model(torch.cat((x, input[:,0,:].unsqueeze(1)),1))
+                    x = self.__models[i](torch.cat((x, input[:,0,:].unsqueeze(1)),1))
 
         return x
