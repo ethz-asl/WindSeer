@@ -9,15 +9,15 @@ class ModelTwin(nn.Module):
 
         # determine the model class
         try:
-            classModule = importlib.import_module('nn_wind_prediction.models.' + kwargs['type'])
+            classModule = importlib.import_module('nn_wind_prediction.models.' + kwargs['submodel_type'])
         except KeyError:
-            print('ModelTwin ERROR: The key "type" was not defined in the model args and is required')
+            print('ModelTwin ERROR: The key "submodel_type" was not defined in the model args and is required')
             sys.exit()
         except ImportError:
-           print('ModelTwin ERROR: Requested model does not exist:', kwargs['type'])
+           print('ModelTwin ERROR: Requested model does not exist:', kwargs['submodel_type'])
            sys.exit()
 
-        Model = getattr(classModule, kwargs['type'])
+        Model = getattr(classModule, kwargs['submodel_type'])
 
         self.__model_mean = Model(**kwargs)
         self.__model_uncertainty = Model(**kwargs)

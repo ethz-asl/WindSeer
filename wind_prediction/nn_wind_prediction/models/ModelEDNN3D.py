@@ -156,6 +156,16 @@ class ModelEDNN3D(nn.Module):
         if self.__use_turbulence:
             self.__num_outputs += 1 # turbulence
 
+        try:
+            self.__num_inputs = kwargs['force_num_inputs']
+        except KeyError:
+            pass
+
+        try:
+            self.__num_outputs = kwargs['force_num_outputs']
+        except KeyError:
+            pass
+
         # convolution layers
         self.__conv = nn.ModuleList()
         for i in range(self.__n_downsample_layers):

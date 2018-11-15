@@ -66,5 +66,6 @@ model:
         activation_args: {negative_slope: 0.1},
         predict_uncertainty: False,
         verbose: True,
-        type: 'ModelEDNN3D'
+        submodel_type: 'ModelEDNN3D',
+        n_stacked: 3
     }
