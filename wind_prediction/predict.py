@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 compressed = False
 dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'test'
+model_name = 'test_model'
 model_version = 'latest'
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
@@ -51,13 +51,8 @@ testset = data.MyDataset(torch.device("cpu"), args.dataset, compressed = args.co
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=0)
 # load the model and its learnt parameters
-if params.model['d3']:
-    if params.model['predict_uncertainty']:
-        net = models.ModelEDNN3D_Twin(**params.model3d_kwargs())
-    else:
-        net = models.ModelEDNN3D(**params.model3d_kwargs())
-else:
-    net = models.ModelEDNN2D(params.model['n_input_layers'], params.model['interpolation_mode'], params.model['align_corners'], params.model['skipping'], params.data['use_turbulence'])
+NetworkType = getattr(models, params.model['model_type'])
+net = NetworkType(**params.model_kwargs())
 
 net.load_state_dict(torch.load('trained_models/' + args.model_name + '/' + args.model_version + '.model', map_location=lambda storage, loc: storage))
 net.to(device)

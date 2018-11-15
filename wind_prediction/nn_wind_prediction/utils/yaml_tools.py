@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import os
+import string
 import yaml
 
 class EDNNParameters(object):
@@ -20,22 +21,8 @@ class EDNNParameters(object):
         with open(file, 'rt') as fh:
             run_parameters = yaml.safe_load(fh)
 
-        # build the number of inputs and outputs of the model based on the params
-        run_parameters['model']['n_input_layers'] = 3
-        run_parameters['model']['n_output_layers'] = 2
-
-        if run_parameters['model']['d3']:
-            run_parameters['model']['n_input_layers'] += 1
-            run_parameters['model']['n_output_layers'] += 1
-
-        if run_parameters['data']['use_turbulence']:
-            run_parameters['model']['n_output_layers'] += 1
-
-        if run_parameters['data']['use_grid_size']:
-            run_parameters['model']['n_input_layers'] += 3
-
-        if run_parameters['model']['predict_uncertainty']:
-            run_parameters['model']['n_output_layers'] *= 2
+        run_parameters['model']['model_args']['use_turbulence'] = run_parameters['data']['use_turbulence']
+        run_parameters['model']['model_args']['use_grid_size'] = run_parameters['data']['use_grid_size']
 
         return run_parameters
 
@@ -50,18 +37,26 @@ class EDNNParameters(object):
             return letter.lower()
 
     def _build_name(self):
-        name = self.model['name_prefix']+'_'
-        name += self._letter_switch(self.model['interpolation_mode'])
-        name += self._letter_switch(self.model['align_corners'], 'a')
-        name += self._letter_switch(self.model['skipping'], 'k')
-        name += 'd{0:d}'.format(self.model['n_downsample_layers'])
-        name += self._letter_switch(self.model['pooling_method'])
-        name += self._letter_switch(self.model['use_fc_layers'], 'f')
-        name += '{0:d}'.format(self.model['fc_scaling'])
-        name += self._letter_switch(self.model['use_mapping_layer'], 'm')
-        name += self._letter_switch(self.model['skipping'], 'k')
-        return name
+        name = self.model['name_prefix']
 
+        # don't use it for now as the order is random
+#         name = self.model['name_prefix']+'_'
+#         for key in self.model['model_args']:
+#             print(key)
+#             try:
+#                 if isinstance(self.model['model_args'][key], bool):
+#                     name += self._letter_switch(self.model['model_args'][key], key[0])
+#
+#                 else:
+#                     val = float(self.model['model_args'][key])
+#                     name += self._letter_switch(False, key[0])
+#                     name += '{0:d}'.format(self.model['model_args'][key])
+#
+#             except:
+#                 if isinstance(self.model['model_args'][key], str):
+#                     name += self._letter_switch(self.model['model_args'][key])
+
+        return name
 
     def MyDataset_kwargs(self):
         return {'stride_hor': self.data['stride_hor'],
@@ -72,19 +67,12 @@ class EDNNParameters(object):
                 'scaling_k': self.data['turbulence_scaling'],
                 'use_grid_size': self.data['use_grid_size'],
                 'input_mode': self.data['input_mode'],
-                'nx': self.model['n_x'],
-                'ny': self.model['n_y'],
-                'nz': self.model['n_z']}
+                'nx': self.model['model_args']['n_x'],
+                'ny': self.model['model_args']['n_y'],
+                'nz': self.model['model_args']['n_z']}
 
-    def model3d_kwargs(self):
-        return self.model
-
-    def model2d_kwargs(self):
-        return {'n_input_layers': self.model['n_input_layers'],
-                'interpolation_mode': self.model['interpolation_mode'],
-                'align_corners': self.model['align_corners'],
-                'skipping': self.model['skipping'],
-                'predict_turbulence': self.data['use_turbulence']}
+    def model_kwargs(self):
+        return self.model['model_args']
 
     def save(self, dir=None):
         if dir is None:
@@ -103,25 +91,10 @@ class EDNNParameters(object):
         print('\tMinibatch epoch loss:\t', self.run['minibatch_epoch_loss'])
         print(' ')
         print('Model Settings:')
-        print('\tModel name:\t\t', self.name)
-        print('\t3D:\t\t\t', self.model['d3'])
-        print('\tNumber of inputs:\t', self.model['n_input_layers'])
-        print('\tNumber of outputs:\t', self.model['n_output_layers'])
-        print('\tNx:\t\t\t', self.model['n_x'])
-        print('\tNy:\t\t\t', self.model['n_y'])
-        print('\tNz:\t\t\t', self.model['n_z'])
-        print('\tNumber conv layers:\t', self.model['n_downsample_layers'])
-        print('\tInterpolation mode:\t', self.model['interpolation_mode'])
-        print('\tAlign corners:\t\t', self.model['align_corners'])
-        print('\tSkip connection:\t', self.model['skipping'])
-        print('\tUse terrain mask:\t', self.model['use_terrain_mask'])
-        print('\tPooling method:\t\t', self.model['pooling_method'])
-        print('\tUse fc layers:\t\t', self.model['use_fc_layers'])
-        print('\tFC layer scaling:\t', self.model['fc_scaling'])
-        print('\tUse mapping layer:\t', self.model['use_mapping_layer'])
-        print('\tPredict uncertainty:\t', self.model['predict_uncertainty'])
-        print('\tPotential flow:\t\t', self.model['potential_flow'])
-        print('\tPredict turbulence:\t', self.data['use_turbulence'])
+        print('\t Model prefix:\t\t', self.model['name_prefix'])
+        print('\t Model type:\t\t', self.model['model_type'])
+        print('\t Model args:')
+        print('\t\t', self.model['model_args'])
         print(' ')
         print('Dataset Settings:')
         print('\tUhor scaling:\t\t', self.data['uhor_scaling'])
