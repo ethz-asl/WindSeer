@@ -140,8 +140,6 @@ class ModelStacked(nn.Module):
                     x = self.__models[i](torch.cat((input, x),1))
                 else:
                     # only pass the terrain information
-                    import pdb
-                    pdb.set_trace()
                     x = self.__models[i](torch.cat((input[:,0,:].unsqueeze(1), x),1))
 
         return x
