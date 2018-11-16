@@ -87,6 +87,10 @@ class ModelStacked(nn.Module):
     def set_prediction_level(self, N):
         self.__prediction_level = N
 
+        if self.__prediction_level > len(self.__models):
+            print('ModelStacke WARNING: Invalid prediction level (', N, '), setting it to the max value:', len(self.__models))
+            self.__prediction_level = len(self.__models)
+
     def new_epoch_callback(self, epoch):
         if self.__train_level < len(self.__models):
             if (epoch >= self.__train_level * self.__train_epoch_step):
@@ -124,20 +128,6 @@ class ModelStacked(nn.Module):
     def num_outputs(self):
         return self.__models[-1].num_outputs()
 
-    def freeze_model_idx(self, N):
-        if (N < 0 or N >= len(self.__models)):
-            print('ModelStacked WARNING: Invalid index to freeze model: ', N, '. Not doing anything')
-            return
-
-        self.__models[N].freeze_model()
-
-    def unfreeze_model_idx(self, N):
-        if (N < 0 or N >= len(self.__models)):
-            print('ModelStacked WARNING: Invalid index to unfreeze model: ', N, '. Not doing anything')
-            return
-
-        self.__models[N].unfreeze_model()
-
     def forward(self, x):
         input = x.clone()
         first_iter = True
@@ -147,9 +137,11 @@ class ModelStacked(nn.Module):
                 first_iter = False
             else:
                 if self.__pass_full_output:
-                    x = self.__models[i](torch.cat((x, input),1))
+                    x = self.__models[i](torch.cat((input, x),1))
                 else:
                     # only pass the terrain information
-                    x = self.__models[i](torch.cat((x, input[:,0,:].unsqueeze(1)),1))
+                    import pdb
+                    pdb.set_trace()
+                    x = self.__models[i](torch.cat((input[:,0,:].unsqueeze(1), x),1))
 
         return x
