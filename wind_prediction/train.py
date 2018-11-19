@@ -160,4 +160,4 @@ if (run_params.run['evaluate_testset']):
 
 # clean up the scratch folder of the cluster
 if (os.path.isdir("/cluster/scratch/")):
-    os.system('rm -r'  + tempfolder)
+    os.system('rm -r '  + tempfolder)
