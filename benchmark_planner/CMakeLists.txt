@@ -10,7 +10,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 find_package(ompl REQUIRED)
 find_library(OMPL_LIBRARIES ompl)
-find_package(fcl REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 include_directories(
@@ -21,15 +20,16 @@ include_directories(
 # add the executable
 add_executable(benchmark
   src/benchmark_main.cpp
+  src/HeightMapClass.cpp
   src/MyGoalSampleableRegion.cpp
   src/MyOptimizationObjective.cpp
   src/MyRRTstar.cpp
   src/MySampler.cpp
   src/MySE3StateSpace.cpp
+  src/MyStateValidityCheckerClass.cpp
 )
 
 target_link_libraries(benchmark
   ${OMPL_LIBRARIES}
-  fcl
   ${Eigen_LIBRARIES}
 )

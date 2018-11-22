@@ -1,5 +1,7 @@
 
 #include <iostream>
+#include <vector>
+#include <random>
 
 #include <ompl/base/PlannerStatus.h>
 #include <ompl/base/ScopedState.h>
@@ -8,10 +10,12 @@
 #include <ompl/geometric/SimpleSetup.h>
 
 #include "params.hpp"
+#include "HeightMapClass.hpp"
 #include "MyOptimizationObjective.hpp"
 #include "MyProjection.hpp"
 #include "MyRRTstar.hpp"
 #include "MySE3StateSpace.hpp"
+#include "MyStateValidityCheckerClass.hpp"
 
 namespace intel_wind {
 
@@ -20,22 +24,35 @@ namespace planning {
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
 
-bool isStateValid(const ob::State *state) {
-    return true;
-}
-
 int plan_with_simple_setup() {
+  // set the terrain
+  const int nx = 64;
+  const int ny = 64;
+  const double resolution = 17.1875;
+  const double max_z = 1100.0 / 96.0 * 64.0;
+
+  std::mt19937 generator(std::random_device{}());
+  std::uniform_real_distribution<float> distribution(0.0, 0.8 * max_z);
+
+  std::vector<float> terrain;
+  terrain.resize(nx*ny, 0.0f);
+  for (std::vector<float>::iterator it=terrain.begin(); it != terrain.end() ;++it) {
+      *it = distribution(generator);
+  }
+  HeightMapClass map = HeightMapClass();
+  map.setHeightMapData(terrain, nx, max_z, resolution);
+
   // construct the state space we are planning in
   ob::StateSpacePtr space(new MySE3StateSpace());
 
   // set the state space bounds
   ob::RealVectorBounds bounds(3);
-  bounds.setLow(0, 0);
-  bounds.setHigh(0, 1100);
-  bounds.setLow(1, 0);
-  bounds.setHigh(1, 1100);
+  bounds.setLow(0, map.getMinX());
+  bounds.setHigh(0, map.getMaxX());
+  bounds.setLow(1, map.getMinY());
+  bounds.setHigh(1, map.getMaxY());
   bounds.setLow(2, 0);
-  bounds.setHigh(2, 600);
+  bounds.setHigh(2, map.getMaxZ());
   space->as<MySE3StateSpace>()->setBounds(bounds);
 
   // set the default projection, not sure if it actually is required
@@ -43,18 +60,17 @@ int plan_with_simple_setup() {
       ob::ProjectionEvaluatorPtr(
           new MyProjection(space, proj_cellsize)));
 
-  // configure the simple setup
+  // using simple setup
   og::SimpleSetup ss(space);
-  ss.setStateValidityChecker([](const ob::State *state) { return isStateValid(state); });
 
-//  mission->getSSGSharedPtr()->setStateValidityChecker(
-//      ob::StateValidityCheckerPtr(
-//          new base::MyStateValidityCheckerClass<StateSpace>(mission, mission->getSSGSharedPtr()->getSpaceInformation())));
-//
-//  double res = *std::min_element(std::begin(mission->getAirplaneBB()), std::end(mission->getAirplaneBB()) - 1)
-//      / (mission->getStateSpacePtr()->template as<StateSpace>()->getMaximumExtent()) * 0.5;
-//  mission->getSSGSharedPtr()->getSpaceInformation()->setStateValidityCheckingResolution(res);  // 1%
-//
+  // set the collision checking
+  ss.setStateValidityChecker(ob::StateValidityCheckerPtr(
+          new MyStateValidityCheckerClass(ss.getSpaceInformation(), map)));
+
+  const double res = *std::min_element(std::begin(airplane_bb_param), std::end(airplane_bb_param) - 1)
+      / (ss.getSpaceInformation()->getMaximumExtent()) * 0.5;
+  ss.getSpaceInformation()->setStateValidityCheckingResolution(res);
+
   // Set optimization objectives
   ss.setOptimizationObjective(ob::OptimizationObjectivePtr(new MyOptimizationObjective(ss.getSpaceInformation())));
 
@@ -84,7 +100,6 @@ int plan_with_simple_setup() {
   if (solved) {
       std::cout << "Found solution:" << std::endl;
       // print the path to screen
-      ss.simplifySolution();
       ss.getSolutionPath().print(std::cout);
   }
 }
