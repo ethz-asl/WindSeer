@@ -27,6 +27,7 @@ add_executable(benchmark
   src/MySampler.cpp
   src/MySE3StateSpace.cpp
   src/MyStateValidityCheckerClass.cpp
+  src/WindGrid.cpp
 )
 
 target_link_libraries(benchmark
