@@ -27,7 +27,7 @@
 #include <ompl/base/objectives/PathLengthOptimizationObjective.h>
 #include <ompl/base/samplers/InformedStateSampler.h>
 
-// TODO write meteo grid class
+#include "WindGrid.hpp"
 
 namespace intel_wind {
 
@@ -43,7 +43,7 @@ namespace ob = ompl::base;
 class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
  public:
   /** \brief Constructor */
-  MyOptimizationObjective(const ob::SpaceInformationPtr &si);
+  MyOptimizationObjective(const ob::SpaceInformationPtr &si, const WindGrid& wind_grid);
 
   /** \brief Destructor. */
   virtual ~MyOptimizationObjective() override;
@@ -106,6 +106,8 @@ class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
   /** \brief String for the unit of the cost. */
   std::string cost_unit_ = " s";
 
+  /** \brief Contains the wind field used for planning */
+  WindGrid wind_grid_;
 
   /** \brief Cache if a solution is known. */
   mutable bool hasSolution_ = false;

@@ -25,8 +25,10 @@ namespace intel_wind {
 
 namespace planning {
 
-MyOptimizationObjective::MyOptimizationObjective(const ob::SpaceInformationPtr& si)
-        : ob::PathLengthOptimizationObjective(si) {
+MyOptimizationObjective::MyOptimizationObjective(const ob::SpaceInformationPtr& si, const WindGrid& wind_grid)
+        : ob::PathLengthOptimizationObjective(si),
+          wind_grid_() {
+  wind_grid_ = wind_grid;
   setCostToGoHeuristic(boost::bind(&MyOptimizationObjective::goalRegionTimeToGo, this, _1, _2));
 }
 
@@ -83,11 +85,9 @@ double MyOptimizationObjective::computeProjectedWindMagnitude(const ob::State *s
   if (eucl_dist <= 0.0)
     return 0.0;
 
-  // TODO fix
-//  return fabs(dx)/eucl_dist * meteo_grid_->getMaxWindMagnitudeX() +
-//      fabs(dy)/eucl_dist * meteo_grid_->getMaxWindMagnitudeY() +
-//      fabs(dz)/eucl_dist * meteo_grid_->getMaxWindMagnitudeZ();
-  return 0.0;
+  return fabs(dx)/eucl_dist * wind_grid_.getMaxWindMagnitudeX() +
+         fabs(dy)/eucl_dist * wind_grid_.getMaxWindMagnitudeY() +
+         fabs(dz)/eucl_dist * wind_grid_.getMaxWindMagnitudeZ();
 }
 
 
@@ -96,8 +96,8 @@ ob::InformedSamplerPtr MyOptimizationObjective::allocInformedStateSampler(const 
 
   // Make the direct path-length informed sampler and return. If OMPL was compiled with Eigen, a direct version is available, if not a rejection-based technique can be used
 #if OMPL_HAVE_EIGEN3
-  return boost::make_shared<MySampler>(probDefn, maxNumberCalls, 0.0, 0.0, 0.0);
-          //meteo_grid_->getMaxWindMagnitudeX(),  meteo_grid_->getMaxWindMagnitudeY(),  meteo_grid_->getMaxWindMagnitudeZ());
+  return boost::make_shared<MySampler>(probDefn, maxNumberCalls,
+          wind_grid_.getMaxWindMagnitudeX(), wind_grid_.getMaxWindMagnitudeY(), wind_grid_.getMaxWindMagnitudeZ());
 
 #else
   throw Exception("Direct sampling of the path-length objective requires Eigen, but this version of OMPL was compiled without Eigen support. If possible, please install Eigen and recompile OMPL. If this is not possible, you can manually create an instantiation of RejectionInfSampler to approximate the behaviour of direct informed sampling.");
@@ -121,72 +121,66 @@ ob::Cost MyOptimizationObjective::goalRegionTimeToGo(const ob::State *state, con
 
 
 double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State *s1, const ob::State *s2) const {
-  return si_->distance(s1, s2);
+  const double dist = si_->distance(s1, s2);
+  if (dist < 1e-5) {
+      return 0.0;
+  }
 
   const double vair_inv = 1.0 / v_air_param;
-  const double distance_inv = 1.0 / si_->distance(s1, s2);
-//  const double dt_max = meteo_grid_->getResolution() * 0.5 * distance_inv;
+  const double distance_inv = 1.0 / dist;
+  const double dt_max = wind_grid_.getResolution() * 0.5 * distance_inv;
   const double dx = s2->as<typename MySE3StateSpace::StateType>()->getX() - s1->as<typename MySE3StateSpace::StateType>()->getX();
   const double dy = s2->as<typename MySE3StateSpace::StateType>()->getY() - s1->as<typename MySE3StateSpace::StateType>()->getY();
   const double dz = s2->as<typename MySE3StateSpace::StateType>()->getZ() - s1->as<typename MySE3StateSpace::StateType>()->getZ();
 
   double t_interpol(0.0), dt(0.0), wind_normal(0.0), wind_forward(0.0), airspeed_forward(0.0), cost(0.0);
-  // TODO implement
-//  ob::State *state_interpol = si_->allocState();
-//  fw_planning_comm::MeteoData meteo_data;
-//
-//  while (t_interpol < 1.0) {
-//    // get dt for this interpolation
-//    dt = std::min(dt_max, 1.0 - t_interpol);
-//
-//    si_->getStateSpace()->interpolate(s1, s2, t_interpol, state_interpol);
-//    if (useCFD_) {
-//        meteo_grid_cfd_.getMeteoData(
-//                state_interpol->as<MySE3StateSpace::StateType>()->getX(),
-//                state_interpol->as<MySE3StateSpace::StateType>()->getY(),
-//                state_interpol->as<MySE3StateSpace::StateType>()->getZ(),
-//                meteo_data);
-//
-//    } else {
-//        meteo_grid_->getMeteoData(
-//                state_interpol->as<MySE3StateSpace::StateType>()->getX(),
-//                state_interpol->as<MySE3StateSpace::StateType>()->getY(),
-//                state_interpol->as<MySE3StateSpace::StateType>()->getZ(),
-//                meteo_data);
-//    }
-//
-//    wind_forward = (dx * meteo_data.u + dy * meteo_data.v + dz * meteo_data.w) * distance_inv;
-//    wind_normal = sqrt(meteo_data.u * meteo_data.u + meteo_data.v * meteo_data.v + meteo_data.w * meteo_data.w - wind_forward * wind_forward);
-//
-//    double scale = 1.0;
-//
-//    if (!useCFD_)
-//        scale = 0.8;
-//
-//    if ((0 > wind_forward + params::v_air_param * scale) ||
-//            (fabsf(meteo_data.v) > params::v_air_param * sinf(0.261799) * scale)) {
-//        if (useCFD_)
-//            std::cout << "wind hor: " << sqrtf(meteo_data.u * meteo_data.u + meteo_data.v * meteo_data.v) <<
-//                    ", wind vert: " << fabsf(meteo_data.v) << std::endl;
-//        return std::numeric_limits<double>::infinity();
-//
-//    }
-//    if (wind_normal > params::v_air_param * scale)
-//        return std::numeric_limits<double>::infinity();
-//
-//    airspeed_forward = sqrt(params::v_air_param * params::v_air_param - wind_normal * wind_normal);
-//
-//    cost += dt / (distance_inv * (airspeed_forward + wind_forward));
-//
-//    // update the interpolation time
-//    t_interpol += dt;
-//  }
-//
-//  if (cost < 0.0) {
-//      if (useCFD_)
-//          std::cout << "negative cost" << std::endl;
-//    return std::numeric_limits<double>::infinity();
-//  }
+  float u(0.0f), v(0.0f), w(0.0f);
+
+  ob::State *state_interpol = si_->allocState();
+
+  while (t_interpol < 1.0) {
+    // get dt for this interpolation
+    dt = std::min(dt_max, 1.0 - t_interpol);
+
+    si_->getStateSpace()->interpolate(s1, s2, t_interpol, state_interpol);
+
+    wind_grid_.getWind(
+            state_interpol->as<MySE3StateSpace::StateType>()->getX(),
+            state_interpol->as<MySE3StateSpace::StateType>()->getY(),
+            state_interpol->as<MySE3StateSpace::StateType>()->getZ(),
+            &u, &v, &w);
+
+    wind_forward = (dx * u + dy * v + dz * w) * distance_inv;
+    wind_normal = sqrt(u * u + v * v + w * w - wind_forward * wind_forward);
+
+    double scale = 0.8; // safety margin of 20 %
+
+    if ((0.0 > wind_forward + v_air_param * scale) ||
+            (fabsf(w) > v_air_param * sinf(max_pitch) * scale)) {
+      return std::numeric_limits<double>::infinity();
+    }
+
+    if (wind_normal > v_air_param * scale) {
+      return std::numeric_limits<double>::infinity();
+    }
+
+    airspeed_forward = sqrt(v_air_param * v_air_param - wind_normal * wind_normal);
+
+    cost += dt * dist / (airspeed_forward + wind_forward);
+
+    // update the interpolation time
+    t_interpol += dt;
+  }
+
+  if (cost < 0.0) {
+    std::cout << "negative cost" << std::endl;
+    return std::numeric_limits<double>::infinity();
+  }
+
+  if (std::isnan(cost)) {
+    std::cout << "nan cost" << distance_inv << std::endl;
+    return std::numeric_limits<double>::infinity();
+  }
 
   return cost;
 }

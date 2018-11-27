@@ -17,11 +17,11 @@ WindGrid::WindGrid() {
 }
 
 
-bool WindGrid::getWind(double x, double y, double z, float& u, float& v, float& w) const {
+bool WindGrid::getWind(double x, double y, double z, float* u, float* v, float* w) const {
   // assign output with 0.0
-  u = 0.0f;
-  v = 0.0f;
-  w = 0.0f;
+  *u = 0.0f;
+  *v = 0.0f;
+  *w = 0.0f;
 
   // check if point is in boundaries
   if ((x < min_x_) || (y < min_y_) || (z < min_z_) || (x > max_x_) || (y > max_y_) || (z > max_z_) ||
@@ -32,15 +32,15 @@ bool WindGrid::getWind(double x, double y, double z, float& u, float& v, float& 
             int((y - min_y_) * resolution_inverse_hor_) * n_x_ +
             int((z - min_z_) * resolution_inverse_ver_) * n_x_ * n_y_;
 
-  u = wind_x_[idx_3D_];
-  v = wind_y_[idx_3D_];
-  w = wind_z_[idx_3D_];
+  *u = wind_x_[idx_3D_];
+  *v = wind_y_[idx_3D_];
+  *w = wind_z_[idx_3D_];
 
   return true;
 }
 
 
-bool WindGrid::setWindGrid(std::vector<float>& u, std::vector<float>& v, std::vector<float>& w, WindGridGeometry& geo) {
+bool WindGrid::setWindGrid(const std::vector<float>& u, const std::vector<float>& v, const std::vector<float>& w, const WindGridGeometry& geo) {
   // if the input is consistent
   if ((u.size() != v.size()) ||
       (u.size() != w.size()) ||

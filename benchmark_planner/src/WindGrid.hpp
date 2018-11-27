@@ -44,12 +44,12 @@ public:
    * @param[out] w: The wind in z-direction [m/s]
    * @return: Indicates if successfully data is extracted.
    */
-  bool getWind(double x, double y, double z, float& u, float& v, float& w) const;
+  bool getWind(double x, double y, double z, float* u, float* v, float* w) const;
 
   /** \brief getMeteoData
    * Insert a meteo grid message and precompute values.
    */
-  bool setWindGrid(std::vector<float>& u, std::vector<float>& v, std::vector<float>& w, WindGridGeometry& geo);
+  bool setWindGrid(const std::vector<float>& u, const std::vector<float>& v, const std::vector<float>& w, const WindGridGeometry& geo);
 
   /** \brief getMaxWindMagnitudeX
    * Get the value of the maximum magnitude of the wind in x-direction of the meteo grid.
