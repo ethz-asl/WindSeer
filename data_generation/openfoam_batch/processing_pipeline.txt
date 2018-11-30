@@ -18,7 +18,7 @@ ssh euler
 source ~/setup_euler.sh
 cd ~/intel_wind/data_generation/openfoam_batch
 mkdir -p "${SCRATCH}/stl/${BATCHNAME}/processed"
-bsub -W 1:00 ./make_stl.sh "${SCRATCH}/geotif/${BATCHNAME}" "${SCRATCH}/stl/${BATCHNAME}"
+bsub -W 2:00 -R "rusage[mem=4096]" ./make_stl.sh ~/phstl/ "${SCRATCH}/geotif/${BATCHNAME}" "${SCRATCH}/stl/${BATCHNAME}"
 
 4 - (euler) Rotate and make terrainDict
 bsub -W 2:00 -R "rusage[mem=2048]" ./process_stl -r "$ROT_ANGLE" -o "${SCRATCH}/stl/${BATCHNAME}/processed/" "${SCRATCH}/stl/${BATCHNAME}/*.stl"
@@ -45,7 +45,7 @@ mkdir "${SCRATCH}/csv/${BATCHNAME}"
 
 cd ~/intel_wind/data_generation/openfoam_batch
 for cdir in $SCRATCH/stl/${BATCHNAME}/processed/*; do 
-    bsub -W 72:00 -n 1 -R "rusage[mem=6144]" ./run_cases_3d -c ${SCRATCH}/csv/${BATCHNAME} -o ${SCRATCH}/openfoam_cases/${BATCHNAME} -b base_case3d_new/ -w 1 -2 linearUpwind -g 0 "$cdir"
+    bsub -W 72:00 -n 1 -R "rusage[mem=6144]" ./run_cases_3d -c "${SCRATCH}/csv/${BATCHNAME}" -o "${SCRATCH}/openfoam_cases/${BATCHNAME}" -b base_case3d_new/ -w 1 -2 linearUpwind -g 0 "$cdir"
 done
 
 7 - (leonhard) When the jobs are done
