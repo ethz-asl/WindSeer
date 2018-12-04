@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
+import h5py
 from math import trunc
 import nn_wind_prediction.utils as utils
 import numpy as np
 import time
 import torch
+from torch.utils.data import DataLoader
+
 
 def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
     #Compute the average loss
@@ -106,6 +109,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         
         return velocity_errors, worst_index, maxloss
 
+
 def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_prediction, loss_fn = None):
     with torch.no_grad():
         input, label = input.to(device), label.to(device)
@@ -151,3 +155,86 @@ def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_
                 print('predict_wind_and_turbulence: Unknown dimension of the output:', len(output.shape))
 
             utils.plot_prediction(output, label, input[0], predict_uncertainty)
+
+
+def save_prediction_to_database(net, device, params, savename, testset):
+    with torch.no_grad():
+        with h5py.File(savename, 'w') as f:
+            testloader = torch.utils.data.DataLoader(testset, batch_size=1,
+                                                     shuffle=False, num_workers=0)
+
+            for i, data in enumerate(testloader):
+                # get the prediction and scale it correctly
+                inputs, labels, ds = data
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = net(inputs)
+                outputs = outputs.squeeze()
+                labels = labels.squeeze()
+
+                if len(outputs.shape) == 4:
+                    outputs[0,:,:,:] *= params.data['uhor_scaling']
+                    outputs[1,:,:,:] *= params.data['uhor_scaling']
+                    outputs[2,:,:,:] *= params.data['uz_scaling']
+                    labels[0,:,:,:] *= params.data['uhor_scaling']
+                    labels[1,:,:,:] *= params.data['uhor_scaling']
+                    labels[2,:,:,:] *= params.data['uz_scaling']
+                    if params.data['use_turbulence']:
+                        outputs[3,:,:,:] *= params.data['turbulence_scaling']
+                        labels[3,:,:,:] *= params.data['turbulence_scaling']
+
+                    inputs, labels, outputs = inputs.cpu(), labels.cpu(), outputs.cpu()
+
+                    wind = outputs[:3,:,:,:].numpy()
+                    wind_label = labels[:3,:,:,:].numpy()
+                    if params.data['use_turbulence']:
+                        turbulence = outputs[3,:,:,:].numpy()
+                        turbulence_label = labels[3,:,:,:].numpy()
+
+                elif len(outputs.shape) == 3:
+                    outputs[0,:,:] *= params.data['uhor_scaling']
+                    outputs[1,:,:] *= params.data['uz_scaling']
+                    labels[0,:,:] *= params.data['uhor_scaling']
+                    labels[1,:,:] *= params.data['uz_scaling']
+                    if params.data['use_turbulence']:
+                        outputs[2,:,:] *= params.data['turbulence_scaling']
+                        labels[2,:,:] *= params.data['turbulence_scaling']
+
+                    inputs, labels, outputs = inputs.cpu(), labels.cpu(), outputs.cpu()
+
+                    wind = outputs[:2,:,:].numpy()
+                    wind_label = labels[:2,:,:].numpy()
+                    if params.data['use_turbulence']:
+                        turbulence = outputs[2,:,:].numpy()
+                        turbulence_label = labels[2,:,:].numpy()
+
+                else:
+                    print('save_prediction_to_database: Unknown dimension of the output:', len(outputs.shape))
+                    return
+
+                # get the terrain
+                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0,0,:,:,:].numpy(), 0)) * ds[2]
+
+                # store the prediction and the respective metadata
+                samplename = testset.get_name(i)
+                grp = f.create_group(samplename)
+
+                dset_terr = grp.create_dataset('terrain', data = terrain.numpy(), dtype='f')
+
+                dset_wind = grp.create_dataset('wind', data = wind, dtype='f')
+                dset_wind_r = grp.create_dataset('wind_reference', data = wind_label, dtype='f')
+
+                if params.data['use_turbulence']:
+                    dset_turb = grp.create_dataset('turbulence', data = turbulence, dtype='f')
+                    dset_turb_r = grp.create_dataset('turbulence_reference', data = turbulence_label, dtype='f')
+
+                if len(outputs.shape) == 4:
+                    dset_nx = grp.create_dataset('grid_info/nx', data = outputs.shape[3], dtype='i')
+                    dset_ny = grp.create_dataset('grid_info/ny', data = outputs.shape[2], dtype='i')
+                    dset_nz = grp.create_dataset('grid_info/nz', data = outputs.shape[1], dtype='i')
+                elif len(outputs.shape) == 3:
+                    dset_nx = grp.create_dataset('grid_info/nx', data = outputs.shape[2], dtype='i')
+                    dset_ny = grp.create_dataset('grid_info/ny', data = 0, dtype='i')
+                    dset_nz = grp.create_dataset('grid_info/nz', data = outputs.shape[1], dtype='i')
+
+                dset_reshor = grp.create_dataset('grid_info/resolution_horizontal', data = ds[0].item(), dtype='f')
+                dset_resver = grp.create_dataset('grid_info/resolution_vertical', data = ds[2].item(), dtype='f')

@@ -22,6 +22,8 @@ use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
 plot_prediction = True
 prediction_level = 10
+save_prediction_database = False
+savename = 'prediction.hdf5'
 num_worker = 0
 # -----------------------------------------------------------------------------------
 
@@ -34,12 +36,15 @@ parser.add_argument('-model_version', dest='model_version', default=model_versio
 parser.add_argument('-cpe', dest='compute_prediction_error', action='store_true', help='If set the velocity prediction errors over the full dataset is computed')
 parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', help='If set the worst prediction of the input dataset is shown. Needs compute_prediction_error to be true.')
 parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
+parser.add_argument('-save', dest='save_prediction_database', action='store_true', help='Store the predictions in a database')
+parser.add_argument('-save_name', dest='savename', default=savename, help='The name of the prediction database')
 
 args = parser.parse_args()
 args.compressed = args.compressed or compressed
 args.compute_prediction_error = args.compute_prediction_error or compute_prediction_error
 args.plot_worst_prediction = args.plot_worst_prediction or plot_worst_prediction
 args.plot_prediction = args.plot_prediction or plot_prediction
+args.save_prediction_database = args.save_prediction_database or save_prediction_database
 
 # check if gpu available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -74,6 +79,9 @@ if args.compute_prediction_error:
 
     if args.plot_worst_prediction:
         args.index = worst_index
+
+if args.save_prediction_database:
+    nn_custom.save_prediction_to_database(net, device, params, savename, testset)
 
 # predict the wind, compute the loss and plot if requested
 input, label, ds = testset[args.index]

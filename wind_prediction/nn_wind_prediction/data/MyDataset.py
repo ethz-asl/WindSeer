@@ -235,5 +235,8 @@ class MyDataset(Dataset):
             print('MyDataset Error: Data dimension of ', len(data_shape), ' is not supported')
             sys.exit()
 
+    def get_name(self, index):
+        return self.__memberslist[index].name
+
     def __len__(self):
         return self.__num_files
