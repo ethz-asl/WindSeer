@@ -11,15 +11,18 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 find_package(ompl REQUIRED)
 find_library(OMPL_LIBRARIES ompl)
 find_package(Eigen3 REQUIRED)
+find_package(HDF5 COMPONENTS C CXX HL REQUIRED)
 
 include_directories(
   SYSTEM ${Boost_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
+  ${HDF5_INCLUDE_DIRS}
 )
 
 # add the executable
 add_executable(benchmark
   src/benchmark_main.cpp
+  src/HDF5Interface.cpp
   src/HeightMapClass.cpp
   src/MyGoalSampleableRegion.cpp
   src/MyOptimizationObjective.cpp
@@ -33,4 +36,5 @@ add_executable(benchmark
 target_link_libraries(benchmark
   ${OMPL_LIBRARIES}
   ${Eigen_LIBRARIES}
+  ${HDF5_CXX_LIBRARIES}
 )

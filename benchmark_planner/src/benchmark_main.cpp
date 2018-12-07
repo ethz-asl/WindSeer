@@ -10,6 +10,7 @@
 #include <ompl/geometric/SimpleSetup.h>
 
 #include "params.hpp"
+#include "HDF5Interface.hpp"
 #include "HeightMapClass.hpp"
 #include "MyOptimizationObjective.hpp"
 #include "MyProjection.hpp"
@@ -25,54 +26,24 @@ namespace planning {
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
 
-int plan_with_simple_setup() {
-  // domain settings
-  const int nx = 64;
-  const int ny = 64;
-  const int nz = 64;
-  const double resolution = 17.1875;
-  const double max_z = 1100.0 / 96.0 * 64.0;
-  std::mt19937 generator(std::random_device{}());
-
+int plan_with_simple_setup(HDF5Interface::Sample input) {
   // set the wind grid
   WindGridGeometry geo;
   geo.min_x = 0.0;
   geo.min_y = 0.0;
   geo.min_z = 0.0;
-  geo.nx = nx;
-  geo.ny = ny;
-  geo.nz = nz;
-  geo.resolution_hor = resolution;
-  geo.resolution_ver = max_z / nz;
-
-  std::uniform_real_distribution<float> distribution_wind(0.0, 1.0);
-  std::vector<float> u, v, w;
-  u.resize(nx*ny*nz, 0.0f);
-  v.resize(nx*ny*nz, 0.0f);
-  w.resize(nx*ny*nz, 0.0f);
-  for (std::vector<float>::iterator it=u.begin(); it != u.end() ;++it) {
-      *it = distribution_wind(generator);
-  }
-  for (std::vector<float>::iterator it=v.begin(); it != v.end() ;++it) {
-      *it = distribution_wind(generator);
-  }
-  for (std::vector<float>::iterator it=w.begin(); it != w.end() ;++it) {
-      *it = distribution_wind(generator);
-  }
+  geo.nx = input.nx;
+  geo.ny = input.ny;
+  geo.nz = input.nz;
+  geo.resolution_hor = input.resolution_horizontal;
+  geo.resolution_ver = input.resolution_vertical;
 
   WindGrid wind_grid;
-  wind_grid.setWindGrid(u, v, w, geo);
+  wind_grid.setWindGrid(input.wind_x, input.wind_y, input.wind_z, geo);
 
-  // generate a random terrain
-  std::uniform_real_distribution<float> distribution(0.0, 0.8 * max_z);
-
-  std::vector<float> terrain;
-  terrain.resize(nx*ny, 0.0f);
-  for (std::vector<float>::iterator it=terrain.begin(); it != terrain.end() ;++it) {
-      *it = distribution(generator);
-  }
+  // set terrain
   HeightMapClass map = HeightMapClass();
-  map.setHeightMapData(terrain, nx, max_z, resolution);
+  map.setHeightMapData(input.terrain, input.nx, input.nz * input.resolution_vertical, input.resolution_horizontal);
 
   // construct the state space we are planning in
   ob::StateSpacePtr space(new MySE3StateSpace());
@@ -141,11 +112,17 @@ int plan_with_simple_setup() {
   }
 }
 
+int benchmark() {
+  // open the specified file and the specified dataset in the file.
+  HDF5Interface database;
+  database.init("prediction.hdf5");
+  plan_with_simple_setup(database.getSample(0));
+}
+
 } // namespace planning
 
 } // namespace intel_wind
 
-int main (int argc, char *argv[])
-{
-  return intel_wind::planning::plan_with_simple_setup();
+int main (int argc, char *argv[]) {
+  return intel_wind::planning::benchmark();
 }
