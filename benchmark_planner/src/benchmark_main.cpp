@@ -1,7 +1,11 @@
 
+#include <array>
+#include <fstream>
 #include <iostream>
-#include <vector>
 #include <random>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include <ompl/base/PlannerStatus.h>
 #include <ompl/base/ScopedState.h>
@@ -26,7 +30,13 @@ namespace planning {
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
 
-int plan_with_simple_setup(HDF5Interface::Sample input) {
+struct PlanningResult {
+  bool solved = false;
+  double planned_time = 0.0;
+  double executed_time = 0.0;
+};
+
+PlanningResult plan_with_simple_setup(HDF5Interface::Sample input) {
   // set the wind grid
   WindGridGeometry geo;
   geo.min_x = 0.0;
@@ -112,11 +122,28 @@ int plan_with_simple_setup(HDF5Interface::Sample input) {
   }
 }
 
-int benchmark() {
+int benchmark(int argc, char *argv[]) {
   // open the specified file and the specified dataset in the file.
   HDF5Interface database;
   database.init("prediction.hdf5");
-  plan_with_simple_setup(database.getSample(0));
+
+  // open the file with the start and goal configurations
+  std::ifstream sg_file("start_goal_configurations.txt");
+
+  // read the configurations from file
+  std::vector<std::array<double, 8>> sg_configurations = {};
+  std::array<double, 8> tmp = {};
+  while (sg_file >> tmp[0] >> tmp[1] >> tmp[2] >> tmp[3] >> tmp[4] >> tmp[5] >> tmp[6] >> tmp[7]) {
+    sg_configurations.push_back(tmp);
+  }
+  sg_file.close();
+
+  for(auto const& tmp: sg_configurations) {
+    printf("%.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f\n", tmp[0], tmp[1], tmp[2], tmp[3], tmp[4], tmp[5], tmp[6], tmp[7]);
+  }
+
+
+//  plan_with_simple_setup(database.getSample(0));
 }
 
 } // namespace planning
@@ -124,5 +151,5 @@ int benchmark() {
 } // namespace intel_wind
 
 int main (int argc, char *argv[]) {
-  return intel_wind::planning::benchmark();
+  return intel_wind::planning::benchmark(argc, argv);
 }
