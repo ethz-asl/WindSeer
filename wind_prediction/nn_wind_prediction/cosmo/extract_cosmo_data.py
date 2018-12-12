@@ -16,10 +16,10 @@ except ImportError:
     exit()
 
 try:
-    import pyproj
+    import utm
 except ImportError:
-    print("'pyproj' is not installed. Use the command below to install it:")
-    print("     pip3 install pyproj")
+    print("'utm' is not installed. Use the command below to install it:")
+    print("     pip3 install utm")
     exit()
 
 def above_line_check(x1, y1, x2, y2, x_test, y_test):
@@ -32,40 +32,24 @@ def above_line_check(x1, y1, x2, y2, x_test, y_test):
     else:
         return False
 
-def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested):
+def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, terrain_file = None):
     """Opens the requested COSMO NetCDF file and extracts all wind profiles that are required to calculate the initial wind field 
     for the complete meteo grid domain. 
     """
 
+    if terrain_file is None:
+        terrain_file = filename
     # create a dummy output
     out = {}
     out['valid'] = False
 
-    # open input file, throw warning if it fails
-    file_err = False
     try:
-        f = netcdf.netcdf_file(filename, "r")
-    except TypeError:
-        file_err = True
-        print("ERROR: COSMO input file '" + filename + "'is not a NetCDF 3 file!")
-    except IOError:
-        file_err = True
-        print("ERROR: COSMO input file '" + filename + "'does not exist!")
-    if file_err:
-        return out
+        time, lon, lat, z_bnd, u_c, v_c, w_c = read_cosmo_nc_file(filename, ['time', 'lon_1', 'lat_1', 'z_bnds_1', 'U', 'V', 'W'])
+        hsurf, hfl = read_cosmo_nc_file(terrain_file, ['HSURF', 'HFL'])
 
-    # read in all required variables, generate warning if error occurs
-    try:
-        time = f.variables["time"][:]
-        lon = np.array(f.variables["lon_1"][:])
-        lat = np.array(f.variables["lat_1"][:])
-        u_c = f.variables["U"][:]
-        v_c = f.variables["V"][:]
-        w_c = f.variables["W"][:]
-
-    except:
-        print("ERROR: Variable(s) of NetCDF input file '" + filename + "'not valid, at least one variable does not exist. ")
-        return out
+    except IOError as e:
+            print('ERROR: Data file read failed')
+            return out
 
     time_true = time == time_requested*3600
     if (sum(time_true*1) != 1):
@@ -74,18 +58,15 @@ def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested):
     t = sum(time_true*np.arange(0, time.shape[0], 1))
 
     # convert to utm coordinates
-    proj1 = pyproj.Proj(proj='latlong', datum='WGS84')
-    proj2 = pyproj.Proj(proj='utm', zone=32, ellps='WGS84') # TODO determine correct zone depending on input lat/long
-
-    x_grid, y_grid = pyproj.transform(proj1, proj2, lon, lat)
-    x_cell, y_cell = pyproj.transform(proj1, proj2, lon_requested, lat_requested)
+    e_cell, n_cell, zone_num0, zone_letter0 = utm.from_latlon(lat_requested, lon_requested)
+    e_grid, n_grid, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
 
     # find the closest gridpoint
-    dist = (x_cell - x_grid)**2 + (y_cell - y_grid)**2
+    dist = (e_cell - e_grid)**2 + (n_cell - n_grid)**2
     idx_r, idx_c = np.unravel_index(dist.argmin(), dist.shape)
 
-    if (np.sqrt(dist[idx_r, idx_c]) > x_grid[0, 1] - x_grid[0, 0]):
-        print('ERROR: The distance to the closest gridpoint (', np.sqrt(dist[idx_r, idx_c]), ') is larger than the grid resolution:', x_grid[0, 1] - x_grid[0, 0])
+    if (np.sqrt(dist[idx_r, idx_c]) > e_grid[0, 1] - e_grid[0, 0]):
+        print('ERROR: The distance to the closest gridpoint (', np.sqrt(dist[idx_r, idx_c]), ') is larger than the grid resolution:', e_grid[0, 1] - e_grid[0, 0])
         return out
 
     # check in which quadrant the requested point lies with respect to the closest gridpoint
@@ -151,9 +132,36 @@ def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested):
 
     out['lat'] = lat[slice_y, slice_x]
     out['lon'] = lon[slice_y, slice_x]
+    out['x'] = e_grid[slice_y, slice_x]
+    out['y'] = n_grid[slice_y, slice_x]
     out['wind_x'] = u_c[t, slice_z, slice_y, slice_x]
     out['wind_y'] = v_c[t, slice_z, slice_y, slice_x]
     out['wind_z'] = w_c[t, slice_z, slice_y, slice_x]
+    out['hsurf'] = hsurf[slice_y, slice_x]
+    out['z'] = hfl[slice_z, slice_y, slice_x]
 
     return out
-    
+
+
+def read_cosmo_nc_file(filename, variable_list):
+    # open input file, throw warning if it fails
+    file_err = False
+    try:
+        f = netcdf.netcdf_file(filename, "r")
+    except TypeError:
+        print("ERROR: COSMO input file '" + filename + "'is not a NetCDF 3 file!")
+        raise IOError
+    except IOError as e:
+        print("ERROR: COSMO input file '" + filename + "'does not exist!")
+        raise e
+
+    # read in all required variables, generate warning if error occurs
+    try:
+        out = []
+        for variable in variable_list:
+            out.append(f.variables[variable][:].copy())
+    except:
+        print("ERROR: Variable(s) of NetCDF input file '" + filename + "'not valid, at least one variable does not exist. ")
+        raise IOError
+    f.close()
+    return out

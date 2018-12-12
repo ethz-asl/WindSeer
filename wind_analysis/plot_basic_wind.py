@@ -1,12 +1,16 @@
 import numpy as np
 from mpl_toolkits.mplot3d import axes3d
+import matplotlib
 import matplotlib.pyplot as plt
 import utm
 from pyulog.core import ULog
 import os
+import nn_wind_prediction.cosmo as cosmo
 
 savefig=False
-logfile = 'logs/13_02_02.ulg'
+logfile = 'logs/11_11_57.ulg'
+cosmo_file = 'data/riemenstalden/cosmo-1_ethz_fcst_2018112312.nc'
+cosmo_time = 0
 
 def rpy(roll, pitch, yaw):
     ra = np.array([[np.cos(roll), -np.sin(roll), 0],
@@ -24,11 +28,13 @@ def quaternion_rotation_matrix(q):
                   [2*(qi*qk - qj*qr), 2*(qj*qk + qi*qr), 1-2*(qi**2+qj**2)]])
     return R
 
-def get_colors(uu, vv, ww, cmap=plt.cm.hsv):
+def get_colors(uu, vv, ww, cmap=plt.cm.hsv, Vmin = 0.0, Vmax=None):
     # Color by azimuthal angle
     c = np.sqrt(uu**2 + vv**2 + ww**2)
     # Flatten and normalize
-    c = (c.ravel() - c.min()) / c.ptp()
+    if Vmax is None:
+        Vmax = c.ptp()
+    c = (c.ravel() - Vmin) / Vmax
     # Repeat for each body line and two head lines
     c = np.concatenate((c, np.repeat(c, 2)))
     # Colormap
@@ -127,6 +133,11 @@ for i, st in enumerate(skip_time):
 # For some reason they are negative... check signs
 wn, we = -wn, -we
 
+# Get cosmo wind
+cosmo_wind = cosmo.extract_cosmo_data(cosmo_file, lat[0], lon[0], cosmo_time,
+                               terrain_file='data/riemenstalden/cosmo-1_ethz_ana/cosmo-1_ethz_ana_const.nc')
+Vmax = np.sqrt((cosmo_wind['wind_x'].flatten()**2 + cosmo_wind['wind_y'].flatten()**2 + cosmo_wind['wind_z'].flatten()**2).max())
+
 # Plot the wind vector estimates
 fig = plt.figure()
 ax = fig.gca(projection='3d')
@@ -135,9 +146,9 @@ ax.set_xlabel('Easting (m)')
 ax.set_ylabel('Northing (m)')
 ax.set_zlabel('Altitude (m)')
 
-xx, yy, zz = x[::skip_amount]-x[0], y[::skip_amount]-y[0], alt[::skip_amount]-alt[0]
-ax.quiver(xx, yy, zz, we_east, we_north, we_up, colors=get_colors(we_east, we_north, we_up))
-ax.quiver(xx, yy, zz, we, wn, -wd, colors=get_colors(we, wn, wd, plt.cm.viridis))
+xx, yy, zz = x[::skip_amount]-x[0], y[::skip_amount]-y[0], alt[::skip_amount]
+# h_w_est = ax.quiver(xx, yy, zz, we_east, we_north, we_up, colors=get_colors(we_east, we_north, we_up, Vmax=Vmax))
+h_w_vanes = ax.quiver(xx, yy, zz, we, wn, -wd, colors=get_colors(we, wn, wd, Vmax=Vmax))
 
 f2, a2 = plt.subplots(3, 1)
 h_est = a2[0].plot(skip_time, we_east)
@@ -150,6 +161,25 @@ a2[1].set_ylabel('$V_N$')
 a2[2].plot(skip_time, we_up)
 a2[2].plot(skip_time, -wd)
 a2[2].set_ylabel('$V_D$')
+
+# Plot cosmo wind
+
+ax.plot(cosmo_wind['x'].flat-x[0], cosmo_wind['y'].flat-y[0], cosmo_wind['hsurf'].flat, 'k.')
+ones_vec = np.ones(cosmo_wind['wind_x'].shape[0])
+for ix in range(2):
+    for iy in range(2):
+        cwe, cwn, cwu = cosmo_wind['wind_x'][:, ix, iy], cosmo_wind['wind_y'][:, ix, iy], cosmo_wind['wind_z'][:, ix, iy]
+        ax.quiver(cosmo_wind['x'][ix, iy]*ones_vec-x[0], cosmo_wind['y'][ix, iy]*ones_vec-y[0], cosmo_wind['z'][:, ix, iy],
+                  cwe, cwn, cwu, colors=get_colors(cwe, cwn, cwu, Vmax=Vmax))
+norm = matplotlib.colors.Normalize()
+norm.autoscale([0, Vmax])
+
+sm = matplotlib.cm.ScalarMappable(cmap=plt.cm.hsv, norm=norm)
+sm.set_array([])
+h_cb = fig.colorbar(sm, ax=ax)
+ax.set_xlim(xx.min(), xx.max())
+ax.set_ylim(yy.min(), yy.max())
+ax.set_zlim(zz.min(), zz.max())
 
 if savefig:
     bn = os.path.basename(logfile)
