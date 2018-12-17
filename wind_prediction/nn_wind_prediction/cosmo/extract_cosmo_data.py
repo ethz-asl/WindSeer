@@ -16,10 +16,10 @@ except ImportError:
     exit()
 
 try:
-    import utm
+    import pyproj
 except ImportError:
-    print("'utm' is not installed. Use the command below to install it:")
-    print("     pip3 install utm")
+    print("'pyproj' is not installed. Use the command below to install it:")
+    print("     pip3 install pyproj")
     exit()
 
 def above_line_check(x1, y1, x2, y2, x_test, y_test):
@@ -57,16 +57,22 @@ def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, t
         return out
     t = sum(time_true*np.arange(0, time.shape[0], 1))
 
-    # convert to utm coordinates
-    e_cell, n_cell, zone_num0, zone_letter0 = utm.from_latlon(lat_requested, lon_requested)
-    e_grid, n_grid, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
+    # convert to CH1903/LV03 coordinates
+    proj_WGS84 = pyproj.Proj(proj='latlong', datum='WGS84')
+    proj_CH_1903_LV03 = pyproj.Proj(init="EPSG:21781")  # https://epsg.io/21781
+
+    x_cell, y_cell = pyproj.transform(proj_WGS84, proj_CH_1903_LV03, lon_requested, lat_requested)
+    x_grid, y_grid, h_grid = pyproj.transform(proj_WGS84, proj_CH_1903_LV03, lon, lat, hsurf)
+
+    # e_cell, n_cell, zone_num0, zone_letter0 = utm.from_latlon(lat_requested, lon_requested)
+    # e_grid, n_grid, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
 
     # find the closest gridpoint
-    dist = (e_cell - e_grid)**2 + (n_cell - n_grid)**2
+    dist = (x_cell - x_grid)**2 + (y_cell - y_grid)**2
     idx_r, idx_c = np.unravel_index(dist.argmin(), dist.shape)
 
-    if (np.sqrt(dist[idx_r, idx_c]) > e_grid[0, 1] - e_grid[0, 0]):
-        print('ERROR: The distance to the closest gridpoint (', np.sqrt(dist[idx_r, idx_c]), ') is larger than the grid resolution:', e_grid[0, 1] - e_grid[0, 0])
+    if (np.sqrt(dist[idx_r, idx_c]) > x_grid[0, 1] - x_grid[0, 0]):
+        print('ERROR: The distance to the closest gridpoint (', np.sqrt(dist[idx_r, idx_c]), ') is larger than the grid resolution:', x_grid[0, 1] - x_grid[0, 0])
         return out
 
     # check in which quadrant the requested point lies with respect to the closest gridpoint
@@ -132,13 +138,18 @@ def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, t
 
     out['lat'] = lat[slice_y, slice_x]
     out['lon'] = lon[slice_y, slice_x]
-    out['x'] = e_grid[slice_y, slice_x]
-    out['y'] = n_grid[slice_y, slice_x]
+    out['x'] = x_grid[slice_y, slice_x]
+    out['y'] = y_grid[slice_y, slice_x]
     out['wind_x'] = u_c[t, slice_z, slice_y, slice_x]
     out['wind_y'] = v_c[t, slice_z, slice_y, slice_x]
     out['wind_z'] = w_c[t, slice_z, slice_y, slice_x]
-    out['hsurf'] = hsurf[slice_y, slice_x]
+    out['hsurf'] = h_grid[slice_y, slice_x]             # These are on the CH1903 (like x and y)
+
+    # Note that the hfl altitudes are incorrect (WGS84, need to convert to CH1903)
     out['z'] = hfl[slice_z, slice_y, slice_x]
+    for i, hfli in enumerate(out['z']):
+        _x, _y, hi_ch = pyproj.transform(proj_WGS84, proj_CH_1903_LV03, out['lon'], out['lat'], hfli)
+        out['z'][i] = hi_ch
 
     return out
 

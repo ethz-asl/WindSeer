@@ -2,15 +2,18 @@ import numpy as np
 from mpl_toolkits.mplot3d import axes3d
 import matplotlib
 import matplotlib.pyplot as plt
-import utm
+from matplotlib import cm
+import pyproj
 from pyulog.core import ULog
 import os
 import nn_wind_prediction.cosmo as cosmo
+from get_mapgeo_terrain import get_terrain
 
-savefig=False
-logfile = 'logs/11_11_57.ulg'
+savefig=True
+logfile = 'logs/13_02_02.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
 cosmo_file = 'data/riemenstalden/cosmo-1_ethz_fcst_2018112312.nc'
-cosmo_time = 0
+cosmo_time = 1
+terrain_tiff = 'terrain/riemenstalden_full.tif'
 
 def rpy(roll, pitch, yaw):
     ra = np.array([[np.cos(roll), -np.sin(roll), 0],
@@ -82,11 +85,18 @@ data_dict = {}
 for d in target_data:
     data_dict[d.name] = d.data
 
+proj_WGS84 = pyproj.Proj(proj='latlong', datum='WGS84')
+# proj_EGM96 = pyproj.Proj(proj='latlong', ellps='WGS84', datum='EGS96') # init="EPSG:5773",
+proj_CH_1903_LV03 = pyproj.Proj(init="EPSG:21781")  # https://epsg.io/21781
+
 gp_time = data_dict['vehicle_global_position']['timestamp']
 lat, lon = data_dict['vehicle_global_position']['lat'], data_dict['vehicle_global_position']['lon']
-x0,y0, zone_num0, zone_letter0 = utm.from_latlon(lat[0], lon[0])
-x, y, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
-alt = data_dict['vehicle_global_position']['alt']
+# x0,y0, zone_num0, zone_letter0 = utm.from_latlon(lat[0], lon[0])
+# x, y, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
+alt_amsl = data_dict['vehicle_global_position']['alt']
+x, y, alt = pyproj.transform(proj_WGS84, proj_CH_1903_LV03, lon, lat, alt_amsl+48.306)
+x0, y0, alt0 = x[0], y[0], alt[0]
+
 vel_d = data_dict['vehicle_global_position']['vel_d']
 vel_e = data_dict['vehicle_global_position']['vel_e']
 vel_n = data_dict['vehicle_global_position']['vel_n']
@@ -138,6 +148,12 @@ cosmo_wind = cosmo.extract_cosmo_data(cosmo_file, lat[0], lon[0], cosmo_time,
                                terrain_file='data/riemenstalden/cosmo-1_ethz_ana/cosmo-1_ethz_ana_const.nc')
 Vmax = np.sqrt((cosmo_wind['wind_x'].flatten()**2 + cosmo_wind['wind_y'].flatten()**2 + cosmo_wind['wind_z'].flatten()**2).max())
 
+# Get corresponding terrain
+min_height = alt.min()
+x_terr, y_terr, z_terr, h_terr, full_block = \
+    get_terrain(terrain_tiff, cosmo_wind['x'][[0,1],[0,1]], cosmo_wind['y'][[0,1],[0,1]],
+                [min_height, min_height+1100.0], (64, 64, 64))
+
 # Plot the wind vector estimates
 fig = plt.figure()
 ax = fig.gca(projection='3d')
@@ -145,8 +161,12 @@ ax = fig.gca(projection='3d')
 ax.set_xlabel('Easting (m)')
 ax.set_ylabel('Northing (m)')
 ax.set_zlabel('Altitude (m)')
+# origin = (x[0], y[0], alt[0])
+origin = (0.0, 0.0, 0.0)
+X, Y = np.meshgrid(x_terr, y_terr)
+hs_terr = ax.plot_surface(X, Y, h_terr, cmap=cm.terrain)
 
-xx, yy, zz = x[::skip_amount]-x[0], y[::skip_amount]-y[0], alt[::skip_amount]
+xx, yy, zz = x[::skip_amount]-origin[0], y[::skip_amount]-origin[1], alt[::skip_amount]-origin[2]
 # h_w_est = ax.quiver(xx, yy, zz, we_east, we_north, we_up, colors=get_colors(we_east, we_north, we_up, Vmax=Vmax))
 h_w_vanes = ax.quiver(xx, yy, zz, we, wn, -wd, colors=get_colors(we, wn, wd, Vmax=Vmax))
 
@@ -164,25 +184,25 @@ a2[2].set_ylabel('$V_D$')
 
 # Plot cosmo wind
 
-ax.plot(cosmo_wind['x'].flat-x[0], cosmo_wind['y'].flat-y[0], cosmo_wind['hsurf'].flat, 'k.')
+ax.plot(cosmo_wind['x'].flatten()-origin[0], cosmo_wind['y'].flatten()-origin[1], cosmo_wind['hsurf'].flatten()-origin[2], 'k.')
 ones_vec = np.ones(cosmo_wind['wind_x'].shape[0])
 for ix in range(2):
     for iy in range(2):
         cwe, cwn, cwu = cosmo_wind['wind_x'][:, ix, iy], cosmo_wind['wind_y'][:, ix, iy], cosmo_wind['wind_z'][:, ix, iy]
-        ax.quiver(cosmo_wind['x'][ix, iy]*ones_vec-x[0], cosmo_wind['y'][ix, iy]*ones_vec-y[0], cosmo_wind['z'][:, ix, iy],
-                  cwe, cwn, cwu, colors=get_colors(cwe, cwn, cwu, Vmax=Vmax))
+        ax.quiver(cosmo_wind['x'][ix, iy]*ones_vec-origin[0], cosmo_wind['y'][ix, iy]*ones_vec-origin[1],
+                  cosmo_wind['z'][:, ix, iy] - origin[2], cwe, cwn, cwu, colors=get_colors(cwe, cwn, cwu, Vmax=Vmax))
 norm = matplotlib.colors.Normalize()
 norm.autoscale([0, Vmax])
 
 sm = matplotlib.cm.ScalarMappable(cmap=plt.cm.hsv, norm=norm)
 sm.set_array([])
 h_cb = fig.colorbar(sm, ax=ax)
-ax.set_xlim(xx.min(), xx.max())
-ax.set_ylim(yy.min(), yy.max())
-ax.set_zlim(zz.min(), zz.max())
+# ax.set_xlim(xx.min(), xx.max())
+# ax.set_ylim(yy.min(), yy.max())
+# ax.set_zlim(zz.min(), zz.max())
 
 if savefig:
     bn = os.path.basename(logfile)
     fig.savefig('fig/{0}_wind3d.png'.format(bn), bbox_inches='tight')
     f2.savefig('fig/{0}_wind.png'.format(bn), bbox_inches='tight')
-plt.show()
+plt.show(block=False)
