@@ -15,7 +15,7 @@ namespace intel_wind {
 namespace planning {
 
 MyGoalSampleableRegion::MyGoalSampleableRegion(const ob::SpaceInformationPtr& si_b,
-                                                           const ob::StateSpacePtr& space)
+                                               const ob::StateSpacePtr& space)
     : /* Note for planningApproach_ == 3:
        * Space information is set to m_ssgc simple setup which uses the Dubins distance. */
        ob::GoalSampleableRegion(si_b),

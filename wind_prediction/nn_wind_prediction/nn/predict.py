@@ -157,84 +157,105 @@ def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_
             utils.plot_prediction(output, label, input[0], predict_uncertainty)
 
 
-def save_prediction_to_database(net, device, params, savename, testset):
+def save_prediction_to_database(models_list, device, params, savename, testset):
+    if len(models_list) == 0:
+        print('ERROR: The given model list is empty')
+        exit()
+
+    interpolator = utils.interpolation.DataInterpolation(device, 3,
+                                                         params.model['model_args']['n_x'],
+                                                         params.model['model_args']['n_y'],
+                                                         params.model['model_args']['n_z'])
+
     with torch.no_grad():
         with h5py.File(savename, 'w') as f:
             testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                                      shuffle=False, num_workers=0)
 
             for i, data in enumerate(testloader):
+                # create the group name for this sample
+                samplename = testset.get_name(i)
+                grp = f.create_group(samplename)
+                gridshape = None
+
                 # get the prediction and scale it correctly
                 inputs, labels, ds = data
                 inputs, labels = inputs.to(device), labels.to(device)
-                outputs = net(inputs)
-                outputs = outputs.squeeze()
+
+                for model in models_list:
+                    outputs = model['net'](inputs)
+                    outputs = outputs.squeeze()
+
+                    if gridshape == None:
+                        gridshape = outputs.shape[1:4]
+                    else:
+                        if gridshape != outputs.shape[1:4]:
+                            print('ERROR: Output shape of the models is not consistent, aborting')
+                            exit()
+
+                    if len(outputs.shape) == 4:
+                        outputs[0,:,:,:] *= params.data['uhor_scaling']
+                        outputs[1,:,:,:] *= params.data['uhor_scaling']
+                        outputs[2,:,:,:] *= params.data['uz_scaling']
+
+                        if model['params'].data['use_turbulence']:
+                            outputs[3,:,:,:] *= params.data['turbulence_scaling']
+
+                        outputs = outputs.cpu()
+
+                        wind = outputs[:3,:,:,:].numpy()
+                        if model['params'].data['use_turbulence']:
+                            turbulence = outputs[3,:,:,:].numpy()
+                        else:
+                            turbulence = np.zeros_like(outputs[0,:,:,:].numpy())
+
+                    else:
+                        print('ERROR: Unknown dimension of the output:', len(outputs.shape))
+                        exit()
+
+                    # save the prediction
+                    grp.create_dataset('predictions/' + model['name'] + '/wind', data = wind, dtype='f')
+                    grp.create_dataset('predictions/' + model['name'] + '/turbulence', data = turbulence, dtype='f')
+
+                # prepare the inputs and labels
                 labels = labels.squeeze()
+                inputs = inputs.squeeze()
 
-                if len(outputs.shape) == 4:
-                    outputs[0,:,:,:] *= params.data['uhor_scaling']
-                    outputs[1,:,:,:] *= params.data['uhor_scaling']
-                    outputs[2,:,:,:] *= params.data['uz_scaling']
-                    labels[0,:,:,:] *= params.data['uhor_scaling']
-                    labels[1,:,:,:] *= params.data['uhor_scaling']
-                    labels[2,:,:,:] *= params.data['uz_scaling']
-                    if params.data['use_turbulence']:
-                        outputs[3,:,:,:] *= params.data['turbulence_scaling']
-                        labels[3,:,:,:] *= params.data['turbulence_scaling']
+                labels[0,:,:,:] *= params.data['uhor_scaling']
+                labels[1,:,:,:] *= params.data['uhor_scaling']
+                labels[2,:,:,:] *= params.data['uz_scaling']
+                inputs[1,:,:,:] *= params.data['uhor_scaling']
+                inputs[2,:,:,:] *= params.data['uhor_scaling']
+                inputs[3,:,:,:] *= params.data['uz_scaling']
+                if model['params'].data['use_turbulence']:
+                    labels[3,:,:,:] *= params.data['turbulence_scaling']
 
-                    inputs, labels, outputs = inputs.cpu(), labels.cpu(), outputs.cpu()
+                inputs, labels = inputs.cpu(), labels.cpu()
 
-                    wind = outputs[:3,:,:,:].numpy()
-                    wind_label = labels[:3,:,:,:].numpy()
-                    if params.data['use_turbulence']:
-                        turbulence = outputs[3,:,:,:].numpy()
-                        turbulence_label = labels[3,:,:,:].numpy()
-
-                elif len(outputs.shape) == 3:
-                    outputs[0,:,:] *= params.data['uhor_scaling']
-                    outputs[1,:,:] *= params.data['uz_scaling']
-                    labels[0,:,:] *= params.data['uhor_scaling']
-                    labels[1,:,:] *= params.data['uz_scaling']
-                    if params.data['use_turbulence']:
-                        outputs[2,:,:] *= params.data['turbulence_scaling']
-                        labels[2,:,:] *= params.data['turbulence_scaling']
-
-                    inputs, labels, outputs = inputs.cpu(), labels.cpu(), outputs.cpu()
-
-                    wind = outputs[:2,:,:].numpy()
-                    wind_label = labels[:2,:,:].numpy()
-                    if params.data['use_turbulence']:
-                        turbulence = outputs[2,:,:].numpy()
-                        turbulence_label = labels[2,:,:].numpy()
-
+                wind_label = labels[:3,:,:,:].numpy()
+                if model['params'].data['use_turbulence']:
+                    turbulence_label = labels[3,:,:,:].numpy()
                 else:
-                    print('save_prediction_to_database: Unknown dimension of the output:', len(outputs.shape))
-                    return
+                    turbulence_label = np.zeros_like(labels[0,:,:,:].numpy())
 
-                # get the terrain
-                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0,0,:,:,:].numpy(), 0)) * ds[2]
+                # save the reference
+                grp.create_dataset('reference/wind', data = wind_label, dtype='f')
+                grp.create_dataset('reference/turbulence', data = turbulence_label, dtype='f')
 
-                # store the prediction and the respective metadata
-                samplename = testset.get_name(i)
-                grp = f.create_group(samplename)
+                # if the input and output have the same shape then also save the interpolated input as a prediction
+                if ((outputs.shape[3] == inputs.shape[3]) and
+                    (outputs.shape[2] == inputs.shape[2]) and
+                    (outputs.shape[1] == inputs.shape[1])):
+                    grp.create_dataset('predictions/interpolated/wind', data = interpolator.edge_interpolation(inputs[1:4,:,:,:]), dtype='f')
+                    grp.create_dataset('predictions/interpolated/turbulence', data = np.zeros_like(turbulence_label), dtype='f')
 
+                # save the grid information
+                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0,:,:,:].numpy(), 0)) * ds[2]
                 dset_terr = grp.create_dataset('terrain', data = terrain.numpy(), dtype='f')
 
-                dset_wind = grp.create_dataset('wind', data = wind, dtype='f')
-                dset_wind_r = grp.create_dataset('wind_reference', data = wind_label, dtype='f')
+                grp.create_dataset('grid_info/nx', data = gridshape[2], dtype='i')
+                grp.create_dataset('grid_info/ny', data = gridshape[1], dtype='i')
+                grp.create_dataset('grid_info/nz', data = gridshape[0], dtype='i')
 
-                if params.data['use_turbulence']:
-                    dset_turb = grp.create_dataset('turbulence', data = turbulence, dtype='f')
-                    dset_turb_r = grp.create_dataset('turbulence_reference', data = turbulence_label, dtype='f')
-
-                if len(outputs.shape) == 4:
-                    dset_nx = grp.create_dataset('grid_info/nx', data = outputs.shape[3], dtype='i')
-                    dset_ny = grp.create_dataset('grid_info/ny', data = outputs.shape[2], dtype='i')
-                    dset_nz = grp.create_dataset('grid_info/nz', data = outputs.shape[1], dtype='i')
-                elif len(outputs.shape) == 3:
-                    dset_nx = grp.create_dataset('grid_info/nx', data = outputs.shape[2], dtype='i')
-                    dset_ny = grp.create_dataset('grid_info/ny', data = 0, dtype='i')
-                    dset_nz = grp.create_dataset('grid_info/nz', data = outputs.shape[1], dtype='i')
-
-                dset_reshor = grp.create_dataset('grid_info/resolution_horizontal', data = ds[0].item(), dtype='f')
-                dset_resver = grp.create_dataset('grid_info/resolution_vertical', data = ds[2].item(), dtype='f')
+                grp.create_dataset('grid_info/resolution_horizontal', data = ds[0].item(), dtype='f')
+                grp.create_dataset('grid_info/resolution_vertical', data = ds[2].item(), dtype='f')

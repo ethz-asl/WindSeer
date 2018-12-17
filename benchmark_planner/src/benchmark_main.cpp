@@ -2,6 +2,7 @@
 #include <array>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <string>
@@ -36,24 +37,23 @@ struct PlanningResult {
   double executed_time = 0.0;
 };
 
-PlanningResult plan_with_simple_setup(HDF5Interface::Sample input) {
-  // set the wind grid
+PlanningResult process_sample(const HDF5Interface::Sample& sample, std::vector<std::array<double, 8>> sg_configurations, double planning_time) {
+  // setup the wind grid based on the reference wind field
   WindGridGeometry geo;
   geo.min_x = 0.0;
   geo.min_y = 0.0;
   geo.min_z = 0.0;
-  geo.nx = input.nx;
-  geo.ny = input.ny;
-  geo.nz = input.nz;
-  geo.resolution_hor = input.resolution_horizontal;
-  geo.resolution_ver = input.resolution_vertical;
+  geo.nx = sample.nx;
+  geo.ny = sample.ny;
+  geo.nz = sample.nz;
+  geo.resolution_hor = sample.resolution_horizontal;
+  geo.resolution_ver = sample.resolution_vertical;
 
-  WindGrid wind_grid;
-  wind_grid.setWindGrid(input.wind_x, input.wind_y, input.wind_z, geo);
+  std::shared_ptr<WindGrid> wind_grid = std::make_shared<WindGrid>(WindGrid());
 
   // set terrain
   HeightMapClass map = HeightMapClass();
-  map.setHeightMapData(input.terrain, input.nx, input.nz * input.resolution_vertical, input.resolution_horizontal);
+  map.setHeightMapData(sample.terrain, sample.nx, sample.nz * sample.resolution_vertical, sample.resolution_horizontal);
 
   // construct the state space we are planning in
   ob::StateSpacePtr space(new MySE3StateSpace());
@@ -98,28 +98,48 @@ PlanningResult plan_with_simple_setup(HDF5Interface::Sample input) {
   my_rrtstar->setComputekNearestNeighbors2way(false);
   ss.setPlanner(ob::PlannerPtr(my_rrtstar));
 
-  // define start and goal
-  ob::ScopedState<> start(space);
-  start.random();
+  // define start and goal states
+  ob::ScopedState<MySE3StateSpace> start(space);
+  ob::ScopedState<MySE3StateSpace> goal(space);
 
-  ob::ScopedState<> goal(space);
-  goal.random();
+  const int len = sg_configurations.size();
+  int counter = 0;
+  for(auto const sg_pair: sg_configurations) {
+    // clear the data from the previous run
+    ss.clear();
+    boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->clear();
 
-  std::cout << "start" << std::endl;
-  start.print(std::cout);
-  std::cout << "goal" << std::endl;
-  goal.print(std::cout);
+    // some info for the user
+    counter++;
+    std::cout << "\e[1;7m\tProcessing case: " << counter << " out of " <<  len << "\e[0m" << std::endl;
+    std::cout << "\e[1;7m\t\tPlanning with reference wind field\e[0m" << std::endl;
 
-  ss.setStartAndGoalStates(start, goal);
+    // get the start and goal position TODO add also the bounding box so that it is at least valid with respect to z
+    const double start_z = (map.getMaxZ() - map.getTerrainHeight(sg_pair[0], sg_pair[1])) * sg_pair[2] + map.getTerrainHeight(sg_pair[0], sg_pair[1]);
+    const double goal_z =  (map.getMaxZ() - map.getTerrainHeight(sg_pair[4], sg_pair[5])) * sg_pair[6] + map.getTerrainHeight(sg_pair[4], sg_pair[5]);
+    start->setXYZYaw(sg_pair[0], sg_pair[1], start_z, 0.0);
+    goal->setXYZYaw(sg_pair[4], sg_pair[5], goal_z, 0.0);
+    ss.setStartState(start);
+    ss.setGoalState(goal);
 
-  // solve the path planning problem
-  ob::PlannerStatus solved = ss.solve(10.0);
+    // plan with the reference wind field
+    wind_grid->setWindGrid(sample.reference.wind_x, sample.reference.wind_y, sample.reference.wind_z, geo);
+    ob::PlannerStatus solved = ss.solve(planning_time);
 
-  if (solved) {
-      std::cout << "Found solution:" << std::endl;
-      // print the path to screen
-      ss.getSolutionPath().print(std::cout);
+    if (solved) {
+      // a solution with the cfd wind field is found, loop over all models
+      for(auto const& prediction: sample.predictions) {
+        std::cout << "\e[1;7m\t\tPlanning with the prediction from the " << prediction.model_name << " model\e[0m" << std::endl;
+        ss.clear();
+        boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->clear();
+        wind_grid->setWindGrid(prediction.wind_x, prediction.wind_y, prediction.wind_z, geo);
+
+        solved = ss.solve(planning_time);
+      }
+    }
   }
+
+
 }
 
 int benchmark(int argc, char *argv[]) {
@@ -138,12 +158,12 @@ int benchmark(int argc, char *argv[]) {
   }
   sg_file.close();
 
-  for(auto const& tmp: sg_configurations) {
-    printf("%.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f\n", tmp[0], tmp[1], tmp[2], tmp[3], tmp[4], tmp[5], tmp[6], tmp[7]);
-  }
+  // TODO: get the planning time
+  const double planning_time = 10.0;
 
-
-//  plan_with_simple_setup(database.getSample(0));
+  // TODO loop over all samples
+  std::cout << "\e[1;7mStart processing sample: " << 0 << "\e[0m" << std::endl;
+  process_sample(database.getSample(0), sg_configurations, planning_time);
 }
 
 } // namespace planning

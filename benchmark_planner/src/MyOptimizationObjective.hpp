@@ -43,7 +43,7 @@ namespace ob = ompl::base;
 class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
  public:
   /** \brief Constructor */
-  MyOptimizationObjective(const ob::SpaceInformationPtr &si, const WindGrid& wind_grid);
+  MyOptimizationObjective(const ob::SpaceInformationPtr &si, std::shared_ptr<WindGrid> wind_grid);
 
   /** \brief Destructor. */
   virtual ~MyOptimizationObjective() override;
@@ -69,6 +69,11 @@ class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
    * Check whether the the cost \e c1 is considered better than the cost \e c2.
    */
   virtual bool isCostBetterThan(ob::Cost c1, ob::Cost c2) const override;
+
+  /** \brief clear
+   * Clear the solution dependent properties of the class.
+   */
+  void clear();
 
  private:
   /** \brief computeProjectedWindMagnitude
@@ -107,7 +112,7 @@ class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
   std::string cost_unit_ = " s";
 
   /** \brief Contains the wind field used for planning */
-  WindGrid wind_grid_;
+  std::shared_ptr<WindGrid> wind_grid_;
 
   /** \brief Cache if a solution is known. */
   mutable bool hasSolution_ = false;

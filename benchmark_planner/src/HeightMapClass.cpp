@@ -90,6 +90,19 @@ bool HeightMapClass::collide(double x, double y, double z) const {
 }
 
 
+double HeightMapClass::getTerrainHeight(double x, double y) const {
+  if (std::isnan(x) || std::isnan(y))
+      return 0.0;
+
+  // point is inside the map so compare z to the map z value.
+  const size_t idx =
+      floor((x - min_x_) * resolution_inverse_) +
+      floor((y - min_y_) * resolution_inverse_) * n_x_;
+
+  return height_data_[idx];
+}
+
+
 double HeightMapClass::getMaxX() const {
   return max_x_;
 }

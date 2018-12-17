@@ -25,10 +25,9 @@ namespace intel_wind {
 
 namespace planning {
 
-MyOptimizationObjective::MyOptimizationObjective(const ob::SpaceInformationPtr& si, const WindGrid& wind_grid)
+MyOptimizationObjective::MyOptimizationObjective(const ob::SpaceInformationPtr& si, std::shared_ptr<WindGrid> wind_grid)
         : ob::PathLengthOptimizationObjective(si),
-          wind_grid_() {
-  wind_grid_ = wind_grid;
+          wind_grid_(wind_grid) {
   setCostToGoHeuristic(boost::bind(&MyOptimizationObjective::goalRegionTimeToGo, this, _1, _2));
 }
 
@@ -76,6 +75,12 @@ bool MyOptimizationObjective::isCostBetterThan(ob::Cost c1, ob::Cost c2) const {
 }
 
 
+void MyOptimizationObjective::clear() {
+  currentBestCost_ = std::numeric_limits<double>::infinity();
+  hasSolution_ = false;
+}
+
+
 double MyOptimizationObjective::computeProjectedWindMagnitude(const ob::State *s1, const ob::State *s2) const {
   const double dx = s2->as<typename MySE3StateSpace::StateType>()->getX() - s1->as<typename MySE3StateSpace::StateType>()->getX();
   const double dy = s2->as<typename MySE3StateSpace::StateType>()->getY() - s1->as<typename MySE3StateSpace::StateType>()->getY();
@@ -85,9 +90,9 @@ double MyOptimizationObjective::computeProjectedWindMagnitude(const ob::State *s
   if (eucl_dist <= 0.0)
     return 0.0;
 
-  return fabs(dx)/eucl_dist * wind_grid_.getMaxWindMagnitudeX() +
-         fabs(dy)/eucl_dist * wind_grid_.getMaxWindMagnitudeY() +
-         fabs(dz)/eucl_dist * wind_grid_.getMaxWindMagnitudeZ();
+  return fabs(dx)/eucl_dist * wind_grid_->getMaxWindMagnitudeX() +
+         fabs(dy)/eucl_dist * wind_grid_->getMaxWindMagnitudeY() +
+         fabs(dz)/eucl_dist * wind_grid_->getMaxWindMagnitudeZ();
 }
 
 
@@ -97,7 +102,7 @@ ob::InformedSamplerPtr MyOptimizationObjective::allocInformedStateSampler(const 
   // Make the direct path-length informed sampler and return. If OMPL was compiled with Eigen, a direct version is available, if not a rejection-based technique can be used
 #if OMPL_HAVE_EIGEN3
   return boost::make_shared<MySampler>(probDefn, maxNumberCalls,
-          wind_grid_.getMaxWindMagnitudeX(), wind_grid_.getMaxWindMagnitudeY(), wind_grid_.getMaxWindMagnitudeZ());
+          wind_grid_->getMaxWindMagnitudeX(), wind_grid_->getMaxWindMagnitudeY(), wind_grid_->getMaxWindMagnitudeZ());
 
 #else
   throw Exception("Direct sampling of the path-length objective requires Eigen, but this version of OMPL was compiled without Eigen support. If possible, please install Eigen and recompile OMPL. If this is not possible, you can manually create an instantiation of RejectionInfSampler to approximate the behaviour of direct informed sampling.");
@@ -128,7 +133,7 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
 
   const double vair_inv = 1.0 / v_air_param;
   const double distance_inv = 1.0 / dist;
-  const double dt_max = wind_grid_.getResolution() * 0.5 * distance_inv;
+  const double dt_max = wind_grid_->getResolution() * 0.5 * distance_inv;
   const double dx = s2->as<typename MySE3StateSpace::StateType>()->getX() - s1->as<typename MySE3StateSpace::StateType>()->getX();
   const double dy = s2->as<typename MySE3StateSpace::StateType>()->getY() - s1->as<typename MySE3StateSpace::StateType>()->getY();
   const double dz = s2->as<typename MySE3StateSpace::StateType>()->getZ() - s1->as<typename MySE3StateSpace::StateType>()->getZ();
@@ -144,7 +149,7 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
 
     si_->getStateSpace()->interpolate(s1, s2, t_interpol, state_interpol);
 
-    wind_grid_.getWind(
+    wind_grid_->getWind(
             state_interpol->as<MySE3StateSpace::StateType>()->getX(),
             state_interpol->as<MySE3StateSpace::StateType>()->getY(),
             state_interpol->as<MySE3StateSpace::StateType>()->getZ(),

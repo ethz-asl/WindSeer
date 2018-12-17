@@ -118,13 +118,13 @@ private:
   int n_z_ = 0;
 
   /** \brief wind in x-direction. */
-  std::vector<float> wind_x_ = {};
+  std::vector<float> wind_x_;
 
   /** \brief wind in y-direction. */
-  std::vector<float> wind_y_ = {};
+  std::vector<float> wind_y_;
 
   /** \brief wind in z-direction. */
-  std::vector<float> wind_z_ = {};
+  std::vector<float> wind_z_;
 
   /** \brief Maximum magnitude of the wind in x-direction of the meteo grid. */
   double max_wind_magnitude_x_ = 0.0;

@@ -30,6 +30,11 @@ public:
    */
   bool collide(double x, double y, double z) const;
 
+  /** \brief getTerrainHeight
+   * Get the terrain height of a certain cell.
+   */
+  double getTerrainHeight(double x, double y) const;
+
   /** \brief getMaxX
    * The the upper boundary in x direction in the global frame.
    */

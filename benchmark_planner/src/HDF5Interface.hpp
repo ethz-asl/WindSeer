@@ -21,6 +21,14 @@ namespace planning {
  */
 class HDF5Interface {
 public:
+  struct Flow {
+    std::string model_name = "";
+    std::vector<float> wind_x;
+    std::vector<float> wind_y;
+    std::vector<float> wind_z;
+    std::vector<float> turbulence;
+  };
+
   struct Sample {
     int nx = 0;
     int ny = 0;
@@ -29,20 +37,13 @@ public:
     float resolution_horizontal = 0.0f;
     float resolution_vertical = 0.0f;
 
-    std::vector<float> terrain = {{}};
+    std::vector<float> terrain;
 
-    std::vector<float> turbulence = {{}};
-    std::vector<float> turbulence_reference = {{}};
+    std::vector<Flow> predictions;
 
-    std::vector<float> wind_x = {{}};
-    std::vector<float> wind_y = {{}};
-    std::vector<float> wind_z = {{}};
-
-    std::vector<float> wind_x_reference = {{}};
-    std::vector<float> wind_y_reference = {{}};
-    std::vector<float> wind_z_reference = {{}};
-
+    Flow reference = Flow();
   };
+
   /** \brief Constructor */
   HDF5Interface();
 
@@ -59,7 +60,6 @@ private:
   H5::H5File file_;
 
   std::vector<std::string> sample_names_;
-
 };
 
 herr_t iter_func(hid_t loc_id, const char *name, const H5L_info_t *info,
