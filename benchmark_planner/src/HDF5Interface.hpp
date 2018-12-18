@@ -30,6 +30,8 @@ public:
   };
 
   struct Sample {
+    std::string sample_name = "";
+
     int nx = 0;
     int ny = 0;
     int nz = 0;
@@ -56,6 +58,7 @@ public:
   std::vector<std::string>& getSampleNames();
 
   Sample getSample(int idx) const;
+
 private:
   H5::H5File file_;
 

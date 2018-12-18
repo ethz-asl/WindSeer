@@ -43,7 +43,9 @@ namespace ob = ompl::base;
 class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
  public:
   /** \brief Constructor */
-  MyOptimizationObjective(const ob::SpaceInformationPtr &si, std::shared_ptr<WindGrid> wind_grid);
+  MyOptimizationObjective(const ob::SpaceInformationPtr &si,
+                          std::shared_ptr<WindGrid> wind_grid,
+                          std::shared_ptr<WindGrid> reference_wind_grid);
 
   /** \brief Destructor. */
   virtual ~MyOptimizationObjective() override;
@@ -74,6 +76,26 @@ class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
    * Clear the solution dependent properties of the class.
    */
   void clear();
+
+  /** \brief setUseReference
+   * Set if the reference or prediction wind field should be used.
+   */
+  void setUseReference(const bool use_reference);
+
+  /** \brief getHasSolution
+   * Get if a solution has been found.
+   */
+  bool getHasSolution() const;
+
+  /** \brief getCurrentBestCost
+   * Get the cost of the current best solution.
+   */
+  double getCurrentBestCost() const;
+
+  /** \brief setVerbose
+   * Set the verbose value.
+   */
+  void setVerbose(bool verbose);
 
  private:
   /** \brief computeProjectedWindMagnitude
@@ -111,8 +133,16 @@ class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
   /** \brief String for the unit of the cost. */
   std::string cost_unit_ = " s";
 
-  /** \brief Contains the wind field used for planning */
+  /** \brief Contains the predicted wind grid*/
   std::shared_ptr<WindGrid> wind_grid_;
+
+  /** \brief Contains the reference wind grid*/
+  std::shared_ptr<WindGrid> reference_wind_grid_;
+
+  /** \brief Indicates if the reference wind field is used for planning*/
+  bool useReference_ = false;
+
+  bool verbose_ = false;
 
   /** \brief Cache if a solution is known. */
   mutable bool hasSolution_ = false;

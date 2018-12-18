@@ -50,6 +50,7 @@ HDF5Interface::Sample HDF5Interface::getSample(int idx) const {
   }
 
   HDF5Interface::Sample out;
+  out.sample_name = sample_names_[idx];
 
   // open the group and copy the data to the output struct
   H5::Group group = file_.openGroup(sample_names_[idx].c_str());

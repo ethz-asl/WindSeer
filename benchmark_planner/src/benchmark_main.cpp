@@ -13,6 +13,7 @@
 #include <ompl/base/State.h>
 #include <ompl/base/spaces/RealVectorBounds.h>
 #include <ompl/geometric/SimpleSetup.h>
+#include <ompl/util/Console.h>
 
 #include "params.hpp"
 #include "HDF5Interface.hpp"
@@ -31,13 +32,27 @@ namespace planning {
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
 
-struct PlanningResult {
-  bool solved = false;
-  double planned_time = 0.0;
-  double executed_time = 0.0;
+struct PredictionPlanningResult {
+  std::string model_name = "";
+  double planned_cost = 0.0;
+  double execution_cost = 0.0;
 };
 
-PlanningResult process_sample(const HDF5Interface::Sample& sample, std::vector<std::array<double, 8>> sg_configurations, double planning_time) {
+struct PlanningResult {
+  bool solution_possible = false;
+  double reference_cost = 0.0;
+  std::vector<PredictionPlanningResult> prediction_results;
+};
+
+struct SampleResult {
+  std::string sample_name = "";
+  std::vector<PlanningResult> planning_result;
+};
+
+SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std::array<double, 8>> sg_configurations, double planning_time) {
+  SampleResult result;
+  result.sample_name = sample.sample_name;
+
   // setup the wind grid based on the reference wind field
   WindGridGeometry geo;
   geo.min_x = 0.0;
@@ -50,6 +65,8 @@ PlanningResult process_sample(const HDF5Interface::Sample& sample, std::vector<s
   geo.resolution_ver = sample.resolution_vertical;
 
   std::shared_ptr<WindGrid> wind_grid = std::make_shared<WindGrid>(WindGrid());
+  std::shared_ptr<WindGrid> reference_wind_grid = std::make_shared<WindGrid>(WindGrid());
+  reference_wind_grid->setWindGrid(sample.reference.wind_x, sample.reference.wind_y, sample.reference.wind_z, geo);
 
   // set terrain
   HeightMapClass map = HeightMapClass();
@@ -85,13 +102,15 @@ PlanningResult process_sample(const HDF5Interface::Sample& sample, std::vector<s
   ss.getSpaceInformation()->setStateValidityCheckingResolution(res);
 
   // Set optimization objectives
-  ss.setOptimizationObjective(ob::OptimizationObjectivePtr(new MyOptimizationObjective(ss.getSpaceInformation(), wind_grid)));
+  ss.setOptimizationObjective(
+          ob::OptimizationObjectivePtr(
+                  new MyOptimizationObjective(ss.getSpaceInformation(), wind_grid, reference_wind_grid)));
 
   // set the planner
   MyRRTstar *my_rrtstar = new MyRRTstar(ss.getSpaceInformation());
   my_rrtstar->setRange(ss.getSpaceInformation()->getMaximumExtent() / 7.0);
   my_rrtstar->setGoalBias(0.05);
-  my_rrtstar->setFocusSearch(false);
+  my_rrtstar->setFocusSearch(false); // TODO occasionally get segfault when true, fix it
   // need to enable admissible cost to come, false sometimes leads to SEGFAULTs due to pruned goal states.
   my_rrtstar->setAdmissibleCostToCome(true);
   my_rrtstar->setCustomNearestNeighbor(false);
@@ -105,18 +124,22 @@ PlanningResult process_sample(const HDF5Interface::Sample& sample, std::vector<s
   const int len = sg_configurations.size();
   int counter = 0;
   for(auto const sg_pair: sg_configurations) {
+    PlanningResult planning_result;
+
     // clear the data from the previous run
     ss.clear();
     boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->clear();
 
     // some info for the user
     counter++;
-    std::cout << "\e[1;7m\tProcessing case: " << counter << " out of " <<  len << "\e[0m" << std::endl;
-    std::cout << "\e[1;7m\t\tPlanning with reference wind field\e[0m" << std::endl;
+    std::cout << "\e[1m\tProcessing start/goal pair: " << counter << " out of " <<  len << "\e[0m" << std::endl;
+    std::cout << "\e[1m\t\tPlanning with reference wind field\e[0m" << std::endl;
 
     // get the start and goal position TODO add also the bounding box so that it is at least valid with respect to z
-    const double start_z = (map.getMaxZ() - map.getTerrainHeight(sg_pair[0], sg_pair[1])) * sg_pair[2] + map.getTerrainHeight(sg_pair[0], sg_pair[1]);
-    const double goal_z =  (map.getMaxZ() - map.getTerrainHeight(sg_pair[4], sg_pair[5])) * sg_pair[6] + map.getTerrainHeight(sg_pair[4], sg_pair[5]);
+    const double start_z = (map.getMaxZ() - map.getTerrainHeight(sg_pair[0], sg_pair[1]) - 0.5 * airplane_bb_param[2]) * sg_pair[2] +
+            map.getTerrainHeight(sg_pair[0], sg_pair[1]) + 0.5 * airplane_bb_param[2];
+    const double goal_z =  (map.getMaxZ() - map.getTerrainHeight(sg_pair[4], sg_pair[5]) - 0.5 * airplane_bb_param[2]) * sg_pair[6] +
+            map.getTerrainHeight(sg_pair[4], sg_pair[5]) + 0.5 * airplane_bb_param[2];
     start->setXYZYaw(sg_pair[0], sg_pair[1], start_z, 0.0);
     goal->setXYZYaw(sg_pair[4], sg_pair[5], goal_z, 0.0);
     ss.setStartState(start);
@@ -126,20 +149,52 @@ PlanningResult process_sample(const HDF5Interface::Sample& sample, std::vector<s
     wind_grid->setWindGrid(sample.reference.wind_x, sample.reference.wind_y, sample.reference.wind_z, geo);
     ob::PlannerStatus solved = ss.solve(planning_time);
 
-    if (solved) {
+    // store the data in the planning result
+    planning_result.solution_possible = solved == ob::PlannerStatus::EXACT_SOLUTION;
+    planning_result.reference_cost =
+            boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->getCurrentBestCost();
+    std::cout << "\e[1m\t\t\treference cost: " << planning_result.reference_cost << "\e[0m" << std::endl;
+
+    if (planning_result.solution_possible) {
       // a solution with the cfd wind field is found, loop over all models
       for(auto const& prediction: sample.predictions) {
-        std::cout << "\e[1;7m\t\tPlanning with the prediction from the " << prediction.model_name << " model\e[0m" << std::endl;
+        PredictionPlanningResult prediction_result;
+        prediction_result.model_name = prediction.model_name;
+
+        std::cout << "\e[1m\t\tPlanning with the prediction from the '" << prediction.model_name << "' model\e[0m" << std::endl;
         ss.clear();
         boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->clear();
         wind_grid->setWindGrid(prediction.wind_x, prediction.wind_y, prediction.wind_z, geo);
 
         solved = ss.solve(planning_time);
+
+        prediction_result.planned_cost = boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->getCurrentBestCost();
+
+        // loop over solution path to determine if it is feasible and what the cost is
+        boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(true);
+
+        double cost(0.0);
+        og::PathGeometric path = ss.getSolutionPath();
+        for (size_t idx_p = 1; idx_p < path.getStateCount(); ++idx_p) {
+          const double intermediate_cost = ss.getOptimizationObjective()->motionCost(path.getState(idx_p - 1),path.getState(idx_p)).value();
+          cost += intermediate_cost;
+        }
+
+        prediction_result.execution_cost = cost;
+        std::cout << "\e[1m\t\t\tplanned cost:   " << prediction_result.planned_cost << "\e[0m" << std::endl;
+        std::cout << "\e[1m\t\t\texecution cost: " << prediction_result.execution_cost << "\e[0m" << std::endl;
+
+        boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(false);
+
+        planning_result.prediction_results.push_back(prediction_result);
       }
     }
+
+    // add the planning results to the output
+    result.planning_result.push_back(planning_result);
   }
 
-
+  return result;
 }
 
 int benchmark(int argc, char *argv[]) {
@@ -158,12 +213,20 @@ int benchmark(int argc, char *argv[]) {
   }
   sg_file.close();
 
-  // TODO: get the planning time
-  const double planning_time = 10.0;
+  // TODO: get the planning time from the arguments
+  const double planning_time = 2.0;
 
-  // TODO loop over all samples
-  std::cout << "\e[1;7mStart processing sample: " << 0 << "\e[0m" << std::endl;
-  process_sample(database.getSample(0), sg_configurations, planning_time);
+  SampleResult results[database.getNumberSamples()];
+  // TODO parallelize this loop
+  for (int i = 0; i < database.getNumberSamples(); ++i) {
+    // change to \e[1;7m for inverse colors
+    std::cout << "\e[1mStart processing sample: " << i+1 << " out of " << database.getNumberSamples() << " (" << database.getSample(i).sample_name << ")\e[0m" << std::endl;
+    results[i] = process_sample(database.getSample(i), sg_configurations, planning_time);
+  }
+
+  // TODO store the results in an hdf5 database
+
+  return 0;
 }
 
 } // namespace planning
@@ -171,5 +234,6 @@ int benchmark(int argc, char *argv[]) {
 } // namespace intel_wind
 
 int main (int argc, char *argv[]) {
+  ompl::msg::setLogLevel(ompl::msg::LOG_WARN);
   return intel_wind::planning::benchmark(argc, argv);
 }
