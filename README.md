@@ -15,7 +15,7 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
    `pip3 install torchvision`
 
 3. Install the following required python packages:
-   `pip3 install tensorboardX lz4 numpy`
+   `pip3 install tensorboardX lz4 numpy tqdm`
 
 4. Install the `nn_wind_prediction` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
     `pip install -e wind_prediction/`

@@ -7,7 +7,7 @@ import numpy as np
 import time
 import torch
 from torch.utils.data import DataLoader
-
+from tqdm import tqdm
 
 def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
     #Compute the average loss
@@ -28,7 +28,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
             predict_uncertainty = False
             print('predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False')
 
-        for i, data in enumerate(loader_testset):
+        for i, data in tqdm(enumerate(loader_testset), total=len(loader_testset)):
             inputs, labels, ds = data
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
@@ -172,7 +172,7 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
             testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                                      shuffle=False, num_workers=0)
 
-            for i, data in enumerate(testloader):
+            for i, data in tqdm(enumerate(testloader), total=len(testloader)):
                 # create the group name for this sample
                 samplename = testset.get_name(i)
                 grp = f.create_group(samplename)
