@@ -249,6 +249,10 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                     grp.create_dataset('predictions/interpolated/wind', data = interpolator.edge_interpolation(inputs[1:4,:,:,:]), dtype='f')
                     grp.create_dataset('predictions/interpolated/turbulence', data = np.zeros_like(turbulence_label), dtype='f')
 
+                # create the no wind prediction
+                grp.create_dataset('predictions/zerowind/wind', data = np.zeros_like(wind_label), dtype='f')
+                grp.create_dataset('predictions/zerowind/turbulence', data = np.zeros_like(turbulence_label), dtype='f')
+
                 # save the grid information
                 terrain = (outputs.shape[1] - np.count_nonzero(inputs[0,:,:,:].numpy(), 0)) * ds[2]
                 dset_terr = grp.create_dataset('terrain', data = terrain.numpy(), dtype='f')

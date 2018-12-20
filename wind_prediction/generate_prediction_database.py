@@ -19,13 +19,13 @@ savename = 'prediction.hdf5'
 
 # define here the models
 models = []
-models.append({'name': 'stacked_1',
+models.append({'name': 'model_1',
                'version': 'latest',
                'prediction_level': 10})
-models.append({'name': 'stacked_2',
+models.append({'name': 'model_2',
                'version': 'latest',
                'prediction_level': 10})
-models.append({'name': 'stacked_3',
+models.append({'name': 'model_3',
                'version': 'latest',
                'prediction_level': 10})
 
