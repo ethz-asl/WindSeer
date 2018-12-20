@@ -1,4 +1,4 @@
-
+#include <algorithm>
 #include <array>
 #include <fstream>
 #include <H5Cpp.h>
@@ -39,16 +39,33 @@ struct PredictionPlanningResult {
   double execution_cost = 0.0;
 };
 
+
 struct PlanningResult {
   bool solution_possible = false;
   double reference_cost = 0.0;
   std::vector<PredictionPlanningResult> prediction_results;
 };
 
+
 struct SampleResult {
   std::string sample_name = "";
   std::vector<PlanningResult> planning_result;
 };
+
+
+char* getCmdOption(char ** begin, char ** end, const std::string & option) {
+  char ** itr = std::find(begin, end, option);
+  if (itr != end && ++itr != end) {
+    return *itr;
+  }
+  return 0;
+}
+
+
+bool cmdOptionExists(char** begin, char** end, const std::string& option) {
+  return std::find(begin, end, option) != end;
+}
+
 
 SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std::array<double, 8>> sg_configurations, double planning_time) {
   SampleResult result;
@@ -198,9 +215,10 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
   return result;
 }
 
-void write_hdf5_database(SampleResult results[], int size) {
+
+void write_hdf5_database(SampleResult results[], int size, std::string database_name) {
   // create the HDF5 file and the necessary dataspaces
-  H5::H5File file = H5::H5File("planning_results.hdf5", H5F_ACC_TRUNC);
+  H5::H5File file = H5::H5File(database_name, H5F_ACC_TRUNC);
   H5::DataSet dataset;
 
   hsize_t dimsf[1];
@@ -248,10 +266,46 @@ void write_hdf5_database(SampleResult results[], int size) {
 
 }
 
+
 int benchmark(int argc, char *argv[]) {
+  // parse the input arguments
+  char* value = getCmdOption(argv, argv + argc, "-i");
+  std::string input_database_name = "prediction.hdf5";
+  if (value) {
+    input_database_name = std::string(value);
+  }
+
+  value = getCmdOption(argv, argv + argc, "-o");
+  std::string output_database_name = "planning_results.hdf5";
+  if (value) {
+    output_database_name = std::string(value);
+  }
+
+  value = getCmdOption(argv, argv + argc, "-t");
+  double planning_time = 10.0;
+  if (value) {
+    planning_time = atof(value);
+  }
+
+  if(cmdOptionExists(argv, argv+argc, "-h") || cmdOptionExists(argv, argv+argc, "--help")) {
+      std::cout << "usage: ./benchmark [-h][-i INPUT_DATASET]" << std::endl;
+      std::cout << "                   [-o OUTPUT_DATASET]" << std::endl;
+      std::cout << "                   [-t PLANNING_TIME]" << std::endl;
+      std::cout << std::endl;
+      std::cout << "Planning benchmark for the wind prediction models" << std::endl;
+      std::cout << std::endl;
+      std::cout << "optional arguments" << std::endl;
+      std::cout << "  -h, --help\t\tshow this message and exit" << std::endl;
+      std::cout << "  -i INPUT_DATASET\tfilename of the input database" << std::endl;
+      std::cout << "  -o OUTPUT_DATASET\tfilename of the output database" << std::endl;
+      std::cout << "  -t PLANNING_TIME\tplanning time for each planning case [s]" << std::endl;
+
+    return 0;
+  }
+
   // open the specified file and the specified dataset in the file.
   HDF5Interface database;
-  database.init("prediction.hdf5"); // TODO make the filename configurable
+  database.init(input_database_name);
 
   // open the file with the start and goal configurations
   std::ifstream sg_file("start_goal_configurations.txt");
@@ -265,7 +319,6 @@ int benchmark(int argc, char *argv[]) {
   sg_file.close();
 
   // TODO: get the planning time from the arguments
-  const double planning_time = 2.0;
 
   SampleResult results[database.getNumberSamples()];
   // TODO parallelize this loop
@@ -276,7 +329,7 @@ int benchmark(int argc, char *argv[]) {
   }
 
   // write the results into a hdf5 database
-  write_hdf5_database(results, database.getNumberSamples());
+  write_hdf5_database(results, database.getNumberSamples(), output_database_name);
 
   return 0;
 }
@@ -284,6 +337,7 @@ int benchmark(int argc, char *argv[]) {
 } // namespace planning
 
 } // namespace intel_wind
+
 
 int main (int argc, char *argv[]) {
   ompl::msg::setLogLevel(ompl::msg::LOG_WARN);
