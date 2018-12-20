@@ -1,6 +1,7 @@
 
 #include <array>
 #include <fstream>
+#include <H5Cpp.h>
 #include <iostream>
 #include <memory>
 #include <random>
@@ -197,10 +198,60 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
   return result;
 }
 
+void write_hdf5_database(SampleResult results[], int size) {
+  // create the HDF5 file and the necessary dataspaces
+  H5::H5File file = H5::H5File("planning_results.hdf5", H5F_ACC_TRUNC);
+  H5::DataSet dataset;
+
+  hsize_t dimsf[1];
+  dimsf[0] = 1;
+  H5::DataSpace dataspace(1, dimsf);
+
+  H5::IntType datatype_bool(H5::PredType::NATIVE_INT);
+  H5::FloatType datatype_double(H5::PredType::NATIVE_DOUBLE);
+
+  // loop over samples
+  for (int i = 0; i < size; ++i) {
+    H5::Group sample_group = H5::Group(file.createGroup(results[i].sample_name.c_str()));
+
+    // loop over start and goal configurations
+    int counter = 0;
+    for (auto const& planning_result: results[i].planning_result) {
+      // only write data if a path was possible
+      if (planning_result.solution_possible) {
+        std::ostringstream oss;
+        oss << "configuration" << counter;
+        H5::Group configuration_group = H5::Group(sample_group.createGroup(oss.str().c_str()));
+
+        dataset = configuration_group.createDataSet("path_possible", datatype_bool, dataspace);
+        const int path_possible = planning_result.solution_possible;
+        dataset.write(&path_possible, H5::PredType::NATIVE_INT);
+
+        dataset = configuration_group.createDataSet("reference_cost", datatype_double, dataspace);
+        dataset.write(&planning_result.reference_cost, H5::PredType::NATIVE_DOUBLE);
+
+        H5::Group prediction_main_group = H5::Group(configuration_group.createGroup("predictions"));
+        for (auto const& prediction_result: planning_result.prediction_results) {
+          H5::Group prediction_group = H5::Group(prediction_main_group.createGroup(prediction_result.model_name.c_str()));
+
+          dataset = prediction_group.createDataSet("planned_cost", datatype_double, dataspace);
+          dataset.write(&prediction_result.planned_cost, H5::PredType::NATIVE_DOUBLE);
+
+          dataset = prediction_group.createDataSet("execution_cost", datatype_double, dataspace);
+          dataset.write(&prediction_result.execution_cost, H5::PredType::NATIVE_DOUBLE);
+        }
+      }
+
+      ++counter;
+    }
+  }
+
+}
+
 int benchmark(int argc, char *argv[]) {
   // open the specified file and the specified dataset in the file.
   HDF5Interface database;
-  database.init("prediction.hdf5");
+  database.init("prediction.hdf5"); // TODO make the filename configurable
 
   // open the file with the start and goal configurations
   std::ifstream sg_file("start_goal_configurations.txt");
@@ -224,7 +275,8 @@ int benchmark(int argc, char *argv[]) {
     results[i] = process_sample(database.getSample(i), sg_configurations, planning_time);
   }
 
-  // TODO store the results in an hdf5 database
+  // write the results into a hdf5 database
+  write_hdf5_database(results, database.getNumberSamples());
 
   return 0;
 }
