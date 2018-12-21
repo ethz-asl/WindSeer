@@ -15,7 +15,7 @@ namespace planning {
 /** \brief Dimensions of box representing airplane (length x width x height).
  *  29.9m to avoid special cases if bounding box has the same size as the map resolution.
  */
-const std::vector<double> airplane_bb_param = { 29.9, 29.9, 29.9 };
+const std::vector<double> airplane_bb_param = { 9.9, 9.9, 9.9 };
 
 /** \brief Airspeed of the airplane */
 const double v_air_param = 15;  // m/s

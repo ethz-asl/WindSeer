@@ -209,17 +209,26 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
     wind_normal = sqrt(u * u + v * v + w * w - wind_forward * wind_forward);
 
     double scale = 0.8; // safety margin of 20 %
+    if (useReference_) {
+        scale = 1.0;
+    }
 
-    if ((0.0 > wind_forward + v_air_param * scale) ||
-            (fabsf(w) > v_air_param * sinf(max_pitch) * scale)) {
+    // check for too strong vertical wind
+    if (fabsf(w) > v_air_param * sinf(max_pitch) * scale) {
       return std::numeric_limits<double>::infinity();
     }
 
-    if (wind_normal > v_air_param * scale) {
+    // check if normal wind exceeds airspeed
+    if ((wind_normal > v_air_param * scale) || (std::isnan(wind_normal))) {
       return std::numeric_limits<double>::infinity();
     }
 
     airspeed_forward = sqrt(v_air_param * v_air_param - wind_normal * wind_normal);
+
+    // check if the airplane is able to move forward after correcting for the normal wind
+    if (0.0 > airspeed_forward + wind_forward / scale) {
+      return std::numeric_limits<double>::infinity();
+    }
 
     cost += dt * dist / (airspeed_forward + wind_forward);
 
@@ -228,12 +237,12 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
   }
 
   if (cost < 0.0) {
-    std::cout << "negative cost" << std::endl;
+    std::cout << "negative cost, should never happen" << std::endl;
     return std::numeric_limits<double>::infinity();
   }
 
   if (std::isnan(cost)) {
-    std::cout << "nan cost" << distance_inv << std::endl;
+    std::cout << "nan cost, should never happen" << std::endl;
     return std::numeric_limits<double>::infinity();
   }
 
