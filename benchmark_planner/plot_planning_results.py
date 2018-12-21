@@ -83,18 +83,18 @@ def main():
         execution_planned_ratio.append(model_dict[key]['execution_planned_ratio'])
 
     # visualize the valid path results
-    bar_plot(labels, valid, 'Prediction Models', 'Fraction Valid Paths [-]')
+    bar_plot(labels, valid, 'Prediction Models', 'Fraction Valid Paths [-]', [0.8, 1.0])
 
     # visualize the normalized execution cost
-    violin_plot(labels, normalized_execution_cost, 'Prediction Models', 'Normalized Execution Cost [-]')
+    violin_plot(labels, normalized_execution_cost, 'Prediction Models', 'Normalized Execution Cost [-]', [0.8, 1.2])
 
     # visualize the normalized
-    violin_plot(labels, execution_planned_ratio, 'Prediction Models', 'Ratio Executed Cost / Planned Cost [-]')
+    violin_plot(labels, execution_planned_ratio, 'Prediction Models', 'Ratio Executed Cost / Planned Cost [-]', [0.5, 1.5])
 
     plt.show()
 
 
-def bar_plot(labels, data, xlabel, ylabel):
+def bar_plot(labels, data, xlabel, ylabel, ylim):
     index = np.arange(len(labels))
     bar_width = 0.8
 
@@ -109,10 +109,11 @@ def bar_plot(labels, data, xlabel, ylabel):
     ax.set_ylabel(ylabel)
     ax.set_xticks(index + bar_width / 2)
     ax.set_xticklabels(labels)
+    ax.set_ylim(ylim)
     fig.tight_layout()
 
 
-def violin_plot(labels, data, xlabel, ylabel):
+def violin_plot(labels, data, xlabel, ylabel, ylim):
     index = np.arange(len(labels))
 
     fig, ax = plt.subplots()
@@ -146,6 +147,7 @@ def violin_plot(labels, data, xlabel, ylabel):
     ax.set_ylabel(ylabel)
     ax.set_xticks(inds)
     ax.set_xticklabels(labels)
+    ax.set_ylim(ylim)
     fig.tight_layout()
 
 
