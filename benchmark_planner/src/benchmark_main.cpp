@@ -3,6 +3,7 @@
 #include <fstream>
 #include <H5Cpp.h>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <random>
 #include <sstream>
@@ -150,14 +151,17 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
 
     // some info for the user
     counter++;
+
+#if not defined(_OPENMP)
     std::cout << "\e[1m\tProcessing start/goal pair: " << counter << " out of " <<  len << "\e[0m" << std::endl;
     std::cout << "\e[1m\t\tPlanning with reference wind field\e[0m" << std::endl;
+#endif
 
     // get the start and goal position TODO add also the bounding box so that it is at least valid with respect to z
-    const double start_z = (map.getMaxZ() - map.getTerrainHeight(sg_pair[0], sg_pair[1]) - 0.5 * airplane_bb_param[2]) * sg_pair[2] +
-            map.getTerrainHeight(sg_pair[0], sg_pair[1]) + 0.5 * airplane_bb_param[2];
-    const double goal_z =  (map.getMaxZ() - map.getTerrainHeight(sg_pair[4], sg_pair[5]) - 0.5 * airplane_bb_param[2]) * sg_pair[6] +
-            map.getTerrainHeight(sg_pair[4], sg_pair[5]) + 0.5 * airplane_bb_param[2];
+    const double start_z = (map.getMaxZ() - map.getTerrainHeight(sg_pair[0], sg_pair[1]) - airplane_bb_param[2]) * sg_pair[2] +
+            map.getTerrainHeight(sg_pair[0], sg_pair[1]) + airplane_bb_param[2];
+    const double goal_z =  (map.getMaxZ() - map.getTerrainHeight(sg_pair[4], sg_pair[5]) - airplane_bb_param[2]) * sg_pair[6] +
+            map.getTerrainHeight(sg_pair[4], sg_pair[5]) + airplane_bb_param[2];
     start->setXYZYaw(sg_pair[0], sg_pair[1], start_z, 0.0);
     goal->setXYZYaw(sg_pair[4], sg_pair[5], goal_z, 0.0);
     ss.setStartState(start);
@@ -171,7 +175,10 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
     planning_result.solution_possible = solved == ob::PlannerStatus::EXACT_SOLUTION;
     planning_result.reference_cost =
             boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->getCurrentBestCost();
+
+#if not defined(_OPENMP)
     std::cout << "\e[1m\t\t\treference cost: " << planning_result.reference_cost << "\e[0m" << std::endl;
+#endif
 
     if (planning_result.solution_possible) {
       // a solution with the cfd wind field is found, loop over all models
@@ -179,7 +186,9 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
         PredictionPlanningResult prediction_result;
         prediction_result.model_name = prediction.model_name;
 
+#if not defined(_OPENMP)
         std::cout << "\e[1m\t\tPlanning with the prediction from the '" << prediction.model_name << "' model\e[0m" << std::endl;
+#endif
         ss.clear();
         boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->clear();
         wind_grid->setWindGrid(prediction.wind_x, prediction.wind_y, prediction.wind_z, geo);
@@ -188,21 +197,31 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
 
         prediction_result.planned_cost = boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->getCurrentBestCost();
 
-        // loop over solution path to determine if it is feasible and what the cost is
-        boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(true);
+        if (solved) {
+          // loop over solution path to determine if it is feasible and what the cost is
+          boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(true);
 
-        double cost(0.0);
-        og::PathGeometric path = ss.getSolutionPath();
-        for (size_t idx_p = 1; idx_p < path.getStateCount(); ++idx_p) {
-          const double intermediate_cost = ss.getOptimizationObjective()->motionCost(path.getState(idx_p - 1),path.getState(idx_p)).value();
-          cost += intermediate_cost;
+          double cost(0.0);
+          og::PathGeometric path = ss.getSolutionPath();
+          for (size_t idx_p = 1; idx_p < path.getStateCount(); ++idx_p) {
+            const double intermediate_cost = ss.getOptimizationObjective()->motionCost(path.getState(idx_p - 1),path.getState(idx_p)).value();
+            cost += intermediate_cost;
+          }
+
+          prediction_result.execution_cost = cost;
+
+#if not defined(_OPENMP)
+          std::cout << "\e[1m\t\t\tplanned cost:   " << prediction_result.planned_cost << "\e[0m" << std::endl;
+          std::cout << "\e[1m\t\t\texecution cost: " << prediction_result.execution_cost << "\e[0m" << std::endl;
+#endif
+
+          boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(false);
+        } else {
+          prediction_result.execution_cost = std::numeric_limits<double>::infinity();
+#if not defined(_OPENMP)
+          std::cout << "\e[1m\t\t\tno solution found\e[0m" << std::endl;
+#endif
         }
-
-        prediction_result.execution_cost = cost;
-        std::cout << "\e[1m\t\t\tplanned cost:   " << prediction_result.planned_cost << "\e[0m" << std::endl;
-        std::cout << "\e[1m\t\t\texecution cost: " << prediction_result.execution_cost << "\e[0m" << std::endl;
-
-        boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(false);
 
         planning_result.prediction_results.push_back(prediction_result);
       }
@@ -318,14 +337,17 @@ int benchmark(int argc, char *argv[]) {
   }
   sg_file.close();
 
-  // TODO: get the planning time from the arguments
-
   SampleResult results[database.getNumberSamples()];
-  // TODO parallelize this loop
-  for (int i = 0; i < database.getNumberSamples(); ++i) {
-    // change to \e[1;7m for inverse colors
+  int i;
+
+#pragma omp parallel for
+  for (i = 0; i < database.getNumberSamples(); ++i) {
+#pragma omp critical
     std::cout << "\e[1mStart processing sample: " << i+1 << " out of " << database.getNumberSamples() << " (" << database.getSample(i).sample_name << ")\e[0m" << std::endl;
-    results[i] = process_sample(database.getSample(i), sg_configurations, planning_time);
+    // change to \e[1;7m for inverse colors
+    SampleResult tmp = process_sample(database.getSample(i), sg_configurations, planning_time);
+#pragma omp critical
+    results[i] = tmp;
   }
 
   // write the results into a hdf5 database
@@ -337,7 +359,6 @@ int benchmark(int argc, char *argv[]) {
 } // namespace planning
 
 } // namespace intel_wind
-
 
 int main (int argc, char *argv[]) {
   ompl::msg::setLogLevel(ompl::msg::LOG_WARN);

@@ -12,8 +12,8 @@ x_min_default = 0
 x_max_default = 1100
 y_min_default = 0
 y_max_default = 1100
-z_max_default = 0.5
-min_dist_default = 500.0
+z_max_default = 0.25
+min_dist_default = 750.0
 n_samples_default = 10
 #----------------------------------------------------------
 
