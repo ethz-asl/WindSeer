@@ -27,6 +27,7 @@
 #include "MyStateValidityCheckerClass.hpp"
 #include "WindGrid.hpp"
 
+
 namespace intel_wind {
 
 namespace planning {
@@ -180,51 +181,50 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
     std::cout << "\e[1m\t\t\treference cost: " << planning_result.reference_cost << "\e[0m" << std::endl;
 #endif
 
-    if (planning_result.solution_possible) {
-      // a solution with the cfd wind field is found, loop over all models
-      for(auto const& prediction: sample.predictions) {
-        PredictionPlanningResult prediction_result;
-        prediction_result.model_name = prediction.model_name;
+    // a solution with the cfd wind field is found, loop over all models
+    for(auto const& prediction: sample.predictions) {
+      PredictionPlanningResult prediction_result;
+      prediction_result.model_name = prediction.model_name;
 
 #if not defined(_OPENMP)
-        std::cout << "\e[1m\t\tPlanning with the prediction from the '" << prediction.model_name << "' model\e[0m" << std::endl;
+      std::cout << "\e[1m\t\tPlanning with the prediction from the '" << prediction.model_name << "' model\e[0m" << std::endl;
 #endif
-        ss.clear();
-        boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->clear();
-        wind_grid->setWindGrid(prediction.wind_x, prediction.wind_y, prediction.wind_z, geo);
+      ss.clear();
+      boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->clear();
+      wind_grid->setWindGrid(prediction.wind_x, prediction.wind_y, prediction.wind_z, geo);
 
-        solved = ss.solve(planning_time);
+      solved = ss.solve(planning_time);
 
-        prediction_result.planned_cost = boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->getCurrentBestCost();
+      prediction_result.planned_cost = boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->getCurrentBestCost();
 
-        if (solved) {
-          // loop over solution path to determine if it is feasible and what the cost is
-          boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(true);
+      if (solved == ob::PlannerStatus::EXACT_SOLUTION) {
+        // loop over solution path to determine if it is feasible and what the cost is
+        boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(true);
 
-          double cost(0.0);
-          og::PathGeometric path = ss.getSolutionPath();
-          for (size_t idx_p = 1; idx_p < path.getStateCount(); ++idx_p) {
-            const double intermediate_cost = ss.getOptimizationObjective()->motionCost(path.getState(idx_p - 1),path.getState(idx_p)).value();
-            cost += intermediate_cost;
-          }
-
-          prediction_result.execution_cost = cost;
-
-#if not defined(_OPENMP)
-          std::cout << "\e[1m\t\t\tplanned cost:   " << prediction_result.planned_cost << "\e[0m" << std::endl;
-          std::cout << "\e[1m\t\t\texecution cost: " << prediction_result.execution_cost << "\e[0m" << std::endl;
-#endif
-
-          boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(false);
-        } else {
-          prediction_result.execution_cost = std::numeric_limits<double>::infinity();
-#if not defined(_OPENMP)
-          std::cout << "\e[1m\t\t\tno solution found\e[0m" << std::endl;
-#endif
+        double cost(0.0);
+        og::PathGeometric path = ss.getSolutionPath();
+        for (size_t idx_p = 1; idx_p < path.getStateCount(); ++idx_p) {
+          const double intermediate_cost = ss.getOptimizationObjective()->motionCost(path.getState(idx_p - 1),path.getState(idx_p)).value();
+          cost += intermediate_cost;
         }
 
-        planning_result.prediction_results.push_back(prediction_result);
+        prediction_result.execution_cost = cost;
+
+#if not defined(_OPENMP)
+        std::cout << "\e[1m\t\t\tplanned cost:   " << prediction_result.planned_cost << "\e[0m" << std::endl;
+        std::cout << "\e[1m\t\t\texecution cost: " << prediction_result.execution_cost << "\e[0m" << std::endl;
+#endif
+
+        boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(false);
+      } else {
+        prediction_result.execution_cost = std::numeric_limits<double>::infinity();
+        prediction_result.planned_cost = std::numeric_limits<double>::infinity();
+#if not defined(_OPENMP)
+        std::cout << "\e[1m\t\t\tno solution found\e[0m" << std::endl;
+#endif
       }
+
+      planning_result.prediction_results.push_back(prediction_result);
     }
 
     // add the planning results to the output
@@ -255,28 +255,26 @@ void write_hdf5_database(SampleResult results[], int size, std::string database_
     int counter = 0;
     for (auto const& planning_result: results[i].planning_result) {
       // only write data if a path was possible
-      if (planning_result.solution_possible) {
-        std::ostringstream oss;
-        oss << "configuration" << counter;
-        H5::Group configuration_group = H5::Group(sample_group.createGroup(oss.str().c_str()));
+      std::ostringstream oss;
+      oss << "configuration" << counter;
+      H5::Group configuration_group = H5::Group(sample_group.createGroup(oss.str().c_str()));
 
-        dataset = configuration_group.createDataSet("path_possible", datatype_bool, dataspace);
-        const int path_possible = planning_result.solution_possible;
-        dataset.write(&path_possible, H5::PredType::NATIVE_INT);
+      dataset = configuration_group.createDataSet("path_possible", datatype_bool, dataspace);
+      const int path_possible = planning_result.solution_possible;
+      dataset.write(&path_possible, H5::PredType::NATIVE_INT);
 
-        dataset = configuration_group.createDataSet("reference_cost", datatype_double, dataspace);
-        dataset.write(&planning_result.reference_cost, H5::PredType::NATIVE_DOUBLE);
+      dataset = configuration_group.createDataSet("reference_cost", datatype_double, dataspace);
+      dataset.write(&planning_result.reference_cost, H5::PredType::NATIVE_DOUBLE);
 
-        H5::Group prediction_main_group = H5::Group(configuration_group.createGroup("predictions"));
-        for (auto const& prediction_result: planning_result.prediction_results) {
-          H5::Group prediction_group = H5::Group(prediction_main_group.createGroup(prediction_result.model_name.c_str()));
+      H5::Group prediction_main_group = H5::Group(configuration_group.createGroup("predictions"));
+      for (auto const& prediction_result: planning_result.prediction_results) {
+        H5::Group prediction_group = H5::Group(prediction_main_group.createGroup(prediction_result.model_name.c_str()));
 
-          dataset = prediction_group.createDataSet("planned_cost", datatype_double, dataspace);
-          dataset.write(&prediction_result.planned_cost, H5::PredType::NATIVE_DOUBLE);
+        dataset = prediction_group.createDataSet("planned_cost", datatype_double, dataspace);
+        dataset.write(&prediction_result.planned_cost, H5::PredType::NATIVE_DOUBLE);
 
-          dataset = prediction_group.createDataSet("execution_cost", datatype_double, dataspace);
-          dataset.write(&prediction_result.execution_cost, H5::PredType::NATIVE_DOUBLE);
-        }
+        dataset = prediction_group.createDataSet("execution_cost", datatype_double, dataspace);
+        dataset.write(&prediction_result.execution_cost, H5::PredType::NATIVE_DOUBLE);
       }
 
       ++counter;
