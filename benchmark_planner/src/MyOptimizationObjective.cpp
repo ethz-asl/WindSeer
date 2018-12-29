@@ -215,11 +215,13 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
 
     // check for too strong vertical wind
     if (fabsf(w) > v_air_param * sinf(max_pitch) * scale) {
+      si_->freeState(state_interpol);
       return std::numeric_limits<double>::infinity();
     }
 
     // check if normal wind exceeds airspeed
     if ((wind_normal > v_air_param * scale) || (std::isnan(wind_normal))) {
+      si_->freeState(state_interpol);
       return std::numeric_limits<double>::infinity();
     }
 
@@ -227,6 +229,7 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
 
     // check if the airplane is able to move forward after correcting for the normal wind
     if (0.0 > airspeed_forward + wind_forward / scale) {
+      si_->freeState(state_interpol);
       return std::numeric_limits<double>::infinity();
     }
 
@@ -235,6 +238,8 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
     // update the interpolation time
     t_interpol += dt;
   }
+
+  si_->freeState(state_interpol);
 
   if (cost < 0.0) {
     std::cout << "negative cost, should never happen" << std::endl;
