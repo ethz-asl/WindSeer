@@ -23,7 +23,7 @@ except ImportError:
     exit()
 
 
-def get_terrain(terrain_geotiff, x, y, z, resolution=(64,64,64)):
+def get_terrain(terrain_geotiff, x, y, z, resolution=(64,64,64), build_binary_block=True):
 
     img = gdal.Open(terrain_geotiff)
 
@@ -54,12 +54,16 @@ def get_terrain(terrain_geotiff, x, y, z, resolution=(64,64,64)):
     y_target = y[0] + (y[1] - y[0])/(resolution[1]-1) * np.arange(resolution[1])
     z_out = interp_spline(y_target, x_target)
 
-    # Build binary indicator array
-    z_target = z[0] + (z[1] - z[0])/(resolution[2]-1) * np.arange(resolution[2])
-    full_block = np.zeros(resolution, dtype='bool')
-    for i in range(z_out.shape[0]):
-        for j in range(z_out.shape[1]):
-            height_dex = np.sum(z_target < z_out[i,j])
-            full_block[i,j,:height_dex] = True
+    if build_binary_block:
+        # Build binary indicator array
+        z_target = z[0] + (z[1] - z[0])/(resolution[2]-1) * np.arange(resolution[2])
+        full_block = np.zeros(resolution, dtype='bool')
+        for i in range(z_out.shape[0]):
+            for j in range(z_out.shape[1]):
+                height_dex = np.sum(z_target < z_out[i,j])
+                full_block[i,j,:height_dex] = True
 
-    return x_target, y_target, z_target, z_out, full_block
+        return x_target, y_target, z_target, z_out, full_block
+
+    else:
+        return x_target, y_target, z_out

@@ -32,7 +32,9 @@ def above_line_check(x1, y1, x2, y2, x_test, y_test):
     else:
         return False
 
-def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, terrain_file = None):
+def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, terrain_file = None,
+                       cosmo_projection = pyproj.Proj(proj='latlong', datum='WGS84'),
+                       output_projection = pyproj.Proj(init="EPSG:21781")):
     """Opens the requested COSMO NetCDF file and extracts all wind profiles that are required to calculate the initial wind field 
     for the complete meteo grid domain. 
     """
@@ -57,12 +59,9 @@ def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, t
         return out
     t = sum(time_true*np.arange(0, time.shape[0], 1))
 
-    # convert to CH1903/LV03 coordinates
-    proj_WGS84 = pyproj.Proj(proj='latlong', datum='WGS84')
-    proj_CH_1903_LV03 = pyproj.Proj(init="EPSG:21781")  # https://epsg.io/21781
-
-    x_cell, y_cell = pyproj.transform(proj_WGS84, proj_CH_1903_LV03, lon_requested, lat_requested)
-    x_grid, y_grid, h_grid = pyproj.transform(proj_WGS84, proj_CH_1903_LV03, lon, lat, hsurf)
+    # convert to output coordinate projection
+    x_cell, y_cell = pyproj.transform(cosmo_projection, output_projection, lon_requested, lat_requested)
+    x_grid, y_grid, h_grid = pyproj.transform(cosmo_projection, output_projection, lon, lat, hsurf)
 
     # e_cell, n_cell, zone_num0, zone_letter0 = utm.from_latlon(lat_requested, lon_requested)
     # e_grid, n_grid, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
@@ -148,7 +147,7 @@ def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, t
     # Note that the hfl altitudes are incorrect (WGS84, need to convert to CH1903)
     out['z'] = hfl[slice_z, slice_y, slice_x]
     for i, hfli in enumerate(out['z']):
-        _x, _y, hi_ch = pyproj.transform(proj_WGS84, proj_CH_1903_LV03, out['lon'], out['lat'], hfli)
+        _x, _y, hi_ch = pyproj.transform(cosmo_projection, output_projection, out['lon'], out['lat'], hfli)
         out['z'][i] = hi_ch
 
     return out

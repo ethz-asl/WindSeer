@@ -10,10 +10,10 @@ import nn_wind_prediction.cosmo as cosmo
 from get_mapgeo_terrain import get_terrain
 
 savefig=True
-logfile = 'logs/13_02_02.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
-cosmo_file = 'data/riemenstalden/cosmo-1_ethz_fcst_2018112312.nc'
+logfile = 'logs/10_36_34.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
+cosmo_file = 'data/riemenstalden/cosmo-1_ethz_fcst_2018112309.nc'
 cosmo_time = 1
-terrain_tiff = 'terrain/riemenstalden_full.tif'
+terrain_tiff = 'terrain/fluelen_full.tif'         # riemenstalden_full
 
 def rpy(roll, pitch, yaw):
     ra = np.array([[np.cos(roll), -np.sin(roll), 0],
@@ -86,15 +86,19 @@ for d in target_data:
     data_dict[d.name] = d.data
 
 proj_WGS84 = pyproj.Proj(proj='latlong', datum='WGS84')
-# proj_EGM96 = pyproj.Proj(proj='latlong', ellps='WGS84', datum='EGS96') # init="EPSG:5773",
+proj_EGM96 = pyproj.Proj(init="EPSG:4326", geoidgrids="egm96_15.gtx") # init="EPSG:5773",
 proj_CH_1903_LV03 = pyproj.Proj(init="EPSG:21781")  # https://epsg.io/21781
+proj_CH_1903_LV03_SWISSTOPO = pyproj.Proj(init="CH:1903_LV03")
+proj_CH_1903_LV95 = pyproj.Proj(init="EPSG:2056")
+proj_CH_1903 = pyproj.Proj(init="CH:1903")
+proj_SPHERE = pyproj.Proj(proj='latlong', ellps='sphere', a='6371000')
 
 gp_time = data_dict['vehicle_global_position']['timestamp']
 lat, lon = data_dict['vehicle_global_position']['lat'], data_dict['vehicle_global_position']['lon']
 # x0,y0, zone_num0, zone_letter0 = utm.from_latlon(lat[0], lon[0])
 # x, y, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
 alt_amsl = data_dict['vehicle_global_position']['alt']
-x, y, alt = pyproj.transform(proj_WGS84, proj_CH_1903_LV03, lon, lat, alt_amsl+48.306)
+x, y, alt = pyproj.transform(proj_WGS84, proj_CH_1903_LV03_SWISSTOPO, lon, lat, alt_amsl)
 x0, y0, alt0 = x[0], y[0], alt[0]
 
 vel_d = data_dict['vehicle_global_position']['vel_d']
@@ -145,14 +149,15 @@ wn, we = -wn, -we
 
 # Get cosmo wind
 cosmo_wind = cosmo.extract_cosmo_data(cosmo_file, lat[0], lon[0], cosmo_time,
-                               terrain_file='data/riemenstalden/cosmo-1_ethz_ana/cosmo-1_ethz_ana_const.nc')
+                               terrain_file='data/riemenstalden/cosmo-1_ethz_ana/cosmo-1_ethz_ana_const.nc',
+                                      cosmo_projection=proj_WGS84, output_projection=proj_CH_1903_LV03_SWISSTOPO)
 Vmax = np.sqrt((cosmo_wind['wind_x'].flatten()**2 + cosmo_wind['wind_y'].flatten()**2 + cosmo_wind['wind_z'].flatten()**2).max())
 
 # Get corresponding terrain
 min_height = alt.min()
 x_terr, y_terr, z_terr, h_terr, full_block = \
     get_terrain(terrain_tiff, cosmo_wind['x'][[0,1],[0,1]], cosmo_wind['y'][[0,1],[0,1]],
-                [min_height, min_height+1100.0], (64, 64, 64))
+                [min_height, min_height+1100.0], (128, 128, 128))
 
 # Plot the wind vector estimates
 fig = plt.figure()
@@ -161,10 +166,10 @@ ax = fig.gca(projection='3d')
 ax.set_xlabel('Easting (m)')
 ax.set_ylabel('Northing (m)')
 ax.set_zlabel('Altitude (m)')
-# origin = (x[0], y[0], alt[0])
-origin = (0.0, 0.0, 0.0)
-X, Y = np.meshgrid(x_terr, y_terr)
-hs_terr = ax.plot_surface(X, Y, h_terr, cmap=cm.terrain)
+origin = (x[0], y[0], alt[0])
+# origin = (0.0, 0.0, 0.0)
+X, Y = np.meshgrid(x_terr-origin[0], y_terr-origin[1])
+hs_terr = ax.plot_surface(X, Y, h_terr-origin[2], cmap=cm.terrain)
 
 xx, yy, zz = x[::skip_amount]-origin[0], y[::skip_amount]-origin[1], alt[::skip_amount]-origin[2]
 # h_w_est = ax.quiver(xx, yy, zz, we_east, we_north, we_up, colors=get_colors(we_east, we_north, we_up, Vmax=Vmax))
