@@ -23,6 +23,7 @@ endif()
 include_directories(
   ${EIGEN3_INCLUDE_DIR}
   ${HDF5_INCLUDE_DIRS}
+  ${OMPL_INCLUDE_DIRS}
 )
 
 # add the executable
