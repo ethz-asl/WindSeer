@@ -130,7 +130,6 @@ double MyOptimizationObjective::computeProjectedWindMagnitude(const ob::State *s
 ob::InformedSamplerPtr MyOptimizationObjective::allocInformedStateSampler(const ob::ProblemDefinitionPtr probDefn,
                                                                                       unsigned int maxNumberCalls) const {
 
-  std::cout << "allocating new state sampler" << std::endl;
   // Make the direct path-length informed sampler and return. If OMPL was compiled with Eigen, a direct version is available, if not a rejection-based technique can be used
 #if OMPL_HAVE_EIGEN3
   if (useReference_) {
@@ -152,14 +151,18 @@ ob::InformedSamplerPtr MyOptimizationObjective::allocInformedStateSampler(const 
 
 ob::Cost MyOptimizationObjective::goalRegionTimeToGo(const ob::State *state, const ob::Goal *goal) {
   const ob::GoalRegion *goalRegion = goal->as<ob::GoalRegion>();
+  const ob::GoalSampleableRegion *goalSampleRegion = goalRegion->as<ob::GoalSampleableRegion>();
 
+  ob::State *goalState = si_->allocState();
+  goalSampleRegion->sampleGoal(goalState);
   // Ensures that all states within the goal region's threshold to
   // have a cost-to-go of exactly zero.
-  return ob::Cost(std::max(goalRegion->distanceGoal(state) - goalRegion->getThreshold(),
+  ob::Cost cost = ob::Cost(std::max(goalRegion->distanceGoal(state) - goalRegion->getThreshold(),
                              0.0) / (v_air_param +
-                                 computeProjectedWindMagnitude(state,
-                                     goal->as<MyGoalSampleableRegion>()->getGoalState())));
+                                 computeProjectedWindMagnitude(state, goalState)));
 
+  si_->freeState(goalState);
+  return cost;
 }
 
 

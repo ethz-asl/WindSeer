@@ -130,7 +130,7 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
   MyRRTstar *my_rrtstar = new MyRRTstar(ss.getSpaceInformation());
   my_rrtstar->setRange(ss.getSpaceInformation()->getMaximumExtent() / 7.0);
   my_rrtstar->setGoalBias(0.05);
-  my_rrtstar->setFocusSearch(false); // TODO occasionally get segfault when true, fix it
+  my_rrtstar->setFocusSearch(true); // TODO occasionally get segfault when true, fix it
   // need to enable admissible cost to come, false sometimes leads to SEGFAULTs due to pruned goal states.
   my_rrtstar->setAdmissibleCostToCome(true);
   my_rrtstar->setCustomNearestNeighbor(false);
