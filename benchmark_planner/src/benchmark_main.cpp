@@ -340,10 +340,15 @@ int benchmark(int argc, char *argv[]) {
 
 #pragma omp parallel for
   for (i = 0; i < database.getNumberSamples(); ++i) {
+    HDF5Interface::Sample sample;
 #pragma omp critical
-    std::cout << "\e[1mStart processing sample: " << i+1 << " out of " << database.getNumberSamples() << " (" << database.getSample(i).sample_name << ")\e[0m" << std::endl;
+    {
+    sample = database.getSample(i);
+    std::cout << "\e[1mStart processing sample: " << i+1 << " out of " << database.getNumberSamples() << " (" << sample.sample_name << ")\e[0m" << std::endl;
+    }
+
     // change to \e[1;7m for inverse colors
-    SampleResult tmp = process_sample(database.getSample(i), sg_configurations, planning_time);
+    SampleResult tmp = process_sample(sample, sg_configurations, planning_time);
 #pragma omp critical
     results[i] = tmp;
   }
