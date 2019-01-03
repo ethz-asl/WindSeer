@@ -69,7 +69,10 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 }
 
 
-SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std::array<double, 8>> sg_configurations, double planning_time) {
+SampleResult process_sample(const HDF5Interface::Sample& sample,
+                            std::vector<std::array<double, 8>> sg_configurations,
+                            double planning_time,
+                            double reference_multiplier) {
   // decide if the info should be printed if OpenMP is available
   const char* omp_num_threads =  std::getenv("OMP_NUM_THREADS");
   bool print_info(false);
@@ -186,7 +189,7 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
 
     // plan with the reference wind field
     wind_grid->setWindGrid(sample.reference.wind_x, sample.reference.wind_y, sample.reference.wind_z, geo);
-    ob::PlannerStatus solved = ss.solve(planning_time);
+    ob::PlannerStatus solved = ss.solve(planning_time * reference_multiplier);
 
     // store the data in the planning result
     planning_result.solution_possible = solved == ob::PlannerStatus::EXACT_SOLUTION;
@@ -338,18 +341,26 @@ int benchmark(int argc, char *argv[]) {
     planning_time = atof(value);
   }
 
+  value = getCmdOption(argv, argv + argc, "-rm");
+  double reference_multiplier = 2;
+  if (value) {
+    reference_multiplier = atof(value);
+  }
+
   if(cmdOptionExists(argv, argv+argc, "-h") || cmdOptionExists(argv, argv+argc, "--help")) {
       std::cout << "usage: ./benchmark [-h][-i INPUT_DATASET]" << std::endl;
       std::cout << "                   [-o OUTPUT_DATASET]" << std::endl;
       std::cout << "                   [-t PLANNING_TIME]" << std::endl;
+      std::cout << "                   [-rm REFERENCE_MULTIPLIER]" << std::endl;
       std::cout << std::endl;
       std::cout << "Planning benchmark for the wind prediction models" << std::endl;
       std::cout << std::endl;
       std::cout << "optional arguments" << std::endl;
-      std::cout << "  -h, --help\t\tshow this message and exit" << std::endl;
-      std::cout << "  -i INPUT_DATASET\tfilename of the input database" << std::endl;
-      std::cout << "  -o OUTPUT_DATASET\tfilename of the output database" << std::endl;
-      std::cout << "  -t PLANNING_TIME\tplanning time for each planning case [s]" << std::endl;
+      std::cout << "  -h, --help\t\t\tshow this message and exit" << std::endl;
+      std::cout << "  -i INPUT_DATASET\t\tfilename of the input database (default prediction.hdf5)" << std::endl;
+      std::cout << "  -o OUTPUT_DATASET\t\tfilename of the output database (default planning_results.hdf5)" << std::endl;
+      std::cout << "  -t PLANNING_TIME\t\tplanning time for each planning case [s] (default 10)" << std::endl;
+      std::cout << "  -rm REFERENCE_MULTIPLIER\tfactor for the planning time with the reference wind field [-] (default 2)" << std::endl;
 
     return 0;
   }
@@ -382,7 +393,7 @@ int benchmark(int argc, char *argv[]) {
     }
 
     // change to \e[1;7m for inverse colors
-    SampleResult tmp = process_sample(sample, sg_configurations, planning_time);
+    SampleResult tmp = process_sample(sample, sg_configurations, planning_time, reference_multiplier);
 #pragma omp critical
     results[i] = tmp;
   }
