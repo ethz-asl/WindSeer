@@ -70,6 +70,17 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 
 
 SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std::array<double, 8>> sg_configurations, double planning_time) {
+  // decide if the info should be printed if OpenMP is available
+  const char* omp_num_threads =  std::getenv("OMP_NUM_THREADS");
+  bool print_info(false);
+  if (omp_num_threads != NULL) {
+    std::stringstream s;
+    s << omp_num_threads;
+    int val;
+    s >> val;
+    print_info = val == 1;
+  }
+
   SampleResult result;
   result.sample_name = sample.sample_name;
 
@@ -156,6 +167,11 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
 #if not defined(_OPENMP)
     std::cout << "\e[1m\tProcessing start/goal pair: " << counter << " out of " <<  len << "\e[0m" << std::endl;
     std::cout << "\e[1m\t\tPlanning with reference wind field\e[0m" << std::endl;
+#else
+    if (print_info) {
+      std::cout << "\e[1m\tProcessing start/goal pair: " << counter << " out of " <<  len << "\e[0m" << std::endl;
+      std::cout << "\e[1m\t\tPlanning with reference wind field\e[0m" << std::endl;
+    }
 #endif
 
     // get the start and goal position TODO add also the bounding box so that it is at least valid with respect to z
@@ -179,6 +195,10 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
 
 #if not defined(_OPENMP)
     std::cout << "\e[1m\t\t\treference cost: " << planning_result.reference_cost << "\e[0m" << std::endl;
+#else
+    if (print_info) {
+      std::cout << "\e[1m\t\t\treference cost: " << planning_result.reference_cost << "\e[0m" << std::endl;
+    }
 #endif
 
     // a solution with the cfd wind field is found, loop over all models
@@ -188,7 +208,12 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
 
 #if not defined(_OPENMP)
       std::cout << "\e[1m\t\tPlanning with the prediction from the '" << prediction.model_name << "' model\e[0m" << std::endl;
+#else
+      if (print_info) {
+        std::cout << "\e[1m\t\tPlanning with the prediction from the '" << prediction.model_name << "' model\e[0m" << std::endl;
+      }
 #endif
+
       ss.clear();
       boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->clear();
       wind_grid->setWindGrid(prediction.wind_x, prediction.wind_y, prediction.wind_z, geo);
@@ -213,6 +238,11 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
 #if not defined(_OPENMP)
         std::cout << "\e[1m\t\t\tplanned cost:   " << prediction_result.planned_cost << "\e[0m" << std::endl;
         std::cout << "\e[1m\t\t\texecution cost: " << prediction_result.execution_cost << "\e[0m" << std::endl;
+#else
+        if (print_info) {
+          std::cout << "\e[1m\t\t\tplanned cost:   " << prediction_result.planned_cost << "\e[0m" << std::endl;
+          std::cout << "\e[1m\t\t\texecution cost: " << prediction_result.execution_cost << "\e[0m" << std::endl;
+        }
 #endif
 
         boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(false);
@@ -221,6 +251,10 @@ SampleResult process_sample(const HDF5Interface::Sample& sample, std::vector<std
         prediction_result.planned_cost = std::numeric_limits<double>::infinity();
 #if not defined(_OPENMP)
         std::cout << "\e[1m\t\t\tno solution found\e[0m" << std::endl;
+#else
+        if (print_info) {
+          std::cout << "\e[1m\t\t\tno solution found\e[0m" << std::endl;
+        }
 #endif
       }
 
