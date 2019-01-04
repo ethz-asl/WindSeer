@@ -7,7 +7,9 @@
 #include <memory>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 #include <ompl/base/PlannerStatus.h>
@@ -66,6 +68,12 @@ char* getCmdOption(char ** begin, char ** end, const std::string & option) {
 
 bool cmdOptionExists(char** begin, char** end, const std::string& option) {
   return std::find(begin, end, option) != end;
+}
+
+
+bool file_exists(const std::string& name) {
+  struct stat buffer;
+  return (stat (name.c_str(), &buffer) == 0);
 }
 
 
@@ -317,12 +325,29 @@ void write_hdf5_database(SampleResult results[], int size, std::string database_
       ++counter;
     }
   }
-
 }
 
 
 int benchmark(int argc, char *argv[]) {
   // parse the input arguments
+  if(cmdOptionExists(argv, argv+argc, "-h") || cmdOptionExists(argv, argv+argc, "--help")) {
+    std::cout << "usage: ./benchmark [-h][-i INPUT_DATASET]" << std::endl;
+    std::cout << "                   [-o OUTPUT_DATASET]" << std::endl;
+    std::cout << "                   [-t PLANNING_TIME]" << std::endl;
+    std::cout << "                   [-rm REFERENCE_MULTIPLIER]" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Planning benchmark for the wind prediction models" << std::endl;
+    std::cout << std::endl;
+    std::cout << "optional arguments" << std::endl;
+    std::cout << "  -h, --help\t\t\tshow this message and exit" << std::endl;
+    std::cout << "  -i INPUT_DATASET\t\tfilename of the input database (default prediction.hdf5)" << std::endl;
+    std::cout << "  -o OUTPUT_DATASET\t\tfilename of the output database (default planning_results.hdf5)" << std::endl;
+    std::cout << "  -t PLANNING_TIME\t\tplanning time for each planning case [s] (default 10)" << std::endl;
+    std::cout << "  -rm REFERENCE_MULTIPLIER\tfactor for the planning time with the reference wind field [-] (default 2)" << std::endl;
+
+    return 0;
+  }
+
   char* value = getCmdOption(argv, argv + argc, "-i");
   std::string input_database_name = "prediction.hdf5";
   if (value) {
@@ -339,30 +364,35 @@ int benchmark(int argc, char *argv[]) {
   double planning_time = 10.0;
   if (value) {
     planning_time = atof(value);
+
+    if (planning_time < 0.0) {
+      throw std::invalid_argument("The planning time needs to be positive: " + std::to_string(planning_time));
+    }
   }
 
   value = getCmdOption(argv, argv + argc, "-rm");
   double reference_multiplier = 2;
   if (value) {
     reference_multiplier = atof(value);
+
+    if (reference_multiplier < 1.0) {
+      throw std::invalid_argument("The reference multiplier needs to be larger than 1.0: " + std::to_string(reference_multiplier));
+    }
   }
 
-  if(cmdOptionExists(argv, argv+argc, "-h") || cmdOptionExists(argv, argv+argc, "--help")) {
-      std::cout << "usage: ./benchmark [-h][-i INPUT_DATASET]" << std::endl;
-      std::cout << "                   [-o OUTPUT_DATASET]" << std::endl;
-      std::cout << "                   [-t PLANNING_TIME]" << std::endl;
-      std::cout << "                   [-rm REFERENCE_MULTIPLIER]" << std::endl;
-      std::cout << std::endl;
-      std::cout << "Planning benchmark for the wind prediction models" << std::endl;
-      std::cout << std::endl;
-      std::cout << "optional arguments" << std::endl;
-      std::cout << "  -h, --help\t\t\tshow this message and exit" << std::endl;
-      std::cout << "  -i INPUT_DATASET\t\tfilename of the input database (default prediction.hdf5)" << std::endl;
-      std::cout << "  -o OUTPUT_DATASET\t\tfilename of the output database (default planning_results.hdf5)" << std::endl;
-      std::cout << "  -t PLANNING_TIME\t\tplanning time for each planning case [s] (default 10)" << std::endl;
-      std::cout << "  -rm REFERENCE_MULTIPLIER\tfactor for the planning time with the reference wind field [-] (default 2)" << std::endl;
+  value = getCmdOption(argv, argv + argc, "-c");
+  std::string configurations_file_name = "start_goal_configurations.txt";
+  if (value) {
+      configurations_file_name = std::string(value);
+  }
 
-    return 0;
+  // check if the input files exist
+  if (!file_exists(input_database_name)) {
+    throw std::invalid_argument("The specified input database does not exist: " + input_database_name);
+  }
+
+  if (!file_exists(configurations_file_name)) {
+    throw std::invalid_argument("The file for the start/goal configurations does not exist: " + configurations_file_name);
   }
 
   // open the specified file and the specified dataset in the file.
@@ -370,7 +400,7 @@ int benchmark(int argc, char *argv[]) {
   database.init(input_database_name);
 
   // open the file with the start and goal configurations
-  std::ifstream sg_file("start_goal_configurations.txt");
+  std::ifstream sg_file(configurations_file_name);
 
   // read the configurations from file
   std::vector<std::array<double, 8>> sg_configurations = {};
