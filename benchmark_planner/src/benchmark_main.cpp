@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <fstream>
 #include <H5Cpp.h>
 #include <iostream>
@@ -413,6 +414,9 @@ int benchmark(int argc, char *argv[]) {
   SampleResult results[database.getNumberSamples()];
   int i;
 
+
+  auto t_start = std::chrono::high_resolution_clock::now();
+
 #pragma omp parallel for
   for (i = 0; i < database.getNumberSamples(); ++i) {
     HDF5Interface::Sample sample;
@@ -428,8 +432,21 @@ int benchmark(int argc, char *argv[]) {
     results[i] = tmp;
   }
 
+  auto t_1 = std::chrono::high_resolution_clock::now();
+  std::cout << "Planning " << database.getNumberSamples() << " samples took "
+            << std::chrono::duration_cast<std::chrono::seconds>(t_1-t_start).count()
+            << " seconds" << std::endl;
+
   // write the results into a hdf5 database
   write_hdf5_database(results, database.getNumberSamples(), output_database_name);
+
+  auto t_2 = std::chrono::high_resolution_clock::now();
+  std::cout << "Writing the database took "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(t_2-t_1).count()
+            << " milliseconds" << std::endl;
+  std::cout << "Executing the script took "
+            << std::chrono::duration_cast<std::chrono::seconds>(t_2-t_start).count()
+            << " seconds" << std::endl;
 
   return 0;
 }
