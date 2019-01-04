@@ -211,7 +211,7 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
     wind_forward = (dx * u + dy * v + dz * w) * distance_inv;
     wind_normal = sqrt(u * u + v * v + w * w - wind_forward * wind_forward);
 
-    double scale = 0.8; // safety margin of 20 %
+    double scale = 1.0; // safety margin of 20 %
     if (useReference_) {
         scale = 1.0;
     }
