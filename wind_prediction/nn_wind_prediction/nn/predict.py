@@ -162,7 +162,7 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
         print('ERROR: The given model list is empty')
         exit()
 
-    interpolator = utils.interpolation.DataInterpolation(device, 3,
+    interpolator = utils.interpolation.DataInterpolation(torch.device('cpu'), 3,
                                                          params.model['model_args']['n_x'],
                                                          params.model['model_args']['n_y'],
                                                          params.model['model_args']['n_z'])

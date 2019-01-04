@@ -40,7 +40,6 @@ args.compressed = args.compressed or compressed
 args.compute_prediction_error = args.compute_prediction_error or compute_prediction_error
 args.plot_worst_prediction = args.plot_worst_prediction or plot_worst_prediction
 args.plot_prediction = args.plot_prediction or plot_prediction
-args.save_prediction_database = args.save_prediction_database or save_prediction_database
 
 # check if gpu available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
