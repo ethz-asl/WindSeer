@@ -175,3 +175,29 @@ def read_cosmo_nc_file(filename, variable_list):
         raise IOError
     f.close()
     return out
+
+
+def cosmo_corner_wind(cosmo_data, z_target, terrain_height=None):
+    # If terrain_height is specified, the winds will be offset to start at the heights specified in the terrain_height
+    # Otherwise, we just sample directly (heights may not match)
+    # NOTE: cosmo_wind is from top to bottom (i.e. first element is max height, down to surface at end)...
+    # BUT: Output is bottom to top
+
+    nz, nx, ny = cosmo_data['z'].shape
+    winds = np.zeros((3, len(z_target), nx, ny), dtype='float')
+
+    for i in range(nx):
+        for j in range(ny):
+            # I append a point at the surface with zero wind speed for properly interpolating from the ground
+            cosmo_z = np.append([cosmo_data['hsurf'][i, j]], cosmo_data['z'][::-1, i, j])
+            cosmo_wx = np.append([0.0], cosmo_data['wind_x'][::-1, i, j])
+            cosmo_wy = np.append([0.0], cosmo_data['wind_y'][::-1, i, j])
+            cosmo_wz = np.append([0.0], cosmo_data['wind_z'][::-1, i, j])
+            if terrain_height is not None:
+                cosmo_z = cosmo_z - (cosmo_z[0] - terrain_height[i,j])
+            valid_z = (z_target >= cosmo_z[0])
+            winds[0, valid_z, i, j] = np.interp(z_target[valid_z], cosmo_z, cosmo_wx)
+            winds[1, valid_z, i, j] = np.interp(z_target[valid_z], cosmo_z, cosmo_wy)
+            winds[2, valid_z, i, j] = np.interp(z_target[valid_z], cosmo_z, cosmo_wz)
+
+    return winds

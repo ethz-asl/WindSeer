@@ -23,8 +23,11 @@ except ImportError:
     exit()
 
 
-def get_terrain(terrain_geotiff, x, y, z, resolution=(64,64,64), build_binary_block=True):
-
+def get_terrain(terrain_geotiff, x, y, z=None, resolution=(64,64,64), build_binary_block=True):
+    # If z is:
+    #       None: use the complete terrain height range
+    #       Single value: use the minimum terrain height to min+ the value (i.e. specify block height)
+    #       Two values: use the specified height range
     img = gdal.Open(terrain_geotiff)
 
     # image dimensions
@@ -56,6 +59,10 @@ def get_terrain(terrain_geotiff, x, y, z, resolution=(64,64,64), build_binary_bl
 
     if build_binary_block:
         # Build binary indicator array
+        if z is None:
+            z = [z_out.min(), z_out.ax()]
+        elif len(z) == 1:
+            z = [z_out.min(), z_out.min()+z[0]]
         z_target = z[0] + (z[1] - z[0])/(resolution[2]-1) * np.arange(resolution[2])
         full_block = np.zeros(resolution, dtype='bool')
         for i in range(z_out.shape[0]):
