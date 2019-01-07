@@ -45,7 +45,8 @@ class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
   /** \brief Constructor */
   MyOptimizationObjective(const ob::SpaceInformationPtr &si,
                           std::shared_ptr<WindGrid> wind_grid,
-                          std::shared_ptr<WindGrid> reference_wind_grid);
+                          std::shared_ptr<WindGrid> reference_wind_grid,
+                          double safety_factor);
 
   /** \brief Destructor. */
   virtual ~MyOptimizationObjective() override;
@@ -143,6 +144,8 @@ class MyOptimizationObjective : public ob::PathLengthOptimizationObjective {
   bool useReference_ = false;
 
   bool verbose_ = false;
+
+  double safety_factor_ = 1.0;
 
   /** \brief Cache if a solution is known. */
   mutable bool hasSolution_ = false;

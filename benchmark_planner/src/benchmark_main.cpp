@@ -81,7 +81,8 @@ bool file_exists(const std::string& name) {
 SampleResult process_sample(const HDF5Interface::Sample& sample,
                             std::vector<std::array<double, 8>> sg_configurations,
                             double planning_time,
-                            double reference_multiplier) {
+                            double reference_multiplier,
+                            double safety_factor) {
   // decide if the info should be printed if OpenMP is available
   const char* omp_num_threads =  std::getenv("OMP_NUM_THREADS");
   bool print_info(false);
@@ -147,7 +148,7 @@ SampleResult process_sample(const HDF5Interface::Sample& sample,
   // Set optimization objectives
   ss.setOptimizationObjective(
           ob::OptimizationObjectivePtr(
-                  new MyOptimizationObjective(ss.getSpaceInformation(), wind_grid, reference_wind_grid)));
+                  new MyOptimizationObjective(ss.getSpaceInformation(), wind_grid, reference_wind_grid, safety_factor)));
 
   // set the planner
   MyRRTstar *my_rrtstar = new MyRRTstar(ss.getSpaceInformation());
@@ -197,6 +198,7 @@ SampleResult process_sample(const HDF5Interface::Sample& sample,
     ss.setGoalState(goal);
 
     // plan with the reference wind field
+    boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(true);
     wind_grid->setWindGrid(sample.reference.wind_x, sample.reference.wind_y, sample.reference.wind_z, geo);
     ob::PlannerStatus solved = ss.solve(planning_time * reference_multiplier);
 
@@ -205,6 +207,7 @@ SampleResult process_sample(const HDF5Interface::Sample& sample,
     planning_result.reference_cost =
             boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->getCurrentBestCost();
 
+    boost::static_pointer_cast<MyOptimizationObjective>(ss.getOptimizationObjective())->setUseReference(false);
 #if not defined(_OPENMP)
     std::cout << "\e[1m\t\t\treference cost: " << planning_result.reference_cost << "\e[0m" << std::endl;
 #else
@@ -345,6 +348,7 @@ int benchmark(int argc, char *argv[]) {
     std::cout << "  -o OUTPUT_DATASET\t\tfilename of the output database (default planning_results.hdf5)" << std::endl;
     std::cout << "  -t PLANNING_TIME\t\tplanning time for each planning case [s] (default 10)" << std::endl;
     std::cout << "  -rm REFERENCE_MULTIPLIER\tfactor for the planning time with the reference wind field [-] (default 2)" << std::endl;
+    std::cout << "  -s SAFETY_FACTOR\t\tsafety factor for the maximum wind speed checks (wind < SAFETY_FACTOR * airspeed) [-] (default 1)" << std::endl;
 
     return 0;
   }
@@ -359,6 +363,15 @@ int benchmark(int argc, char *argv[]) {
   std::string output_database_name = "planning_results.hdf5";
   if (value) {
     output_database_name = std::string(value);
+  }
+
+  value = getCmdOption(argv, argv + argc, "-s");
+  double safety_factor = 1.0;
+  if (value) {
+      safety_factor = atof(value);
+      if (safety_factor > 1.0) {
+        throw std::invalid_argument("The safety factor needs to be smaller than 1.0: " + std::to_string(safety_factor));
+      }
   }
 
   value = getCmdOption(argv, argv + argc, "-t");
@@ -427,7 +440,7 @@ int benchmark(int argc, char *argv[]) {
     }
 
     // change to \e[1;7m for inverse colors
-    SampleResult tmp = process_sample(sample, sg_configurations, planning_time, reference_multiplier);
+    SampleResult tmp = process_sample(sample, sg_configurations, planning_time, reference_multiplier, safety_factor);
 #pragma omp critical
     results[i] = tmp;
   }

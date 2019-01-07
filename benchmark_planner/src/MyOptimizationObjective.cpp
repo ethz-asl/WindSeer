@@ -27,10 +27,12 @@ namespace planning {
 
 MyOptimizationObjective::MyOptimizationObjective(const ob::SpaceInformationPtr& si,
                                                  std::shared_ptr<WindGrid> wind_grid,
-                                                 std::shared_ptr<WindGrid> reference_wind_grid)
+                                                 std::shared_ptr<WindGrid> reference_wind_grid,
+                                                 double safety_factor)
         : ob::PathLengthOptimizationObjective(si),
           wind_grid_(wind_grid),
-          reference_wind_grid_(reference_wind_grid) {
+          reference_wind_grid_(reference_wind_grid),
+          safety_factor_(safety_factor){
   setCostToGoHeuristic(boost::bind(&MyOptimizationObjective::goalRegionTimeToGo, this, _1, _2));
 }
 
@@ -211,7 +213,7 @@ double MyOptimizationObjective::computeEuclideanTimeoptimalCost(const ob::State 
     wind_forward = (dx * u + dy * v + dz * w) * distance_inv;
     wind_normal = sqrt(u * u + v * v + w * w - wind_forward * wind_forward);
 
-    double scale = 1.0; // safety margin of 20 %
+    double scale = safety_factor_;
     if (useReference_) {
         scale = 1.0;
     }
