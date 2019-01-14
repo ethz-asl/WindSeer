@@ -33,12 +33,12 @@ def compute_prediction_error(label, prediction, u_hor_scale, u_ver_scale, uncert
             if (nonzero_idx[i, 1] < terrain[nonzero_idx[i, 2].item()]):
                 terrain[nonzero_idx[i, 2].item()] = nonzero_idx[i, 1].item()
 
-    low_error_hor = 0.0
-    low_error_vert = 0.0
-    low_error_tot = 0.0
-    high_error_hor = 0.0
-    high_error_vert = 0.0
-    high_error_tot = 0.0
+    low_error_hor = torch.Tensor([0])
+    low_error_vert = torch.Tensor([0])
+    low_error_tot = torch.Tensor([0])
+    high_error_hor = torch.Tensor([0])
+    high_error_vert = torch.Tensor([0])
+    high_error_tot = torch.Tensor([0])
     max_low_hor = 0.0
     max_low_vert = 0.0
     max_low_tot = 0.0
@@ -47,36 +47,36 @@ def compute_prediction_error(label, prediction, u_hor_scale, u_ver_scale, uncert
     max_high_tot = 0.0
 
     if d3:
-        for i in range(abs_error.shape[3]):
-            for j in range(abs_error.shape[4]):
-                low_error_hor += (abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] +
-                                  abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j]).sqrt().sum()
-                low_error_vert += abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j].sum()
-                low_error_tot += (abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] +
-                                  abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] +
-                                  abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j]).sqrt().sum()
-                high_error_hor += (abs_error[:,0,terrain[i,j]+4:, i, j] * abs_error[:,0,terrain[i,j]+4:, i, j] +
-                                   abs_error[:,1,terrain[i,j]+4:, i, j] * abs_error[:,1,terrain[i,j]+4:, i, j]).sqrt().sum()
-                high_error_vert += abs_error[:,2,terrain[i,j]+4:, i, j].sum()
-                high_error_tot += (abs_error[:,0,terrain[i,j]+4:, i, j] * abs_error[:,0,terrain[i,j]+4:, i, j] +
-                                   abs_error[:,1,terrain[i,j]+4:, i, j] * abs_error[:,1,terrain[i,j]+4:, i, j] +
-                                   abs_error[:,2,terrain[i,j]+4:, i, j] * abs_error[:,2,terrain[i,j]+4:, i, j]).sqrt().sum()
-                max_low_hor = max(max_low_hor,
-                                  (abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] +
-                                  abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j]).sqrt().max().item())
-                max_low_vert = max(max_low_vert, abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j].max().item())
-                max_low_tot = max(max_low_tot,
-                                  (abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] +
-                                  abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] +
-                                  abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j]).sqrt().max().item())
-                max_high_hor = max(max_high_hor,
-                                   (abs_error[:,0,terrain[i,j]+4:, i, j] * abs_error[:,0,terrain[i,j]+4:, i, j] +
-                                   abs_error[:,1,terrain[i,j]+4:, i, j] * abs_error[:,1,terrain[i,j]+4:, i, j]).sqrt().max().item())
-                max_high_vert = max(max_high_vert, abs_error[:,2,terrain[i,j]+4:, i, j].max().item())
-                max_high_tot = max(max_high_tot,
-                                   (abs_error[:,0,terrain[i,j]+4:, i, j] * abs_error[:,0,terrain[i,j]+4:, i, j] +
-                                   abs_error[:,1,terrain[i,j]+4:, i, j] * abs_error[:,1,terrain[i,j]+4:, i, j] +
-                                   abs_error[:,2,terrain[i,j]+4:, i, j] * abs_error[:,2,terrain[i,j]+4:, i, j]).sqrt().max().item())
+#         for i in range(abs_error.shape[3]):
+#             for j in range(abs_error.shape[4]):
+#                 low_error_hor += (abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] +
+#                                   abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j]).sqrt().sum()
+#                 low_error_vert += abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j].sum()
+#                 low_error_tot += (abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] +
+#                                   abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] +
+#                                   abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j]).sqrt().sum()
+#                 high_error_hor += (abs_error[:,0,terrain[i,j]+4:, i, j] * abs_error[:,0,terrain[i,j]+4:, i, j] +
+#                                    abs_error[:,1,terrain[i,j]+4:, i, j] * abs_error[:,1,terrain[i,j]+4:, i, j]).sqrt().sum()
+#                 high_error_vert += abs_error[:,2,terrain[i,j]+4:, i, j].sum()
+#                 high_error_tot += (abs_error[:,0,terrain[i,j]+4:, i, j] * abs_error[:,0,terrain[i,j]+4:, i, j] +
+#                                    abs_error[:,1,terrain[i,j]+4:, i, j] * abs_error[:,1,terrain[i,j]+4:, i, j] +
+#                                    abs_error[:,2,terrain[i,j]+4:, i, j] * abs_error[:,2,terrain[i,j]+4:, i, j]).sqrt().sum()
+#                 max_low_hor = max(max_low_hor,
+#                                   (abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] +
+#                                   abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j]).sqrt().max().item())
+#                 max_low_vert = max(max_low_vert, abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j].max().item())
+#                 max_low_tot = max(max_low_tot,
+#                                   (abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,0,terrain[i,j]:terrain[i,j]+4, i, j] +
+#                                   abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,1,terrain[i,j]:terrain[i,j]+4, i, j] +
+#                                   abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j] * abs_error[:,2,terrain[i,j]:terrain[i,j]+4, i, j]).sqrt().max().item())
+#                 max_high_hor = max(max_high_hor,
+#                                    (abs_error[:,0,terrain[i,j]+4:, i, j] * abs_error[:,0,terrain[i,j]+4:, i, j] +
+#                                    abs_error[:,1,terrain[i,j]+4:, i, j] * abs_error[:,1,terrain[i,j]+4:, i, j]).sqrt().max().item())
+#                 max_high_vert = max(max_high_vert, abs_error[:,2,terrain[i,j]+4:, i, j].max().item())
+#                 max_high_tot = max(max_high_tot,
+#                                    (abs_error[:,0,terrain[i,j]+4:, i, j] * abs_error[:,0,terrain[i,j]+4:, i, j] +
+#                                    abs_error[:,1,terrain[i,j]+4:, i, j] * abs_error[:,1,terrain[i,j]+4:, i, j] +
+#                                    abs_error[:,2,terrain[i,j]+4:, i, j] * abs_error[:,2,terrain[i,j]+4:, i, j]).sqrt().max().item())
 
         low_error_hor /= abs_error.shape[3] * abs_error.shape[4] * 4
         low_error_vert /= abs_error.shape[3] * abs_error.shape[4] * 4

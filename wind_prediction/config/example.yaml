@@ -8,7 +8,7 @@ run:
     learning_rate_decay_step_size: 100
     compute_validation_loss: True
     custom_init: False
-    minibatch_epoch_loss: True
+    minibatch_epoch_loss: False
 
     # options to store data
     save_model: True
@@ -16,7 +16,6 @@ run:
     evaluate_testset: False
     warm_start: False
     loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: Custom, else: MSE
-    uncertainty_train_mode: 0 # 0: mean + uncertainty, 1: only mean, 2: only uncertainty
     uncertainty_loss_eps: 1.0E-9
     save_model_every_n_epoch: 25
     save_params_hist_every_n_epoch: 100
@@ -64,7 +63,15 @@ model:
         potential_flow: False,
         activation_type: 'LeakyReLU',
         activation_args: {negative_slope: 0.1},
-        predict_uncertainty: False,
         verbose: True,
-        type: 'ModelEDNN3D'
+        submodel_type: 'ModelEDNN3D',
+
+        # uncertainty prediction params
+        predict_uncertainty: False,
+        uncertainty_train_mode: 'alternating',
+
+        # uncertainty prediction params
+        n_stacked: 3,
+        pass_full_output: False,
+        submodel_terrain_mask: False
     }

@@ -62,9 +62,10 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             Indicates if for each channel and pixel the uncertainty of the model is predicted
         uncertainty_train_mode:
             Specifies the mode in which the uncertainty is trained:
-                1: Train only the mean prediction of the model
-                2: Train only the uncertainty of the model
-                else: Train the uncertainty and the mean alternatively per epoch
+                mean: Train only the mean prediction of the model
+                uncertainty: Train only the uncertainty of the model
+                alternating: Train the uncertainty and the mean alternatively per epoch
+                both: Train both models at the same time
 
     Return:
         net: The trained network
@@ -88,20 +89,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             break
         epoch_start = time.time()
 
-        if predict_uncertainty:
-            if uncertainty_train_mode == 1:
-                net.freeze_uncertainty()
-                net.unfreeze_mean()
-            elif uncertainty_train_mode == 2:
-                net.unfreeze_uncertainty()
-                net.freeze_mean()
-            else:
-                if epoch % 2 == 0:
-                    net.freeze_uncertainty()
-                    net.unfreeze_mean()
-                else:
-                    net.unfreeze_uncertainty()
-                    net.freeze_mean()
+        net.new_epoch_callback(epoch)
 
         train_loss = 0
         running_loss = 0.0

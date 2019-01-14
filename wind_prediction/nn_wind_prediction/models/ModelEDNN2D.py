@@ -212,6 +212,10 @@ class ModelEDNN2D(nn.Module):
             self.__pf_convolution = nn.Conv2d(2,1,1)
             self.__pf_pad = nn.ReplicationPad2d((0, 1, 0, 1))
 
+    def new_epoch_callback(self, epoch):
+        # nothing to do here
+        return
+
     def freeze_model(self):
         def freeze_weights(m):
             for params in m.parameters():

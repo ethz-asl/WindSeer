@@ -21,6 +21,8 @@ compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
 plot_prediction = True
+prediction_level = 10
+num_worker = 0
 # -----------------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(description='Script to plot a prediction of the network')
@@ -49,13 +51,18 @@ params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yam
 testset = data.MyDataset(torch.device("cpu"), args.dataset, compressed = args.compressed,
                          augmentation = False, subsample = False, return_grid_size = True, **params.MyDataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1,
-                                             shuffle=False, num_workers=0)
+                                             shuffle=False, num_workers=num_worker)
 # load the model and its learnt parameters
 NetworkType = getattr(models, params.model['model_type'])
 net = NetworkType(**params.model_kwargs())
 
 net.load_state_dict(torch.load('trained_models/' + args.model_name + '/' + args.model_version + '.model', map_location=lambda storage, loc: storage))
 net.to(device)
+
+try:
+    net.set_prediction_level(prediction_level)
+except AttributeError:
+    pass
 
 # define loss function
 loss_fn = torch.nn.MSELoss()

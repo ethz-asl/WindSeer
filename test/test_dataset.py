@@ -29,7 +29,7 @@ dataset_rounds = 0
 use_turbulence = True
 stride_hor = 1
 stride_vert = 1
-compute_dataset_statistics = False
+compute_dataset_statistics = True
 plot_divergence = True
 use_grid_size = True
 #-----------------------------------------------------
@@ -51,6 +51,14 @@ def main():
         uy = []
         uz = []
         turb = []
+        ux_std = []
+        uy_std = []
+        uz_std = []
+        turb_std = []
+        ux_max = []
+        uy_max = []
+        uz_max = []
+        turb_max = []
         reflow_ratio = []
         global dataset_rounds
         dataset_rounds = 1
@@ -70,9 +78,17 @@ def main():
                 ux.append(label[:,0,:].abs().mean().item())
                 uy.append(label[:,1,:].abs().mean().item())
                 uz.append(label[:,2,:].abs().mean().item())
+                ux_max.append(label[:,0,:].abs().max().item())
+                uy_max.append(label[:,1,:].abs().max().item())
+                uz_max.append(label[:,2,:].abs().max().item())
+                ux_std.append(label[:,0,:].abs().std().item())
+                uy_std.append(label[:,1,:].abs().std().item())
+                uz_std.append(label[:,2,:].abs().std().item())
 
                 if use_turbulence:
                     turb.append(label[:,3,:].abs().mean().item())
+                    turb_max.append(label[:,3,:].abs().max().item())
+                    turb_std.append(label[:,3,:].abs().std().item())
 
                 # compute if a reflow is happening in the simulated flow
                 if label[:,0,:].mean().abs().item() > label[:,1,:].mean().abs().item():
@@ -111,8 +127,16 @@ def main():
         print('INFO: Mean ux:   {} m/s'.format(np.mean(ux)))
         print('INFO: Mean uy:   {} m/s'.format(np.mean(uy)))
         print('INFO: Mean uz:   {} m/s'.format(np.mean(uz)))
+        print('INFO: Max ux:    {} m/s'.format(np.mean(ux_max)))
+        print('INFO: Max uy:    {} m/s'.format(np.mean(uy_max)))
+        print('INFO: Max uz:    {} m/s'.format(np.mean(uz_max)))
+        print('INFO: Std ux:    {} m/s'.format(np.mean(ux_std)))
+        print('INFO: Std uy:    {} m/s'.format(np.mean(uy_std)))
+        print('INFO: Std uz:    {} m/s'.format(np.mean(uz_std)))
         if use_turbulence:
             print('INFO: Mean turb: {} J/kg'.format(np.mean(turb)))
+            print('INFO: Max turb:  {} J/kg'.format(np.mean(turb_max)))
+            print('INFO: Std turb:  {} J/kg'.format(np.mean(turb_std)))
         print('INFO: Number of cases with a reflow ratio of > 0.05: {}'.format(sum(i > 0.05 for i in reflow_ratio)))
         print('INFO: Number of cases with a reflow ratio of > 0.10: {}'.format(sum(i > 0.10 for i in reflow_ratio)))
         print('INFO: Number of cases with a reflow ratio of > 0.20: {}'.format(sum(i > 0.20 for i in reflow_ratio)))

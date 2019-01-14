@@ -23,6 +23,7 @@ class EDNNParameters(object):
 
         run_parameters['model']['model_args']['use_turbulence'] = run_parameters['data']['use_turbulence']
         run_parameters['model']['model_args']['use_grid_size'] = run_parameters['data']['use_grid_size']
+        run_parameters['model']['model_args']['n_epochs'] = run_parameters['run']['n_epochs']
 
         return run_parameters
 
