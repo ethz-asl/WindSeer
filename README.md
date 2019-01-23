@@ -2,23 +2,37 @@
 
 This repository contains the tools to predict the wind using a neural network.
 
-The `data_generation` folder provides the necessary scripts to generate the training data using OpenFoam while the `wind_prediction` folder contains the network and the scripts to train and predict.
+## Structure
+### Benchmark Planner
+This folder contains the planning benchmark tools used to compare the planning performance using different wind predictions.
+
+### Data Generation
+This folder contains the pipeline to generate the training data to learn the wind prediction
+
+### Test
+This folder contains some test functions for the python scripts.
+
+### Wind Prediction
+This folder contains the tools to train and evaluate the networks for the wind prediction.
 
 ## Installation
 This guide explains how to set up the environment in Ubuntu to make the scripts in the repository run.
 
 1. Python3 is required:
    `sudo apt-get install python3.6`
+
 2. Install PyTorch v4.1 or newer:
 
    `pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp35-cp35m-linux_x86_64.whl`
    `pip3 install torchvision`
 
 3. Install the following required python packages:
-   `pip3 install tensorboardX lz4 numpy`
+   `pip3 install tensorboardX lz4 numpy tqdm`
 
 4. Install the `nn_wind_prediction` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
     `pip install -e wind_prediction/`
+
+TODO: add installation for the planning benchmark locally and on the cluster
 
 ## Working with Leonhard
 
@@ -28,7 +42,7 @@ On the leonhard cluster, you need to perform a few setup steps
    `module load python_gpu/3.6.4`
    
 2. Install required packages:
-   `python -m pip install --user tensorboardX lz4`
+   `python -m pip install --user tensorboardX lz4 tqdm`
    
 3. Setup to use PyTorch 0.4.1:
    ~~~
@@ -38,6 +52,7 @@ On the leonhard cluster, you need to perform a few setup steps
    python -c 'import torch; print(torch.__version__); print("cuda avail: {0}".format(torch.cuda.is_available()))'
    ~~~
    (Packages will be installed in `$HOME/.local/lib64/python3.6/site-packages`)
+
 
 ## Guidelines
 ### Branches
