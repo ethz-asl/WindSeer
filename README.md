@@ -34,6 +34,26 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
 
 TODO: add installation for the planning benchmark locally and on the cluster
 
+## Working with Leonhard
+
+On the leonhard cluster, you need to perform a few setup steps
+
+1. Load python 3.6.4 for gpu:
+   `module load python_gpu/3.6.4`
+   
+2. Install required packages:
+   `python -m pip install --user tensorboardX lz4 tqdm`
+   
+3. Setup to use PyTorch 0.4.1:
+   ~~~
+   bsub -Is -W 4:00 -R "rusage[mem=4096, ngpus_excl_p=1]" bash
+   module load magma/2.2.0 libffi/3.2.1 python_gpu/3.6.4 eth_proxy
+   pip install --user torch==0.4.1
+   python -c 'import torch; print(torch.__version__); print("cuda avail: {0}".format(torch.cuda.is_available()))'
+   ~~~
+   (Packages will be installed in `$HOME/.local/lib64/python3.6/site-packages`)
+
+
 ## Guidelines
 ### Branches
 - master: Current main release, i.e. under development but bench-tested and thus operational.
