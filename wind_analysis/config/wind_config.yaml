@@ -1,8 +1,14 @@
 cosmo:
-  file: 'data/riemenstalden/cosmo-1_ethz_fcst_2018112309.nc'
+  file: 'data/riemenstalden/cosmo-1_ethz_fcst_2018112309.nc'        #09, 12
   time: 'auto'
   terrain_file: 'data/riemenstalden/cosmo-1_ethz_ana/cosmo-1_ethz_ana_const.nc'
-  terrain_tiff: 'terrain/fluelen_full.tif'         # riemenstalden_full
+  terrain_tiff: 'terrain/fluelen_full.tif'         # fluelen_full, riemenstalden_full
+  rotate: 0.0 #-110.0
+  scale: 1.0  # 0.8
+  prediction_prefix: ''  # rotated_
 
 ulog:
-  file: 'logs/10_36_34.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
+  file: 'logs/11_11_57.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
+  
+csv:
+  file: 'data/rotated_13_33_46.csv'

@@ -177,27 +177,39 @@ def read_cosmo_nc_file(filename, variable_list):
     return out
 
 
-def cosmo_corner_wind(cosmo_data, z_target, terrain_height=None):
-    # If terrain_height is specified, the winds will be offset to start at the heights specified in the terrain_height
-    # Otherwise, we just sample directly (heights may not match)
-    # NOTE: cosmo_wind is from top to bottom (i.e. first element is max height, down to surface at end)...
-    # BUT: Output is bottom to top
+def rotate_and_scale_wind(wx, wy, angle=0.0, scale=1.0):
+    wx2 = scale*(wx*np.cos(angle) - wy*np.sin(angle))
+    wy2 = scale*(wx*np.sin(angle) + wy*np.cos(angle))
+    return wx2, wy2
 
-    nz, nx, ny = cosmo_data['z'].shape
-    winds = np.zeros((3, len(z_target), nx, ny), dtype='float')
 
-    for i in range(nx):
-        for j in range(ny):
+def cosmo_corner_wind(cosmo_data, z_target, terrain_height=None, rotate=0.0, scale=1.0):
+    """
+    Get winds at cosmo corners for specified z heights
+    If terrain_height is specified, the winds will be offset to start at the heights specified in the terrain_height
+    Otherwise, we just sample directly (heights may not match)
+    NOTE: cosmo_wind is from top to bottom (i.e. first element is max height, down to surface at end)...
+    BUT: Output is bottom to top
+    Output wind dimensions: [3, nz, ny, nx]
+    First dimension is wind speeds, in order W_East(0), W_North(1), W_Up(2)
+    """
+
+    nz, ny, nx = cosmo_data['z'].shape
+    winds = np.zeros((3, len(z_target), ny, nx), dtype='float')
+
+    for yi in range(ny):
+        for xi in range(nx):
             # I append a point at the surface with zero wind speed for properly interpolating from the ground
-            cosmo_z = np.append([cosmo_data['hsurf'][i, j]], cosmo_data['z'][::-1, i, j])
-            cosmo_wx = np.append([0.0], cosmo_data['wind_x'][::-1, i, j])
-            cosmo_wy = np.append([0.0], cosmo_data['wind_y'][::-1, i, j])
-            cosmo_wz = np.append([0.0], cosmo_data['wind_z'][::-1, i, j])
+            cosmo_z = np.append([cosmo_data['hsurf'][yi, xi]], cosmo_data['z'][::-1, yi, xi])
+            cosmo_wx = np.append([0.0], cosmo_data['wind_x'][::-1, yi, xi])
+            cosmo_wy = np.append([0.0], cosmo_data['wind_y'][::-1, yi, xi])
+            cosmo_wx, cosmo_wy = rotate_and_scale_wind(cosmo_wx, cosmo_wy, angle=rotate, scale=scale)
+            cosmo_wz = np.append([0.0], cosmo_data['wind_z'][::-1, yi, xi])
             if terrain_height is not None:
-                cosmo_z = cosmo_z - (cosmo_z[0] - terrain_height[i,j])
+                cosmo_z = cosmo_z - (cosmo_z[0] - terrain_height[yi, xi])
             valid_z = (z_target >= cosmo_z[0])
-            winds[0, valid_z, i, j] = np.interp(z_target[valid_z], cosmo_z, cosmo_wx)
-            winds[1, valid_z, i, j] = np.interp(z_target[valid_z], cosmo_z, cosmo_wy)
-            winds[2, valid_z, i, j] = np.interp(z_target[valid_z], cosmo_z, cosmo_wz)
+            winds[0, valid_z, yi, xi] = np.interp(z_target[valid_z], cosmo_z, cosmo_wx)
+            winds[1, valid_z, yi, xi] = np.interp(z_target[valid_z], cosmo_z, cosmo_wy)
+            winds[2, valid_z, yi, xi] = np.interp(z_target[valid_z], cosmo_z, cosmo_wz)
 
     return winds
