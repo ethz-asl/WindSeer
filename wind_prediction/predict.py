@@ -48,9 +48,9 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yaml')
 
 # load dataset
-testset = data.MyDataset(torch.device("cpu"), args.dataset, compressed = args.compressed,
+testset = data.MyDataset(args.dataset, compressed = args.compressed,
                          augmentation = False, subsample = False, return_grid_size = True, **params.MyDataset_kwargs())
-testloader = torch.utils.data.DataLoader(testset, batch_size=1,
+testloader = torch.utils.data.DataLoader(testset, batch_size=2,
                                              shuffle=False, num_workers=num_worker)
 # load the model and its learnt parameters
 NetworkType = getattr(models, params.model['model_type'])
@@ -76,5 +76,6 @@ if args.compute_prediction_error:
         args.index = worst_index
 
 # predict the wind, compute the loss and plot if requested
-input, label, ds = testset[args.index]
-nn_custom.predict_wind_and_turbulence(input, label, ds, device, net, params, args.plot_prediction, loss_fn)
+input = testset[args.index][0]
+label = testset[args.index][1]
+nn_custom.predict_wind_and_turbulence(input, label, device, net, params, args.plot_prediction, loss_fn)

@@ -65,12 +65,15 @@ class EDNNParameters(object):
                 'turbulence_label': self.data['use_turbulence'],
                 'scaling_uhor': self.data['uhor_scaling'],
                 'scaling_uz': self.data['uz_scaling'],
-                'scaling_k': self.data['turbulence_scaling'],
+                'scaling_turb': self.data['turbulence_scaling'],
+                'scaling_terrain': self.data['terrain_scaling'],
                 'use_grid_size': self.data['use_grid_size'],
                 'input_mode': self.data['input_mode'],
                 'nx': self.model['model_args']['n_x'],
                 'ny': self.model['model_args']['n_y'],
-                'nz': self.model['model_args']['n_z']}
+                'nz': self.model['model_args']['n_z'],
+                'autoscale': self.data['autoscale'],
+                'normalize_terrain': self.data['normalize_terrain']}
 
     def model_kwargs(self):
         return self.model['model_args']

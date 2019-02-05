@@ -29,8 +29,9 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
             print('predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False')
 
         for i, data in tqdm(enumerate(loader_testset), total=len(loader_testset)):
-            inputs, labels, ds = data
-            inputs, labels = inputs.to(device), labels.to(device)
+            inputs = data[0]
+            labels = data[1]
+
             outputs = net(inputs)
 
             if predict_uncertainty:
@@ -110,7 +111,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         return velocity_errors, worst_index, maxloss
 
 
-def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_prediction, loss_fn = None):
+def predict_wind_and_turbulence(input, label, device, net, params, plotting_prediction, loss_fn = None):
     with torch.no_grad():
         input, label = input.to(device), label.to(device)
         start_time = time.time()
@@ -179,7 +180,8 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 gridshape = None
 
                 # get the prediction and scale it correctly
-                inputs, labels, ds = data
+                inputs = data[0]
+                labels = data[1]
                 inputs, labels = inputs.to(device), labels.to(device)
 
                 for model in models_list:

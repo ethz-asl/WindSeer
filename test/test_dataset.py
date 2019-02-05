@@ -21,27 +21,31 @@ nz = 64
 input_mode = 1
 subsample = False
 augmentation = False
-uhor_scaling = 1
-uz_scaling = 1
-turbulence_scaling = 1
+uhor_scaling = 1.0
+uz_scaling = 1.0
+turbulence_scaling = 1.0
+terrain_scaling = 64.0
 plot_sample_num = 0
 dataset_rounds = 0
 use_turbulence = True
 stride_hor = 1
 stride_vert = 1
-compute_dataset_statistics = True
+compute_dataset_statistics = False
 plot_divergence = True
 use_grid_size = True
+autoscale = True
+normalize_terrain = False
 #-----------------------------------------------------
 
 def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    db = nn_data.MyDataset(torch.device("cpu"), input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
-                        stride_hor = stride_hor, stride_vert = stride_vert,
-                        turbulence_label = use_turbulence, scaling_uhor = uhor_scaling,
-                        scaling_uz = uz_scaling, scaling_k = turbulence_scaling,
-                        compressed = compressed, use_grid_size = use_grid_size, return_grid_size = True)
+    db = nn_data.MyDataset(input_dataset, nx = nx, ny = ny, nz = nz, input_mode = input_mode,
+                           subsample = subsample, augmentation = augmentation, autoscale = autoscale,
+                           stride_hor = stride_hor, stride_vert = stride_vert, normalize_terrain = normalize_terrain,
+                           turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_terrain = terrain_scaling,
+                           scaling_uz = uz_scaling, scaling_turb = turbulence_scaling,
+                           compressed = compressed, use_grid_size = use_grid_size, return_grid_size = True)
 
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
                                               shuffle=False, num_workers=0)
@@ -72,7 +76,10 @@ def main():
     start_time = time.time()
     for j in range(dataset_rounds):
         for i, data in enumerate(dbloader):
-            input, label, ds = data
+            if autoscale:
+                input, label, scale, ds = data
+            else:
+                input, label, ds = data
 
             if compute_dataset_statistics:
                 ux.append(label[:,0,:].abs().mean().item())
@@ -246,7 +253,10 @@ def main():
     print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 
     try:
-        input, label, ds = db[plot_sample_num]
+        if autoscale:
+            input, label, scale, ds = db[plot_sample_num]
+        else:
+            input, label, ds = db[plot_sample_num]
     except:
         print('The plot_sample_num needs to be a value between 0 and', len(db)-1, '->' , plot_sample_num, ' is invalid.')
         sys.exit()

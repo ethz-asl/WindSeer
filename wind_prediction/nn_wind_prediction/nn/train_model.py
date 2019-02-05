@@ -106,7 +106,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 break
 
             # get the inputs
-            inputs, labels = data
+            inputs = data[0]
+            labels = data[1]
             inputs, labels = inputs.to(device), labels.to(device)
 
             # zero the parameter gradients
@@ -163,7 +164,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                     if should_exit:
                         break
 
-                    inputs, labels = data
+                    inputs = data[0]
+                    labels = data[1]
                     inputs, labels = inputs.to(device), labels.to(device)
 
                     if predict_uncertainty:
@@ -201,7 +203,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                     if should_exit:
                         break
 
-                    inputs, labels = data
+                    inputs = data[0]
+                    labels = data[1]
                     inputs, labels = inputs.to(device), labels.to(device)
 
                     if predict_uncertainty:

@@ -54,7 +54,7 @@ for item in models:
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # load dataset
-testset = data.MyDataset(torch.device("cpu"), args.dataset, compressed = args.compressed,
+testset = data.MyDataset(args.dataset, compressed = args.compressed,
                          augmentation = False, subsample = False, return_grid_size = True, **dataset_kwargs)
 
 for item in models:
