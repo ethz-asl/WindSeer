@@ -34,9 +34,8 @@ if run_params.run['save_model'] and (not os.path.exists(model_dir)):
 # --------------------------------------------------------------------------
 
 if (os.path.isdir("/cluster/scratch/")):
-    tempfolder = '/scratch/tmp_' + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20)) + '/'
+    tempfolder = os.environ['TMPDIR'] + '/'
     print('Script is running on the cluster, copying files to', tempfolder)
-    os.makedirs(tempfolder)
     trainset_name = tempfolder + 'train.tar'
     validationset_name = tempfolder + 'validation.tar'
     testset_name = tempfolder + 'test.tar'
@@ -160,4 +159,4 @@ if (run_params.run['evaluate_testset']):
 
 # clean up the scratch folder of the cluster
 if (os.path.isdir("/cluster/scratch/")):
-    os.system('rm -r '  + tempfolder)
+    os.system('rm -r '  + tempfolder + '*')
