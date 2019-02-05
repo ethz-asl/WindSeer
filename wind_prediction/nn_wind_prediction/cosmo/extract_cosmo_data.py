@@ -34,7 +34,7 @@ def above_line_check(x1, y1, x2, y2, x_test, y_test):
 
 def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, terrain_file = None,
                        cosmo_projection = pyproj.Proj(proj='latlong', datum='WGS84'),
-                       output_projection = pyproj.Proj(init="EPSG:21781")):
+                       output_projection = pyproj.Proj(init="CH:1903_LV03")):
     """Opens the requested COSMO NetCDF file and extracts all wind profiles that are required to calculate the initial wind field 
     for the complete meteo grid domain. 
     """
