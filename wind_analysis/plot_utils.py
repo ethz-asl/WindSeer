@@ -19,13 +19,15 @@ def get_colors(uvw, cmap=plt.cm.hsv, Vlims=None):
     if Vlims is None:
         Vlims = (c.min(), c.max())
     c = (c.ravel() - Vlims[0]) / Vlims[1]
+    # There is a problem where zero-length vectors are removed, offsetting all the correspnding colours
     # Repeat for each body line and two head lines
+    c = c[c != 0.0]
     c = np.concatenate((c, np.repeat(c, 2)))
     # Colormap
     return cmap(c)
 
 
-def plot_wind_3d(pos, wind, x_terr, y_terr, h_terr, cosmo_wind, origin=(0.0, 0.0, 0.0), wskip=5, Vlims=None):
+def plot_wind_3d(pos, wind, x_terr, y_terr, h_terr, cosmo_wind, origin=(0.0, 0.0, 0.0), wskip=5, Vlims=None, plot_cosmo=True):
     # Plot the wind vector estimates
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -50,12 +52,13 @@ def plot_wind_3d(pos, wind, x_terr, y_terr, h_terr, cosmo_wind, origin=(0.0, 0.0
 
     # Plot cosmo wind
     # ax.plot(cosmo_wind['x'].flatten()-origin[0], cosmo_wind['y'].flatten()-origin[1], cosmo_wind['hsurf'].flatten()-origin[2], 'k.')
-    ones_vec = np.ones(cwind.shape[1])
-    for ix in range(2):
-        for iy in range(2):
-            cw = cwind[:,:,ix,iy]
-            ax.quiver(cosmo_wind['x'][ix, iy]*ones_vec-origin[0], cosmo_wind['y'][ix, iy]*ones_vec-origin[1],
-                      cosmo_wind['z'][:, ix, iy] - origin[2], cw[0], cw[1], cw[2], colors=get_colors(cw, Vlims=Vlims), length=5.0)
+    if plot_cosmo:
+        ones_vec = np.ones(cwind.shape[1])
+        for ix in range(2):
+            for iy in range(2):
+                cw = cwind[:,:,ix,iy]
+                ax.quiver(cosmo_wind['x'][ix, iy]*ones_vec-origin[0], cosmo_wind['y'][ix, iy]*ones_vec-origin[1],
+                          cosmo_wind['z'][:, ix, iy] - origin[2], cw[0], cw[1], cw[2], colors=get_colors(cw, Vlims=Vlims), length=5.0)
 
     norm = matplotlib.colors.Normalize()
 
@@ -63,7 +66,8 @@ def plot_wind_3d(pos, wind, x_terr, y_terr, h_terr, cosmo_wind, origin=(0.0, 0.0
 
     sm = matplotlib.cm.ScalarMappable(cmap=plt.cm.hsv, norm=norm)
     sm.set_array([])
-    fig.colorbar(sm, ax=ax)
+    hc = fig.colorbar(sm, ax=ax)
+    hc.set_label('Wind speed (m/s)')
     # ax.set_xlim(xx.min(), xx.max())
     # ax.set_ylim(yy.min(), yy.max())
     # ax.set_zlim(zz.min(), zz.max())

@@ -68,12 +68,13 @@ if __name__ == "__main__":
         wind_names.append('Post-process filtered (HDF5 file)')
     except:
         print('Filtered wind hdf5 not found for ulog {0}'.format(bn))
+        w_filtered = None
 
     vane_lims = plot_utils.vector_lims(w_vanes, axis=0)
     cosmo_lims = plot_utils.vector_lims(np.array([cosmo_wind['wind_x'], cosmo_wind['wind_y'], cosmo_wind['wind_z']]), axis=0)
     Vlims = (0.0, max(vane_lims[1], cosmo_lims[1]))  # min(vane_lims[0], cosmo_lims[0])
 
-    fh, ah = plot_utils.plot_wind_3d(plane_pos, w_vanes, x_terr, y_terr, h_terr, cosmo_wind, origin=plane_pos[:,0].flat, Vlims=Vlims)
+    fh, ah = plot_utils.plot_wind_3d(plane_pos, w_vanes, x_terr, y_terr, h_terr, cosmo_wind, origin=plane_pos[:,0].flat, Vlims=Vlims, plot_cosmo=True)
     plot_utils.plot_cosmo_corners(ah, cosmo_corners, x_terr, y_terr, z_terr, origin=plane_pos[:,0].flat, Vlims=Vlims)
     plot_time = (ulog_data['gp_time']-ulog_data['gp_time'][0])*1e-6
     f2, a2 = plot_utils.plot_wind_estimates(plot_time, all_winds, wind_names, polar=args.polar)
@@ -113,9 +114,13 @@ if __name__ == "__main__":
     # Nearest COSMO corner for vertical profile
     cx = int((plane_pos[0, 0] - x_terr[0])/(x_terr[-1] - x_terr[0]) > 0.5)
     cy = int((plane_pos[1, 0] - y_terr[0])/(y_terr[-1] - y_terr[0]) > 0.5)
-    fp, ap = plot_utils.plot_vertical_profile(z_terr, cosmo_corners[:,:,cy,cx], w_ekfest, ulog_data['alt'], plot_time)
+    if w_filtered is not None:
+        w_plot = w_filtered
+    else:
+        w_plot = w_vanes
+    fp, ap = plot_utils.plot_vertical_profile(z_terr, cosmo_corners[:,:,cy,cx], w_plot, ulog_data['alt'], plot_time)
     fp.set_size_inches((5, 8))
-    fv, av = plot_utils.plot_lateral_variation(w_ekfest, plane_pos, plot_time, min_alt=870, max_alt=920)
+    fv, av = plot_utils.plot_lateral_variation(w_plot, plane_pos, plot_time, min_alt=1700, max_alt=None)
 
     if args.save_figs:
         print("Saving figures.")

@@ -8,7 +8,7 @@ cosmo:
   prediction_prefix: ''  # rotated_
 
 ulog:
-  file: 'logs/riemenstalden/14_47_05.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
+  file: 'logs/riemenstalden/13_33_46.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
   filtered_dir: 'logs/riemenstalden/filtered_wind/'
   
 csv:
