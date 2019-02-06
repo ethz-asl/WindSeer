@@ -1,5 +1,5 @@
 import numpy as np
-from ulog_utils import get_log_data
+import ulog_utils
 from get_mapgeo_terrain import get_terrain
 import plot_utils
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     ulog_args = yaml_tools.UlogParameters(args.yaml_file)
     ulog_args.print()
 
-    ulog_data = get_log_data(ulog_args.params['file'])
+    ulog_data = ulog_utils.get_log_data(ulog_args.params['file'])
 
     lat0, lon0 = ulog_data['lat'][0], ulog_data['lon'][0]
 
@@ -55,6 +55,20 @@ if __name__ == "__main__":
     plane_pos = np.array([ulog_data['x'], ulog_data['y'], ulog_data['alt']])
     w_vanes = np.array([ulog_data['we'], ulog_data['wn'], ulog_data['wd']])
     w_ekfest = np.array([ulog_data['we_east'], ulog_data['we_north'], ulog_data['we_down']])
+    all_winds = [w_vanes, w_ekfest]
+    wind_names = ['Raw vane estimates', 'On-board EKF estimate']
+    try:
+        filt_file = os.path.join(ulog_args.params['filtered_dir'], bn+'_filtered.hdf5')
+        filtered_wind = ulog_utils.read_filtered_hdf5(filt_file)
+        w_filtered = []
+        for wind_key in ['wind_e', 'wind_n', 'wind_d']:
+            w_filtered.append(np.interp(ulog_data['gp_time'], filtered_wind['time'], filtered_wind[wind_key]))
+        w_filtered = np.array(w_filtered)
+        all_winds.append(w_filtered)
+        wind_names.append('Post-process filtered (HDF5 file)')
+    except:
+        print('Filtered wind hdf5 not found for ulog {0}'.format(bn))
+
     vane_lims = plot_utils.vector_lims(w_vanes, axis=0)
     cosmo_lims = plot_utils.vector_lims(np.array([cosmo_wind['wind_x'], cosmo_wind['wind_y'], cosmo_wind['wind_z']]), axis=0)
     Vlims = (0.0, max(vane_lims[1], cosmo_lims[1]))  # min(vane_lims[0], cosmo_lims[0])
@@ -62,7 +76,7 @@ if __name__ == "__main__":
     fh, ah = plot_utils.plot_wind_3d(plane_pos, w_vanes, x_terr, y_terr, h_terr, cosmo_wind, origin=plane_pos[:,0].flat, Vlims=Vlims)
     plot_utils.plot_cosmo_corners(ah, cosmo_corners, x_terr, y_terr, z_terr, origin=plane_pos[:,0].flat, Vlims=Vlims)
     plot_time = (ulog_data['gp_time']-ulog_data['gp_time'][0])*1e-6
-    f2, a2 = plot_utils.plot_wind_estimates(plot_time, w_ekfest, w_vanes, 'On-board EKF estimate', 'Raw vane estimates', polar=args.polar)
+    f2, a2 = plot_utils.plot_wind_estimates(plot_time, all_winds, wind_names, polar=args.polar)
     if args.prediction:
         try:
             prediction_array = np.load('data/{0}{1}.npy'.format(cosmo_args.params['prediction_prefix'], bn))
@@ -87,12 +101,12 @@ if __name__ == "__main__":
 
         if args.polar:
             pred_V, pred_dir = plot_utils.rec2polar(pred_wind[0], pred_wind[1], wind_bearing=True, deg=True)
-            a2[0].plot(pred_t, pred_V, 'g.')
-            a2[1].plot(pred_t, pred_dir, 'g.')
+            a2[0].plot(pred_t, pred_V, 'r.')
+            a2[1].plot(pred_t, pred_dir, 'r.')
         else:
-            a2[0].plot(pred_t, pred_wind[0], 'g.')
-            a2[1].plot(pred_t, pred_wind[1], 'g.')
-        a2[2].plot(pred_t, pred_wind[2], 'g.')
+            a2[0].plot(pred_t, pred_wind[0], 'r.')
+            a2[1].plot(pred_t, pred_wind[1], 'r.')
+        a2[2].plot(pred_t, pred_wind[2], 'r.')
 
         # Calculate RMSE - resample measured wind onto valid time stamps from
 

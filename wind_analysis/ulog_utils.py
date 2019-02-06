@@ -1,6 +1,7 @@
 import numpy as np
 import pyproj
 import csv
+import h5py
 
 from pyulog.core import ULog
 
@@ -147,3 +148,14 @@ def build_csv(x_terr, y_terr, z_terr, full_block, cosmo_corners, outfile, origin
                     base[types.index("U:2")] = full_wind[2, k, j, i]
                     base[types.index("vtkValidPointMask")] = (not full_block[k, j, i])*1.0
                     csv_writer.writerow(base)
+
+
+def read_filtered_hdf5(filename):
+    # extract the data
+    out_dict = {}
+    f = h5py.File(filename, 'r')
+    for key, value in f['wind_out'].items():
+        out_dict[key] = np.array(value).squeeze()
+    # Convert time stamps back to uint64 microseconds
+    out_dict['time'] = (out_dict['time']*1e6).astype('int64')
+    return out_dict

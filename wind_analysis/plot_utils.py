@@ -137,27 +137,25 @@ def U_abl(z, z_0=0.5, U_ref=10.0, Z_ref=10.0, kappa=0.4, z_ground=0.0, U_star=No
     return U_star/kappa*np.log((z-z_ground+z_0)/z_0)
 
 
-def plot_wind_estimates(time, w0, w1, w0_name='W0', w1_name='W1', polar=False):
+def plot_wind_estimates(time, wind_array, wind_names=None, polar=False):
+    if wind_names is None:
+        wind_names = ['W{0:d}'.format(n) for n in range(len(wind_array))]
     f2, a2 = plt.subplots(3, 1)
     if polar:
-        mag0, dir0 = rec2polar(w0[0], w0[1], wind_bearing=True, deg=True)
-        mag1, dir1 = rec2polar(w1[0], w1[1], wind_bearing=True, deg=True)
-        a2[0].plot(time, mag0)
-        a2[0].plot(time, mag1)
+        for wind in wind_array:
+            mag, dir = rec2polar(wind[0], wind[1], wind_bearing=True, deg=True)
+            a2[0].plot(time, mag)
+            a2[1].plot(time, dir)
         a2[0].set_ylabel('$|V|$')
-        a2[0].legend([w0_name, w1_name])
-        a2[1].plot(time, dir0)
-        a2[1].plot(time, dir1)
         a2[1].set_ylabel('$\Psi (deg)$')
     else:
-        a2[0].plot(time, w0[0])
-        a2[0].plot(time, w1[0])
+        for wind in wind_array:
+            a2[0].plot(time, wind[0])
+            a2[1].plot(time, wind[1])
         a2[0].set_ylabel('$V_E$')
-        a2[0].legend([w0_name, w1_name])
-        a2[1].plot(time, w0[1])
-        a2[1].plot(time, w1[1])
         a2[1].set_ylabel('$V_N$')
-    a2[2].plot(time, w0[2])
-    a2[2].plot(time, w1[2])
+    a2[0].legend(wind_names)
+    for wind in wind_array:
+        a2[2].plot(time, wind[2])
     a2[2].set_ylabel('$V_D$')
     return f2, a2
