@@ -79,6 +79,7 @@ if args.compute_prediction_error:
 
 # predict the wind, compute the loss and plot if requested
 input, label, ds = testset[args.index]
+print('Test index name: {0}'.format(testset.get_name(args.index)))
 if args.save_prediction:
     name = 'data/'+os.path.splitext(testset.get_name(args.index))[0]
 else:
