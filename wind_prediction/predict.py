@@ -21,7 +21,7 @@ model_version = 'latest'
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
-plot_prediction = False
+plot_prediction = True
 prediction_level = 10
 num_worker = 0
 # -----------------------------------------------------------------------------------
@@ -81,7 +81,7 @@ if args.compute_prediction_error:
 input, label, ds = testset[args.index]
 print('Test index name: {0}'.format(testset.get_name(args.index)))
 if args.save_prediction:
-    name = 'data/'+os.path.splitext(testset.get_name(args.index))[0]
+    savename = 'data/'+os.path.splitext(testset.get_name(args.index))[0]
 else:
-    name = None
-nn_custom.predict_wind_and_turbulence(input, label, ds, device, net, params, args.plot_prediction, loss_fn, name)
+    savename = None
+nn_custom.predict_wind_and_turbulence(input, label, ds, device, net, params, args.plot_prediction, loss_fn=loss_fn, savename=savename)
