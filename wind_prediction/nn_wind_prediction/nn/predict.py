@@ -110,7 +110,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         return velocity_errors, worst_index, maxloss
 
 
-def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_prediction, loss_fn = None):
+def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_prediction, loss_fn = None, savename=None):
     with torch.no_grad():
         input, label = input.to(device), label.to(device)
         start_time = time.time()
@@ -133,7 +133,7 @@ def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_
             if loss_fn:
                 print('Loss: {}'.format(loss_fn(output, label)))
     
-        if plotting_prediction:
+        if plotting_prediction or (savename is not None):
             if len(output.shape) == 4:
                 output[0,:,:,:] *= params.data['uhor_scaling']
                 output[1,:,:,:] *= params.data['uhor_scaling']
@@ -154,7 +154,11 @@ def predict_wind_and_turbulence(input, label, ds, device, net, params, plotting_
             else:
                 print('predict_wind_and_turbulence: Unknown dimension of the output:', len(output.shape))
 
-            utils.plot_prediction(output, label, input[0], predict_uncertainty)
+            if plotting_prediction:
+                utils.plot_prediction(output, label, input[0], predict_uncertainty)
+
+            if savename is not None:
+                np.save(savename, output.cpu().numpy())
 
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
