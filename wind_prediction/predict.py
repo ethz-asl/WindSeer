@@ -13,11 +13,11 @@ from torch.utils.data import DataLoader
 
 # ----  Default Params --------------------------------------------------------------
 compressed = False
-dataset = 'data/test.tar'
+dataset = 'data/test_small.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'test_model'
+model_name = 'ednn3d_4'
 model_version = 'latest'
-compute_prediction_error = False
+compute_prediction_error = True
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
 plot_prediction = True
@@ -50,7 +50,7 @@ params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yam
 # load dataset
 testset = data.MyDataset(args.dataset, compressed = args.compressed,
                          augmentation = False, subsample = False, return_grid_size = True, **params.MyDataset_kwargs())
-testloader = torch.utils.data.DataLoader(testset, batch_size=2,
+testloader = torch.utils.data.DataLoader(testset, batch_size=1, # needs to be one
                                              shuffle=False, num_workers=num_worker)
 # load the model and its learnt parameters
 NetworkType = getattr(models, params.model['model_type'])
@@ -69,8 +69,8 @@ loss_fn = torch.nn.MSELoss()
 
 # compute the errors on the dataset
 if args.compute_prediction_error:
-    velocity_errors, worst_index, maxloss = nn_custom.dataset_prediction_error(net, device, params, loss_fn, testloader)
-    np.save('velocity_prediction_errors.npy', velocity_errors)
+    prediction_errors, losses, worst_index, maxloss = nn_custom.dataset_prediction_error(net, device, params, loss_fn, testloader)
+    np.savez('prediction_errors.npz', prediction_errors=prediction_errors, losses=losses)
 
     if args.plot_worst_prediction:
         args.index = worst_index
@@ -78,4 +78,8 @@ if args.compute_prediction_error:
 # predict the wind, compute the loss and plot if requested
 input = testset[args.index][0]
 label = testset[args.index][1]
-nn_custom.predict_wind_and_turbulence(input, label, device, net, params, args.plot_prediction, loss_fn)
+scale = 1.0
+if params.data['autoscale']:
+    scale = testset[args.index][2].item()
+
+nn_custom.predict_wind_and_turbulence(input, label, scale, device, net, params, args.plot_prediction, loss_fn)
