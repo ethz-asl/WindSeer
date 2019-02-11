@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 compressed = False
 dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'model1'
+model_name = 'model_1'
 model_version = 'latest'
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
@@ -70,7 +70,7 @@ loss_fn = torch.nn.MSELoss()
 # compute the errors on the dataset
 if args.compute_prediction_error:
     prediction_errors, losses, worst_index, maxloss = nn_custom.dataset_prediction_error(net, device, params, loss_fn, testloader)
-    np.savez('prediction_errors.npz', prediction_errors=prediction_errors, losses=losses)
+    np.savez('prediction_errors_' + model_name + '.npz', prediction_errors=prediction_errors, losses=losses)
 
     if args.plot_worst_prediction:
         args.index = worst_index
