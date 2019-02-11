@@ -22,50 +22,46 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
             'loss_uz': np.zeros(len(loader_testset)),
             'loss_turb': np.zeros(len(loader_testset)),
         }
-        loss_ux = np.zeros((len(loader_testset)))
-        loss_uy = np.zeros((len(loader_testset)))
-        loss_uz = np.zeros((len(loader_testset)))
-        loss_nut = np.zeros((len(loader_testset)))
 
         prediction_errors = {
-            'all_tot_mean': np.zeros(len(loader_testset)),
-            'all_tot_max': np.zeros(len(loader_testset)),
-            'all_tot_median': np.zeros(len(loader_testset)),
-            'all_hor_mean': np.zeros(len(loader_testset)),
-            'all_hor_max': np.zeros(len(loader_testset)),
-            'all_hor_median': np.zeros(len(loader_testset)),
-            'all_ver_mean': np.zeros(len(loader_testset)),
-            'all_ver_max': np.zeros(len(loader_testset)),
-            'all_ver_median': np.zeros(len(loader_testset)),
-            'all_turb_mean': np.zeros(len(loader_testset)),
-            'all_turb_max': np.zeros(len(loader_testset)),
-            'all_turb_median': np.zeros(len(loader_testset)),
+            'all_tot_mean': [],
+            'all_tot_max': [],
+            'all_tot_median': [],
+            'all_hor_mean': [],
+            'all_hor_max': [],
+            'all_hor_median': [],
+            'all_ver_mean': [],
+            'all_ver_max': [],
+            'all_ver_median': [],
+            'all_turb_mean': [],
+            'all_turb_max': [],
+            'all_turb_median': [],
 
-            'low_tot_mean': np.zeros(len(loader_testset)),
-            'low_tot_max': np.zeros(len(loader_testset)),
-            'low_tot_median': np.zeros(len(loader_testset)),
-            'low_hor_mean': np.zeros(len(loader_testset)),
-            'low_hor_max': np.zeros(len(loader_testset)),
-            'low_hor_median': np.zeros(len(loader_testset)),
-            'low_ver_mean': np.zeros(len(loader_testset)),
-            'low_ver_max': np.zeros(len(loader_testset)),
-            'low_ver_median': np.zeros(len(loader_testset)),
-            'low_turb_mean': np.zeros(len(loader_testset)),
-            'low_turb_max': np.zeros(len(loader_testset)),
-            'low_turb_median': np.zeros(len(loader_testset)),
+            'low_tot_mean': [],
+            'low_tot_max': [],
+            'low_tot_median': [],
+            'low_hor_mean': [],
+            'low_hor_max': [],
+            'low_hor_median': [],
+            'low_ver_mean': [],
+            'low_ver_max': [],
+            'low_ver_median': [],
+            'low_turb_mean': [],
+            'low_turb_max': [],
+            'low_turb_median': [],
 
-            'high_tot_mean': np.zeros(len(loader_testset)),
-            'high_tot_max': np.zeros(len(loader_testset)),
-            'high_tot_median': np.zeros(len(loader_testset)),
-            'high_hor_mean': np.zeros(len(loader_testset)),
-            'high_hor_max': np.zeros(len(loader_testset)),
-            'high_hor_median': np.zeros(len(loader_testset)),
-            'high_ver_mean': np.zeros(len(loader_testset)),
-            'high_ver_max': np.zeros(len(loader_testset)),
-            'high_ver_median': np.zeros(len(loader_testset)),
-            'high_turb_mean': np.zeros(len(loader_testset)),
-            'high_turb_max': np.zeros(len(loader_testset)),
-            'high_turb_median': np.zeros(len(loader_testset)),
+            'high_tot_mean': [],
+            'high_tot_max': [],
+            'high_tot_median': [],
+            'high_hor_mean': [],
+            'high_hor_max': [],
+            'high_hor_median': [],
+            'high_ver_mean': [],
+            'high_ver_max': [],
+            'high_ver_median': [],
+            'high_turb_mean': [],
+            'high_turb_max': [],
+            'high_turb_median': [],
         }
 
         try:
@@ -156,7 +152,11 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
             # compute the prediction errors and extract the data
             error_stats = utils.prediction_error.compute_prediction_error(labels, outputs, inputs[0,0], predict_uncertainty, device, params.data['use_turbulence'])
             for key in error_stats.keys():
-                prediction_errors[key][i] = error_stats[key]
+                if not np.isnan(error_stats[key]):
+                    prediction_errors[key].append(error_stats[key])
+
+        for key in prediction_errors.keys():
+            prediction_errors[key] = np.array(prediction_errors[key])
 
         # print the results over the full dataset
         print('INFO: Average loss on test set: %s' % (np.mean(losses['loss_total'])))

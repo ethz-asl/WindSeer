@@ -37,70 +37,112 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
             error_turb = abs_error[2]
 
     # error properties over the full domain
-    all_tot_mean = torch.masked_select(error_tot, mask_wind).mean()
-    all_tot_max = torch.masked_select(error_tot, mask_wind).max()
-    all_tot_median = torch.masked_select(error_tot, mask_wind).median()
+    if mask_wind.sum() > 0.0:
+        all_tot_mean = torch.masked_select(error_tot, mask_wind).mean()
+        all_tot_max = torch.masked_select(error_tot, mask_wind).max()
+        all_tot_median = torch.masked_select(error_tot, mask_wind).median()
 
-    all_hor_mean = torch.masked_select(error_hor, mask_wind).mean()
-    all_hor_max = torch.masked_select(error_hor, mask_wind).max()
-    all_hor_median = torch.masked_select(error_hor, mask_wind).median()
+        all_hor_mean = torch.masked_select(error_hor, mask_wind).mean()
+        all_hor_max = torch.masked_select(error_hor, mask_wind).max()
+        all_hor_median = torch.masked_select(error_hor, mask_wind).median()
 
-    all_ver_mean = torch.masked_select(error_ver, mask_wind).mean()
-    all_ver_max = torch.masked_select(error_ver, mask_wind).max()
-    all_ver_median = torch.masked_select(error_ver, mask_wind).median()
+        all_ver_mean = torch.masked_select(error_ver, mask_wind).mean()
+        all_ver_max = torch.masked_select(error_ver, mask_wind).max()
+        all_ver_median = torch.masked_select(error_ver, mask_wind).median()
 
-    if turbulence:
-        all_turb_mean = torch.masked_select(error_turb, mask_wind).mean()
-        all_turb_max = torch.masked_select(error_turb, mask_wind).max()
-        all_turb_median = torch.masked_select(error_turb, mask_wind).median()
+        if turbulence:
+            all_turb_mean = torch.masked_select(error_turb, mask_wind).mean()
+            all_turb_max = torch.masked_select(error_turb, mask_wind).max()
+            all_turb_median = torch.masked_select(error_turb, mask_wind).median()
+        else:
+            all_turb_mean = torch.tensor(-1)
+            all_turb_max = torch.tensor(-1)
+            all_turb_median = torch.tensor(-1)
     else:
-        all_turb_mean = torch.tensor(-1)
-        all_turb_max = torch.tensor(-1)
-        all_turb_median = torch.tensor(-1)
+        all_tot_mean = torch.tensor(float('NaN'))
+        all_tot_max = torch.tensor(float('NaN'))
+        all_tot_median = torch.tensor(float('NaN'))
+        all_hor_mean = torch.tensor(float('NaN'))
+        all_hor_max = torch.tensor(float('NaN'))
+        all_hor_median = torch.tensor(float('NaN'))
+        all_ver_mean = torch.tensor(float('NaN'))
+        all_ver_max = torch.tensor(float('NaN'))
+        all_ver_median = torch.tensor(float('NaN'))
+        all_turb_mean = torch.tensor(float('NaN'))
+        all_turb_max = torch.tensor(float('NaN'))
+        all_turb_median = torch.tensor(float('NaN'))
 
     # error properties close to the ground
-    low_tot_mean = torch.masked_select(error_tot, mask_low).mean()
-    low_tot_max = torch.masked_select(error_tot, mask_low).max()
-    low_tot_median = torch.masked_select(error_tot, mask_low).median()
+    if mask_low.sum() > 0.0:
+        low_tot_mean = torch.masked_select(error_tot, mask_low).mean()
+        low_tot_max = torch.masked_select(error_tot, mask_low).max()
+        low_tot_median = torch.masked_select(error_tot, mask_low).median()
 
-    low_hor_mean = torch.masked_select(error_hor, mask_low).mean()
-    low_hor_max = torch.masked_select(error_hor, mask_low).max()
-    low_hor_median = torch.masked_select(error_hor, mask_low).median()
+        low_hor_mean = torch.masked_select(error_hor, mask_low).mean()
+        low_hor_max = torch.masked_select(error_hor, mask_low).max()
+        low_hor_median = torch.masked_select(error_hor, mask_low).median()
 
-    low_ver_mean = torch.masked_select(error_ver, mask_low).mean()
-    low_ver_max = torch.masked_select(error_ver, mask_low).max()
-    low_ver_median = torch.masked_select(error_ver, mask_low).median()
+        low_ver_mean = torch.masked_select(error_ver, mask_low).mean()
+        low_ver_max = torch.masked_select(error_ver, mask_low).max()
+        low_ver_median = torch.masked_select(error_ver, mask_low).median()
 
-    if turbulence:
-        low_turb_mean = torch.masked_select(error_turb, mask_low).mean()
-        low_turb_max = torch.masked_select(error_turb, mask_low).max()
-        low_turb_median = torch.masked_select(error_turb, mask_low).median()
+        if turbulence:
+            low_turb_mean = torch.masked_select(error_turb, mask_low).mean()
+            low_turb_max = torch.masked_select(error_turb, mask_low).max()
+            low_turb_median = torch.masked_select(error_turb, mask_low).median()
+        else:
+            low_turb_mean = torch.tensor(-1)
+            low_turb_max = torch.tensor(-1)
+            low_turb_median = torch.tensor(-1)
     else:
-        low_turb_mean = torch.tensor(-1)
-        low_turb_max = torch.tensor(-1)
-        low_turb_median = torch.tensor(-1)
+        low_tot_mean = torch.tensor(float('NaN'))
+        low_tot_max = torch.tensor(float('NaN'))
+        low_tot_median = torch.tensor(float('NaN'))
+        low_hor_mean = torch.tensor(float('NaN'))
+        low_hor_max = torch.tensor(float('NaN'))
+        low_hor_median = torch.tensor(float('NaN'))
+        low_ver_mean = torch.tensor(float('NaN'))
+        low_ver_max = torch.tensor(float('NaN'))
+        low_ver_median = torch.tensor(float('NaN'))
+        low_turb_mean = torch.tensor(float('NaN'))
+        low_turb_max = torch.tensor(float('NaN'))
+        low_turb_median = torch.tensor(float('NaN'))
 
     # error properties high above the ground
-    high_tot_mean = torch.masked_select(error_tot, mask_high).mean()
-    high_tot_max = torch.masked_select(error_tot, mask_high).max()
-    high_tot_median = torch.masked_select(error_tot, mask_high).median()
+    if mask_high.sum() > 0.0:
+        high_tot_mean = torch.masked_select(error_tot, mask_high).mean()
+        high_tot_max = torch.masked_select(error_tot, mask_high).max()
+        high_tot_median = torch.masked_select(error_tot, mask_high).median()
 
-    high_hor_mean = torch.masked_select(error_hor, mask_high).mean()
-    high_hor_max = torch.masked_select(error_hor, mask_high).max()
-    high_hor_median = torch.masked_select(error_hor, mask_high).median()
+        high_hor_mean = torch.masked_select(error_hor, mask_high).mean()
+        high_hor_max = torch.masked_select(error_hor, mask_high).max()
+        high_hor_median = torch.masked_select(error_hor, mask_high).median()
 
-    high_ver_mean = torch.masked_select(error_ver, mask_high).mean()
-    high_ver_max = torch.masked_select(error_ver, mask_high).max()
-    high_ver_median = torch.masked_select(error_ver, mask_high).median()
+        high_ver_mean = torch.masked_select(error_ver, mask_high).mean()
+        high_ver_max = torch.masked_select(error_ver, mask_high).max()
+        high_ver_median = torch.masked_select(error_ver, mask_high).median()
 
-    if turbulence:
-        high_turb_mean = torch.masked_select(error_turb, mask_high).mean()
-        high_turb_max = torch.masked_select(error_turb, mask_high).max()
-        high_turb_median = torch.masked_select(error_turb, mask_high).median()
+        if turbulence:
+            high_turb_mean = torch.masked_select(error_turb, mask_high).mean()
+            high_turb_max = torch.masked_select(error_turb, mask_high).max()
+            high_turb_median = torch.masked_select(error_turb, mask_high).median()
+        else:
+            high_turb_mean = torch.tensor(-1)
+            high_turb_max = torch.tensor(-1)
+            high_turb_median = torch.tensor(-1)
     else:
-        high_turb_mean = torch.tensor(-1)
-        high_turb_max = torch.tensor(-1)
-        high_turb_median = torch.tensor(-1)
+        high_tot_mean = torch.tensor(float('NaN'))
+        high_tot_max = torch.tensor(float('NaN'))
+        high_tot_median = torch.tensor(float('NaN'))
+        high_hor_mean = torch.tensor(float('NaN'))
+        high_hor_max = torch.tensor(float('NaN'))
+        high_hor_median = torch.tensor(float('NaN'))
+        high_ver_mean = torch.tensor(float('NaN'))
+        high_ver_max = torch.tensor(float('NaN'))
+        high_ver_median = torch.tensor(float('NaN'))
+        high_turb_mean = torch.tensor(float('NaN'))
+        high_turb_max = torch.tensor(float('NaN'))
+        high_turb_median = torch.tensor(float('NaN'))
 
     # pack the values
     error_stats = {
