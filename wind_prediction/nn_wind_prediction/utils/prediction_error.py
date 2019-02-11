@@ -3,6 +3,7 @@ from scipy import ndimage
 import torch
 
 threshold_low = 7.0 # this corresponds to roughly 80 m for the unscaled terrain
+eps = 1e-1
 
 def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, device, turbulence, normalized_terrain):
     if uncertainty_predicted:
@@ -28,23 +29,23 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
         error_tot = abs_error[:3].norm(dim=0)
         error_hor = abs_error[:2].norm(dim=0)
         error_ver = abs_error[2]
-        vel_tot = label[:3].norm(dim=0)
-        vel_hor = label[:2].norm(dim=0)
-        vel_ver = label[2]
+        vel_tot = label[:3].norm(dim=0).clamp(min=eps)
+        vel_hor = label[:2].norm(dim=0).clamp(min=eps)
+        vel_ver = label[2].clamp(min=eps)
         if turbulence:
             error_turb = abs_error[3]
-            vel_turb = label[3]
+            vel_turb = label[3].clamp(min=eps)
 
     else:
         error_tot = abs_error[:2].norm(dim=0)
         error_hor = abs_error[0].norm(dim=0)
         error_ver = abs_error[1]
-        vel_tot = label[:2].norm(dim=0)
-        vel_hor = label[0].norm(dim=0)
+        vel_tot = label[:2].norm(dim=0).clamp(min=eps)
+        vel_hor = label[0].norm(dim=0).clamp(min=eps)
         vel_ver = label[1]
         if turbulence:
             error_turb = abs_error[2]
-            vel_turb = label[2]
+            vel_turb = label[2].clamp(min=eps)
 
     # error properties over the full domain
     if mask_wind.sum() > 0.0:
