@@ -26,18 +26,27 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
         error_tot = abs_error[:3].norm(dim=0)
         error_hor = abs_error[:2].norm(dim=0)
         error_ver = abs_error[2]
+        vel_tot = label[:3].norm(dim=0)
+        vel_hor = label[:2].norm(dim=0)
+        vel_ver = label[2]
         if turbulence:
             error_turb = abs_error[3]
+            vel_turb = label[3]
 
     else:
         error_tot = abs_error[:2].norm(dim=0)
         error_hor = abs_error[0].norm(dim=0)
         error_ver = abs_error[1]
+        vel_tot = label[:2].norm(dim=0)
+        vel_hor = label[0].norm(dim=0)
+        vel_ver = label[1]
         if turbulence:
             error_turb = abs_error[2]
+            vel_turb = label[2]
 
     # error properties over the full domain
     if mask_wind.sum() > 0.0:
+        # compute the absolute errors
         all_tot_mean = torch.masked_select(error_tot, mask_wind).mean()
         all_tot_max = torch.masked_select(error_tot, mask_wind).max()
         all_tot_median = torch.masked_select(error_tot, mask_wind).median()
@@ -58,6 +67,33 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
             all_turb_mean = torch.tensor(-1)
             all_turb_max = torch.tensor(-1)
             all_turb_median = torch.tensor(-1)
+
+        # compute the relative errors
+        rel_err_tot = torch.masked_select(error_tot, mask_wind) / torch.masked_select(vel_tot, mask_wind)
+        all_tot_mean_rel = rel_err_tot.mean()
+        all_tot_max_rel = rel_err_tot.max()
+        all_tot_median_rel = rel_err_tot.median()
+
+        rel_err_hor = torch.masked_select(error_hor, mask_wind) / torch.masked_select(vel_hor, mask_wind)
+        all_hor_mean_rel = rel_err_hor.mean()
+        all_hor_max_rel = rel_err_hor.max()
+        all_hor_median_rel = rel_err_hor.median()
+
+        rel_err_ver = torch.masked_select(error_ver, mask_wind) / torch.masked_select(vel_ver, mask_wind)
+        all_ver_mean_rel = rel_err_ver.mean()
+        all_ver_max_rel = rel_err_ver.max()
+        all_ver_median_rel = rel_err_ver.median()
+
+        if turbulence:
+            rel_err_turb = torch.masked_select(error_turb, mask_wind) / torch.masked_select(vel_turb, mask_wind)
+            all_turb_mean_rel = rel_err_turb.mean()
+            all_turb_max_rel = rel_err_turb.max()
+            all_turb_median_rel = rel_err_turb.median()
+        else:
+            all_turb_mean_rel = torch.tensor(-1)
+            all_turb_max_rel = torch.tensor(-1)
+            all_turb_median_rel = torch.tensor(-1)
+
     else:
         all_tot_mean = torch.tensor(float('NaN'))
         all_tot_max = torch.tensor(float('NaN'))
@@ -71,6 +107,19 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
         all_turb_mean = torch.tensor(float('NaN'))
         all_turb_max = torch.tensor(float('NaN'))
         all_turb_median = torch.tensor(float('NaN'))
+
+        all_tot_mean_rel = torch.tensor(float('NaN'))
+        all_tot_max_rel = torch.tensor(float('NaN'))
+        all_tot_median_rel = torch.tensor(float('NaN'))
+        all_hor_mean_rel = torch.tensor(float('NaN'))
+        all_hor_max_rel = torch.tensor(float('NaN'))
+        all_hor_median_rel = torch.tensor(float('NaN'))
+        all_ver_mean_rel = torch.tensor(float('NaN'))
+        all_ver_max_rel = torch.tensor(float('NaN'))
+        all_ver_median_rel = torch.tensor(float('NaN'))
+        all_turb_mean_rel = torch.tensor(float('NaN'))
+        all_turb_max_rel = torch.tensor(float('NaN'))
+        all_turb_median_rel = torch.tensor(float('NaN'))
 
     # error properties close to the ground
     if mask_low.sum() > 0.0:
@@ -94,6 +143,32 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
             low_turb_mean = torch.tensor(-1)
             low_turb_max = torch.tensor(-1)
             low_turb_median = torch.tensor(-1)
+
+        # compute the relative errors
+        rel_err_tot = torch.masked_select(error_tot, mask_low) / torch.masked_select(vel_tot, mask_low)
+        low_tot_mean_rel = rel_err_tot.mean()
+        low_tot_max_rel = rel_err_tot.max()
+        low_tot_median_rel = rel_err_tot.median()
+
+        rel_err_hor = torch.masked_select(error_hor, mask_low) / torch.masked_select(vel_hor, mask_low)
+        low_hor_mean_rel = rel_err_hor.mean()
+        low_hor_max_rel = rel_err_hor.max()
+        low_hor_median_rel = rel_err_hor.median()
+
+        rel_err_ver = torch.masked_select(error_ver, mask_low) / torch.masked_select(vel_ver, mask_low)
+        low_ver_mean_rel = rel_err_ver.mean()
+        low_ver_max_rel = rel_err_ver.max()
+        low_ver_median_rel = rel_err_ver.median()
+
+        if turbulence:
+            rel_err_turb = torch.masked_select(error_turb, mask_low) / torch.masked_select(vel_turb, mask_low)
+            low_turb_mean_rel = rel_err_turb.mean()
+            low_turb_max_rel = rel_err_turb.max()
+            low_turb_median_rel = rel_err_turb.median()
+        else:
+            low_turb_mean_rel = torch.tensor(-1)
+            low_turb_max_rel = torch.tensor(-1)
+            low_turb_median_rel = torch.tensor(-1)
     else:
         low_tot_mean = torch.tensor(float('NaN'))
         low_tot_max = torch.tensor(float('NaN'))
@@ -107,6 +182,19 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
         low_turb_mean = torch.tensor(float('NaN'))
         low_turb_max = torch.tensor(float('NaN'))
         low_turb_median = torch.tensor(float('NaN'))
+
+        low_tot_mean_rel = torch.tensor(float('NaN'))
+        low_tot_max_rel = torch.tensor(float('NaN'))
+        low_tot_median_rel = torch.tensor(float('NaN'))
+        low_hor_mean_rel = torch.tensor(float('NaN'))
+        low_hor_max_rel = torch.tensor(float('NaN'))
+        low_hor_median_rel = torch.tensor(float('NaN'))
+        low_ver_mean_rel = torch.tensor(float('NaN'))
+        low_ver_max_rel = torch.tensor(float('NaN'))
+        low_ver_median_rel = torch.tensor(float('NaN'))
+        low_turb_mean_rel = torch.tensor(float('NaN'))
+        low_turb_max_rel = torch.tensor(float('NaN'))
+        low_turb_median_rel = torch.tensor(float('NaN'))
 
     # error properties high above the ground
     if mask_high.sum() > 0.0:
@@ -130,6 +218,33 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
             high_turb_mean = torch.tensor(-1)
             high_turb_max = torch.tensor(-1)
             high_turb_median = torch.tensor(-1)
+
+        # compute the relative errors
+        rel_err_tot = torch.masked_select(error_tot, mask_high) / torch.masked_select(vel_tot, mask_high)
+        high_tot_mean_rel = rel_err_tot.mean()
+        high_tot_max_rel = rel_err_tot.max()
+        high_tot_median_rel = rel_err_tot.median()
+
+        rel_err_hor = torch.masked_select(error_hor, mask_high) / torch.masked_select(vel_hor, mask_high)
+        high_hor_mean_rel = rel_err_hor.mean()
+        high_hor_max_rel = rel_err_hor.max()
+        high_hor_median_rel = rel_err_hor.median()
+
+        rel_err_ver = torch.masked_select(error_ver, mask_high) / torch.masked_select(vel_ver, mask_high)
+        high_ver_mean_rel = rel_err_ver.mean()
+        high_ver_max_rel = rel_err_ver.max()
+        high_ver_median_rel = rel_err_ver.median()
+
+        if turbulence:
+            rel_err_turb = torch.masked_select(error_turb, mask_high) / torch.masked_select(vel_turb, mask_high)
+            high_turb_mean_rel = rel_err_turb.mean()
+            high_turb_max_rel = rel_err_turb.max()
+            high_turb_median_rel = rel_err_turb.median()
+        else:
+            high_turb_mean_rel = torch.tensor(-1)
+            high_turb_max_rel = torch.tensor(-1)
+            high_turb_median_rel = torch.tensor(-1)
+
     else:
         high_tot_mean = torch.tensor(float('NaN'))
         high_tot_max = torch.tensor(float('NaN'))
@@ -143,6 +258,19 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
         high_turb_mean = torch.tensor(float('NaN'))
         high_turb_max = torch.tensor(float('NaN'))
         high_turb_median = torch.tensor(float('NaN'))
+
+        high_tot_mean_rel = torch.tensor(float('NaN'))
+        high_tot_max_rel = torch.tensor(float('NaN'))
+        high_tot_median_rel = torch.tensor(float('NaN'))
+        high_hor_mean_rel = torch.tensor(float('NaN'))
+        high_hor_max_rel = torch.tensor(float('NaN'))
+        high_hor_median_rel = torch.tensor(float('NaN'))
+        high_ver_mean_rel = torch.tensor(float('NaN'))
+        high_ver_max_rel = torch.tensor(float('NaN'))
+        high_ver_median_rel = torch.tensor(float('NaN'))
+        high_turb_mean_rel = torch.tensor(float('NaN'))
+        high_turb_max_rel = torch.tensor(float('NaN'))
+        high_turb_median_rel = torch.tensor(float('NaN'))
 
     # pack the values
     error_stats = {
@@ -159,6 +287,19 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
         'all_turb_max': all_turb_max.item(),
         'all_turb_median': all_turb_median.item(),
 
+        'all_tot_mean_rel': all_tot_mean_rel.item(),
+        'all_tot_max_rel': all_tot_max_rel.item(),
+        'all_tot_median_rel': all_tot_median_rel.item(),
+        'all_hor_mean_rel': all_hor_mean_rel.item(),
+        'all_hor_max_rel': all_hor_max_rel.item(),
+        'all_hor_median_rel': all_hor_median_rel.item(),
+        'all_ver_mean_rel': all_ver_mean_rel.item(),
+        'all_ver_max_rel': all_ver_max_rel.item(),
+        'all_ver_median_rel': all_ver_median_rel.item(),
+        'all_turb_mean_rel': all_turb_mean_rel.item(),
+        'all_turb_max_rel': all_turb_max_rel.item(),
+        'all_turb_median_rel': all_turb_median_rel.item(),
+
         'low_tot_mean': low_tot_mean.item(),
         'low_tot_max': low_tot_max.item(),
         'low_tot_median': low_tot_median.item(),
@@ -172,6 +313,19 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
         'low_turb_max': low_turb_max.item(),
         'low_turb_median': low_turb_median.item(),
 
+        'low_tot_mean_rel': low_tot_mean_rel.item(),
+        'low_tot_max_rel': low_tot_max_rel.item(),
+        'low_tot_median_rel': low_tot_median_rel.item(),
+        'low_hor_mean_rel': low_hor_mean_rel.item(),
+        'low_hor_max_rel': low_hor_max_rel.item(),
+        'low_hor_median_rel': low_hor_median_rel.item(),
+        'low_ver_mean_rel': low_ver_mean_rel.item(),
+        'low_ver_max_rel': low_ver_max_rel.item(),
+        'low_ver_median_rel': low_ver_median_rel.item(),
+        'low_turb_mean_rel': low_turb_mean_rel.item(),
+        'low_turb_max_rel': low_turb_max_rel.item(),
+        'low_turb_median_rel': low_turb_median_rel.item(),
+
         'high_tot_mean': high_tot_mean.item(),
         'high_tot_max': high_tot_max.item(),
         'high_tot_median': high_tot_median.item(),
@@ -184,6 +338,19 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
         'high_turb_mean': high_turb_mean.item(),
         'high_turb_max': high_turb_max.item(),
         'high_turb_median': high_turb_median.item(),
+
+        'high_tot_mean_rel': high_tot_mean_rel.item(),
+        'high_tot_max_rel': high_tot_max_rel.item(),
+        'high_tot_median_rel': high_tot_median_rel.item(),
+        'high_hor_mean_rel': high_hor_mean_rel.item(),
+        'high_hor_max_rel': high_hor_max_rel.item(),
+        'high_hor_median_rel': high_hor_median_rel.item(),
+        'high_ver_mean_rel': high_ver_mean_rel.item(),
+        'high_ver_max_rel': high_ver_max_rel.item(),
+        'high_ver_median_rel': high_ver_median_rel.item(),
+        'high_turb_mean_rel': high_turb_mean_rel.item(),
+        'high_turb_max_rel': high_turb_max_rel.item(),
+        'high_turb_median_rel': high_turb_median_rel.item(),
         }
 
     return error_stats

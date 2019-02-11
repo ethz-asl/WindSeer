@@ -37,6 +37,19 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
             'all_turb_max': [],
             'all_turb_median': [],
 
+            'all_tot_mean_rel': [],
+            'all_tot_max_rel': [],
+            'all_tot_median_rel': [],
+            'all_hor_mean_rel': [],
+            'all_hor_max_rel': [],
+            'all_hor_median_rel': [],
+            'all_ver_mean_rel': [],
+            'all_ver_max_rel': [],
+            'all_ver_median_rel': [],
+            'all_turb_mean_rel': [],
+            'all_turb_max_rel': [],
+            'all_turb_median_rel': [],
+
             'low_tot_mean': [],
             'low_tot_max': [],
             'low_tot_median': [],
@@ -50,6 +63,19 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
             'low_turb_max': [],
             'low_turb_median': [],
 
+            'low_tot_mean_rel': [],
+            'low_tot_max_rel': [],
+            'low_tot_median_rel': [],
+            'low_hor_mean_rel': [],
+            'low_hor_max_rel': [],
+            'low_hor_median_rel': [],
+            'low_ver_mean_rel': [],
+            'low_ver_max_rel': [],
+            'low_ver_median_rel': [],
+            'low_turb_mean_rel': [],
+            'low_turb_max_rel': [],
+            'low_turb_median_rel': [],
+
             'high_tot_mean': [],
             'high_tot_max': [],
             'high_tot_median': [],
@@ -62,6 +88,19 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
             'high_turb_mean': [],
             'high_turb_max': [],
             'high_turb_median': [],
+
+            'high_tot_mean_rel': [],
+            'high_tot_max_rel': [],
+            'high_tot_median_rel': [],
+            'high_hor_mean_rel': [],
+            'high_hor_max_rel': [],
+            'high_hor_median_rel': [],
+            'high_ver_mean_rel': [],
+            'high_ver_max_rel': [],
+            'high_ver_median_rel': [],
+            'high_turb_mean_rel': [],
+            'high_turb_max_rel': [],
+            'high_turb_median_rel': [],
         }
 
         try:
@@ -165,7 +204,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         print('INFO: Average loss on test set for uz: %s' % (np.mean(losses['loss_uz'])))
         print('INFO: Average loss on test set for turbulence: %s' % (np.mean(losses['loss_turb'])))
 
-        print('INFO: Full domain errors:')
+        print('INFO: Full domain errors, absolute:')
         print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['all_tot_mean'])))
         print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_hor_mean'])))
         print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['all_ver_mean'])))
@@ -180,7 +219,22 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         print('\tmax tubulence velocity error:     %s [J/kg]' % (np.mean(prediction_errors['all_turb_max'])))
         print('')
 
-        print('INFO: High above terrain errors:')
+        print('INFO: Full domain errors, relative:')
+        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['all_tot_mean_rel'])))
+        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['all_hor_mean_rel'])))
+        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['all_ver_mean_rel'])))
+        print('\tmean tubulence velocity error:    %s' % (np.mean(prediction_errors['all_turb_mean_rel'])))
+        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['all_tot_median_rel'])))
+        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['all_hor_median_rel'])))
+        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['all_ver_median_rel'])))
+        print('\tmedian tubulence velocity error:  %s' % (np.mean(prediction_errors['all_turb_median_rel'])))
+        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['all_tot_max_rel'])))
+        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['all_hor_max_rel'])))
+        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['all_ver_max_rel'])))
+        print('\tmax tubulence velocity error:     %s' % (np.mean(prediction_errors['all_turb_max_rel'])))
+        print('')
+
+        print('INFO: High above terrain errors, absolute:')
         print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['high_tot_mean'])))
         print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_hor_mean'])))
         print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['high_ver_mean'])))
@@ -195,7 +249,22 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         print('\tmax tubulence velocity error:     %s [J/kg]' % (np.mean(prediction_errors['high_turb_max'])))
         print('')
 
-        print('INFO: Close to terrain errors:')
+        print('INFO: High above terrain errors, relative:')
+        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['high_tot_mean_rel'])))
+        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['high_hor_mean_rel'])))
+        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['high_ver_mean_rel'])))
+        print('\tmean tubulence velocity error:    %s' % (np.mean(prediction_errors['high_turb_mean_rel'])))
+        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['high_tot_median_rel'])))
+        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['high_hor_median_rel'])))
+        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['high_ver_median_rel'])))
+        print('\tmedian tubulence velocity error:  %s' % (np.mean(prediction_errors['high_turb_median_rel'])))
+        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['high_tot_max_rel'])))
+        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['high_hor_max_rel'])))
+        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['high_ver_max_rel'])))
+        print('\tmax tubulence velocity error:     %s' % (np.mean(prediction_errors['high_turb_max_rel'])))
+        print('')
+
+        print('INFO: Close to terrain errors, absolute:')
         print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['low_tot_mean'])))
         print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_hor_mean'])))
         print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['low_ver_mean'])))
@@ -208,6 +277,22 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['low_hor_max'])))
         print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_ver_max'])))
         print('\tmax tubulence velocity error:     %s [J/kg]' % (np.mean(prediction_errors['low_turb_max'])))
+        print('')
+
+        print('INFO: Close to terrain errors, relative:')
+        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['low_tot_mean_rel'])))
+        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['low_hor_mean_rel'])))
+        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['low_ver_mean_rel'])))
+        print('\tmean tubulence velocity error:    %s' % (np.mean(prediction_errors['low_turb_mean_rel'])))
+        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['low_tot_median_rel'])))
+        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['low_hor_median_rel'])))
+        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['low_ver_median_rel'])))
+        print('\tmedian tubulence velocity error:  %s' % (np.mean(prediction_errors['low_turb_median_rel'])))
+        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['low_tot_max_rel'])))
+        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['low_hor_max_rel'])))
+        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['low_ver_max_rel'])))
+        print('\tmax tubulence velocity error:     %s' % (np.mean(prediction_errors['low_turb_max_rel'])))
+        print('')
 
         return prediction_errors, losses, worst_index, maxloss
 
