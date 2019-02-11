@@ -70,7 +70,7 @@ loss_fn = torch.nn.MSELoss()
 # compute the errors on the dataset
 if args.compute_prediction_error:
     prediction_errors, losses, worst_index, maxloss = nn_custom.dataset_prediction_error(net, device, params, loss_fn, testloader)
-    np.savez('prediction_errors_' + model_name + '.npz', prediction_errors=prediction_errors, losses=losses)
+    np.savez('prediction_errors_' + args.model_name + '.npz', prediction_errors=prediction_errors, losses=losses)
 
     if args.plot_worst_prediction:
         args.index = worst_index
