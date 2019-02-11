@@ -189,7 +189,12 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 raise ValueError
 
             # compute the prediction errors and extract the data
-            error_stats = utils.prediction_error.compute_prediction_error(labels, outputs, inputs[0,0], predict_uncertainty, device, params.data['use_turbulence'])
+            error_stats = utils.prediction_error.compute_prediction_error(labels,
+                                                                          outputs,
+                                                                          inputs[0,0] * params.data['terrain_scaling'],
+                                                                          predict_uncertainty, device,
+                                                                          params.data['use_turbulence'],
+                                                                          params.data['normalize_terrain'])
             for key in error_stats.keys():
                 if not np.isnan(error_stats[key]):
                     prediction_errors[key].append(error_stats[key])
