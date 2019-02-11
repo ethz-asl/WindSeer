@@ -13,11 +13,11 @@ from torch.utils.data import DataLoader
 
 # ----  Default Params --------------------------------------------------------------
 compressed = False
-dataset = 'data/test_small.tar'
+dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'ednn3d_4'
+model_name = 'model1'
 model_version = 'latest'
-compute_prediction_error = True
+compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
 plot_prediction = True
