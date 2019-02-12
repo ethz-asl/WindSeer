@@ -2,6 +2,7 @@
 
 import h5py
 from math import trunc
+import matplotlib.pyplot as plt
 import nn_wind_prediction.utils as utils
 import numpy as np
 import time
