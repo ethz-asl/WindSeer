@@ -2,7 +2,6 @@
 
 import h5py
 from math import trunc
-import matplotlib.pyplot as plt
 import nn_wind_prediction.utils as utils
 import numpy as np
 import time
@@ -356,8 +355,8 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
         if savename is not None:
             np.save(savename, output.cpu().numpy())
 
-        plt.show()
-
+        if plotting_prediction:
+            utils.plot_prediction(output, label, input[0], predict_uncertainty)
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
     if len(models_list) == 0:
