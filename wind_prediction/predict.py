@@ -9,6 +9,7 @@ import nn_wind_prediction.nn as nn_custom
 import nn_wind_prediction.utils as utils
 import numpy as np
 import torch
+import os
 from torch.utils.data import DataLoader
 
 # ----  Default Params --------------------------------------------------------------
@@ -34,6 +35,7 @@ parser.add_argument('-model_version', dest='model_version', default=model_versio
 parser.add_argument('-cpe', dest='compute_prediction_error', action='store_true', help='If set the velocity prediction errors over the full dataset is computed')
 parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', help='If set the worst prediction of the input dataset is shown. Needs compute_prediction_error to be true.')
 parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
+parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
 
 args = parser.parse_args()
 args.compressed = args.compressed or compressed
@@ -82,4 +84,10 @@ scale = 1.0
 if params.data['autoscale']:
     scale = testset[args.index][2].item()
 
-nn_custom.predict_wind_and_turbulence(input, label, scale, device, net, params, args.plot_prediction, loss_fn)
+print('Test index name: {0}'.format(testset.get_name(args.index)))
+if args.save_prediction:
+    savename = 'data/'+os.path.splitext(testset.get_name(args.index))[0]
+else:
+    savename = None
+
+nn_custom.predict_wind_and_turbulence(input, label, scale, device, net, params, args.plot_prediction, loss_fn=loss_fn, savename=savename)

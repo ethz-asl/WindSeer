@@ -301,8 +301,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
 
         return prediction_errors, losses, worst_index, maxloss
 
-
-def predict_wind_and_turbulence(input, label, scale, device, net, params, plotting_prediction, loss_fn = None):
+def predict_wind_and_turbulence(input, label, scale, device, net, params, plotting_prediction, loss_fn = None, savename=None):
     with torch.no_grad():
         # predict and measure how long it takes
         input, label = input.to(device), label.to(device)
@@ -352,9 +351,11 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
         else:
             if loss_fn:
                 print('Loss: {}'.format(loss_fn(output, label)))
-    
-        if plotting_prediction:
-            utils.plot_prediction(output, label, input[0], predict_uncertainty)
+
+        if savename is not None:
+            np.save(savename, output.cpu().numpy())
+
+        plt.show()
 
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
