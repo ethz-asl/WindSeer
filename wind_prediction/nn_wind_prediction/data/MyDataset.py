@@ -31,90 +31,235 @@ class MyDataset(Dataset):
     - Reimplement the 2D data handling
     '''
 
-    def __init__(self, device, filename, nx, ny, nz, input_mode = 0, subsample = False, augmentation = False,
-                 stride_hor = 1, stride_vert = 1, turbulence_label = False,
-                 scaling_uhor = 1.0, scaling_uz = 1.0, scaling_k = 1.0,
-                 compressed = True, use_grid_size = False, return_grid_size = False, return_name = False):
+    __default_device = 'cpu'
+    __default_nx = 64
+    __default_ny = 64
+    __default_nz = 64
+    __default_input_mode = 0
+    __default_subsample = False
+    __default_augmentation = False
+    __default_stride_hor = 1
+    __default_stride_vert = 1
+    __default_turbulence_label = True
+    __default_scaling_uhor = 1.0
+    __default_scaling_uz = 1.0
+    __default_scaling_turb = 1.0
+    __default_scaling_terrain = 1.0
+    __default_compressed = False
+    __default_use_grid_size = False
+    __default_return_grid_size = False
+    __default_return_name = False
+    __default_autoscale = False
+    __default_normalize_terrain = False
+
+    def __init__(self, filename, **kwargs):
         '''
         Params:
             device:
-                Device (CPU or GPU) on which the tensor operations are executed
-            filename:
+                Device (CPU or GPU) on which the tensor operations are executed, default 'cpu'
+            filename (required):
                 The name of the tar file containing the dataset
             nx:
-                Number of grid points in x-direction of the output
+                Number of grid points in x-direction of the output, default 64
             ny:
-                Number of grid points in y-direction of the output
+                Number of grid points in y-direction of the output, default 64
             nz:
-                Number of grid points in z-direction of the output
+                Number of grid points in z-direction of the output, default 64
             input_mode:
                 Indicates how the input is constructed. The following modes are currently implemented:
                     0: The inflow condition is copied over the full domain
-                    1: The vertical edges are interpolated over the full domain
+                    1: The vertical edges are interpolated over the full domain, default 0
             subsample:
-                If true a region with the size of (nx, ny, nz) is sampled from the input data
+                If true a region with the size of (nx, ny, nz) is sampled from the input data, default False
             augmentation:
-                If true the data is augmented using flipping in x/y direction and rotation aroung z
+                If true the data is augmented using flipping in x/y direction and rotation aroung z, default False
             stride_hor:
-                Horizontal stride, used to reduce the size of the output tensors
+                Horizontal stride, used to reduce the size of the output tensors, default 1
             stride_vert:
-                Vertical stride, used to reduce the size of the output tensors
+                Vertical stride, used to reduce the size of the output tensors, default 1
             turbulence_label:
-                Specifies if the turbulent kinetic energy is contained in the output
+                Specifies if the turbulent kinetic energy is contained in the output, default True
             scaling_uhor:
-                Scaling factor for the horizontal velocity components
+                Scaling factor for the horizontal velocity components, default 1.0
             scaling_uz:
-                Scaling factor for the vertical velocity component
-            scaling_k:
-                Scaling factor for the turbulent kinetic energy
+                Scaling factor for the vertical velocity component, default 1.0
+            scaling_turb:
+                Scaling factor for the turbulent kinetic energy, default 1.0
             compressed:
-                Specifies if the input tensors are compressed using LZ4
+                Specifies if the input tensors are compressed using LZ4, default False
             use_grid_size:
-                Specifies if the turbulent kinetic energy is contained in the output
+                Specifies if the turbulent kinetic energy is contained in the output, default False
             return_grid_size:
-                If true a tuple of the grid size is returned in addition to the input and output tensors
+                If true a tuple of the grid size is returned in addition to the input and output tensors, default False
             return_name:
-                Return the filename of the sample
+                Return the filename of the sample, default False
+            autoscale:
+                Automatically scale the input and return the scale, default False
+            normalize_terrain:
+                Normalize the values of the terrain output channel, default False
         '''
+        self.__filename = filename
+
         try:
             tar = tarfile.open(filename, 'r')
         except IOError as e:
             print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, filename))
             sys.exit()
 
-        self.__device = device
+        try:
+            verbose = kwargs['verbose']
+        except KeyError:
+            verbose = False
 
-        self.__filename = filename
+        try:
+            self.__device = kwargs['device']
+        except KeyError:
+            self.__device = self.__default_device
+            if verbose:
+                print('MyDataset: device not present in kwargs, using default value:', self.__default_device)
+
+        try:
+            self.__nx = kwargs['nx']
+        except KeyError:
+            self.__nx = self.__default_nx
+            if verbose:
+                print('MyDataset: nx not present in kwargs, using default value:', self.__default_nx)
+
+        try:
+            self.__ny = kwargs['ny']
+        except KeyError:
+            self.__ny = self.__default_ny
+            if verbose:
+                print('MyDataset: ny not present in kwargs, using default value:', self.__default_ny)
+
+        try:
+            self.__nz = kwargs['nz']
+        except KeyError:
+            self.__nz = self.__default_nz
+            if verbose:
+                print('MyDataset: nz not present in kwargs, using default value:', self.__default_nz)
+
+        try:
+            self.__input_mode = kwargs['input_mode']
+        except KeyError:
+            self.__input_mode = self.__default_input_mode
+            if verbose:
+                print('MyDataset: input_mode not present in kwargs, using default value:', self.__default_input_mode)
+
+        try:
+            self.__subsample = kwargs['subsample']
+        except KeyError:
+            self.__subsample = self.__default_subsample
+            if verbose:
+                print('MyDataset: subsample not present in kwargs, using default value:', self.subsample)
+
+        try:
+            self.__augmentation = kwargs['augmentation']
+        except KeyError:
+            self.__augmentation = self.__default_augmentation
+            if verbose:
+                print('MyDataset: augmentation not present in kwargs, using default value:', self.__default_augmentation)
+
+        try:
+            self.__turbulence_label = kwargs['turbulence_label']
+        except KeyError:
+            self.__turbulence_label = self.__default_turbulence_label
+            if verbose:
+                print('MyDataset: turbulence_label not present in kwargs, using default value:', self.__default_turbulence_label)
+
+        try:
+            self.__scaling_uhor = kwargs['scaling_uhor']
+        except KeyError:
+            self.__scaling_uhor = self.__default_scaling_uhor
+            if verbose:
+                print('MyDataset: scaling_uhor not present in kwargs, using default value:', self.__default_scaling_uhor)
+
+        try:
+            self.__scaling_uz = kwargs['scaling_uz']
+        except KeyError:
+            self.__scaling_uz = self.__default_scaling_uz
+            if verbose:
+                print('MyDataset: scaling_uz not present in kwargs, using default value:', self.__default_scaling_uz)
+
+        try:
+            self.__scaling_turb = kwargs['scaling_turb']
+        except KeyError:
+            self.__scaling_turb = self.__default_scaling_turb
+            if verbose:
+                print('MyDataset: scaling_turb not present in kwargs, using default value:', self.__default_scaling_turb)
+
+        try:
+            self.__scaling_terrain = kwargs['scaling_terrain']
+        except KeyError:
+            self.__scaling_terrain = self.__default_scaling_terrain
+            if verbose:
+                print('MyDataset: scaling_terrain not present in kwargs, using default value:', self.__default_scaling_terrain)
+
+        try:
+            self.__stride_hor = kwargs['stride_hor']
+        except KeyError:
+            self.__stride_hor = self.__default_stride_hor
+            if verbose:
+                print('MyDataset: stride_hor not present in kwargs, using default value:', self.__default_stride_hor)
+
+        try:
+            self.__stride_vert = kwargs['stride_vert']
+        except KeyError:
+            self.__stride_vert = self.__default_stride_vert
+            if verbose:
+                print('MyDataset: stride_vert not present in kwargs, using default value:', self.__default_stride_vert)
+
+        try:
+            self.__compressed = kwargs['compressed']
+        except KeyError:
+            self.__compressed = self.__default_compressed
+            if verbose:
+                print('MyDataset: compressed not present in kwargs, using default value:', self.__default_compressed)
+
+        try:
+            self.__return_grid_size = kwargs['return_grid_size']
+        except KeyError:
+            self.__return_grid_size = self.__default_return_grid_size
+            if verbose:
+                print('MyDataset: return_grid_size not present in kwargs, using default value:', self.__default_return_grid_size)
+
+        try:
+            self.__use_grid_size = kwargs['use_grid_size']
+        except KeyError:
+            self.__use_grid_size = self.__default_use_grid_size
+            if verbose:
+                print('MyDataset: use_grid_size not present in kwargs, using default value:', self.__default_use_grid_size)
+
+        try:
+            self.__return_name = kwargs['return_name']
+        except KeyError:
+            self.__return_name = self.__default_return_name
+            if verbose:
+                print('MyDataset: return_name not present in kwargs, using default value:', self.__default_return_name)
+
+        try:
+            self.__autoscale = kwargs['autoscale']
+        except KeyError:
+            self.__autoscale = self.__default_autoscale
+            if verbose:
+                print('MyDataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
+
+        try:
+            self.__normalize_terrain = kwargs['normalize_terrain']
+        except KeyError:
+            self.__normalize_terrain = self.__default_normalize_terrain
+            if verbose:
+                print('MyDataset: normalize_terrain not present in kwargs, using default value:', self.__default_normalize_terrain)
+
+        # extract data from the tar file
         self.__num_files = len(tar.getnames())
         self.__memberslist = tar.getmembers()
 
-        self.__nx = nx
-        self.__ny = ny
-        self.__nz = nz
-
-        self.__input_mode = input_mode
-        self.__subsample = subsample
-        self.__augmentation = augmentation
-
-        self.__turbulence_label = turbulence_label
-        self.__scaling_uhor = scaling_uhor
-        self.__scaling_uz = scaling_uz
-        self.__scaling_k = scaling_k
-
-        self.__stride_hor = stride_hor
-        self.__stride_vert = stride_vert
-
-        self.__compressed = compressed
-
-        self.__return_grid_size = return_grid_size
-        self.__use_grid_size = use_grid_size
-
-        self.__return_name = return_name
-
+        # initialize random number generator used for the subsampling
         self.__rand = random.SystemRandom()
 
         # interpolator for the three input velocities
-        self.__interpolator = DataInterpolation(device, 3, nx, ny, nz)
+        self.__interpolator = DataInterpolation(self.__device, 3, self.__nx, self.__ny, self.__nz)
 
         print('MyDataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
@@ -134,10 +279,19 @@ class MyDataset(Dataset):
         data_shape = data[0,:].shape
         if (len(data_shape) == 3):
             # scale the data according to the specifications
-            data[1, :, :, :] /= self.__scaling_uhor # in u_x
-            data[2, :, :, :] /= self.__scaling_uhor # in u_y
-            data[3, :, :, :] /= self.__scaling_uz # in u_z
-            data[4, :, :, :] /= self.__scaling_k # label turbulence
+            if self.__autoscale:
+                scale = self.__get_scale(data[1:4, :, :, :])
+            else:
+                scale = 1.0
+
+            data[0, :, :, :] /= self.__scaling_terrain # terrain
+            data[1, :, :, :] /= scale * self.__scaling_uhor # in u_x
+            data[2, :, :, :] /= scale * self.__scaling_uhor # in u_y
+            data[3, :, :, :] /= scale * self.__scaling_uz # in u_z
+            data[4, :, :, :] /= scale * scale * self.__scaling_turb # label turbulence
+
+            if self.__normalize_terrain:
+                data[0, :, :, :] /= data[0, :, :, :].max()
 
             # downscale if requested
             data = data[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
@@ -217,16 +371,18 @@ class MyDataset(Dataset):
 
                     ds = (ds[1], ds[0], ds[2])
 
+            out = [input, output]
+
+            if self.__autoscale:
+                out.append(scale)
+
             if self.__return_grid_size:
-                if self.__return_name:
-                    return input, output, ds, self.__memberslist[index].name
-                else:
-                    return input, output, ds
-            else:
-                if self.__return_name:
-                    return input, output, self.__memberslist[index].name
-                else:
-                    return input, output
+                out.append(ds)
+
+            if self.__return_name:
+                out.append(self.__memberslist[index].name)
+
+            return out
 
         elif (len(data_shape) == 2):
             print('MyDataset Error: 2D data handling is not implemented yet')
@@ -240,3 +396,11 @@ class MyDataset(Dataset):
 
     def __len__(self):
         return self.__num_files
+
+    def __get_scale(self, x):
+        shape = x.shape
+
+        corners = torch.index_select(x, 2, torch.tensor([0,shape[2]-1]))
+        corners = torch.index_select(corners, 3, torch.tensor([0,shape[3]-1]))
+
+        return corners.norm(dim=0).mean(dim=0).max()

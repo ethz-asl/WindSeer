@@ -492,3 +492,52 @@ def plot_sample(input, label, terrain, plot_divergence = False, plot_turbulence 
 def plot_prediction(output, label, terrain, uncertainty_predicted):
     instance = PlotUtils(output, label, terrain, 1, uncertainty_predicted)
     instance.plot_prediction()
+
+def violin_plot(labels, data, xlabel, ylabel, ylim=None):
+    index = np.arange(len(labels))
+
+    fig, ax = plt.subplots()
+    fig.patch.set_facecolor('white')
+
+    # need to manually set the factor and make sure that it is not too small, otherwise a numerical underflow will happen
+    factor = np.power(len(data[0]), -1.0 / (len(data) + 4))
+    parts = ax.violinplot(data, showmeans=False, showmedians=False, showextrema=False, points=300, bw_method=np.max([factor, 0.6]))
+
+    for pc in parts['bodies']:
+        pc.set_facecolor('#D43F3A')
+        pc.set_edgecolor('black')
+        pc.set_alpha(1)
+
+    quartile1 = []
+    medians = []
+    quartile3 = []
+    for channel in data:
+        quartile1_channel, medians_channel, quartile3_channel = np.percentile(channel, [25, 50, 75])
+        quartile1.append(quartile1_channel)
+        medians.append(medians_channel)
+        quartile3.append(quartile3_channel)
+
+    whiskers = np.array([adjacent_values(sorted(sorted_array), q1, q3) for sorted_array, q1, q3 in zip(data, quartile1, quartile3)])
+    whiskersMin, whiskersMax = whiskers[:, 0], whiskers[:, 1]
+
+    inds = np.arange(1, len(medians) + 1)
+    ax.scatter(inds, medians, marker='o', color='white', s=30, zorder=3)
+    ax.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
+    ax.vlines(inds, whiskersMin, whiskersMax, color='k', linestyle='-', lw=1)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xticks(inds)
+    ax.set_xticklabels(labels)
+    if ylim:
+        ax.set_ylim(ylim)
+    fig.tight_layout()
+
+
+def adjacent_values(vals, q1, q3):
+    upper_adjacent_value = q3 + (q3 - q1) * 1.5
+    upper_adjacent_value = np.clip(upper_adjacent_value, q3, vals[-1])
+
+    lower_adjacent_value = q1 - (q3 - q1) * 1.5
+    lower_adjacent_value = np.clip(lower_adjacent_value, vals[0], q1)
+    return lower_adjacent_value, upper_adjacent_value
