@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 # ----  Default Params --------------------------------------------------------------
 compressed = False
-dataset = '../wind_analysis/data/converted_flight_trials.tar'
+dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
 model_name = 'test_model'
 model_version = 'latest'

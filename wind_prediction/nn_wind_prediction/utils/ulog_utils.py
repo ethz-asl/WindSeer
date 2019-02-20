@@ -2,6 +2,7 @@ import numpy as np
 import pyproj
 import csv
 import h5py
+import time
 
 from pyulog.core import ULog
 
@@ -43,7 +44,7 @@ def get_quat(data, index):
     return(np.array([data['q[0]'][index], data['q[1]'][index], data['q[2]'][index], data['q[3]'][index]]))
 
 
-def get_log_data(logfile, proj_logfile=None, proj_output=None, skip_amount=10):
+def get_log_data(logfile, proj_logfile=None, proj_output=None, skip_amount=10, verbose = False):
 
     if proj_logfile is None:
         proj_logfile = pyproj.Proj(proj='latlong', datum='WGS84')
@@ -52,13 +53,15 @@ def get_log_data(logfile, proj_logfile=None, proj_output=None, skip_amount=10):
 
     log_data = ULog(logfile).data_list
 
-    print('Message types found:')
+    if (verbose):
+        print('Message types found:')
     all_names = [log_data[i].name for i in range(len(log_data))]
     for d in log_data:
         message_size = sum([ULog.get_field_size(f.type_str) for f in d.field_data])
         num_data_points = len(d.data['timestamp'])
         name_id = "{:} ({:}, {:})".format(d.name, d.multi_id, message_size)
-        print(" {:<40} {:7d} {:10d}".format(name_id, num_data_points,
+        if (verbose):
+            print(" {:<40} {:7d} {:10d}".format(name_id, num_data_points,
                                             message_size * num_data_points))
 
     # Create dictionary because otherwise unsorted
@@ -150,7 +153,13 @@ def build_csv(x_terr, y_terr, z_terr, full_block, cosmo_corners, outfile, origin
                     csv_writer.writerow(base)
 
 
-def read_filtered_hdf5(filename):
+def read_filtered_hdf5(filename, proj_logfile=None, proj_output=None):
+    # default projections
+    if proj_logfile is None:
+        proj_logfile = pyproj.Proj(proj='latlong', datum='WGS84')
+    if proj_output is None:
+        proj_output = pyproj.Proj(init="CH:1903_LV03")
+
     # extract the data
     out_dict = {}
     f = h5py.File(filename, 'r')
@@ -158,4 +167,62 @@ def read_filtered_hdf5(filename):
         out_dict[key] = np.array(value).squeeze()
     # Convert time stamps back to uint64 microseconds
     out_dict['time'] = (out_dict['time']*1e6).astype('int64')
+
+    out_dict['alt_amsl'] = out_dict['alt']
+
+    out_dict['x'], out_dict['y'], out_dict['alt'] = \
+        pyproj.transform(proj_logfile, proj_output, out_dict['lon'], out_dict['lat'], out_dict['alt_amsl'])
+
     return out_dict
+
+def extract_wind_data(filename, use_estimate):
+    # import the wind data
+    t_start = time.time()
+    file_ending = filename.split('.')[-1]
+    if file_ending == 'ulg':
+        print('Importing wind data from ulog file...', end='', flush=True)
+        ulog_data = get_log_data(filename)
+        wind_data = {
+            'lat': ulog_data['lat'],
+            'lon': ulog_data['lon'],
+            'alt_amsl': ulog_data['alt_amsl'],
+            'x': ulog_data['x'],
+            'y': ulog_data['y'],
+            'alt': ulog_data['alt'],
+        }
+        if (use_estimate):
+            wind_data['we'] = ulog_data['we_east']
+            wind_data['wn'] = ulog_data['we_north']
+            wind_data['wd'] = ulog_data['we_down']
+
+        else:
+            wind_data['we'] = ulog_data['we']
+            wind_data['wn'] = ulog_data['wn']
+            wind_data['wd'] = ulog_data['wd']
+
+        del ulog_data
+
+    elif file_ending == 'hdf5':
+        print('Importing wind data from hdf5 file...', end='', flush=True)
+        hdf5_data = read_filtered_hdf5(filename)
+
+        wind_data = {
+            'lat': hdf5_data['lat'],
+            'lon': hdf5_data['lon'],
+            'alt_amsl': hdf5_data['alt_amsl'],
+            'x': hdf5_data['x'],
+            'y': hdf5_data['y'],
+            'alt': hdf5_data['alt'],
+            'we':  hdf5_data['wind_e'],
+            'wn':  hdf5_data['wind_n'],
+            'wd':  hdf5_data['wind_d'],
+        }
+
+        del hdf5_data
+
+    else:
+        print('Error: Unknown file type:', file_ending)
+        exit()
+
+    print(' done [{:.2f} s]'.format(time.time() - t_start))
+    return wind_data

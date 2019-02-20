@@ -1,3 +1,4 @@
+from .bin_log_data import *
 from .divergence import *
 from .interpolation import *
 from .plotting_analysis import *

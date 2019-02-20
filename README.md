@@ -17,7 +17,10 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
 3. Install the following required python packages:
    `pip3 install tensorboardX lz4 numpy`
 
-4. Install the `nn_wind_prediction` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
+4. Upgrade matplotlib
+   `pip3 install -U matplotlib`
+
+5. Install the `nn_wind_prediction` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
     `pip install -e wind_prediction/`
 
 ## Guidelines
