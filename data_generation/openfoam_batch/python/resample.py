@@ -53,6 +53,7 @@ for t in inputfoam.TimestepValues:
 
     # Properties modified on resampleWithDataset1
     resampleWithDataset1.Tolerance = 2.22044604925031e-16
+    # resampleWithDataset1.MarkBlankPointsAndCells = False
 
     # save data
     para.SaveData(tfile, proxy=resampleWithDataset1)

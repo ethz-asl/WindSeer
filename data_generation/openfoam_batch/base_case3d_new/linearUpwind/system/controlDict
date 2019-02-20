@@ -1,18 +1,17 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  5                                     |
+|  \\    /   O peration     | Version:  5.x                                   |
 |   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 FoamFile
 {
-    version     2.0;
-    format      ascii;
-    class       dictionary;
-    object      controlDict;
+    version         2;
+    format          ascii;
+    class           dictionary;
+    object          controlDict;
 }
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 application     simpleFoam;
 
@@ -22,7 +21,7 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         5000;
+endTime         10000;
 
 deltaT          1;
 
@@ -43,5 +42,6 @@ timeFormat      general;
 timePrecision   6;
 
 runTimeModifiable yes;
+
 
 // ************************************************************************* //
