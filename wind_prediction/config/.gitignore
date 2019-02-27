@@ -3,4 +3,4 @@
 
 # But gitignore and the example file
 !.gitignore
-!example.yaml
+!divergence_free.yaml
