@@ -27,15 +27,20 @@ def derive(input_tensor, deriv_axis, ds=1):
     else:
         raise ValueError('The derivation axis must be 1, 2 or 3')
 
+    # setting device
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     # setting up convolution equivalent to centered first order finite differences
     deriv_conv = nn.Conv2d(in_channels=input_tensor.shape[1], out_channels=input_tensor.shape[1],
                            kernel_size=[1, 3], stride=1, padding=[0, 0], groups=input_tensor.shape[1], bias=False)
-    deriv_conv.weight.data[:, :, :, 0] = -1
-    deriv_conv.weight.data[:, :, :, 1] = 0
-    deriv_conv.weight.data[:, :, :, 2] = 1
+    kernel = deriv_conv.weight.data
+    kernel[:, :, :, 0] = -1
+    kernel[:, :, :, 1] = 0
+    kernel[:, :, :, 2] = 1
+    deriv_conv.weight.data = kernel.to(device)
     deriv_conv.weight.requires_grad = False
 
-    # apply padding
+    # define padding
     m = nn.ReplicationPad2d((1, 1, 0, 0))
 
     # apply convolution
@@ -65,14 +70,14 @@ def curl(input_tensor, ds=1):
     Output:
         curled_tensor: 5D tensor (samples, curled_field[u, v, w]), X, Y, Z)
     '''
-    phix_y = derive(input_tensor[:, 1, :, :, :], 2, ds)
-    phix_z = derive(input_tensor[:, 1, :, :, :], 3, ds)
+    phix_y = derive(input_tensor[:, 0, :, :, :], 2, ds)
+    phix_z = derive(input_tensor[:, 0, :, :, :], 3, ds)
 
-    phiy_x = derive(input_tensor[:, 2, :, :, :], 1, ds)
-    phiy_z = derive(input_tensor[:, 2, :, :, :], 3, ds)
+    phiy_x = derive(input_tensor[:, 1, :, :, :], 1, ds)
+    phiy_z = derive(input_tensor[:, 1, :, :, :], 3, ds)
 
-    phiz_x = derive(input_tensor[:, 3, :, :, :], 1, ds)
-    phiz_y = derive(input_tensor[:, 3, :, :, :], 2, ds)
+    phiz_x = derive(input_tensor[:, 2, :, :, :], 1, ds)
+    phiz_y = derive(input_tensor[:, 2, :, :, :], 2, ds)
 
     # curled vector field components
     u = phiz_y - phiy_z
