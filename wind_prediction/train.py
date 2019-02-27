@@ -103,7 +103,7 @@ if run_params.run['loss_function'] == 1:
 elif run_params.run['loss_function'] == 2:
     loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
 elif run_params.run['loss_function'] == 3:
-    loss_fn = nn_custom.MyLoss()
+    loss_fn = nn_custom.StreamFunctionLoss()
 else:
     loss_fn = torch.nn.MSELoss()
 

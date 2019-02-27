@@ -15,7 +15,7 @@ run:
     save_metadata: True
     evaluate_testset: False
     warm_start: False
-    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: Custom, else: MSE
+    loss_function: 3 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: StreamFunctionLoss, else: MSE
     uncertainty_loss_eps: 1.0E-9
     save_model_every_n_epoch: 25
     save_params_hist_every_n_epoch: 100
@@ -30,11 +30,11 @@ run:
 data:
     # dataset parameter
     compressed: False
-    trainset_name: 'data/train.tar'
-    validationset_name: 'data/validation.tar'
-    testset_name: 'data/test.tar'
-    trainset_augmentation: True
-    trainset_subsample: True
+    trainset_name: '../../datasets/train.tar'
+    validationset_name: '../../datasets/train.tar'
+    testset_name: '../../datasets/test.tar'
+    trainset_augmentation: False
+    trainset_subsample: False
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
@@ -43,7 +43,7 @@ data:
     turbulence_scaling: 1.1
     terrain_scaling: 64.0
     use_grid_size: False
-    use_turbulence: True
+    use_turbulence: False
     autoscale: False
     normalize_terrain: False
 
