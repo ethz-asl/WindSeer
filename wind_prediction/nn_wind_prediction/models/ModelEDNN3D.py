@@ -2,6 +2,7 @@ import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import nn_wind_prediction.utils as utils
 
 '''
 Encoder/Decoder Neural Network
@@ -313,11 +314,12 @@ class ModelEDNN3D(nn.Module):
             x = self.__mapping_layer(x)
 
         if self.__potential_flow:
-            potential = self.__pf_convolution(self.__pf_pad(x[:,:3,:]))
-            x = torch.cat([(potential[:,:,:-1,:-1,1: ]-potential[:,:,:-1,:-1,:-1]), # U_x
-                           (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
-                           (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
-                            x[:,3:,:]], 1)
+            # potential = self.__pf_convolution(self.__pf_pad(x[:,:3,:]))
+            # x = torch.cat([(potential[:,:,:-1,:-1,1: ]-potential[:,:,:-1,:-1,:-1]), # U_x
+            #                (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
+            #                (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
+            #                 x[:,3:,:]], 1)
+            x = utils.curl(x, ds=1)
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x

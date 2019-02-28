@@ -48,7 +48,7 @@ data:
     normalize_terrain: False
 
 model:
-    name_prefix: 'test_model'
+    name_prefix: 'test_model2'
     model_type: 'ModelEDNN3D'
     model_args: {
         n_x: 64,
