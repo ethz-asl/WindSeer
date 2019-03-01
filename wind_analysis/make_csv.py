@@ -1,5 +1,5 @@
 import numpy as np
-import ulog_utils
+import nn_wind_prediction.utils as utils
 from get_mapgeo_terrain import get_terrain
 import os
 import nn_wind_prediction.cosmo as cosmo
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     ulog_args = yaml_tools.UlogParameters(args.yaml_file)
     ulog_args.print()
 
-    ulog_data = ulog_utils.get_log_data(ulog_args.params['file'])
+    ulog_data = utils.get_log_data(ulog_args.params['file'])
     lat0, lon0 = ulog_data['lat'][0], ulog_data['lon'][0]
 
     # Get cosmo wind
@@ -50,6 +50,6 @@ if __name__ == "__main__":
     try:
         csv_args = yaml_tools.BasicParameters(args.yaml_file, 'csv')
         print('Saving csv to {0}'.format(csv_args.params['file']))
-        ulog_utils.build_csv(x_terr, y_terr, z_terr, full_block, cosmo_corners, csv_args.params['file'])
+        utils.build_csv(x_terr, y_terr, z_terr, full_block, cosmo_corners, csv_args.params['file'])
     except:
         print('CSV filename parameter (csv:file) not found in {0}, csv not saved'.format(args.yaml_file))

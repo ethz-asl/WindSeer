@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 from matplotlib.widgets import Slider, RadioButtons
+import matplotlib.colors as colors
 import torch
 
 # try importing mayavi
@@ -20,7 +21,7 @@ class PlotUtils():
     Class providing the tools to plot the input and labels for the 2D and 3D case.
     '''
     def __init__(self, input, label, terrain, design, uncertainty_predicted = False, plot_divergence = False, plot_turbulence = False,
-                 ds = None, title_fontsize = 20, label_fontsize = 15, tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
+                 ds = None, title_fontsize = 20, label_fontsize = 15, tick_fontsize = 10, cmap=cm.jet, terrain_color='gray', invalid_color='white'):
         # Input is the prediction, label is CFD
         self.__axis = 'x-z'
         self.__n_slice = 0
@@ -48,24 +49,32 @@ class PlotUtils():
         self.__error_images = []
         self.__uncertainty_images = []
 
+        self.__in_images_terrain = []
+        self.__out_images_terrain = []
+        self.__error_images_terrain = []
+        self.__uncertainty_images_terrain = []
+
         if self.__plot_divergence and ds and (len(list(label.shape)) > 3):
             label = torch.cat([label, torch.tensor(divergence(label.squeeze()[:3], ds, terrain.squeeze())).unsqueeze(0)])
         else:
             self.__plot_divergence = False
 
-        # Set the input to be a masked array so that we specify a terrain colour
-        self.__input = np.ma.MaskedArray(np.zeros(input.shape))
-        is_terrain = np.logical_not(terrain.cpu().numpy().astype(bool))
-        for i, channel in enumerate(input):
-            self.__input[i] = np.ma.masked_where(is_terrain, channel)
+        # create the terrain mask
+        no_terrain = np.logical_not(np.logical_not(terrain.cpu().numpy().astype(bool)))
+        self.__terrain_mask = np.ma.masked_where(no_terrain, no_terrain)
 
-        self.__label = np.ma.MaskedArray(np.zeros(label.shape))
-        for i, channel in enumerate(label):
-            self.__label[i] = np.ma.masked_where(is_terrain, channel)
+        # mask out NaN's
+        self.__input = np.ma.masked_where(torch.isnan(input).cpu().numpy(), input.cpu().numpy())
+        self.__label = np.ma.masked_where(torch.isnan(label).cpu().numpy(), label.cpu().numpy())
         self.__uncertainty = None
 
+        # colormap for the wind values
         self.__cmap = cmap
-        self.__cmap.set_bad(terrain_color)
+        self.__cmap.set_bad(invalid_color)
+
+        # color for the terrain
+        self.__cmap_terrain = colors.LinearSegmentedColormap.from_list('custom', colors.to_rgba_array([terrain_color, terrain_color]), 2) #cm.binary_r
+        self.__cmap_terrain.set_bad('grey', 0.0)
 
         num_channels = self.__input.shape[0]
         if uncertainty_predicted:
@@ -89,16 +98,32 @@ class PlotUtils():
                 im.set_data(self.__input[i, :, :, self.__n_slice])
                 im.set_extent([0, self.__input.shape[2], 0, self.__input.shape[1]])
 
+            for i, im in enumerate(self.__in_images_terrain):
+                im.set_data(self.__terrain_mask[:, :, self.__n_slice])
+                im.set_extent([0, self.__input.shape[2], 0, self.__input.shape[1]])
+
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, :, :, self.__n_slice])
+                im.set_extent([0, self.__label.shape[2], 0, self.__label.shape[1]])
+
+            for i, im in enumerate(self.__out_images_terrain):
+                im.set_data(self.__terrain_mask[:, :, self.__n_slice])
                 im.set_extent([0, self.__label.shape[2], 0, self.__label.shape[1]])
 
             for i, im in enumerate(self.__error_images):
                 im.set_data(self.__error[i, :, :, self.__n_slice])
                 im.set_extent([0, self.__error.shape[2], 0, self.__error.shape[1]])
 
+            for i, im in enumerate(self.__error_images_terrain):
+                im.set_data(self.__terrain_mask[:, :, self.__n_slice])
+                im.set_extent([0, self.__error.shape[2], 0, self.__error.shape[1]])
+
             for i, im in enumerate(self.__uncertainty_images):
                 im.set_data(self.__uncertainty[i, :, :, self.__n_slice])
+                im.set_extent([0, self.__uncertainty.shape[2], 0, self.__uncertainty.shape[1]])
+
+            for i, im in enumerate(self.__uncertainty_images_terrain):
+                im.set_data(self.__terrain_mask[:, :, self.__n_slice])
                 im.set_extent([0, self.__uncertainty.shape[2], 0, self.__uncertainty.shape[1]])
 
         elif self.__axis == '  x-y':
@@ -106,8 +131,16 @@ class PlotUtils():
                 im.set_data(self.__input[i, self.__n_slice, :, :])
                 im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[2]])
 
+            for i, im in enumerate(self.__in_images_terrain):
+                im.set_data(self.__terrain_mask[self.__n_slice, :, :])
+                im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[2]])
+
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, self.__n_slice, :, :])
+                im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[2]])
+
+            for i, im in enumerate(self.__out_images_terrain):
+                im.set_data(self.__terrain_mask[self.__n_slice, :, :])
                 im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[2]])
 
             for i, im in enumerate(self.__error_images):
@@ -123,16 +156,32 @@ class PlotUtils():
                 im.set_data(self.__input[i, :, self.__n_slice, :])
                 im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[1]])
 
+            for i, im in enumerate(self.__in_images_terrain):
+                im.set_data(self.__terrain_mask[:, self.__n_slice, :])
+                im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[1]])
+
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, :, self.__n_slice, :])
+                im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[1]])
+
+            for i, im in enumerate(self.__out_images_terrain):
+                im.set_data(self.__terrain_mask[:, self.__n_slice, :])
                 im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[1]])
 
             for i, im in enumerate(self.__error_images):
                 im.set_data(self.__error[i, :, self.__n_slice, :])
                 im.set_extent([0, self.__error.shape[3], 0, self.__error.shape[1]])
 
+            for i, im in enumerate(self.__error_images_terrain):
+                im.set_data(self.__terrain_mask[:, self.__n_slice, :])
+                im.set_extent([0, self.__error.shape[3], 0, self.__error.shape[1]])
+
             for i, im in enumerate(self.__uncertainty_images):
                 im.set_data(self.__uncertainty[i, :, self.__n_slice, :])
+                im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[1]])
+
+            for i, im in enumerate(self.__uncertainty_images_terrain):
+                im.set_data(self.__terrain_mask[:, self.__n_slice, :])
                 im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[1]])
 
         plt.draw()
@@ -176,10 +225,16 @@ class PlotUtils():
             fh_in.patch.set_facecolor('white')
 
             # plot the input data
-            self.__in_images.append(ah_in[2][0].imshow(self.__input[0,:,self.__n_slice,:], origin='lower', vmin=self.__input[0,:,:,:].min(), vmax=self.__input[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #terrain
-            self.__in_images.append(ah_in[0][0].imshow(self.__input[1,:,self.__n_slice,:], origin='lower', vmin=self.__label[0,:,:,:].min(), vmax=self.__label[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #ux
-            self.__in_images.append(ah_in[0][1].imshow(self.__input[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #uy
-            self.__in_images.append(ah_in[0][2].imshow(self.__input[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #uz
+            self.__in_images.append(ah_in[2][0].imshow(self.__input[0,:,self.__n_slice,:], origin='lower', vmin=self.__input[0,:,:,:].min(), vmax=self.__input[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #terrain
+            self.__in_images.append(ah_in[0][0].imshow(self.__input[1,:,self.__n_slice,:], origin='lower', vmin=self.__label[0,:,:,:].min(), vmax=self.__label[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #ux
+            self.__in_images.append(ah_in[0][1].imshow(self.__input[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #uy
+            self.__in_images.append(ah_in[0][2].imshow(self.__input[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #uz
+
+            self.__in_images_terrain.append(ah_in[2][0].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+            self.__in_images_terrain.append(ah_in[0][0].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+            self.__in_images_terrain.append(ah_in[0][1].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+            self.__in_images_terrain.append(ah_in[0][2].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
             ah_in[2][0].set_title('Terrain', fontsize = self.__title_fontsize)
             ah_in[0][0].set_title('Input Vel X', fontsize = self.__title_fontsize)
             ah_in[0][1].set_title('Input Vel Y', fontsize = self.__title_fontsize)
@@ -194,11 +249,19 @@ class PlotUtils():
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
             # plot the label data
-            self.__out_images.append(ah_in[1][0].imshow(self.__label[0,:,self.__n_slice,:], origin='lower', vmin=self.__label[0,:,:,:].min(), vmax=self.__label[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #ux
-            self.__out_images.append(ah_in[1][1].imshow(self.__label[1,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #uy
-            self.__out_images.append(ah_in[1][2].imshow(self.__label[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #uz
+            self.__out_images.append(ah_in[1][0].imshow(self.__label[0,:,self.__n_slice,:], origin='lower', vmin=self.__label[0,:,:,:].min(), vmax=self.__label[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #ux
+            self.__out_images.append(ah_in[1][1].imshow(self.__label[1,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #uy
+            self.__out_images.append(ah_in[1][2].imshow(self.__label[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #uz
+
+            self.__out_images_terrain.append(ah_in[1][0].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+            self.__out_images_terrain.append(ah_in[1][1].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+            self.__out_images_terrain.append(ah_in[1][2].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
+
             if self.__plot_turbulence:
-                self.__out_images.append(ah_in[2][1].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
+                self.__out_images.append(ah_in[2][1].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #turbulence viscosity
+                self.__out_images_terrain.append(ah_in[2][1].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
                 chbar = fh_in.colorbar(self.__out_images[3], ax=ah_in[2][1])
                 ah_in[2][1].set_title('Prediction Turbulence', fontsize = self.__title_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -216,7 +279,9 @@ class PlotUtils():
                 else:
                     idx_div = 3
 
-                self.__out_images.append(ah_in[2][2].imshow(self.__label[idx_div,:,self.__n_slice,:], origin='lower', vmin=max(self.__label[idx_div,:,:,:].min(), -0.5), vmax=min(self.__label[idx_div,:,:,:].max(), 0.5), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
+                self.__out_images.append(ah_in[2][2].imshow(self.__label[idx_div,:,self.__n_slice,:], origin='lower', vmin=max(self.__label[idx_div,:,:,:].min(), -0.5), vmax=min(self.__label[idx_div,:,:,:].max(), 0.5), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear')) #turbulence viscosity
+                self.__out_images_terrain.append(ah_in[2][2].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
                 chbar = fh_in.colorbar(self.__out_images[-1], ax=ah_in[2][2])
                 ah_in[2][2].set_title('Velocity Divergence', fontsize = self.__title_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -300,8 +365,12 @@ class PlotUtils():
             fh_in, ah_in = plt.subplots(3, 2, figsize=(20,13))
             fh_in.patch.set_facecolor('white')
 
-            h_ux_in = ah_in[0][0].imshow(self.__input[1,:,:], origin='lower', vmin=self.__label[0,:,:].min(), vmax=self.__label[0,:,:].max(), cmap=self.__cmap)
-            h_uz_in = ah_in[0][1].imshow(self.__input[2,:,:], origin='lower', vmin=self.__label[1,:,:].min(), vmax=self.__label[1,:,:].max(), cmap=self.__cmap)
+            h_ux_in = ah_in[0][0].imshow(self.__input[1,:,:], origin='lower', vmin=self.__label[0,:,:].min(), vmax=self.__label[0,:,:].max(), cmap=self.__cmap, interpolation='bilinear')
+            h_uz_in = ah_in[0][1].imshow(self.__input[2,:,:], origin='lower', vmin=self.__label[1,:,:].min(), vmax=self.__label[1,:,:].max(), cmap=self.__cmap, interpolation='bilinear')
+
+            ah_in[0][0].imshow(self.__terrain_mask, cmap=self.__cmap_terrain, origin='lower')
+            ah_in[0][1].imshow(self.__terrain_mask, cmap=self.__cmap_terrain, origin='lower')
+
             ah_in[0][0].set_title('Input Vel X', fontsize = self.__title_fontsize)
             ah_in[0][1].set_title('Input Vel Z', fontsize = self.__title_fontsize)
             chbar = fh_in.colorbar(h_ux_in, ax=ah_in[0][0])
@@ -311,8 +380,12 @@ class PlotUtils():
             chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
-            h_ux_in = ah_in[1][0].imshow(self.__label[0,:,:], origin='lower', vmin=self.__label[0,:,:].min(), vmax=self.__label[0,:,:].max(), cmap=self.__cmap)
-            h_uz_in = ah_in[1][1].imshow(self.__label[1,:,:], origin='lower', vmin=self.__label[1,:,:].min(), vmax=self.__label[1,:,:].max(), cmap=self.__cmap)
+            h_ux_in = ah_in[1][0].imshow(self.__label[0,:,:], origin='lower', vmin=self.__label[0,:,:].min(), vmax=self.__label[0,:,:].max(), cmap=self.__cmap, interpolation='bilinear')
+            h_uz_in = ah_in[1][1].imshow(self.__label[1,:,:], origin='lower', vmin=self.__label[1,:,:].min(), vmax=self.__label[1,:,:].max(), cmap=self.__cmap, interpolation='bilinear')
+
+            ah_in[1][0].imshow(self.__terrain_mask, cmap=self.__cmap_terrain, origin='lower')
+            ah_in[1][1].imshow(self.__terrain_mask, cmap=self.__cmap_terrain, origin='lower')
+
             ah_in[1][0].set_title('CFD Vel X', fontsize = self.__title_fontsize)
             ah_in[1][1].set_title('CFD Vel Z', fontsize = self.__title_fontsize)
             chbar = fh_in.colorbar(h_ux_in, ax=ah_in[1][0])
@@ -322,9 +395,13 @@ class PlotUtils():
             chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
             plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
-            h_ux_in = ah_in[2][0].imshow(self.__input[0,:,:], origin='lower', vmin=self.__input[0,:,:].min(), vmax=self.__input[0,:,:].max(), cmap=self.__cmap)
+            h_ux_in = ah_in[2][0].imshow(self.__input[0,:,:], origin='lower', vmin=self.__input[0,:,:].min(), vmax=self.__input[0,:,:].max(), cmap=self.__cmap, interpolation='bilinear')
+            ah_in[2][0].imshow(self.__terrain_mask, cmap=self.__cmap_terrain, origin='lower')
+
             try:
-                h_uz_in = ah_in[2][1].imshow(self.__label[2,:,:], origin='lower', vmin=self.__label[2,:,:].min(), vmax=self.__label[2,:,:].max(), cmap=self.__cmap)
+                h_uz_in = ah_in[2][1].imshow(self.__label[2,:,:], origin='lower', vmin=self.__label[2,:,:].min(), vmax=self.__label[2,:,:].max(), cmap=self.__cmap, interpolation='bilinear')
+                ah_in[2][1].imshow(self.__terrain_mask, cmap=self.__cmap_terrain, origin='lower')
+
                 ah_in[2][1].set_title('Turbulence viscosity label', fontsize = self.__title_fontsize)
                 chbar = fh_in.colorbar(h_uz_in, ax=ah_in[2][1])
                 chbar.set_label('[J/kg]', fontsize = self.__label_fontsize)
@@ -387,9 +464,14 @@ class PlotUtils():
             title = ['Vel X', 'Vel Y','Vel Z', 'Turbulence']
             units = ['[m/s]', '[m/s]', '[m/s]', '[J/kg]']
             for i in range(self.__label.shape[0]):
-                self.__out_images.append(ah_in[0][i].imshow(self.__label[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                self.__in_images.append(ah_in[1][i].imshow(self.__input[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,self.__n_slice,:], origin='lower', vmin=self.__error[i,:,:,:].min(), vmax=self.__error[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                self.__out_images.append(ah_in[0][i].imshow(self.__label[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear'))
+                self.__in_images.append(ah_in[1][i].imshow(self.__input[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear'))
+                self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,self.__n_slice,:], origin='lower', vmin=self.__error[i,:,:,:].min(), vmax=self.__error[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear'))
+
+                self.__out_images_terrain.append(ah_in[0][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+                self.__in_images_terrain.append(ah_in[1][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+                self.__error_images_terrain.append(ah_in[2][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
 
                 ah_in[0][i].set_title(title[i], fontsize = self.__title_fontsize)
 
@@ -408,7 +490,9 @@ class PlotUtils():
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
                 if self.__uncertainty_predicted:
-                    self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,self.__n_slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                    self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,self.__n_slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear'))
+                    self.__uncertainty_images_terrain.append(ah_in[3][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
                     chbar = fh_in.colorbar(self.__uncertainty_images[i], ax=ah_in[3][i])
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                     plt.setp(ah_in[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
@@ -448,18 +532,25 @@ class PlotUtils():
             title = ['Vel X', 'Vel Z', 'Turbulence']
             units = ['[m/s]', '[m/s]', '[J/kg]']
             for i in range(self.__label.shape[0]):
-                self.__in_images.append(ah_in[0][i].imshow(self.__label[i,:,:], origin='lower', vmin=self.__label[i,:,:].min(), vmax=self.__label[i,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                self.__out_images.append(ah_in[1][i].imshow(self.__input[i,:,:], origin='lower', vmin=self.__label[i,:,:].min(), vmax=self.__label[i,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,:], origin='lower', vmin=self.__error[i,:,:].min(), vmax=self.__error[i,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                self.__in_images.append(ah_in[0][i].imshow(self.__label[i,:,:], origin='lower', vmin=self.__label[i,:,:].min(), vmax=self.__label[i,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear'))
+                self.__out_images.append(ah_in[1][i].imshow(self.__input[i,:,:], origin='lower', vmin=self.__label[i,:,:].min(), vmax=self.__label[i,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear'))
+                self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,:], origin='lower', vmin=self.__error[i,:,:].min(), vmax=self.__error[i,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation='bilinear'))
+
+                self.__out_images_terrain.append(ah_in[0][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+                self.__in_images_terrain.append(ah_in[1][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+                self.__error_images_terrain.append(ah_in[2][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
                 ah_in[0][i].set_title(title[i] + ' CFD', fontsize = self.__title_fontsize)
                 ah_in[1][i].set_title(title[i] + ' Prediction', fontsize = self.__title_fontsize)
                 ah_in[2][i].set_title(title[i] + ' Error', fontsize = self.__title_fontsize)
+
                 plt.setp(ah_in[0][i].get_xticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[1][i].get_xticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][i].get_xticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[0][i].get_yticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[1][i].get_yticklabels(), fontsize=self.__tick_fontsize)
                 plt.setp(ah_in[2][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+
                 chbar = fh_in.colorbar(self.__in_images[i], ax=ah_in[0][i])
                 chbar.set_label(units[i], fontsize = self.__label_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -469,6 +560,7 @@ class PlotUtils():
                 chbar = fh_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
                 chbar.set_label(units[i], fontsize = self.__label_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
                 ah_in[0][i].set_xlabel('x', fontsize=self.__label_fontsize)
                 ah_in[1][i].set_xlabel('x', fontsize=self.__label_fontsize)
                 ah_in[2][i].set_xlabel('x', fontsize=self.__label_fontsize)
@@ -478,6 +570,50 @@ class PlotUtils():
                 plt.tight_layout()
 
         plt.show()
+
+    def plot_measurements(self):
+        fh_in, ah_in = plt.subplots(2, 3,figsize=(16,10))
+        fh_in.patch.set_facecolor('white')
+
+        title = ['Vel X', 'Vel Y','Vel Z']
+        units = ['[m/s]', '[m/s]', '[m/s]']
+        for i in range(self.__label.shape[0]):
+            self.__in_images.append(ah_in[0][i].imshow(self.__input[i,:,self.__n_slice,:], origin='lower', vmin=self.__input[i,:,:,:].min(), vmax=self.__input[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap, interpolation = 'none'))
+            self.__out_images.append(ah_in[1][i].imshow(self.__label[i,:,self.__n_slice,:], origin='lower', vmin=0.0, vmax=0.1, aspect = 'auto', cmap=self.__cmap, interpolation = 'none'))
+
+            self.__in_images_terrain.append(ah_in[0][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+            self.__out_images_terrain.append(ah_in[1][i].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
+            ah_in[0][i].set_title(title[i], fontsize = self.__title_fontsize)
+
+            ah_in[0][i].set_xticks([])
+            ah_in[0][i].set_yticks([])
+            ah_in[1][i].set_xticks([])
+            ah_in[1][i].set_yticks([])
+
+            chbar = fh_in.colorbar(self.__in_images[i], ax=ah_in[0][i])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            chbar = fh_in.colorbar(self.__out_images[i], ax=ah_in[1][i])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
+            if (i == 0):
+                ah_in[0][i].set_ylabel('Mean', fontsize=self.__label_fontsize)
+                ah_in[1][i].set_ylabel('Variance', fontsize=self.__label_fontsize)
+
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.12)
+
+        # create slider to select the slice
+        self.__ax_slider = plt.axes(self.__slider_location)
+        self.__slider = Slider(self.__ax_slider, 'Slice', 0, self.__input.shape[2]-1, valinit=self.__n_slice, valfmt='%0.0f')
+        self.__slider.on_changed(self.slider_callback)
+
+        # create button to select the axis along which the slices are made
+        rax = plt.axes(self.__button_location)
+        self.__button = RadioButtons(rax, ('  x-z', '  x-y', '  y-z'), active=0)
+        for circle in self.__button.circles:
+            circle.set_radius(0.1)
+        self.__button.on_clicked(self.radio_callback)
 
 def plot_sample(input, label, terrain, plot_divergence = False, plot_turbulence = False, ds = None):
     '''
@@ -492,3 +628,7 @@ def plot_sample(input, label, terrain, plot_divergence = False, plot_turbulence 
 def plot_prediction(output, label, terrain, uncertainty_predicted):
     instance = PlotUtils(output, label, terrain, 1, uncertainty_predicted)
     instance.plot_prediction()
+
+def plot_measurements(wind, variance, terrain):
+    instance = PlotUtils(wind, variance, terrain, 0)
+    instance.plot_measurements()

@@ -32,47 +32,14 @@ def above_line_check(x1, y1, x2, y2, x_test, y_test):
     else:
         return False
 
-def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, terrain_file = None,
-                       cosmo_projection = pyproj.Proj(proj='latlong', datum='WGS84'),
-                       output_projection = pyproj.Proj(init="CH:1903_LV03")):
-    """Opens the requested COSMO NetCDF file and extracts all wind profiles that are required to calculate the initial wind field 
-    for the complete meteo grid domain. 
-    """
-
-    if terrain_file is None:
-        terrain_file = filename
-    # create a dummy output
-    out = {}
-    out['valid'] = False
-
-    try:
-        time, lon, lat, z_bnd, u_c, v_c, w_c = read_cosmo_nc_file(filename, ['time', 'lon_1', 'lat_1', 'z_bnds_1', 'U', 'V', 'W'])
-        hsurf, hfl = read_cosmo_nc_file(terrain_file, ['HSURF', 'HFL'])
-
-    except IOError as e:
-            print('ERROR: Data file read failed')
-            return out
-
-    time_true = time == time_requested*3600
-    if (sum(time_true*1) != 1):
-        print("ERROR: Requested COSMO hour invalid!")
-        return out
-    t = sum(time_true*np.arange(0, time.shape[0], 1))
-
-    # convert to output coordinate projection
-    x_cell, y_cell = pyproj.transform(cosmo_projection, output_projection, lon_requested, lat_requested)
-    x_grid, y_grid, h_grid = pyproj.transform(cosmo_projection, output_projection, lon, lat, hsurf)
-
-    # e_cell, n_cell, zone_num0, zone_letter0 = utm.from_latlon(lat_requested, lon_requested)
-    # e_grid, n_grid, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
-
+def determine_cell_indices(x_grid, y_grid, x_cell, y_cell, lat, lon, lat_requested, lon_requested):
     # find the closest gridpoint
     dist = (x_cell - x_grid)**2 + (y_cell - y_grid)**2
     idx_r, idx_c = np.unravel_index(dist.argmin(), dist.shape)
 
     if (np.sqrt(dist[idx_r, idx_c]) > x_grid[0, 1] - x_grid[0, 0]):
         print('ERROR: The distance to the closest gridpoint (', np.sqrt(dist[idx_r, idx_c]), ') is larger than the grid resolution:', x_grid[0, 1] - x_grid[0, 0])
-        return out
+        exit()
 
     # check in which quadrant the requested point lies with respect to the closest gridpoint
     #      c3
@@ -102,13 +69,7 @@ def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, t
     # confirm that only one quadrant is true
     if quadrant_mask.sum() != 1:
         print('ERROR: Could not uniquely determine correct cell to extract')
-        return out
-
-    # determine the correct vertical slices to extract
-    # TODO extract the correct vertical slices
-    z_start = 0
-    z_stop = u_c.shape[1]
-    slice_z = slice(z_start, z_stop)
+        exit()
 
     # extract the data
     if quadrant_mask[0,1]:
@@ -133,7 +94,51 @@ def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, t
 
     else:
         print('ERROR: Could not determine correct cell to extract')
+        exit
+
+    return slice_x, slice_y
+
+def extract_cosmo_data(filename, lat_requested, lon_requested, time_requested, terrain_file = None,
+                       cosmo_projection = pyproj.Proj(proj='latlong', datum='WGS84'),
+                       output_projection = pyproj.Proj(init="CH:1903_LV03")):
+    """Opens the requested COSMO NetCDF file and extracts all wind profiles that are required to calculate the initial wind field 
+    for the complete meteo grid domain.
+    """
+
+    if terrain_file is None:
+        terrain_file = filename
+    # create a dummy output
+    out = {}
+    out['valid'] = False
+
+    try:
+        time, lon, lat, z_bnd, u_c, v_c, w_c = read_cosmo_nc_file(filename, ['time', 'lon_1', 'lat_1', 'z_bnds_1', 'U', 'V', 'W'])
+        hsurf, hfl = read_cosmo_nc_file(terrain_file, ['HSURF', 'HFL'])
+
+    except IOError as e:
+            print('ERROR: Data file read failed')
+            return out
+
+    time_true = time == time_requested*3600
+    if (sum(time_true*1) != 1):
+        print("ERROR: Requested COSMO hour invalid!")
         return out
+    t = sum(time_true*np.arange(0, time.shape[0], 1))
+
+    # convert to output coordinate projection
+    x_cell, y_cell = pyproj.transform(cosmo_projection, output_projection, lon_requested, lat_requested)
+    x_grid, y_grid, h_grid = pyproj.transform(cosmo_projection, output_projection, lon, lat, hsurf)
+
+    # e_cell, n_cell, zone_num0, zone_letter0 = utm.from_latlon(lat_requested, lon_requested)
+    # e_grid, n_grid, zone_num, zone_letter = utm.from_latlon(lat, lon, force_zone_number=zone_num0, force_zone_letter=zone_letter0)
+
+    slice_x, slice_y = determine_cell_indices(x_grid, y_grid, x_cell, y_cell, lat, lon, lat_requested, lon_requested)
+
+    # determine the correct vertical slices to extract
+    # TODO extract the correct vertical slices
+    z_start = 0
+    z_stop = u_c.shape[1]
+    slice_z = slice(z_start, z_stop)
 
     out['lat'] = lat[slice_y, slice_x]
     out['lon'] = lon[slice_y, slice_x]
@@ -213,3 +218,33 @@ def cosmo_corner_wind(cosmo_data, z_target, terrain_height=None, rotate=0.0, sca
             winds[2, valid_z, yi, xi] = np.interp(z_target[valid_z], cosmo_z, cosmo_wz)
 
     return winds
+
+
+def get_cosmo_cell(filename, lat_requested, lon_requested, z_min, d_hor, d_ver,
+                   cosmo_projection = pyproj.Proj(proj='latlong', datum='WGS84'),
+                   output_projection = pyproj.Proj(init="CH:1903_LV03")):
+    try:
+        lon, lat, hsurf, hfl = read_cosmo_nc_file(filename, ['lon_1', 'lat_1', 'HSURF', 'HFL'])
+
+    except IOError as e:
+            print('ERROR: Data file read failed')
+            return out
+
+    x_cell, y_cell = pyproj.transform(cosmo_projection, output_projection, lon_requested, lat_requested)
+    x_grid, y_grid, h_grid = pyproj.transform(cosmo_projection, output_projection, lon, lat, hsurf)
+
+    slice_x, slice_y = determine_cell_indices(x_grid, y_grid, x_cell, y_cell, lat, lon, lat_requested, lon_requested)
+
+    x = x_grid[slice_y, slice_x]
+    y = y_grid[slice_y, slice_x]
+
+    corners = {
+        'x_min': x[0][0],
+        'x_max': x[0][0] + d_hor,
+        'y_min': y[0][0],
+        'y_max': y[0][0] + d_hor,
+        'z_min': z_min,
+        'z_max': z_min + d_ver,
+    }
+
+    return corners
