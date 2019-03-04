@@ -362,7 +362,10 @@ class MyDataset(Dataset):
                 # rotate 90 degrees
                 if (self.__rand.randint(0,1)):
                     output = output.transpose(2,3).flip(3)
-                    output = output[[1,0,2,3]]
+                    if self.__turbulence_label:
+                        output = output[[1,0,2,3]]
+                    else:
+                        output = output[[1, 0, 2]]
                     output[0,:,:,:] *= -1.0
 
                     input = input.transpose(2,3).flip(3)
