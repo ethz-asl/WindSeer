@@ -93,9 +93,18 @@ def get_log_data(logfile, proj_logfile=None, proj_output=None, skip_amount=10, v
     ulog_data['we_down'] = np.zeros(ulog_data['we_north'].shape)
 
     # Raw wind estimates from alpha, beta !THIS IS UNCORRECTED!
-    alpha_skip = np.interp(ulog_data['gp_time'], data_dict['sensor_hall']['timestamp'], data_dict['sensor_hall']['mag_T'])*np.pi/180.0
-    beta_skip = np.interp(ulog_data['gp_time'], data_dict['sensor_hall_01']['timestamp'], data_dict['sensor_hall_01']['mag_T'])*np.pi/180.0
-    V_skip =  np.interp(ulog_data['gp_time'], data_dict['airspeed']['timestamp'], data_dict['airspeed']['true_airspeed_m_s'])
+    V_skip = np.interp(ulog_data['gp_time'], data_dict['airspeed']['timestamp'],
+                       data_dict['airspeed']['true_airspeed_m_s'])
+    try:
+        alpha_skip = np.interp(ulog_data['gp_time'], data_dict['sensor_hall']['timestamp'], data_dict['sensor_hall']['mag_T'])*np.pi/180.0
+    except KeyError:
+        print("Alpha vane values not found!!")
+        alpha_skip = np.zeros(V_skip.shape)
+    try:
+        beta_skip = np.interp(ulog_data['gp_time'], data_dict['sensor_hall_01']['timestamp'], data_dict['sensor_hall_01']['mag_T'])*np.pi/180.0
+    except KeyError:
+        print("Beta vane values not found!!")
+        beta_skip = np.zeros(V_skip.shape)
 
     # Body axis velocities
     u = V_skip*np.cos(alpha_skip)*np.cos(beta_skip)
