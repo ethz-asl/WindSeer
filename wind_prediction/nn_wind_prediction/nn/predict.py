@@ -306,6 +306,9 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
         input, label = input.to(device), label.to(device)
         start_time = time.time()
         output = net(input.unsqueeze(0))
+        # adjust for StreamFunctionLoss
+        if params.run['loss_function'] ==3:
+            output = utils.curl(output)
         print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
         input = input.squeeze()
         output = output.squeeze()
