@@ -57,11 +57,11 @@ class PlotUtils():
         self.__input = np.ma.MaskedArray(np.zeros(input.shape))
         is_terrain = np.logical_not(terrain.cpu().numpy().astype(bool))
         for i, channel in enumerate(input):
-            self.__input[i] = np.ma.masked_where(is_terrain, channel)
+            self.__input[i] = np.ma.masked_where(is_terrain, channel.cpu())
 
         self.__label = np.ma.MaskedArray(np.zeros(label.shape))
         for i, channel in enumerate(label):
-            self.__label[i] = np.ma.masked_where(is_terrain, channel)
+            self.__label[i] = np.ma.masked_where(is_terrain, channel.cpu())
         self.__uncertainty = None
 
         self.__cmap = cmap
