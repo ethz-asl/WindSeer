@@ -6,3 +6,4 @@ from .plotting import *
 from .prediction_error import *
 from .ulog_utils import *
 from .yaml_tools import *
+from .get_mapgeo_terrain import *

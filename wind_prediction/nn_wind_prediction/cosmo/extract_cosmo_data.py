@@ -227,8 +227,8 @@ def get_cosmo_cell(filename, lat_requested, lon_requested, z_min, d_hor, d_ver,
         lon, lat, hsurf, hfl = read_cosmo_nc_file(filename, ['lon_1', 'lat_1', 'HSURF', 'HFL'])
 
     except IOError as e:
-            print('ERROR: Data file read failed')
-            return out
+        print('ERROR: Data file read failed')
+        raise e
 
     x_cell, y_cell = pyproj.transform(cosmo_projection, output_projection, lon_requested, lat_requested)
     x_grid, y_grid, h_grid = pyproj.transform(cosmo_projection, output_projection, lon, lat, hsurf)

@@ -82,6 +82,7 @@ if __name__ == "__main__":
             prediction_array = np.load('data/{0}{1}.npy'.format(cosmo_args.params['prediction_prefix'], bn))
         except:
             print('Prediction file {0} not found.')
+            raise
         x_terr2 = np.linspace(x_terr[0], x_terr[-1], prediction_array.shape[-1])
         y_terr2 = np.linspace(y_terr[0], y_terr[-1], prediction_array.shape[-2])
         z_terr2 = np.linspace(z_terr[0], z_terr[-1], prediction_array.shape[-3])
