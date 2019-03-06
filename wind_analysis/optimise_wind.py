@@ -9,6 +9,7 @@ from scipy import ndimage
 import torch
 import os
 import time
+import matplotlib.pyplot as plt
 
 
 class TerrainBlock(object):
@@ -161,7 +162,7 @@ class WindOptimiser(object):
             print('CSV filename parameter (csv:file) not found in {0}, csv not saved'.format(self.config_yaml))
 
     def run_prediction(self, input):
-        output = self.net(input.unsqueeze(0))
+        return self.net(input.unsqueeze(0))
 
     def rms_error(self, input, output):
         return 0.0
@@ -170,7 +171,8 @@ class WindOptimiser(object):
         self.set_rotation_scale(rotation, scale)        # Set new rotation
         input = self.generate_wind_input()
         output = self.run_prediction(input)                      # Run network prediction with input csv
-        return self.rms_error(input, output)
+        utils.plot_sample(output.squeeze(0).detach(), self.wind_blocks, self.terrain.network_terrain.squeeze(0))
+        plt.show()
 
 
 test = WindOptimiser('config/optim_config.yaml')
