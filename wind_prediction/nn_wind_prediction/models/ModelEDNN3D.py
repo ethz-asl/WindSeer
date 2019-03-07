@@ -192,7 +192,7 @@ class ModelEDNN3D(nn.Module):
         elif (self.__pooling_method == 'striding'):
             self.__pooling = nn.MaxPool3d(1, stride=2)
         else:
-            raise ValueError('The pooling method value is invalid: ' + pooling_method)
+            raise ValueError('The pooling method value is invalid: ' + self.__pooling_method)
 
         # upconvolution layers
         self.__deconv1 = nn.ModuleList()

@@ -35,6 +35,8 @@ class TerrainBlock(object):
 
 
 class WindOptimiser(object):
+    loss_fn = torch.nn.MSELoss()
+
     def __init__(self, config_yaml, initial_rotation=0.0, initial_scale=1.0, resolution=64):
         self.config_yaml = config_yaml
         self.cosmo_args = utils.COSMOParameters(self.config_yaml)
@@ -50,7 +52,19 @@ class WindOptimiser(object):
         self.cosmo_corners = self.get_cosmo_corners()
         self.__interpolator = DataInterpolation(self.device, 3, *self.terrain.get_dimensions())
         self.net = self.load_network_model()
-        self.wind_blocks, self.var_blocks = self.get_wind_blocks()
+        self.wind_blocks, self.var_blocks, self.wind_zeros, self.wind_mask = self.get_wind_blocks()
+
+        try:
+            if self.model_args.params['loss'].lower() == 'l1':
+                self.loss_fn = torch.nn.L1Loss()
+            elif self.model_args.params['loss'].lower() == 'mse':
+                self.loss_fn = torch.nn.MSELoss()
+            else:
+                print('Specified loss function: {0} unknown!'.format(self.model_args.params['loss']))
+                raise ValueError
+        except KeyError:
+            print('Loss function not specified, using default: {0}'.format(str(self.loss_fn)))
+
 
     def load_ulog_data(self):
         print('Loading ulog data...', end='', flush=True)
@@ -142,8 +156,12 @@ class WindOptimiser(object):
 
         # bin the data into the regular grid
         wind, variance = utils.bin_log_data(self.ulog_data, corners)
+        wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
+        wind_zeros = torch.tensor(wind)
+        wind_zeros[wind_mask] = 0
+
         print(' done [{:.2f} s]'.format(time.time() - t_start))
-        return wind, variance
+        return wind, variance, wind_zeros.to(self.device), wind_mask.to(self.device)
 
     def generate_wind_input(self):
         # Currently can only use interpolated wind, since we only have the cosmo corners
@@ -162,18 +180,25 @@ class WindOptimiser(object):
             print('CSV filename parameter (csv:file) not found in {0}, csv not saved'.format(self.config_yaml))
 
     def run_prediction(self, input):
-        return self.net(input.unsqueeze(0))
+        return self.net(input.unsqueeze(0)).squeeze(0)
 
-    def rms_error(self, input, output):
-        return 0.0
+    def evaluate_loss(self, output):
+        # input = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
+        masked_out = output[0:3,:,:,:]
+        masked_out[self.wind_mask] = 0.0
+        return self.loss_fn(masked_out, self.wind_zeros)
 
-    def evaluate_error(self, rotation, scale):
+    def get_prediction(self, rotation, scale):
         self.set_rotation_scale(rotation, scale)        # Set new rotation
         input = self.generate_wind_input()
-        output = self.run_prediction(input)                      # Run network prediction with input csv
-        utils.plot_sample(output.squeeze(0).detach(), self.wind_blocks, self.terrain.network_terrain.squeeze(0))
-        plt.show()
+        output = self.run_prediction(input)              # Run network prediction with input csv
+        return input, output
+
+
 
 
 test = WindOptimiser('config/optim_config.yaml')
-test.evaluate_error(0.0, 1.0)
+input, output = test.get_prediction(0.0, 1.0)
+print('Loss: {0}'.format(test.evaluate_loss(output)))
+utils.plot_sample(output.detach(), test.wind_blocks, test.terrain.network_terrain.squeeze(0))
+plt.show()
