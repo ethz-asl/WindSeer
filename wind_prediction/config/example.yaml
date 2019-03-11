@@ -15,21 +15,8 @@ run:
     save_metadata: True
     evaluate_testset: False
     warm_start: False
-    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: ScaledLoss, else: MSE
-    loss_kwargs: {
-        # General
-        loss_type: 'MSE', #MSE or L1
-
-        # Gaussian-Log-Likelihood
-        uncertainty_loss_eps: 1.0E-9,
-
-        # ScaledLoss
-        max_scale: 4,
-        norm_threshold: 0.5,
-        exclude_terrain: True,
-        no_scaling: False,
-    }
-
+    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: Custom, else: MSE
+    uncertainty_loss_eps: 1.0E-9
     save_model_every_n_epoch: 25
     save_params_hist_every_n_epoch: 100
 
@@ -46,24 +33,22 @@ data:
     trainset_name: 'data/train.tar'
     validationset_name: 'data/validation.tar'
     testset_name: 'data/test.tar'
-    augmentation: True
-    augmentation_mode: 1 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
-    augmentation_kwargs: {
-        subsampling: True,
-        rotating: True
-    }
+    trainset_augmentation: True
+    trainset_subsample: True
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    uhor_scaling: 0.5
-    uz_scaling: 0.1
-    turbulence_scaling: 0.01
-    terrain_scaling: 1.0
+    uhor_scaling: 6.5
+    uz_scaling: 0.7
+    turbulence_scaling: 1.1
+    terrain_scaling: 64.0
+    use_grid_size: False
     use_turbulence: True
-    autoscale: True
+    autoscale: False
+    normalize_terrain: False
 
 model:
-    name_prefix: 'test_model2'
+    name_prefix: 'test_model'
     model_type: 'ModelEDNN3D'
     model_args: {
         n_x: 64,
