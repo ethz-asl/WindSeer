@@ -319,7 +319,7 @@ class ModelEDNN3D(nn.Module):
             #                (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
             #                (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
             #                 x[:,3:,:]], 1)
-            x = utils.curl(x, ds=1)
+            x = torch.cat([utils.curl(x, ds=1), x[:, 3:, :]], 1)
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
