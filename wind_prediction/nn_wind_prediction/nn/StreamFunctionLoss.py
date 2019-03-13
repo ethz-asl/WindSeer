@@ -1,4 +1,5 @@
 from torch.nn import Module
+import torch
 import torch.nn.functional as f
 import nn_wind_prediction.utils as utils
 
@@ -20,5 +21,5 @@ class StreamFunctionLoss(Module):
         return self.compute_loss(net_output, target)
 
     def compute_loss(self, net_output, target):
-        curled_output = utils.curl(net_output,ds=1)
+        curled_output = torch.cat([utils.curl(net_output,ds=1), net_output[:, 3:, :]], 1)
         return f.l1_loss(curled_output, target)
