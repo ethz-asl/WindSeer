@@ -47,7 +47,7 @@ data:
     turbulence_scaling: 1.1
     terrain_scaling: 64.0
     use_turbulence: True
-    autoscale: False
+    autoscale: True
 
 model:
     name_prefix: 'test_model'
