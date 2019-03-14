@@ -35,7 +35,7 @@ class ModelStacked(nn.Module):
         try:
             n_epochs = kwargs['n_epochs']
         except KeyError:
-            print('ModelStacked ERROR: The key "n_epochs" was not defined in the model args, setting it to: ')
+            print('ModelStacked ERROR: The key "n_epochs" was not defined in the model args, setting it to: ', N)
             n_epochs = N
 
         try:
