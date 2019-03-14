@@ -104,6 +104,10 @@ elif run_params.run['loss_function'] == 2:
     loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
 elif run_params.run['loss_function'] == 3:
     loss_fn = nn_custom.StreamFunctionLoss()
+elif run_params.run['loss_function'] == 4.1:
+    loss_fn = nn_custom.VelocityGradientLoss(loss_type='L1')
+elif run_params.run['loss_function'] == 4.2:
+    loss_fn = nn_custom.VelocityGradientLoss(loss_type='MSE')
 else:
     loss_fn = torch.nn.MSELoss()
 
