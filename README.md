@@ -18,18 +18,18 @@ This folder contains the tools to train and evaluate the networks for the wind p
 ## Installation
 This guide explains how to set up the environment in Ubuntu to make the scripts in the repository run.
 
-1. Python3 is required:
-   `sudo apt-get install python3.6`
+1. Python3 is required, usually it is already present. If not install it with:
+   `sudo apt-get install python3`
 
-2. Install PyTorch v4.1 or newer:
-
-   `pip3 install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp35-cp35m-linux_x86_64.whl`
-   `pip3 install torchvision`
+2. Install (Cuda)[https://developer.nvidia.com/cuda-zone] if a graphics card is present and (PyTorch)[https://pytorch.org/get-started/locally/] according to your CUDA, Ubuntu, and Python version.
 
 3. Install the following required python packages:
-   `pip3 install tensorboardX lz4 numpy tqdm`
+   `pip3 install tensorboardX lz4 numpy tqdm matplotlib scipy pandas h5py interpolation termcolor`
 
-4. Install the `nn_wind_prediction` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
+4. Install python tkinter
+   `sudo apt-get install python3-tk`
+
+5. Install the `nn_wind_prediction` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
     `pip install -e wind_prediction/`
 
 TODO: add installation for the planning benchmark locally and on the cluster
