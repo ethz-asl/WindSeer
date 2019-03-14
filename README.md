@@ -42,7 +42,7 @@ On the leonhard cluster, you need to perform a few setup steps
    `module load python_gpu/3.6.4`
    
 2. Install required packages:
-   `python -m pip install --user tensorboardX==1.4 lz4 tqdm`
+   `python -m pip install --user tensorboardX==1.4 lz4 tqdm interpolation`
    
 3. Setup to use PyTorch 0.4.1:
    ~~~
