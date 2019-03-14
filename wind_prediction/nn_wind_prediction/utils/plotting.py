@@ -56,11 +56,11 @@ class PlotUtils():
         # Set the input to be a masked array so that we specify a terrain colour
         self.__input = np.ma.MaskedArray(np.zeros(input.shape))
         is_terrain = np.logical_not(terrain.cpu().numpy().astype(bool))
-        for i, channel in enumerate(input):
+        for i, channel in enumerate(input.cpu()):
             self.__input[i] = np.ma.masked_where(is_terrain, channel)
 
         self.__label = np.ma.MaskedArray(np.zeros(label.shape))
-        for i, channel in enumerate(label):
+        for i, channel in enumerate(label.cpu()):
             self.__label[i] = np.ma.masked_where(is_terrain, channel)
         self.__uncertainty = None
 
