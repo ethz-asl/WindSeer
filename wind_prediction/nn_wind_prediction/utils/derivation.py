@@ -88,3 +88,30 @@ def curl(input_tensor, ds=1):
     # concat all components as well as terrain (first channel)
     curled_tensor = torch.cat((u.unsqueeze(1), v.unsqueeze(1), w.unsqueeze(1)), 1)
     return curled_tensor
+
+
+def gradient(input_tensor, ds=1):
+    '''
+    This function computes the gradient (2nd order tensor) of a vector at each XYZ position, with regard to a specified grid size
+
+    Input params:
+        input_tensor: 5D tensor (samples, input_field[u_in, v_in, w_in]), Z, Y, X)
+        ds: grid size, default is unit.
+
+    Output:
+        gradient_tensor: 5D tensor (samples, gradient_components(9 in total), X, Y, Z)
+    '''
+    u_x = derive(input_tensor[:, 0, :, :, :], 3, ds).unsqueeze(1)
+    u_y = derive(input_tensor[:, 0, :, :, :], 2, ds).unsqueeze(1)
+    u_z = derive(input_tensor[:, 0, :, :, :], 1, ds).unsqueeze(1)
+
+    v_x = derive(input_tensor[:, 1, :, :, :], 3, ds).unsqueeze(1)
+    v_y = derive(input_tensor[:, 1, :, :, :], 2, ds).unsqueeze(1)
+    v_z = derive(input_tensor[:, 1, :, :, :], 1, ds).unsqueeze(1)
+
+    w_x = derive(input_tensor[:, 2, :, :, :], 3, ds).unsqueeze(1)
+    w_y = derive(input_tensor[:, 2, :, :, :], 2, ds).unsqueeze(1)
+    w_z = derive(input_tensor[:, 2, :, :, :], 1, ds).unsqueeze(1)
+
+    gradient_tensor = torch.cat((u_x, u_y, u_z, v_x, v_y, v_z, w_x, w_y, w_z), 1)
+    return gradient_tensor
