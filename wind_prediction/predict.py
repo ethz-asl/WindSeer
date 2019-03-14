@@ -51,7 +51,7 @@ params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yam
 
 # load dataset
 testset = data.MyDataset(args.dataset, compressed = args.compressed,
-                         augmentation = False, subsample = False, return_grid_size = True, **params.MyDataset_kwargs())
+                         augmentation = False, return_grid_size = True, **params.MyDataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1, # needs to be one
                                              shuffle=False, num_workers=num_worker)
 # load the model and its learnt parameters

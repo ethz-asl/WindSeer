@@ -22,7 +22,6 @@ class EDNNParameters(object):
             run_parameters = yaml.safe_load(fh)
 
         run_parameters['model']['model_args']['use_turbulence'] = run_parameters['data']['use_turbulence']
-        run_parameters['model']['model_args']['use_grid_size'] = run_parameters['data']['use_grid_size']
         run_parameters['model']['model_args']['n_epochs'] = run_parameters['run']['n_epochs']
 
         return run_parameters
@@ -67,13 +66,11 @@ class EDNNParameters(object):
                 'scaling_uz': self.data['uz_scaling'],
                 'scaling_turb': self.data['turbulence_scaling'],
                 'scaling_terrain': self.data['terrain_scaling'],
-                'use_grid_size': self.data['use_grid_size'],
                 'input_mode': self.data['input_mode'],
                 'nx': self.model['model_args']['n_x'],
                 'ny': self.model['model_args']['n_y'],
                 'nz': self.model['model_args']['n_z'],
-                'autoscale': self.data['autoscale'],
-                'normalize_terrain': self.data['normalize_terrain']}
+                'autoscale': self.data['autoscale']}
 
     def model_kwargs(self):
         return self.model['model_args']

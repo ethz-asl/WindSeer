@@ -2,6 +2,7 @@ from __future__ import print_function
 
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 
+from interpolation.splines import UCGrid, eval_linear
 from io import BytesIO
 import lz4.frame
 import numpy as np
@@ -36,8 +37,9 @@ class MyDataset(Dataset):
     __default_ny = 64
     __default_nz = 64
     __default_input_mode = 0
-    __default_subsample = False
     __default_augmentation = False
+    __default_augmentation_mode = 0
+    __default_augmentation_kwargs = None
     __default_stride_hor = 1
     __default_stride_vert = 1
     __default_turbulence_label = True
@@ -46,11 +48,9 @@ class MyDataset(Dataset):
     __default_scaling_turb = 1.0
     __default_scaling_terrain = 1.0
     __default_compressed = False
-    __default_use_grid_size = False
     __default_return_grid_size = False
     __default_return_name = False
     __default_autoscale = False
-    __default_normalize_terrain = False
 
     def __init__(self, filename, **kwargs):
         '''
@@ -69,10 +69,12 @@ class MyDataset(Dataset):
                 Indicates how the input is constructed. The following modes are currently implemented:
                     0: The inflow condition is copied over the full domain
                     1: The vertical edges are interpolated over the full domain, default 0
-            subsample:
-                If true a region with the size of (nx, ny, nz) is sampled from the input data, default False
             augmentation:
-                If true the data is augmented using flipping in x/y direction and rotation aroung z, default False
+                If true the data is augmented according to the mode and augmentation_kwargs
+            augmentation_mode:
+                Specifies the data augmentation mode
+                    0: Rotating and subsampling the data without interpolation (rotation in 90deg steps, shift in integer steps)
+                    1: Rotating and subsampling the data with interpolation (continuous rotation, continous shift)
             stride_hor:
                 Horizontal stride, used to reduce the size of the output tensors, default 1
             stride_vert:
@@ -87,16 +89,12 @@ class MyDataset(Dataset):
                 Scaling factor for the turbulent kinetic energy, default 1.0
             compressed:
                 Specifies if the input tensors are compressed using LZ4, default False
-            use_grid_size:
-                Specifies if the turbulent kinetic energy is contained in the output, default False
             return_grid_size:
                 If true a tuple of the grid size is returned in addition to the input and output tensors, default False
             return_name:
                 Return the filename of the sample, default False
             autoscale:
                 Automatically scale the input and return the scale, default False
-            normalize_terrain:
-                Normalize the values of the terrain output channel, default False
         '''
         self.__filename = filename
 
@@ -147,18 +145,18 @@ class MyDataset(Dataset):
                 print('MyDataset: input_mode not present in kwargs, using default value:', self.__default_input_mode)
 
         try:
-            self.__subsample = kwargs['subsample']
-        except KeyError:
-            self.__subsample = self.__default_subsample
-            if verbose:
-                print('MyDataset: subsample not present in kwargs, using default value:', self.subsample)
-
-        try:
             self.__augmentation = kwargs['augmentation']
         except KeyError:
             self.__augmentation = self.__default_augmentation
             if verbose:
                 print('MyDataset: augmentation not present in kwargs, using default value:', self.__default_augmentation)
+
+        try:
+            self.__augmentation_mode = kwargs['augmentation_mode']
+        except KeyError:
+            self.__augmentation_mode = self.__default_augmentation_mode
+            if verbose:
+                print('MyDataset: augmentation_mode not present in kwargs, using default value:', self.__default_augmentation_mode)
 
         try:
             self.__turbulence_label = kwargs['turbulence_label']
@@ -224,13 +222,6 @@ class MyDataset(Dataset):
                 print('MyDataset: return_grid_size not present in kwargs, using default value:', self.__default_return_grid_size)
 
         try:
-            self.__use_grid_size = kwargs['use_grid_size']
-        except KeyError:
-            self.__use_grid_size = self.__default_use_grid_size
-            if verbose:
-                print('MyDataset: use_grid_size not present in kwargs, using default value:', self.__default_use_grid_size)
-
-        try:
             self.__return_name = kwargs['return_name']
         except KeyError:
             self.__return_name = self.__default_return_name
@@ -244,12 +235,23 @@ class MyDataset(Dataset):
             if verbose:
                 print('MyDataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
 
-        try:
-            self.__normalize_terrain = kwargs['normalize_terrain']
-        except KeyError:
-            self.__normalize_terrain = self.__default_normalize_terrain
-            if verbose:
-                print('MyDataset: normalize_terrain not present in kwargs, using default value:', self.__default_normalize_terrain)
+        # parse the augmentation_kwargs depending on the augmentation_mode
+        if self.__augmentation:
+            # mode 1 has no options
+            if self.__augmentation_mode == 0:
+                try:
+                    self.__subsample = kwargs['augmentation_kwargs']['subsampling']
+                except KeyError:
+                    self.__subsample = True
+                    if verbose:
+                        print('MyDataset: subsampling not present in augmentation_kwargs, using default value:', True)
+
+                try:
+                    self.__rotating = kwargs['augmentation_kwargs']['rotating']
+                except KeyError:
+                    self.__rotating = True
+                    if verbose:
+                        print('MyDataset: rotating not present in augmentation_kwargs, using default value:', True)
 
         # extract data from the tar file
         self.__num_files = len(tar.getnames())
@@ -260,6 +262,9 @@ class MyDataset(Dataset):
 
         # interpolator for the three input velocities
         self.__interpolator = DataInterpolation(self.__device, 3, self.__nx, self.__ny, self.__nz)
+
+        # avoids printing a warning multiple times
+        self.__augmentation_warning_printed = False
 
         print('MyDataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
@@ -290,23 +295,64 @@ class MyDataset(Dataset):
             data[3, :, :, :] /= scale * self.__scaling_uz # in u_z
             data[4, :, :, :] /= scale * scale * self.__scaling_turb # label turbulence
 
-            if self.__normalize_terrain:
-                data[0, :, :, :] /= data[0, :, :, :].max()
-
             # downscale if requested
             data = data[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
 
-            # determine the region for the output
-            if self.__subsample:
-                start_x = self.__rand.randint(0,data_shape[2]-self.__nx)
-                start_y = self.__rand.randint(0,data_shape[1]-self.__ny)
-                # gauss distribution
-#                 start_z = int(min(np.abs(self.__rand.gauss(0.0,(data_shape[0]-self.__nz)/3.0)), (data_shape[0]-self.__nz)))
-                # triangle distribution
-                start_z = int(self.__rand.triangular(0,(data_shape[0]-self.__nz),0))
+            # augment if requested according to the augmentation mode
+            if self.__augmentation:
+                if self.__augmentation_mode == 0:
+                    # subsampling
+                    if self.__subsample:
+                        start_x = self.__rand.randint(0,data_shape[2]-self.__nx)
+                        start_y = self.__rand.randint(0,data_shape[1]-self.__ny)
+                        start_z = int(self.__rand.triangular(0,(data_shape[0]-self.__nz),0)) # triangle distribution
 
-                data = data[:, start_z:start_z+self.__nz,  start_y:start_y+self.__ny,  start_x:start_x+self.__nx]
+                        data = data[:, start_z:start_z+self.__nz,  start_y:start_y+self.__ny,  start_x:start_x+self.__nx]
+                    else:
+                        # select the first indices
+                        data = data[:,:self.__nz, :self.__ny, :self.__nx]
+
+                    # rotating and flipping
+                    if self.__rotating:
+                        # flip in x-direction
+                        if (self.__rand.randint(0,1)):
+                            data = data.flip(3)
+                            data[1,:,:,:] *= -1.0
+
+                        # flip in y-direction
+                        if (self.__rand.randint(0,1)):
+                            data = data.flip(2)
+                            data[2,:,:,:] *= -1.0
+
+                        # rotate 90 degrees
+                        if (self.__rand.randint(0,1)):
+                            data = data.transpose(2,3).flip(3)
+                            data = data[[0,2,1,3,4]]
+                            data[1,:,:,:] *= -1.0
+
+                            ds = (ds[1], ds[0], ds[2])
+
+                elif self.__augmentation_mode == 1:
+                    # use the numpy implementation as it is more accurate and slightly faster
+                    data = self.__augmentation_mode2_numpy(data, self.__nx) # u_x: index 1, u_y: index 2
+                    #data = self.__augmentation_mode2_torch(data, self.__nx) # u_x: index 1, u_y: index 2
+
+                    # flip in x-direction
+                    if (self.__rand.randint(0,1)):
+                        data = data.flip(3)
+                        data[1,:,:,:] *= -1.0
+
+                    # flip in y-direction
+                    if (self.__rand.randint(0,1)):
+                        data = data.flip(2)
+                        data[2,:,:,:] *= -1.0
+
+                else:
+                    if not self.__augmentation_warning_printed:
+                        print('WARNING: Unknown augmentation mode in MyDatatset ', augmentation_mode, ', not augmenting the data')
+
             else:
+                # no data augmentation
                 data = data[:,:self.__nz, :self.__ny, :self.__nx]
 
             # generate the input channels
@@ -326,50 +372,10 @@ class MyDataset(Dataset):
                 print('MyDataset Error: Input mode ', self.__input_mode, ' is not supported')
                 sys.exit()
 
-            # append the grid size
-            if self.__use_grid_size:
-                dx = torch.full((self.__nz, self.__ny, self.__nx), float(ds[0])).unsqueeze(0).to(self.__device)
-                dy = torch.full((self.__nz, self.__ny, self.__nx), float(ds[1])).unsqueeze(0).to(self.__device)
-                dz = torch.full((self.__nz, self.__ny, self.__nx), float(ds[2])).unsqueeze(0).to(self.__device)
-                input = torch.cat([input, dx, dy, dz])
-                input_permute = [0,2,1,3,4,5,6]
-            else:
-                input_permute = [0,2,1,3]
-
             if self.__turbulence_label:
                 output = data[1:,:,:,:]
             else:
                 output = data[1:4,:,:,:]
-
-            # data augmentation
-            if self.__augmentation:
-                # flip in x-direction
-                if (self.__rand.randint(0,1)):
-                    output = output.flip(3)
-                    input = input.flip(3)
-
-                    output[0,:,:,:] *= -1.0
-                    input[1,:,:,:] *= -1.0
-
-                # flip in y-direction
-                if (self.__rand.randint(0,1)):
-                    output = output.flip(2)
-                    input = input.flip(2)
-
-                    output[1,:,:,:] *= -1.0
-                    input[2,:,:,:] *= -1.0
-
-                # rotate 90 degrees
-                if (self.__rand.randint(0,1)):
-                    output = output.transpose(2,3).flip(3)
-                    output = output[[1,0,2,3]]
-                    output[0,:,:,:] *= -1.0
-
-                    input = input.transpose(2,3).flip(3)
-                    input = input[input_permute]
-                    input[1,:,:,:] *= -1.0
-
-                    ds = (ds[1], ds[0], ds[2])
 
             out = [input, output]
 
@@ -396,6 +402,206 @@ class MyDataset(Dataset):
 
     def __len__(self):
         return self.__num_files
+
+    def __augmentation_mode2_torch(self, data, out_size, vx_channel = 1, vy_channel = 2):
+        '''
+        Augment the data by random subsampling and rotation the data.
+        This approach has errors in the order of 10^-6 even when resampling on the original grid.
+        The output is a cubical grid with shape (N_channels, out_size, out_size, out_size)
+
+        Assumptions:
+            - The input is 4D (channels, z, y, x)
+            - The number of cells is equal in x- and y-dimension
+            - The number of cells in each dimension is at least as large as the out_size
+
+        Inputs:
+            - data: The input data
+            - out_size: The size of the output grid
+            - vx_channel: The channel of the x velocity
+            - vy_channel: The channel of the y velocity
+        '''
+        if not len(data.shape) == 4:
+            raise ValueError('The input dimension of the data array needs to be 4 (channels, z, y, x)')
+
+        if data.shape[2] != data.shape[3]:
+            raise ValueError('The number of cells in x- and y-direction must be the same, shape: ', data.shape)
+
+        if out_size > data.shape[3]:
+            raise ValueError('The number of output cells cannot be larger than the input')
+
+        # create the initial grid, see the grid_sample documentation for an explanation
+        # https://pytorch.org/docs/1.0.0/nn.html?highlight=sample#torch.nn.functional.grid_sample
+        X = torch.linspace(0, out_size-1, steps=out_size).view(1,1,1,-1,1).repeat(1,out_size,out_size,1,1)
+        Y = torch.linspace(0, out_size-1, steps=out_size).view(1,1,-1,1,1).repeat(1,out_size,1,out_size,1)
+        Z = torch.linspace(0, out_size-1, steps=out_size).view(1,-1,1,1,1).repeat(1,1,out_size,out_size,1)
+
+        # sample the rotation angle
+        ratio = data.shape[3] / out_size
+        if ratio > np.sqrt(2):
+            # fully rotation possible
+            angle = self.__rand.uniform(0, 2.0*np.pi)
+        elif (ratio <= 1.0):
+            # no rotation possible
+            angle = 0.0
+
+        else:
+            # some angles are infeasible
+            angle_found = False
+            lower_bound = 2 * np.arctan((1 - np.sqrt(2 - ratio*ratio)) / (1+ratio))
+            upper_bound = 0.5 * np.pi - lower_bound
+
+            while (not angle_found):
+                angle = self.__rand.uniform(0, 0.5*np.pi)
+
+                if not ((angle > lower_bound) and (angle < upper_bound)):
+                    angle_found = True
+
+            angle += 0.5*np.pi * self.__rand.randint(0, 3)
+
+        # rotate the grid
+        X_rot = np.cos(angle) * X - np.sin(angle) * Y
+        Y_rot = np.sin(angle) * X + np.cos(angle) * Y
+
+        # determine the shift limits
+        x_minshift = -X_rot.min()
+        x_maxshift = data.shape[3] - 1 - X_rot.max()
+        y_minshift = -Y_rot.min()
+        y_maxshift = data.shape[2] - 1 - Y_rot.max()
+        z_minshift = 0.0
+        z_maxshift = data.shape[1] - out_size
+
+        # shift the grid
+        X = X_rot + self.__rand.uniform(x_minshift, x_maxshift)
+        Y = Y_rot + self.__rand.uniform(y_minshift, y_maxshift)
+        Z = Z     + int(self.__rand.triangular(z_minshift,z_maxshift,z_minshift))
+
+        # check if the shifted/rotated grid is fine
+        if ((X.min() < 0.0) or
+            (Y.min() < 0.0) or
+            (Z.min() < 0.0) or
+            (X.max() > data.shape[3] - 1.0) or
+            (Y.max() > data.shape[2] - 1.0) or
+            (Z.max() > data.shape[1] - 1.0)):
+            raise RuntimeError("The rotated and shifted grid does not satisfy the data grid bounds")
+
+        # convert the coordinates to a range of -1 to 1 as required by grid_sample
+        X = 2.0 * X / (data.shape[3] - 1.0) - 1.0
+        Y = 2.0 * Y / (data.shape[2] - 1.0) - 1.0
+        Z = 2.0 * Z / (data.shape[1] - 1.0) - 1.0
+
+        # assemble the final interpolation grid and interpolate
+        grid = torch.cat((X, Y, Z), dim = 4)
+        interpolated = torch.nn.functional.grid_sample(data.unsqueeze(0), grid).squeeze()
+
+        # rotate also the horizontal velocities
+        vel_x =  np.cos(angle) * interpolated[vx_channel] + np.sin(angle) * interpolated[vy_channel]
+        vel_y = -np.sin(angle) * interpolated[vx_channel] + np.cos(angle) * interpolated[vy_channel]
+        interpolated[vx_channel] = vel_x
+        interpolated[vy_channel] = vel_y
+
+        # fix the terrain
+        terrain = interpolated[0]
+        terrain[terrain<=0.5 / self.__scaling_terrain] = 0
+
+        return interpolated
+
+    def __augmentation_mode2_numpy(self, data, out_size, vx_channel = 1, vy_channel = 2):
+        '''
+        Augment the data by random subsampling and rotation the data.
+        The output is a cubical grid with shape (N_channels, out_size, out_size, out_size)
+
+        Assumptions:
+            - The input is 4D (channels, z, y, x)
+            - The number of cells is equal in x- and y-dimension
+            - The number of cells in each dimension is at least as large as the out_size
+
+        Inputs:
+            - data: The input data
+            - out_size: The size of the output grid
+            - vx_channel: The channel of the x velocity
+            - vy_channel: The channel of the y velocity
+        '''
+        if not len(data.shape) == 4:
+            raise ValueError('The input dimension of the data array needs to be 4 (channels, z, y, x)')
+
+        if data.shape[2] != data.shape[3]:
+            raise ValueError('The number of cells in x- and y-direction must be the same, shape: ', data.shape)
+
+        if out_size > data.shape[3]:
+            raise ValueError('The number of output cells cannot be larger than the input')
+
+        # generate the existing grid and data
+        values = np.moveaxis(data.numpy(), 0, -1)
+        grid = UCGrid((0,values.shape[0]-1,values.shape[0]),(0,values.shape[1]-1,values.shape[1]),(0,values.shape[2]-1,values.shape[2]))
+
+        # generate the initial unrotated grid
+        x_f = np.linspace(0, out_size-1, out_size)
+        y_f = np.linspace(0, out_size-1, out_size)
+        z_f = np.linspace(0, out_size-1, out_size)
+        Z, Y, X = np.meshgrid(z_f, y_f, x_f, indexing='ij')
+
+        # sample the grid orientation
+        ratio = values.shape[2] / out_size
+        if ratio > np.sqrt(2):
+            # fully rotation possible
+            angle = self.__rand.uniform(0, 2.0*np.pi)
+        elif (ratio <= 1.0):
+            # no rotation possible
+            angle = 0.0
+
+        else:
+            # some angles are infeasible
+            angle_found = False
+            lower_bound = 2 * np.arctan((1 - np.sqrt(2 - ratio*ratio)) / (1+ratio))
+            upper_bound = 0.5 * np.pi - lower_bound
+
+            while (not angle_found):
+                angle = self.__rand.uniform(0, 0.5*np.pi)
+
+                if not ((angle > lower_bound) and (angle < upper_bound)):
+                    angle_found = True
+
+            angle += 0.5*np.pi * self.__rand.randint(0, 3)
+
+        # rotate the grid
+        X_rot = np.cos(angle) * X - np.sin(angle) * Y
+        Y_rot = np.sin(angle) * X + np.cos(angle) * Y
+
+        # determine the shift limits
+        x_minshift = -X_rot.min()
+        x_maxshift = values.shape[2] - 1 - X_rot.max()
+        y_minshift = -Y_rot.min()
+        y_maxshift = values.shape[1] - 1 - Y_rot.max()
+        z_minshift = 0.0
+        z_maxshift = values.shape[0] - out_size
+
+        # shift the grid
+        X = X_rot + self.__rand.uniform(x_minshift, x_maxshift)
+        Y = Y_rot + self.__rand.uniform(y_minshift, y_maxshift)
+        Z = Z     + int(self.__rand.triangular(z_minshift,z_maxshift,z_minshift))
+
+        # check if the shifted/rotated grid is fine
+        if ((X.min() < grid[2][0]) or
+            (Y.min() < grid[1][0]) or
+            (Z.min() < grid[0][0]) or
+            (X.max() > grid[2][1]) or
+            (Y.max() > grid[1][1]) or
+            (Z.max() > grid[0][1])):
+            raise RuntimeError("The rotated and shifted grid does not satisfy the data grid bounds")
+
+        # interpolate
+        points = np.stack((Z.ravel(), Y.ravel(), X.ravel()), axis=1)
+        interpolated = eval_linear(grid, values, points)
+        interpolated = interpolated.reshape((out_size,out_size,out_size, values.shape[3]))
+        interpolated = np.moveaxis(interpolated, -1, 0)
+
+        # rotate also the horizontal velocities
+        vel_x =  np.cos(angle) * interpolated[vx_channel] + np.sin(angle) * interpolated[vy_channel]
+        vel_y = -np.sin(angle) * interpolated[vx_channel] + np.cos(angle) * interpolated[vy_channel]
+        interpolated[vx_channel] = vel_x
+        interpolated[vy_channel] = vel_y
+
+        return torch.from_numpy(interpolated).float()
 
     def __get_scale(self, x):
         shape = x.shape
