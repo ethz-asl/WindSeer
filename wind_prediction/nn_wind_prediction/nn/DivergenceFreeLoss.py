@@ -25,10 +25,10 @@ class DivergenceFreeLoss(Module):
     def compute_loss(self, net_output, target):
         if self.__loss_type == 'L1':
             loss = f.l1_loss(target, net_output)
-            loss += f.l1_loss(utils.divergence(net_output, self.__grid_size), utils.gradient(net_output * 0, self.__grid_size))
+            loss += f.l1_loss(utils.divergence_(net_output, self.__grid_size), utils.divergence_(net_output * 0, self.__grid_size))
         elif self.__loss_type == 'MSE':
             loss = f.mse_loss(target, net_output)
-            loss += f.mse_loss(utils.divergence(net_output, self.__grid_size), utils.gradient(net_output * 0, self.__grid_size))
+            loss += f.mse_loss(utils.divergence_(net_output, self.__grid_size), utils.divergence_(net_output * 0, self.__grid_size))
         else:
             raise ValueError('Only L1 and MSE loss_type supported')
         return loss
