@@ -60,25 +60,25 @@ def derive(input_tensor, deriv_axis, ds=1):
 
     return deriv_tensor
 
-def curl(input_tensor, ds=1):
+def curl(input_tensor, grid_size):
     '''
     This function computes the curl of a vector field, with regard to a specified grid size
 
     Input params:
         input_tensor: 5D tensor (samples, input_field[phix_in, phiy_in, phiz_in]), Z, Y, X)
-        ds: grid size, default is unit.
+        grid_size: list/array which contains the grid sizes in X, Y and Z
 
     Output:
-        curled_tensor: 5D tensor (samples, curled_field[u, v, w]), X, Y, Z)
+        curled_tensor: 5D tensor (samples, curled_field[u, v, w]), Z, Y, X)
     '''
-    phix_y = derive(input_tensor[:, 0, :, :, :], 2, ds)
-    phix_z = derive(input_tensor[:, 0, :, :, :], 1, ds)
+    phix_y = derive(input_tensor[:, 0, :, :, :], 2, grid_size[1])
+    phix_z = derive(input_tensor[:, 0, :, :, :], 1, grid_size[2])
 
-    phiy_x = derive(input_tensor[:, 1, :, :, :], 3, ds)
-    phiy_z = derive(input_tensor[:, 1, :, :, :], 1, ds)
+    phiy_x = derive(input_tensor[:, 1, :, :, :], 3, grid_size[0])
+    phiy_z = derive(input_tensor[:, 1, :, :, :], 1, grid_size[2])
 
-    phiz_x = derive(input_tensor[:, 2, :, :, :], 3, ds)
-    phiz_y = derive(input_tensor[:, 2, :, :, :], 2, ds)
+    phiz_x = derive(input_tensor[:, 2, :, :, :], 3, grid_size[0])
+    phiz_y = derive(input_tensor[:, 2, :, :, :], 2, grid_size[1])
 
     # curled vector field components
     u = phiz_y - phiy_z
@@ -90,28 +90,28 @@ def curl(input_tensor, ds=1):
     return curled_tensor
 
 
-def gradient(input_tensor, ds=1):
+def gradient(input_tensor, grid_size):
     '''
     This function computes the gradient (2nd order tensor) of a vector at each XYZ position, with regard to a specified grid size
 
     Input params:
         input_tensor: 5D tensor (samples, input_field[u_in, v_in, w_in]), Z, Y, X)
-        ds: grid size, default is unit.
+        grid_size: list/array which contains the grid sizes in X, Y and Z
 
     Output:
-        gradient_tensor: 5D tensor (samples, gradient_components(9 in total), X, Y, Z)
+        gradient_tensor: 5D tensor (samples, gradient_components(9 in total), Z, Y, X)
     '''
-    u_x = derive(input_tensor[:, 0, :, :, :], 3, ds).unsqueeze(1)
-    u_y = derive(input_tensor[:, 0, :, :, :], 2, ds).unsqueeze(1)
-    u_z = derive(input_tensor[:, 0, :, :, :], 1, ds).unsqueeze(1)
+    u_x = derive(input_tensor[:, 0, :, :, :], 3, grid_size[0]).unsqueeze(1)
+    u_y = derive(input_tensor[:, 0, :, :, :], 2, grid_size[1]).unsqueeze(1)
+    u_z = derive(input_tensor[:, 0, :, :, :], 1, grid_size[2]).unsqueeze(1)
 
-    v_x = derive(input_tensor[:, 1, :, :, :], 3, ds).unsqueeze(1)
-    v_y = derive(input_tensor[:, 1, :, :, :], 2, ds).unsqueeze(1)
-    v_z = derive(input_tensor[:, 1, :, :, :], 1, ds).unsqueeze(1)
+    v_x = derive(input_tensor[:, 1, :, :, :], 3, grid_size[0]).unsqueeze(1)
+    v_y = derive(input_tensor[:, 1, :, :, :], 2, grid_size[1]).unsqueeze(1)
+    v_z = derive(input_tensor[:, 1, :, :, :], 1, grid_size[2]).unsqueeze(1)
 
-    w_x = derive(input_tensor[:, 2, :, :, :], 3, ds).unsqueeze(1)
-    w_y = derive(input_tensor[:, 2, :, :, :], 2, ds).unsqueeze(1)
-    w_z = derive(input_tensor[:, 2, :, :, :], 1, ds).unsqueeze(1)
+    w_x = derive(input_tensor[:, 2, :, :, :], 3, grid_size[0]).unsqueeze(1)
+    w_y = derive(input_tensor[:, 2, :, :, :], 2, grid_size[1]).unsqueeze(1)
+    w_z = derive(input_tensor[:, 2, :, :, :], 1, grid_size[2]).unsqueeze(1)
 
     gradient_tensor = torch.cat((u_x, u_y, u_z, v_x, v_y, v_z, w_x, w_y, w_z), 1)
     return gradient_tensor
