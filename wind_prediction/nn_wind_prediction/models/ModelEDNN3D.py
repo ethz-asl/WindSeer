@@ -32,6 +32,7 @@ class ModelEDNN3D(nn.Module):
     __default_pooling_method = 'striding'
     __default_use_grid_size = False
     __default_use_turbulence = True
+    __default_grid_size = [1, 1, 1]
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -140,6 +141,15 @@ class ModelEDNN3D(nn.Module):
             self.__use_grid_size = self.__default_use_grid_size
             if verbose:
                 print('EDNN3D: use_grid_size not present in kwargs, using default value:', self.__default_use_grid_size)
+
+        # grid size is needed for potential flow
+        if self.__potential_flow:
+            try:
+                self.__grid_size = kwargs['grid_size']
+            except KeyError:
+                self.__grid_size = self.__default_grid_size
+                if verbose:
+                    print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
 
         try:
             self.__use_turbulence = kwargs['use_turbulence']
@@ -319,7 +329,7 @@ class ModelEDNN3D(nn.Module):
             #                (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
             #                (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
             #                 x[:,3:,:]], 1)
-            x = torch.cat([utils.curl(x, ds=1), x[:, 3:, :]], 1)
+            x = torch.cat([utils.curl(x, self.__grid_size), x[:, 3:, :]], 1)
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
