@@ -7,4 +7,4 @@ def get_grid_size(dataset_filename):
     file = tar.extractfile(memberslist[0])
 
     ds = torch.load(file)[1]
-    return torch.as_tensor(ds).tolist()
+    return torch.as_tensor(ds, dtype=torch.float).tolist()
