@@ -615,6 +615,82 @@ class PlotUtils():
             circle.set_radius(0.1)
         self.__button.on_clicked(self.radio_callback)
 
+    def plot_prediction_observations(self):
+        '''
+        Plots the network-estimated wind and a set of observations.
+        In this object '__label' is the network wind, '__input' is the observations
+        '''
+        if (len(list(self.__label.shape)) > 3):
+            # 3D data
+            fh_in, ah_in = plt.subplots(3, 3, figsize=(16,13))
+            fh_in.patch.set_facecolor('white')
+
+            # Velocity limits (max of either [observations.max(), predictions.max()]
+            v_lims = np.zeros((ah_in.shape[1],2))
+            for i, lim in enumerate(v_lims):
+                lim[0] = min(self.__label[i, :, :, :].min(), self.__input[i+1, :, :, :].min())
+                lim[1] = max(self.__label[i, :, :, :].max(), self.__input[i+1, :, :, :].max())
+
+            # We reorganise the __input and __label arrays so that terrain is in the first spot in the first dimension
+            # of the __input array (like the network input style)
+
+            #  Terrain and then velocities from prediction
+            self.__in_images.append(ah_in[2][0].imshow(self.__input[0, :, self.__n_slice, :], origin='lower', vmin=self.__input[0, :, :, :].min(), vmax=self.__input[0, :, :, :].max(), aspect='auto', cmap=self.__cmap))  # terrain
+            for ah, im, lims in zip(ah_in[0], self.__input[1:], v_lims):
+                self.__in_images.append(ah.imshow(im[:,self.__n_slice,:], origin='lower', vmin=lims[0], vmax=lims[1], aspect='auto', cmap=self.__cmap))  # ux
+
+            self.__in_images_terrain.append(ah_in[2][0].imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+            for ah in ah_in[0]:
+                self.__in_images_terrain.append(ah.imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
+            ah_in[2][0].set_title('Terrain', fontsize = self.__title_fontsize)
+            chbar = fh_in.colorbar(self.__in_images[0], ax=ah_in[2][0])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
+            for ah, im, X in zip(ah_in[0], self.__in_images[1:], ['X', 'Y', 'Z']):
+                ah.set_title('Prediction Vel {0}'.format(X), fontsize = self.__title_fontsize)
+                chbar = fh_in.colorbar(im, ax=ah)
+                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
+            # plot the label (observation) data
+            for ah, im, lims in zip(ah_in[1], self.__label, v_lims):
+                self.__out_images.append(ah.imshow(im[:,self.__n_slice,:], origin='lower', vmin=lims[0], vmax=lims[1], aspect = 'auto', cmap=self.__cmap)) #ux
+
+            # Add the terrain masks
+            for ah in ah_in[1]:
+                self.__out_images_terrain.append(ah.imshow(self.__terrain_mask[:,self.__n_slice,:], cmap=self.__cmap_terrain, origin='lower'))
+
+            fh_in.delaxes(ah_in[2][1])
+            fh_in.delaxes(ah_in[2][2])
+
+            if self.__plot_divergence:
+                print('WARNING: Divergence not implemented for plot_prediction_observations()')
+
+            for ah, X, im in zip(ah_in[1], ['X', 'Y', 'Z'], self.__out_images):
+                ah.set_title('Observation Vel {0}'.format(X), fontsize = self.__title_fontsize)
+                chbar = fh_in.colorbar(im, ax=ah)
+                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
+            for ah in ah_in.flat:
+                ah.set_xticks([])
+                ah.set_yticks([])
+
+            # create slider to select the slice
+            self.__ax_slider = plt.axes(self.__slider_location)
+            self.__slider = Slider(self.__ax_slider, 'Slice', 0, self.__input.shape[2]-1, valinit=self.__n_slice, valfmt='%0.0f')
+            self.__slider.on_changed(self.slider_callback)
+
+            plt.tight_layout()
+            plt.subplots_adjust(bottom=0.12)
+
+            # create button to select the axis along which the slices are made
+            rax = plt.axes(self.__button_location)
+            self.__button = RadioButtons(rax, ('  x-z', '  x-y', '  y-z'), active=0)
+            for circle in self.__button.circles:
+                circle.set_radius(0.1)
+            self.__button.on_clicked(self.radio_callback)
+            plt.show()
+
 def plot_sample(input, label, terrain, plot_divergence = False, plot_turbulence = False, ds = None):
     '''
     Creates the plots according to the input and label data.
@@ -632,3 +708,8 @@ def plot_prediction(output, label, terrain, uncertainty_predicted):
 def plot_measurements(wind, variance, terrain):
     instance = PlotUtils(wind, variance, terrain, 0)
     instance.plot_measurements()
+
+def plot_prediction_observations(input, label, terrain):
+    i2 = torch.cat((terrain.unsqueeze(0), input), 0)
+    instance = PlotUtils(i2, label, terrain, 0, False, plot_divergence=False, plot_turbulence=False, ds=None)
+    instance.plot_prediction_observations()

@@ -167,8 +167,10 @@ class WindOptimiser(object):
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return net
 
-    def reset_rotation_scale(self):
-        self._rotation_scale = torch.Tensor([self._rotation0, self._scale0]).to(self._device).requires_grad_()
+    def reset_rotation_scale(self, rot=None, scale=None):
+        if rot is None: rot = self._rotation0
+        if scale is None: scale = self._scale0
+        self._rotation_scale = torch.Tensor([rot, scale]).to(self._device).requires_grad_()
 
     def get_wind_blocks(self):
         print('Getting binned wind blocks...', end='', flush=True)
@@ -184,7 +186,7 @@ class WindOptimiser(object):
         # bin the data into the regular grid
         wind, variance = utils.bin_log_data(self._ulog_data, corners)
         wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
-        wind_zeros = torch.tensor(wind)
+        wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
 
         print(' done [{:.2f} s]'.format(time.time() - t_start))
@@ -235,11 +237,11 @@ class WindOptimiser(object):
         t0 = time.time()
         t = 0
         max_grad = min_gradient+1.0
-        grads = []
-        losses = []
+        losses, grads, rotation_scales = [], [], []
         while t < n and max_grad > min_gradient:
             print('{0:4} r: {1:5.2f} deg, s: {2:5.2f}, '.format(t, self._rotation_scale[0] * 180.0 / np.pi,
                                                                 self._rotation_scale[1]), end='')
+            rotation_scales.append(self._rotation_scale.clone().detach().cpu().numpy())
             optimizer.zero_grad()
             t1 = time.time()
             output = self.get_prediction()
@@ -264,12 +266,12 @@ class WindOptimiser(object):
             to = time.time()
 
             if verbose:
-                print('Times: prediction: ', tp - t1, end='')
-                print(', loss: ', tl - tp, end='')
-                print(', backward: ', tb - tl, end='')
-                print(', opt step: ', to - tb)
+                print('Times: prediction: {0:6.3f}s'.format(tp - t1), end='')
+                print(', loss: {0:6.3f}s'.format(tl - tp), end='')
+                print(', backward: {0:6.3f}s'.format(tb - tl), end='')
+                print(', opt step: {0:6.3f}s'.format(to - tb))
             t += 1
         tt = time.time()-t0
         if verbose:
             print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
-        return losses, grads, optimizer.__class__.__name__
+        return np.array(rotation_scales), np.array(losses), np.array(grads)
