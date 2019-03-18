@@ -106,16 +106,22 @@ optimizer = torch.optim.Adam(net.parameters(), lr=run_params.run['learning_rate_
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 
+# choose loss function
 if run_params.run['loss_function'] == 1:
     loss_fn = torch.nn.L1Loss()
 elif run_params.run['loss_function'] == 2:
     loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
-elif run_params.run['loss_function'] == 3:
-    loss_fn = nn_custom.StreamFunctionLoss()
+
+elif run_params.run['loss_function'] == 3.1:
+    loss_fn = nn_custom.DivergenceFreeLoss('L1',data.get_grid_size(trainset_name))
+elif run_params.run['loss_function'] == 3.2:
+    loss_fn = nn_custom.DivergenceFreeLoss('MSE', data.get_grid_size(trainset_name))
+
 elif run_params.run['loss_function'] == 4.1:
     loss_fn = nn_custom.VelocityGradientLoss('L1',data.get_grid_size(trainset_name))
 elif run_params.run['loss_function'] == 4.2:
     loss_fn = nn_custom.VelocityGradientLoss('MSE',data.get_grid_size(trainset_name))
+
 else:
     loss_fn = torch.nn.MSELoss()
 
