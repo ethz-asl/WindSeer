@@ -6,7 +6,7 @@ def derive(input_tensor, deriv_axis, ds=1):
     This function computes the derivative of a scalar field, with regard to a specified axis direction
 
     Input params:
-        input_tensor: 4D tensor (samples x Z x Y x X)
+        input_tensor: 4D tensor [samples, Z, Y, X]
         deriv_axis: axis along which to compute the derivative
         ds: grid size of deriv_axis, default is unit.
 
@@ -65,11 +65,11 @@ def curl(input_tensor, grid_size):
     This function computes the curl of a vector field, with regard to a specified grid size
 
     Input params:
-        input_tensor: 5D tensor (samples, input_field[phix_in, phiy_in, phiz_in]), Z, Y, X)
+        input_tensor: 5D tensor [samples, input_field(phix_in, phiy_in, phiz_in), Z, Y, X]
         grid_size: list/array which contains the grid sizes in X, Y and Z
 
     Output:
-        curled_tensor: 5D tensor (samples, curled_field[u, v, w]), Z, Y, X)
+        curled_tensor: 5D tensor [samples, curled_field(u, v, w), Z, Y, X]
     '''
     phix_y = derive(input_tensor[:, 0, :, :, :], 2, grid_size[1])
     phix_z = derive(input_tensor[:, 0, :, :, :], 1, grid_size[2])
@@ -85,7 +85,7 @@ def curl(input_tensor, grid_size):
     v = phix_z - phiz_x
     w = phiy_x - phix_y
 
-    # concat all components as well as terrain (first channel)
+    # concat all components (2d dimension)
     curled_tensor = torch.cat((u.unsqueeze(1), v.unsqueeze(1), w.unsqueeze(1)), 1)
     return curled_tensor
 
@@ -95,11 +95,11 @@ def gradient(input_tensor, grid_size):
     This function computes the gradient (2nd order tensor) of a vector at each XYZ position, with regard to a specified grid size
 
     Input params:
-        input_tensor: 5D tensor (samples, input_field[u_in, v_in, w_in]), Z, Y, X)
+        input_tensor: 5D tensor [samples, input_field(u_in, v_in, w_in), Z, Y, X]
         grid_size: list/array which contains the grid sizes in X, Y and Z
 
     Output:
-        gradient_tensor: 5D tensor (samples, gradient_components(9 in total), Z, Y, X)
+        gradient_tensor: 5D tensor [samples, gradient_components(9 in total), Z, Y, X]
     '''
     u_x = derive(input_tensor[:, 0, :, :, :], 3, grid_size[0]).unsqueeze(1)
     u_y = derive(input_tensor[:, 0, :, :, :], 2, grid_size[1]).unsqueeze(1)
@@ -115,3 +115,21 @@ def gradient(input_tensor, grid_size):
 
     gradient_tensor = torch.cat((u_x, u_y, u_z, v_x, v_y, v_z, w_x, w_y, w_z), 1)
     return gradient_tensor
+
+def divergence_(input_tensor, grid_size):
+    '''
+    This function computes the divergence of a vector at each XYZ position, with regard to a specified grid size
+
+    Input params:
+        input_tensor: 5D tensor [samples, input_field(u_in, v_in, w_in), Z, Y, X]
+        grid_size: list/array which contains the grid sizes in X, Y and Z
+
+    Output:
+        divergence_tensor: 4D tensor of divergence of input field [samples, Z, Y, X]
+    '''
+    u_x = derive(input_tensor[:, 0, :, :, :], 3, grid_size[0])
+    v_y = derive(input_tensor[:, 1, :, :, :], 2, grid_size[1])
+    w_z = derive(input_tensor[:, 2, :, :, :], 1, grid_size[2])
+
+    divergence_tensor = u_x + v_y + w_z
+    return divergence_tensor
