@@ -4,25 +4,33 @@ from torch.nn import Module
 import torch.nn.functional as f
 
 class MyLoss(Module):
-    def __init__(self, use_turbulence_scaling = False, turbulence_factor = 1.0):
+    def __init__(self, method = 'MSE', max_scale = 4.0):
         super(MyLoss, self).__init__()
-        self.__turbulence_factor = turbulence_factor
-        self.__use_turbulence_scaling = use_turbulence_scaling
 
-    def forward(self, prediction, label):
-        if (prediction.shape != label.shape):
-            raise ValueError('Prediction and label do not have the same shape')
+        # input sanity checks
+        if (max_scale < 1.0):
+            raise ValueError('max_scale must be larger than 1.0')
 
-        if (len(prediction.shape) != 5):
-            raise ValueError('The loss is only defined for 5D data')
+        if (method == 'MSE'):
+            self.__loss = torch.nn.MSELoss(reduction='none')
+        elif (method == 'L1'):
+            self.__loss = torch.nn.L1Loss(reduction='none')
 
-        # compute mse loss for each channel for each batch
-        mse_loss = f.mse_loss(prediction, label, reduction='none')
-        loss = torch.sum(mse_loss, [2,3,4]) / label.abs().mean(-1).mean(-1).mean(-1)
+        self.__max_scale = max_scale
 
-        loss = loss.sum() / label.numel()
+    def forward(self, prediction, label, input):
+        # compute the scale
+        scale = label[:,0:3]-input[:,1:4]
+        scale = (scale.norm(dim=1) / label[:,0:3].norm(dim=1))
 
-        if self.__use_turbulence_scaling:
-            print('not implemented yet')
+        # set nans to 0.0
+        nan_mask =  torch.isnan(scale)
+        scale[nan_mask] = 0.0
 
-        return loss
+        # map to a range of 1.0 to max_scale
+        scale = scale.clamp(min=0.0, max=0.5).unsqueeze(0) * 2.0 * (self.__max_scale - 1.0) + 1.0
+
+        # compute the loss per pixel
+        loss = self.__loss(prediction, label).mean(dim=1)
+
+        return (loss*scale).sum() / scale.sum()
