@@ -349,7 +349,8 @@ class MyDataset(Dataset):
 
                 else:
                     if not self.__augmentation_warning_printed:
-                        print('WARNING: Unknown augmentation mode in MyDatatset ', augmentation_mode, ', not augmenting the data')
+                        print('WARNING: Unknown augmentation mode in MyDatatset ', self.__augmentation_mode,
+                              ', not augmenting the data')
 
             else:
                 # no data augmentation

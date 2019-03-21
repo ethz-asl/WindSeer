@@ -24,7 +24,7 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
 2. Install (Cuda)[https://developer.nvidia.com/cuda-zone] if a graphics card is present and (PyTorch)[https://pytorch.org/get-started/locally/] according to your CUDA, Ubuntu, and Python version.
 
 3. Install the following required python packages:
-   `pip3 install tensorboardX lz4 numpy tqdm matplotlib scipy pandas h5py interpolation termcolor`
+   `pip3 install tensorboardX lz4 numpy tqdm matplotlib scipy pandas h5py interpolation termcolor pyyaml`
 
 4. Install python tkinter
    `sudo apt-get install python3-tk`
