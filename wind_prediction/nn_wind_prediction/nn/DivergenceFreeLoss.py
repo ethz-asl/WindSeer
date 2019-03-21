@@ -18,7 +18,10 @@ class DivergenceFreeLoss(Module):
             raise ValueError('Prediction and target do not have the same shape')
 
         if (len(net_output.shape) != 5):
-            raise ValueError('The loss is only defined for 5D data')
+            if (len(net_output.shape) == 4) and net_output.shape[0]==3: # corresponds to a single sample
+                net_output = net_output.unsqueeze(0)
+            else:
+             raise ValueError('The loss is only defined for 5D data')
 
         return self.compute_loss(net_output, target)
 
