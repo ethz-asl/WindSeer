@@ -19,11 +19,17 @@ class VelocityGradientLoss(Module):
             raise ValueError('Prediction and target do not have the same shape')
 
         if (len(net_output.shape) != 5):
-            raise ValueError('The loss is only defined for 5D data')
+            if (len(net_output.shape) == 4) and net_output.shape[0]==3: # corresponds to a single sample
+                net_output = net_output.unsqueeze(0)
+            else:
+             raise ValueError('The loss is only defined for 5D data')
 
         return self.compute_loss(net_output, target)
 
     def compute_loss(self, net_output, target):
+        if (len(target.shape) == 4) and target.shape[0] == 3:  # corresponds to a single sample
+            target = target.unsqueeze(0)
+
         if self.__loss_type == 'L1':
             loss = f.l1_loss(target, net_output)
             loss += f.l1_loss(utils.gradient(target,self.__grid_size), utils.gradient(net_output,self.__grid_size))
