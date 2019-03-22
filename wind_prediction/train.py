@@ -113,14 +113,14 @@ elif run_params.run['loss_function'] == 2:
     loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
 
 elif run_params.run['loss_function'] == 3.1:
-    loss_fn = nn_custom.DivergenceFreeLoss('L1',data.get_grid_size(trainset_name))
+    loss_fn = nn_custom.DivergenceFreeLoss('L1', data.get_grid_size(trainset_name), run_params.run['loss_scaling_factor'])
 elif run_params.run['loss_function'] == 3.2:
-    loss_fn = nn_custom.DivergenceFreeLoss('MSE', data.get_grid_size(trainset_name))
+    loss_fn = nn_custom.DivergenceFreeLoss('MSE', data.get_grid_size(trainset_name), run_params.run['loss_scaling_factor'])
 
 elif run_params.run['loss_function'] == 4.1:
-    loss_fn = nn_custom.VelocityGradientLoss('L1',data.get_grid_size(trainset_name))
+    loss_fn = nn_custom.VelocityGradientLoss('L1',data.get_grid_size(trainset_name), run_params.run['loss_scaling_factor'])
 elif run_params.run['loss_function'] == 4.2:
-    loss_fn = nn_custom.VelocityGradientLoss('MSE',data.get_grid_size(trainset_name))
+    loss_fn = nn_custom.VelocityGradientLoss('MSE',data.get_grid_size(trainset_name), run_params.run['loss_scaling_factor'])
 
 else:
     loss_fn = torch.nn.MSELoss()
