@@ -78,11 +78,12 @@ if args.compute_prediction_error:
         args.index = worst_index
 
 # predict the wind, compute the loss and plot if requested
-input = testset[args.index][0]
-label = testset[args.index][1]
+data = testset[args.index]
+input = data[0]
+label = data[1]
 scale = 1.0
 if params.data['autoscale']:
-    scale = testset[args.index][2].item()
+    scale = data[2].item()
 
 print('Test index name: {0}'.format(testset.get_name(args.index)))
 if args.save_prediction:
