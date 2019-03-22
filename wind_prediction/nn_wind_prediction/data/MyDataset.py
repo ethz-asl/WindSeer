@@ -404,40 +404,15 @@ class MyDataset(Dataset):
     def __len__(self):
         return self.__num_files
 
-    def __augmentation_mode2_torch(self, data, out_size, vx_channel = 1, vy_channel = 2):
-        '''
-        Augment the data by random subsampling and rotation the data.
-        This approach has errors in the order of 10^-6 even when resampling on the original grid.
-        The output is a cubical grid with shape (N_channels, out_size, out_size, out_size)
+    def __generate_interpolation_grid(self, data_shape, out_size):
+        # generate the initial unrotated grid
+        x_f = np.arange(out_size)
+        y_f = np.arange(out_size)
+        z_f = np.arange(out_size)
+        Z, Y, X = np.meshgrid(z_f, y_f, x_f, indexing='ij')
 
-        Assumptions:
-            - The input is 4D (channels, z, y, x)
-            - The number of cells is equal in x- and y-dimension
-            - The number of cells in each dimension is at least as large as the out_size
-
-        Inputs:
-            - data: The input data
-            - out_size: The size of the output grid
-            - vx_channel: The channel of the x velocity
-            - vy_channel: The channel of the y velocity
-        '''
-        if not len(data.shape) == 4:
-            raise ValueError('The input dimension of the data array needs to be 4 (channels, z, y, x)')
-
-        if data.shape[2] != data.shape[3]:
-            raise ValueError('The number of cells in x- and y-direction must be the same, shape: ', data.shape)
-
-        if out_size > data.shape[3]:
-            raise ValueError('The number of output cells cannot be larger than the input')
-
-        # create the initial grid, see the grid_sample documentation for an explanation
-        # https://pytorch.org/docs/1.0.0/nn.html?highlight=sample#torch.nn.functional.grid_sample
-        X = torch.linspace(0, out_size-1, steps=out_size).view(1,1,1,-1,1).repeat(1,out_size,out_size,1,1)
-        Y = torch.linspace(0, out_size-1, steps=out_size).view(1,1,-1,1,1).repeat(1,out_size,1,out_size,1)
-        Z = torch.linspace(0, out_size-1, steps=out_size).view(1,-1,1,1,1).repeat(1,1,out_size,out_size,1)
-
-        # sample the rotation angle
-        ratio = data.shape[3] / out_size
+        # sample the grid orientation
+        ratio = data_shape[3] / out_size
         if ratio > np.sqrt(2):
             # fully rotation possible
             angle = self.__rand.uniform(0, 2.0*np.pi)
@@ -465,11 +440,11 @@ class MyDataset(Dataset):
 
         # determine the shift limits
         x_minshift = -X_rot.min()
-        x_maxshift = data.shape[3] - 1 - X_rot.max()
+        x_maxshift = data_shape[3] - 1 - X_rot.max()
         y_minshift = -Y_rot.min()
-        y_maxshift = data.shape[2] - 1 - Y_rot.max()
+        y_maxshift = data_shape[2] - 1 - Y_rot.max()
         z_minshift = 0.0
-        z_maxshift = data.shape[1] - out_size
+        z_maxshift = data_shape[1] - out_size
 
         # shift the grid
         X = X_rot + self.__rand.uniform(x_minshift, x_maxshift)
@@ -480,10 +455,43 @@ class MyDataset(Dataset):
         if ((X.min() < 0.0) or
             (Y.min() < 0.0) or
             (Z.min() < 0.0) or
-            (X.max() > data.shape[3] - 1.0) or
-            (Y.max() > data.shape[2] - 1.0) or
-            (Z.max() > data.shape[1] - 1.0)):
+            (X.max() > data_shape[3] - 1) or
+            (Y.max() > data_shape[2] - 1) or
+            (Z.max() > data_shape[1] - 1)):
             raise RuntimeError("The rotated and shifted grid does not satisfy the data grid bounds")
+
+        return X, Y, Z, angle
+
+
+    def __augmentation_mode2_torch(self, data, out_size, vx_channel = 1, vy_channel = 2):
+        '''
+        Augment the data by random subsampling and rotation the data.
+        This approach has errors in the order of 10^-6 even when resampling on the original grid.
+        The output is a cubical grid with shape (N_channels, out_size, out_size, out_size)
+
+        Assumptions:
+            - The input is 4D (channels, z, y, x)
+            - The number of cells is equal in x- and y-dimension
+            - The number of cells in each dimension is at least as large as the out_size
+
+        Inputs:
+            - data: The input data
+            - out_size: The size of the output grid
+            - vx_channel: The channel of the x velocity
+            - vy_channel: The channel of the y velocity
+        '''
+        if not len(data.shape) == 4:
+            raise ValueError('The input dimension of the data array needs to be 4 (channels, z, y, x)')
+
+        if data.shape[2] != data.shape[3]:
+            raise ValueError('The number of cells in x- and y-direction must be the same, shape: ', data.shape)
+
+        if out_size > data.shape[3]:
+            raise ValueError('The number of output cells cannot be larger than the input')
+
+        # generate the interpolation grid
+        X, Y, Z, angle = self.__generate_interpolation_grid(data.shape, out_size)
+        X, Y, Z = torch.from_numpy(X).float().unsqueeze(0).unsqueeze(-1), torch.from_numpy(Y).float().unsqueeze(0).unsqueeze(-1), torch.from_numpy(Z).float().unsqueeze(0).unsqueeze(-1)
 
         # convert the coordinates to a range of -1 to 1 as required by grid_sample
         X = 2.0 * X / (data.shape[3] - 1.0) - 1.0
@@ -535,60 +543,8 @@ class MyDataset(Dataset):
         values = np.moveaxis(data.numpy(), 0, -1)
         grid = UCGrid((0,values.shape[0]-1,values.shape[0]),(0,values.shape[1]-1,values.shape[1]),(0,values.shape[2]-1,values.shape[2]))
 
-        # generate the initial unrotated grid
-        x_f = np.linspace(0, out_size-1, out_size)
-        y_f = np.linspace(0, out_size-1, out_size)
-        z_f = np.linspace(0, out_size-1, out_size)
-        Z, Y, X = np.meshgrid(z_f, y_f, x_f, indexing='ij')
-
-        # sample the grid orientation
-        ratio = values.shape[2] / out_size
-        if ratio > np.sqrt(2):
-            # fully rotation possible
-            angle = self.__rand.uniform(0, 2.0*np.pi)
-        elif (ratio <= 1.0):
-            # no rotation possible
-            angle = 0.0
-
-        else:
-            # some angles are infeasible
-            angle_found = False
-            lower_bound = 2 * np.arctan((1 - np.sqrt(2 - ratio*ratio)) / (1+ratio))
-            upper_bound = 0.5 * np.pi - lower_bound
-
-            while (not angle_found):
-                angle = self.__rand.uniform(0, 0.5*np.pi)
-
-                if not ((angle > lower_bound) and (angle < upper_bound)):
-                    angle_found = True
-
-            angle += 0.5*np.pi * self.__rand.randint(0, 3)
-
-        # rotate the grid
-        X_rot = np.cos(angle) * X - np.sin(angle) * Y
-        Y_rot = np.sin(angle) * X + np.cos(angle) * Y
-
-        # determine the shift limits
-        x_minshift = -X_rot.min()
-        x_maxshift = values.shape[2] - 1 - X_rot.max()
-        y_minshift = -Y_rot.min()
-        y_maxshift = values.shape[1] - 1 - Y_rot.max()
-        z_minshift = 0.0
-        z_maxshift = values.shape[0] - out_size
-
-        # shift the grid
-        X = X_rot + self.__rand.uniform(x_minshift, x_maxshift)
-        Y = Y_rot + self.__rand.uniform(y_minshift, y_maxshift)
-        Z = Z     + int(self.__rand.triangular(z_minshift,z_maxshift,z_minshift))
-
-        # check if the shifted/rotated grid is fine
-        if ((X.min() < grid[2][0]) or
-            (Y.min() < grid[1][0]) or
-            (Z.min() < grid[0][0]) or
-            (X.max() > grid[2][1]) or
-            (Y.max() > grid[1][1]) or
-            (Z.max() > grid[0][1])):
-            raise RuntimeError("The rotated and shifted grid does not satisfy the data grid bounds")
+        # generate the interpolation grid
+        X, Y, Z, angle = self.__generate_interpolation_grid(data.shape, out_size)
 
         # interpolate
         points = np.stack((Z.ravel(), Y.ravel(), X.ravel()), axis=1)

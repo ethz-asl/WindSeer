@@ -22,7 +22,7 @@ input_mode = 1
 augmentation = True
 augmentation_mode = 1
 augmentation_kwargs = {
-    'subsampling': False,
+    'subsampling': True,
     'rotating': True,
     }
 uhor_scaling = 1.0

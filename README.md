@@ -18,8 +18,8 @@ This folder contains the tools to train and evaluate the networks for the wind p
 ## Installation
 This guide explains how to set up the environment in Ubuntu to make the scripts in the repository run.
 
-1. Python3 is required, usually it is already present. If not install it with:
-   `sudo apt-get install python3`
+1. Python3 (at least version 3.6) is required, usually it is already present. If not install it with:
+   `sudo apt-get install python3.6`
 
 2. Install (Cuda)[https://developer.nvidia.com/cuda-zone] if a graphics card is present and (PyTorch)[https://pytorch.org/get-started/locally/] according to your CUDA, Ubuntu, and Python version.
 
