@@ -8,11 +8,12 @@ class VelocityGradientLoss(Module):
     Upgraded version of Stream Function Loss according to https://arxiv.org/abs/1806.02071
     '''
 
-    def __init__(self, loss_type, grid_size):
+    def __init__(self, loss_type, grid_size, grad_scaling=1.0):
         super(VelocityGradientLoss, self).__init__()
 
         self.__loss_type = loss_type
         self.__grid_size = grid_size
+        self.__grad_scaling = grad_scaling
 
     def forward(self, net_output, target):
         if (net_output.shape != target.shape):
@@ -32,10 +33,12 @@ class VelocityGradientLoss(Module):
 
         if self.__loss_type == 'L1':
             loss = f.l1_loss(target, net_output)
-            loss += f.l1_loss(utils.gradient(target,self.__grid_size), utils.gradient(net_output,self.__grid_size))
+            loss += self.__grad_scaling*f.l1_loss(utils.gradient(target,self.__grid_size),
+                                                  utils.gradient(net_output,self.__grid_size))
         elif self.__loss_type == 'MSE':
             loss = f.mse_loss(target, net_output)
-            loss += f.mse_loss(utils.gradient(target,self.__grid_size), utils.gradient(net_output,self.__grid_size))
+            loss += self.__grad_scaling*f.mse_loss(utils.gradient(target,self.__grid_size),
+                                                   utils.gradient(net_output,self.__grid_size))
         else:
             raise ValueError('Only L1 and MSE loss_type supported')
         return loss
