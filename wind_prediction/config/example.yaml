@@ -33,19 +33,21 @@ data:
     trainset_name: 'data/train.tar'
     validationset_name: 'data/validation.tar'
     testset_name: 'data/test.tar'
-    trainset_augmentation: True
-    trainset_subsample: True
+    augmentation: True
+    augmentation_mode: 1 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
+    augmentation_kwargs: {
+        subsampling: True,
+        rotating: True
+    }
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    uhor_scaling: 6.5
-    uz_scaling: 0.7
-    turbulence_scaling: 1.1
-    terrain_scaling: 64.0
-    use_grid_size: False
+    uhor_scaling: 0.5
+    uz_scaling: 0.1
+    turbulence_scaling: 0.01
+    terrain_scaling: 1.0
     use_turbulence: True
-    autoscale: False
-    normalize_terrain: False
+    autoscale: True
 
 model:
     name_prefix: 'test_model'

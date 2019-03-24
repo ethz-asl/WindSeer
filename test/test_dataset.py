@@ -19,12 +19,16 @@ nx = 64
 ny = 64
 nz = 64
 input_mode = 1
-subsample = False
-augmentation = False
+augmentation = True
+augmentation_mode = 1
+augmentation_kwargs = {
+    'subsampling': True,
+    'rotating': True,
+    }
 uhor_scaling = 1.0
 uz_scaling = 1.0
 turbulence_scaling = 1.0
-terrain_scaling = 64.0
+terrain_scaling = 1.0
 plot_sample_num = 0
 dataset_rounds = 0
 use_turbulence = True
@@ -34,15 +38,15 @@ compute_dataset_statistics = False
 plot_divergence = True
 use_grid_size = True
 autoscale = True
-normalize_terrain = False
 #-----------------------------------------------------
 
 def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     db = nn_data.MyDataset(input_dataset, nx = nx, ny = ny, nz = nz, input_mode = input_mode,
-                           subsample = subsample, augmentation = augmentation, autoscale = autoscale,
-                           stride_hor = stride_hor, stride_vert = stride_vert, normalize_terrain = normalize_terrain,
+                           augmentation = augmentation, augmentation_mode = augmentation_mode,
+                           augmentation_kwargs = augmentation_kwargs, autoscale = autoscale,
+                           stride_hor = stride_hor, stride_vert = stride_vert,
                            turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_terrain = terrain_scaling,
                            scaling_uz = uz_scaling, scaling_turb = turbulence_scaling,
                            compressed = compressed, use_grid_size = use_grid_size, return_grid_size = True)
