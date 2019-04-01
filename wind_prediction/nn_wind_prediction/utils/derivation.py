@@ -116,7 +116,7 @@ def gradient(input_tensor, grid_size):
     gradient_tensor = torch.cat((u_x, u_y, u_z, v_x, v_y, v_z, w_x, w_y, w_z), 1)
     return gradient_tensor
 
-def divergence_(input_tensor, grid_size):
+def divergence(input_tensor, grid_size):
     '''
     This function computes the divergence of a vector at each XYZ position, with regard to a specified grid size
 

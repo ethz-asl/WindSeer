@@ -1,4 +1,4 @@
-from .divergence import divergence
+from .derivation import divergence
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
@@ -39,7 +39,12 @@ class PlotUtils():
         self.__uncertainty_images = []
 
         if self.__plot_divergence and ds and (len(list(label.shape)) > 3):
-            label = torch.cat([label, torch.tensor(divergence(label.squeeze()[:3], ds, terrain.squeeze())).unsqueeze(0)])
+            # divergence method requires tensors to be on gpu if it available
+            if torch.cuda.is_available():
+                label = label.cuda()
+
+            label = torch.cat([label, torch.tensor(divergence(label[:3].unsqueeze(0), ds).squeeze()).unsqueeze(0)])
+            label = label.cpu()
         else:
             self.__plot_divergence = False
 
