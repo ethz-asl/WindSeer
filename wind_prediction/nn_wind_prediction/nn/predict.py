@@ -307,11 +307,6 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
         input, label = input.to(device), label.to(device)
         start_time = time.time()
         output = net(input.unsqueeze(0))
-
-        # adjust for StreamFunctionLoss
-        if params.run['loss_function'] ==3:
-            output = torch.cat([utils.curl(output,ds=1), output[:, 3:, :]], 1)
-
         print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
         input = input.squeeze()
         output = output.squeeze()
