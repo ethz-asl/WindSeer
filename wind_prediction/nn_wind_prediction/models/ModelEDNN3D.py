@@ -244,10 +244,6 @@ class ModelEDNN3D(nn.Module):
             # mapping layer
             self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
 
-        #if self.__potential_flow:
-        #   self.__pf_convolution = nn.Conv3d(3,1,1)
-        #  self.__pf_pad = nn.ReplicationPad3d((0, 1, 0, 1, 0, 1))
-
     def new_epoch_callback(self, epoch):
         # nothing to do here
         return
@@ -324,11 +320,6 @@ class ModelEDNN3D(nn.Module):
             x = self.__mapping_layer(x)
 
         if self.__potential_flow:
-            # potential = self.__pf_convolution(self.__pf_pad(x[:,:3,:]))
-            # x = torch.cat([(potential[:,:,:-1,:-1,1: ]-potential[:,:,:-1,:-1,:-1]), # U_x
-            #                (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
-            #                (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
-            #                 x[:,3:,:]], 1)
             x = torch.cat([utils.curl(x, self.__grid_size), x[:, 3:, :]], 1)
 
         if self.__use_terrain_mask:
