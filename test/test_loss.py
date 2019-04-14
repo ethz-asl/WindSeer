@@ -28,11 +28,11 @@ output = torch.randn(32,4,64,64,64, requires_grad=True)
 
 label, output, input = label.to(device), output.to(device), input.to(device)
 
-my_loss = nn.MyLoss()
+my_loss = nn.ScaledLoss()
 start_time = time.time()
 loss = my_loss(output, label, input)
-print('MyLoss: Forward took', (time.time() - start_time), 'seconds')
+print('ScaledLoss: Forward took', (time.time() - start_time), 'seconds')
 
 start_time = time.time()
 loss.backward()
-print('MyLoss: Backward took', (time.time() - start_time), 'seconds')
+print('ScaledLoss: Backward took', (time.time() - start_time), 'seconds')

@@ -3,9 +3,9 @@ import torch
 from torch.nn import Module
 import torch.nn.functional as f
 
-class MyLoss(Module):
+class ScaledLoss(Module):
     def __init__(self, method = 'MSE', max_scale = 4.0):
-        super(MyLoss, self).__init__()
+        super(ScaledLoss, self).__init__()
 
         # input sanity checks
         if (max_scale < 1.0):
