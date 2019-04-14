@@ -19,6 +19,7 @@ run:
     custom_loss_kwargs: {
         method: 'MSE', #MSE or L1
         max_scale: 4,
+        exclude_terrain: True,
     }
     uncertainty_loss_eps: 1.0E-9
     save_model_every_n_epoch: 25
