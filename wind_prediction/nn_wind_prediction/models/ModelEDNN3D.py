@@ -141,14 +141,12 @@ class ModelEDNN3D(nn.Module):
             if verbose:
                 print('EDNN3D: use_grid_size not present in kwargs, using default value:', self.__default_use_grid_size)
 
-        # grid size is needed for potential flow
-        if self.__potential_flow:
-            try:
-                self.__grid_size = kwargs['grid_size']
-            except KeyError:
-                self.__grid_size = self.__default_grid_size
-                if verbose:
-                    print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
+        try:
+            self.__grid_size = kwargs['grid_size']
+        except KeyError:
+            self.__grid_size = self.__default_grid_size
+            if verbose:
+                print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
 
         try:
             self.__use_turbulence = kwargs['use_turbulence']
