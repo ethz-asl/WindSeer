@@ -4,7 +4,7 @@ from torch.nn import Module
 import torch.nn.functional as f
 
 class ScaledLoss(Module):
-    def __init__(self, method = 'MSE', max_scale = 4.0, exclude_terrain = True):
+    def __init__(self, method = 'MSE', max_scale = 4.0, norm_threshold = 0.5, exclude_terrain = True):
         super(ScaledLoss, self).__init__()
 
         # input sanity checks
@@ -18,6 +18,7 @@ class ScaledLoss(Module):
 
         self.__max_scale = max_scale
         self.__exclude_terrain = exclude_terrain
+        self.__norm_threshold = norm_threshold
 
     def forward(self, prediction, label, input):
         # compute the scale
@@ -25,11 +26,10 @@ class ScaledLoss(Module):
         scale = (scale.norm(dim=1) / label[:,0:3].norm(dim=1))
 
         # set nans to 0.0
-        nan_mask =  torch.isnan(scale)
-        scale[nan_mask] = 0.0
+        scale = torch.where(torch.isnan(scale), torch.zeros_like(scale), scale)
 
         # map to a range of 1.0 to max_scale
-        scale = scale.clamp(min=0.0, max=0.5) * 2.0 * (self.__max_scale - 1.0) + 1.0
+        scale = scale.clamp(min=0.0, max=self.__norm_threshold) * (1.0 / self.__norm_threshold) * (self.__max_scale - 1.0) + 1.0
 
         # compute the loss per pixel
         loss = self.__loss(prediction, label).mean(dim=1)
