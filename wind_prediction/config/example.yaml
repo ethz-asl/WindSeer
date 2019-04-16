@@ -15,9 +15,12 @@ run:
     save_metadata: True
     evaluate_testset: False
     warm_start: False
-    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3.1: DivergenceFreeLoss(L1), 3.2: DivergenceFreeLoss(MSE), 4.1: VelocityGradientLoss(L1), 4.2: VelocityGradientLoss(MSE), else: MSE
-    loss_scaling_factor: 500 # scaling factor used to balance components of DFL or VGL losses
-    uncertainty_loss_eps: 1.0E-9
+    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: MyLoss, 4: DivergenceFreeLoss, 5: VelocityGradientLoss, else: MSE
+    loss_function_args: {
+        loss_method_type: 'MSE',
+        loss_scaling_factor: 500, # recommended values: 500 for DFL, 1200 for VGL (trial and error)
+        uncertainty_loss_eps: 1.0E-9
+    }
     save_model_every_n_epoch: 25
     save_params_hist_every_n_epoch: 100
 

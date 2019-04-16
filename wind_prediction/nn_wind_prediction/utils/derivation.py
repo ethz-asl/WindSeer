@@ -11,25 +11,20 @@ def derive(input_tensor, deriv_axis, ds=1):
         ds: grid size of deriv_axis, default is unit.
 
     Output:
-        deriv_tensor: 4D tensor containing the derived field wrt to deriv_axis for each sample
-                Implementation of first order centered finite differences. 0 padding for first and last element
+        deriv_tensor: 4D tensor containing the derived field wrt to deriv_axis for each sample.
     '''
-    # Permute axes depending on deriv_axs
+    # Permute axes depending on deriv_axs, no permutation required for X
     if deriv_axis == 1:  # Z
         input_tensor = input_tensor.permute(0, 3, 2, 1)
 
     elif deriv_axis == 2:  # Y
         input_tensor = input_tensor.permute(0, 1, 3, 2)
 
-
-    elif deriv_axis == 3:  # X
-        input_tensor = input_tensor.permute(0, 1, 2, 3)
-
-    else:
-        raise ValueError('The derivation axis must be 1, 2 or 3')
+    elif deriv_axis != 3:
+        raise ValueError('The derivation axis must be 1 [Z], 2 [Y] or 3 [X]')
 
     # setting device
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = input_tensor.device
 
     # setting up convolution equivalent to centered first order finite differences
     deriv_conv = nn.Conv2d(in_channels=input_tensor.shape[1], out_channels=input_tensor.shape[1],
@@ -48,8 +43,8 @@ def derive(input_tensor, deriv_axis, ds=1):
     deriv_tensor = deriv_conv(m(input_tensor)) / (2 * ds)
 
     # multiply by 2 on edges (finite diff non-centered on edges, similar to np.gradient)
-    deriv_tensor[:, :, :, 0] = deriv_tensor[:, :, :, 0].clone() * 2
-    deriv_tensor[:, :, :, -1] = deriv_tensor[:, :, :, -1].clone() * 2
+    deriv_tensor[:, :, :, 0] *= 2
+    deriv_tensor[:, :, :, -1] *= 2
 
     # permute output of convolution back
     if deriv_axis == 1:
