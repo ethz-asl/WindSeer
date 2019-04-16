@@ -104,10 +104,10 @@ custom_loss = False
 if run_params.run['loss_function'] == 1:
     loss_fn = torch.nn.L1Loss()
 elif run_params.run['loss_function'] == 2:
-    loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
+    loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.run['loss_kwargs'])
 elif run_params.run['loss_function'] == 3:
     custom_loss = True
-    loss_fn = nn_custom.ScaledLoss(**run_params.run['custom_loss_kwargs'])
+    loss_fn = nn_custom.ScaledLoss(**run_params.run['loss_kwargs'])
 else:
     loss_fn = torch.nn.MSELoss()
 

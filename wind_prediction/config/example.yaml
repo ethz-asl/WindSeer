@@ -16,15 +16,20 @@ run:
     evaluate_testset: False
     warm_start: False
     loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: ScaledLoss, else: MSE
-    custom_loss_kwargs: {
-        # kwargs for ScaledLoss
-        method: 'MSE', #MSE or L1
+    loss_kwargs: {
+        # General
+        loss_type: 'MSE', #MSE or L1
+
+        # Gaussian-Log-Likelihood
+        uncertainty_loss_eps: 1.0E-9,
+
+        # ScaledLoss
         max_scale: 4,
         norm_threshold: 0.5,
         exclude_terrain: True,
         no_scaling: False,
     }
-    uncertainty_loss_eps: 1.0E-9
+
     save_model_every_n_epoch: 25
     save_params_hist_every_n_epoch: 100
 
