@@ -46,3 +46,12 @@ print('ScaledLoss include terrain: Forward took', (time.time() - start_time), 's
 start_time = time.time()
 loss.backward()
 print('ScaledLoss include terrain: Backward took', (time.time() - start_time), 'seconds')
+
+my_loss = nn.ScaledLoss(exclude_terrain = True, no_scaling = True)
+start_time = time.time()
+loss = my_loss(output, label, input)
+print('ScaledLoss mse no terrain: Forward took', (time.time() - start_time), 'seconds')
+
+start_time = time.time()
+loss.backward()
+print('ScaledLoss mse no terrain: Backward took', (time.time() - start_time), 'seconds')
