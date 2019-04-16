@@ -79,11 +79,11 @@ validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, bat
 # define model and move to gpu if available
 NetworkType = getattr(models, run_params.model['model_type'])
 
-# to use potential flow layer the grid size of the data must be passed to the model
-if run_params.model_kwargs()['potential_flow']:
-    # get grid size
-    grid_size = data.get_grid_size(trainset_name)
-    run_params.model_kwargs()['grid_size'] = grid_size
+# get grid size
+grid_size = data.get_grid_size(trainset_name)
+run_params.model_kwargs()['grid_size'] = grid_size
+run_params.loss_function_kwargs()['grid_size'] = grid_size
+
 
 net = NetworkType(**run_params.model_kwargs())
 
@@ -112,10 +112,13 @@ custom_loss = False
 if run_params.run['loss_function'] == 1:
     loss_fn = torch.nn.L1Loss()
 elif run_params.run['loss_function'] == 2:
-    loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.run['loss_kwargs'])
+    loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.loss_function_kwargs()['uncertainty_loss_eps'])
 elif run_params.run['loss_function'] == 3:
-    custom_loss = True
-    loss_fn = nn_custom.ScaledLoss(**run_params.run['loss_kwargs'])
+    loss_fn = nn_custom.MyLoss()
+elif run_params.run['loss_function'] == 4:
+    loss_fn = nn_custom.DivergenceFreeLoss(**run_params.loss_function_kwargs())
+elif run_params.run['loss_function'] == 5:
+    loss_fn = nn_custom.VelocityGradientLoss(**run_params.loss_function_kwargs())
 else:
     loss_fn = torch.nn.MSELoss()
 
