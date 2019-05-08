@@ -290,13 +290,22 @@ class ModelEDNN3D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(
-                    torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
-                               x_skip[i]], 1)))))
+                if (i == 0):
+                    x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1))))))
+                else:
+                    x = self.__activation(self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1)))))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv1[i](self.__pad_deconv(
-                    F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                if (i == 0):
+                    x = self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                else:
+                    x = self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners))))
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)
