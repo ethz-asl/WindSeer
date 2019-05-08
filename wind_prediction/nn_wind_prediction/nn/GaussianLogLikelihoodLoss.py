@@ -5,10 +5,17 @@ class GaussianLogLikelihoodLoss(Module):
     '''
     Gaussian Log Likelihood Loss according to https://arxiv.org/pdf/1705.07115.pdf
     '''
-    def __init__(self, eps = 1e-8):
+
+    __default_eps = 1e-8
+
+    def __init__(self, **kwargs):
         super(GaussianLogLikelihoodLoss, self).__init__()
 
-        self.__eps = eps
+        try:
+            self.__eps = kwargs['uncertainty_loss_eps']
+        except KeyError:
+            self.__eps = self.__default_eps
+            print('GaussianLogLikelihoodLoss: uncertainty_loss_eps not present in kwargs, using default value:', self.__eps)
 
     def forward(self, output, label):
         num_channels = output.shape[1]

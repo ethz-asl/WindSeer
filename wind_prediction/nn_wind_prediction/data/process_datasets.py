@@ -315,8 +315,7 @@ def sample_dataset(dbloader, output_dataset, n_sampling_rounds, compressed):
         tempfolder = os.environ['TMPDIR'] + '/'
     else:
         tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-
-    os.makedirs(tempfolder)
+        os.makedirs(tempfolder)
 
     for j in range(n_sampling_rounds):
         for i, data in enumerate(dbloader):

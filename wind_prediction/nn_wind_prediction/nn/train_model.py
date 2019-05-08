@@ -23,7 +23,7 @@ def signal_handler(sig, frame):
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
                 save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss,
-                model_directory, use_writer, predict_uncertainty, uncertainty_train_mode):
+                model_directory, use_writer, predict_uncertainty, uncertainty_train_mode, custom_loss):
     '''
     Train the model according to the specified loss function and params
     
@@ -66,6 +66,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 uncertainty: Train only the uncertainty of the model
                 alternating: Train the uncertainty and the mean alternatively per epoch
                 both: Train both models at the same time
+        custom_loss:
+            Indicates if the custom loss function is used
 
     Return:
         net: The trained network
@@ -131,7 +133,10 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
             else:
                 outputs = net(inputs)
-                loss = loss_fn(outputs, labels)
+                if custom_loss:
+                    loss = loss_fn(outputs, labels, inputs)
+                else:
+                    loss = loss_fn(outputs, labels)
 
             loss.backward()
             optimizer.step()
@@ -186,7 +191,10 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
-                        loss = loss_fn(outputs, labels)
+                        if custom_loss:
+                            loss = loss_fn(outputs, labels, inputs)
+                        else:
+                            loss = loss_fn(outputs, labels)
                         train_loss += loss.item()
 
             train_loss /= len(loader_trainset)
@@ -225,7 +233,10 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         validation_min_uncertainty = min(validation_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
-                        loss = loss_fn(outputs, labels)
+                        if custom_loss:
+                            loss = loss_fn(outputs, labels, inputs)
+                        else:
+                            loss = loss_fn(outputs, labels)
                         validation_loss += loss.item()
                 validation_loss /= len(loader_validationset)
 

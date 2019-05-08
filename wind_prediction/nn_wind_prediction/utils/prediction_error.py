@@ -5,7 +5,7 @@ import torch
 threshold_low = 7.0 # this corresponds to roughly 80 m for the unscaled terrain
 eps = 1e-1
 
-def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, device, turbulence, normalized_terrain):
+def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, device, turbulence):
     if uncertainty_predicted:
         abs_error = (label - prediction[:label.shape[0]]).abs()
     else:
@@ -15,8 +15,7 @@ def compute_prediction_error(label, prediction, terrain, uncertainty_predicted, 
 
     # convert the boolean terrain into a distance field if required
     if ((terrain.max().item() == 1.0) and
-            (torch.mul(torch.gt(terrain, torch.zeros_like(terrain)), torch.gt(torch.ones_like(terrain), terrain)).sum() == 0) or
-            normalized_terrain):
+            (torch.mul(torch.gt(terrain, torch.zeros_like(terrain)), torch.gt(torch.ones_like(terrain), terrain)).sum() == 0)):
         terrain = torch.from_numpy(ndimage.distance_transform_edt(terrain.sign().cpu().numpy()).astype(np.float32)).to(device)
 
     # create the masks

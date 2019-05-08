@@ -100,12 +100,14 @@ optimizer = torch.optim.Adam(net.parameters(), lr=run_params.run['learning_rate_
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 
+custom_loss = False
 if run_params.run['loss_function'] == 1:
     loss_fn = torch.nn.L1Loss()
 elif run_params.run['loss_function'] == 2:
-    loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
+    loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.run['loss_kwargs'])
 elif run_params.run['loss_function'] == 3:
-    loss_fn = nn_custom.MyLoss()
+    custom_loss = True
+    loss_fn = nn_custom.ScaledLoss(**run_params.run['loss_kwargs'])
 else:
     loss_fn = torch.nn.MSELoss()
 
@@ -136,7 +138,7 @@ net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optim
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
                        run_params.run['compute_validation_loss'], model_dir, args.use_writer,
-                       predict_uncertainty, uncertainty_train_mode)
+                       predict_uncertainty, uncertainty_train_mode, custom_loss)
 
 # save the model if requested
 if (run_params.run['save_model']):
@@ -155,7 +157,10 @@ if (run_params.run['evaluate_testset']):
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
-            loss += loss_fn(outputs, labels)
+            if run_params.run['loss_function']:
+                loss += loss_fn(outputs, labels, inputs)
+            else:
+                loss += loss_fn(outputs, labels)
 
         print('INFO: Average loss on test set: %s' % (loss.item()/len(testset)))
 
