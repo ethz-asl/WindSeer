@@ -119,19 +119,19 @@ optimizer = torch.optim.Adam(net.parameters(), lr=run_params.run['learning_rate_
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 
+# choose loss function
 scaled_loss = False
 if run_params.run['loss_function'] == 1:
     loss_fn = nn_custom.L1Loss()
 elif run_params.run['loss_function'] == 2:
-    loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.run['loss_kwargs'])
+    loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.loss_kwargs())
 elif run_params.run['loss_function'] == 3:
-    custom_loss = True
-    loss_fn = nn_custom.ScaledLoss(**run_params.run['loss_kwargs'])
+    loss_fn = nn_custom.ScaledLoss(**run_params.loss_kwargs())
     scaled_loss = True
 elif run_params.run['loss_function'] == 4:
-    loss_fn = nn_custom.DivergenceFreeLoss(**run_params.run['loss_kwargs'])
+    loss_fn = nn_custom.DivergenceFreeLoss(**run_params.loss_kwargs())
 elif run_params.run['loss_function'] == 5:
-    loss_fn = nn_custom.VelocityGradientLoss(**run_params.run['loss_kwargs'])
+    loss_fn = nn_custom.VelocityGradientLoss(**run_params.loss_kwargs())
 else:
     loss_fn = nn_custom.MSELoss()
 
