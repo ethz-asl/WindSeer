@@ -19,7 +19,7 @@ run:
     save_params_hist_every_n_epoch: 100
 
     # loss function options
-    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: MyLoss, 4: DivergenceFreeLoss, 5: VelocityGradientLoss, else: MSE
+    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: ScaledLoss, 4: DivergenceFreeLoss, 5: VelocityGradientLoss, else: MSE
     loss_kwargs: {
         # General
         loss_type: 'MSE', #MSE or L1
