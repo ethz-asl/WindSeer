@@ -15,14 +15,27 @@ run:
     save_metadata: True
     evaluate_testset: False
     warm_start: False
-    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: MyLoss, 4: DivergenceFreeLoss, 5: VelocityGradientLoss, else: MSE
-    loss_function_args: {
-        loss_method_type: 'MSE',
-        loss_scaling_factor: 500, # recommended values: 500 for DFL, 1200 for VGL (trial and error)
-        uncertainty_loss_eps: 1.0E-9
-    }
     save_model_every_n_epoch: 25
     save_params_hist_every_n_epoch: 100
+
+    # loss function options
+    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: MyLoss, 4: DivergenceFreeLoss, 5: VelocityGradientLoss, else: MSE
+    loss_kwargs: {
+        # General
+        loss_type: 'MSE', #MSE or L1
+
+        # Gaussian-Log-Likelihood
+        uncertainty_loss_eps: 1.0E-9,
+
+        # ScaledLoss
+        max_scale: 4,
+        norm_threshold: 0.5,
+        exclude_terrain: True,
+        no_scaling: False,
+
+        #DFL or VGL
+        loss_scaling_factor: 500, # recommended values: 500 for DFL, 1200 for VGL (trial and error)
+    }
 
     # solver settings
     beta1: 0.9
@@ -37,19 +50,21 @@ data:
     trainset_name: 'data/train.tar'
     validationset_name: 'data/validation.tar'
     testset_name: 'data/test.tar'
-    trainset_augmentation: True
-    trainset_subsample: True
+    augmentation: True
+    augmentation_mode: 0 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
+    augmentation_kwargs: {
+        subsampling: True,
+        rotating: True
+    }
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    uhor_scaling: 6.5
-    uz_scaling: 0.7
-    turbulence_scaling: 1.1
-    terrain_scaling: 64.0
-    use_grid_size: False
+    uhor_scaling: 0.5
+    uz_scaling: 0.1
+    turbulence_scaling: 0.01
+    terrain_scaling: 1.0
     use_turbulence: True
-    autoscale: False
-    normalize_terrain: False
+    autoscale: True
 
 model:
     name_prefix: 'test_model'

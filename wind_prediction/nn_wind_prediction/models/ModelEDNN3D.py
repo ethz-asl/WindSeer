@@ -135,13 +135,6 @@ class ModelEDNN3D(nn.Module):
                 print('EDNN3D: pooling_method not present in kwargs, using default value:', self.__default_pooling_method)
 
         try:
-            self.__use_grid_size = kwargs['use_grid_size']
-        except KeyError:
-            self.__use_grid_size = self.__default_use_grid_size
-            if verbose:
-                print('EDNN3D: use_grid_size not present in kwargs, using default value:', self.__default_use_grid_size)
-
-        try:
             self.__grid_size = kwargs['grid_size']
         except KeyError:
             self.__grid_size = self.__default_grid_size

@@ -1,6 +1,6 @@
 from torch.nn import Module
 import torch
-import torch.nn.functional as f
+from nn_wind_prediction.utils import remove_terrain_data
 import nn_wind_prediction.utils as utils
 
 class VelocityGradientLoss(Module):
@@ -14,16 +14,16 @@ class VelocityGradientLoss(Module):
         grid_size: list containing the grid spacing in directions X, Y and Z of the dataset. [m]
         grad_scaling: scaling factor used to balance the two components of the loss.
     '''
-    __default_loss_method_type = 'MSE'
+    __default_loss_method = 'MSE'
     __default_grid_size = [1, 1, 1]
     __default_scaling_factor = 1200 #found to work well (trial and error)
 
     def __init__(self, **kwargs):
         super(VelocityGradientLoss, self).__init__()
         try:
-            loss_method_type = kwargs['loss_method_type']
+            self.__loss_method = kwargs['loss_method']
         except KeyError:
-            loss_method_type = self.__default_loss_method_type
+            self.__loss_method = self.__default_loss_method
             print('DivergenceFreeLoss: loss_method not present in kwargs, using default value:', self.__default_loss_method)
 
         try:
@@ -39,14 +39,14 @@ class VelocityGradientLoss(Module):
             print('DivergenceFreeLoss: scaling_factor not present in kwargs, using default value:',
                   self.__default_scaling_factor)
 
-        if (loss_method_type == 'MSE'):
+        if (self.__loss_method == 'MSE'):
             self.__loss = torch.nn.MSELoss()
-        elif (loss_method_type == 'L1'):
+        elif (self.__loss_method == 'L1'):
             self.__loss = torch.nn.L1Loss()
         else:
-            raise ValueError('Only L1 and MSE loss_type supported')
+            raise ValueError('Unknown loss type: ', self.__loss_method)
 
-    def forward(self, net_output, target):
+    def forward(self, net_output, target, terrain=None):
         if (net_output.shape != target.shape):
             raise ValueError('Prediction and target do not have the same shape')
 
@@ -57,11 +57,19 @@ class VelocityGradientLoss(Module):
             else:
                 raise ValueError('The loss is only defined for 5D data')
 
-        return self.compute_loss(net_output, target)
+        return self.compute_loss(net_output, target, terrain)
 
-    def compute_loss(self, net_output, target):
+    def compute_loss(self, net_output, target, terrain):
+        target_grad = utils.gradient(target,self.__grid_size)
+        net_output_grad = utils.gradient(net_output,self.__grid_size)
+
+        # remove data in terrain
+        if terrain is not None:
+            target = remove_terrain_data(target, terrain)
+            net_output = remove_terrain_data(net_output, terrain)
+            target_grad = remove_terrain_data(target_grad, terrain)
+            net_output_grad = remove_terrain_data(net_output_grad, terrain)
 
         loss = self.__loss(target, net_output)
-        loss += self.__grad_scaling*self.__loss(utils.gradient(target,self.__grid_size),
-                                                  utils.gradient(net_output,self.__grid_size))
+        loss += self.__grad_scaling*self.__loss(net_output_grad, target_grad)
         return loss

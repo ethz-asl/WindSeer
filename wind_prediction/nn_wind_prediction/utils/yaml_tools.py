@@ -75,8 +75,8 @@ class EDNNParameters(object):
     def model_kwargs(self):
         return self.model['model_args']
 
-    def loss_function_kwargs(self):
-        return self.run['loss_function_args']
+    def loss_kwargs(self):
+        return self.run['loss_kwargs']
 
     def save(self, dir=None):
         if dir is None:
@@ -95,7 +95,7 @@ class EDNNParameters(object):
         print('\tMinibatch epoch loss:\t', self.run['minibatch_epoch_loss'])
         print('\tLoss function:\t', self.run['loss_function'])
         print('\tLoss function args:')
-        print('\t\t', self.run['loss_function_args'])
+        print('\t\t', self.run['loss_kwargs'])
         print(' ')
         print('Model Settings:')
         print('\t Model prefix:\t\t', self.model['name_prefix'])
