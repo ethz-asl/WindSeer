@@ -1,7 +1,8 @@
 def compute_terrain_factor(samples, terrain):
     '''
-    This function computes the ratio of the amount of terrain data in a sample or a batch of samples vs the total amount
-    of data in the samples.
+    This function computes the ratio of the amount of fluid data in a sample or a batch of samples vs the total amount
+    of data in the samples. This factor is used to correct the loss, where samples with more terrain have a loss that is
+    underestimated (data is 0 in the terrain). Thus samples with more terrain have a higher terrain factor.
 
     Input params:
         net_output: 5D tensor [samples, input channels, Z, Y, X]

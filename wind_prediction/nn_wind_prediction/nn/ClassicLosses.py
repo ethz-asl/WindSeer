@@ -5,7 +5,8 @@ import nn_wind_prediction.utils as utils
 
 class MSELoss(Module):
     '''
-    Modified version of the default MSE loss, where terrain data can be masked out in loss computation.
+    Modified version of the default MSE loss, where a correction factor can be applied to account for the amount of
+    terrain data in the samples.
     '''
     __default_exclude_terrain = True
 
@@ -38,7 +39,8 @@ class MSELoss(Module):
 
 class L1Loss(Module):
     '''
-    Modified version of the default L1 loss, where terrain data can be masked out in loss computation.
+    Modified version of the default L1 loss, where a correction factor can be applied to account for the amount of
+    terrain data in the samples.
     '''
     __default_exclude_terrain = True
 
