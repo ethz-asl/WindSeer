@@ -121,7 +121,7 @@ scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step
 
 # choose loss function
 if run_params.run['loss_function'] == 1:
-    loss_fn = nn_custom.L1Loss()
+    loss_fn = nn_custom.L1Loss(**run_params.loss_kwargs())
 elif run_params.run['loss_function'] == 2:
     loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.loss_kwargs())
 elif run_params.run['loss_function'] == 3:
@@ -131,7 +131,7 @@ elif run_params.run['loss_function'] == 4:
 elif run_params.run['loss_function'] == 5:
     loss_fn = nn_custom.VelocityGradientLoss(**run_params.loss_kwargs())
 else:
-    loss_fn = nn_custom.MSELoss()
+    loss_fn = nn_custom.MSELoss(**run_params.loss_kwargs())
 
 # save the model parameter in the beginning
 run_params.save(model_dir)
