@@ -13,7 +13,7 @@ class DivergenceFreeLoss(Module):
         grid_size: list containing the grid spacing in directions X, Y and Z of the dataset. [m]
         div_scaling: scaling factor used to balance the two components of the loss.
     '''
-    __default_loss_method = 'MSE'
+    __default_loss_type = 'MSE'
     __default_grid_size = [1, 1, 1]
     __default_scaling_factor = 500 #found to work well (trial and error)
     __default_exclude_terrain = True
@@ -21,10 +21,10 @@ class DivergenceFreeLoss(Module):
     def __init__(self, **kwargs):
         super(DivergenceFreeLoss, self).__init__()
         try:
-            self.__loss_method = kwargs['loss_method']
+            self.__loss_type = kwargs['loss_type']
         except KeyError:
-            self.__loss_method = self.__default_loss_method
-            print('DivergenceFreeLoss: loss_method not present in kwargs, using default value:', self.__default_loss_method)
+            self.__loss_type = self.__default_loss_type
+            print('DivergenceFreeLoss: loss_type not present in kwargs, using default value:', self.__default_loss_type)
 
         try:
             self.__grid_size = kwargs['grid_size']
@@ -46,12 +46,12 @@ class DivergenceFreeLoss(Module):
             print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
                   self.__default_exclude_terrain)
 
-        if (self.__loss_method == 'MSE'):
+        if (self.__loss_type == 'MSE'):
             self.__loss = torch.nn.MSELoss()
-        elif (self.__loss_method == 'L1'):
+        elif (self.__loss_type == 'L1'):
             self.__loss = torch.nn.L1Loss()
         else:
-            raise ValueError('Unknown loss type: ', self.__loss_method)
+            raise ValueError('Unknown loss type: ', self.__loss_type)
 
 
     def forward(self, net_output, target, input):

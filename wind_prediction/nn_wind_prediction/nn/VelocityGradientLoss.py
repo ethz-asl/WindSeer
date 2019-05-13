@@ -13,7 +13,7 @@ class VelocityGradientLoss(Module):
         grid_size: list containing the grid spacing in directions X, Y and Z of the dataset. [m]
         grad_scaling: scaling factor used to balance the two components of the loss.
     '''
-    __default_loss_method = 'MSE'
+    __default_loss_type = 'MSE'
     __default_grid_size = [1, 1, 1]
     __default_scaling_factor = 1200 #found to work well (trial and error)
     __default_exclude_terrain = True
@@ -21,36 +21,36 @@ class VelocityGradientLoss(Module):
     def __init__(self, **kwargs):
         super(VelocityGradientLoss, self).__init__()
         try:
-            self.__loss_method = kwargs['loss_method']
+            self.__loss_type = kwargs['loss_type']
         except KeyError:
-            self.__loss_method = self.__default_loss_method
-            print('DivergenceFreeLoss: loss_method not present in kwargs, using default value:', self.__default_loss_method)
+            self.__loss_type = self.__default_loss_type
+            print('VelocityGradientLoss: loss_type not present in kwargs, using default value:', self.__default_loss_type)
 
         try:
             self.__grid_size = kwargs['grid_size']
         except KeyError:
             self.__grid_size = self.__default_grid_size
-            print('DivergenceFreeLoss: grid_size not present in kwargs, using default value:', self.__default_grid_size)
+            print('VelocityGradientLoss: grid_size not present in kwargs, using default value:', self.__default_grid_size)
 
         try:
             self.__grad_scaling = kwargs['scaling_factor']
         except KeyError:
             self.__grad_scaling = self.__default_scaling_factor
-            print('DivergenceFreeLoss: scaling_factor not present in kwargs, using default value:',
+            print('VelocityGradientLoss: scaling_factor not present in kwargs, using default value:',
                   self.__default_scaling_factor)
         try:
            self.__exclude_terrain =  kwargs['exclude_terrain']
         except KeyError:
             self.__exclude_terrain = self.__default_exclude_terrain
-            print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
+            print('VelocityGradientLoss: exclude_terrain not present in kwargs, using default value:',
                   self.__default_exclude_terrain)
 
-        if (self.__loss_method == 'MSE'):
+        if (self.__loss_type == 'MSE'):
             self.__loss = torch.nn.MSELoss()
-        elif (self.__loss_method == 'L1'):
+        elif (self.__loss_type == 'L1'):
             self.__loss = torch.nn.L1Loss()
         else:
-            raise ValueError('Unknown loss type: ', self.__loss_method)
+            raise ValueError('Unknown loss type: ', self.__loss_type)
 
     def forward(self, net_output, target, input):
         if (net_output.shape != target.shape):
