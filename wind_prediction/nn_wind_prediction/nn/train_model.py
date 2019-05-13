@@ -66,8 +66,6 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 uncertainty: Train only the uncertainty of the model
                 alternating: Train the uncertainty and the mean alternatively per epoch
                 both: Train both models at the same time
-        scaled_loss:
-            Indicates if the scaled loss function is used
 
     Return:
         net: The trained network
