@@ -23,7 +23,7 @@ def signal_handler(sig, frame):
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
                 save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss,
-                model_directory, use_writer, predict_uncertainty, uncertainty_train_mode, scaled_loss, start_epoch=0):
+                model_directory, use_writer, predict_uncertainty, uncertainty_train_mode, start_epoch=0):
     '''
     Train the model according to the specified loss function and params
 
@@ -109,7 +109,6 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
 
             # get the inputs
             inputs = data[0]
-            terrain = inputs[:, 0, :, :, :].unsqueeze(1)
             labels = data[1]
             inputs, labels = inputs.to(device), labels.to(device)
 
@@ -134,10 +133,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
             else:
                 outputs = net(inputs)
-                if scaled_loss:
-                    loss = loss_fn(outputs, labels, inputs)
-                else:
-                    loss = loss_fn(outputs, labels, terrain)
+                loss = loss_fn(outputs, labels, inputs)
 
             loss.backward()
             optimizer.step()
@@ -171,7 +167,6 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         break
 
                     inputs = data[0]
-                    terrain = inputs[:, 0, :, :, :].unsqueeze(1)
                     labels = data[1]
                     inputs, labels = inputs.to(device), labels.to(device)
 
@@ -193,10 +188,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
-                        if scaled_loss:
-                            loss = loss_fn(outputs, labels, inputs)
-                        else:
-                            loss = loss_fn(outputs, labels, terrain)
+                        loss = loss_fn(outputs, labels, inputs)
                         train_loss += loss.item()
 
             train_loss /= len(loader_trainset)
@@ -214,7 +206,6 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         break
 
                     inputs = data[0]
-                    terrain = inputs[:, 0, :, :, :].unsqueeze(1)
                     labels = data[1]
                     inputs, labels = inputs.to(device), labels.to(device)
 
@@ -236,10 +227,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         validation_min_uncertainty = min(validation_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
-                        if scaled_loss:
-                            loss = loss_fn(outputs, labels, inputs)
-                        else:
-                            loss = loss_fn(outputs, labels, terrain)
+                        loss = loss_fn(outputs, labels, inputs)
                         validation_loss += loss.item()
                 validation_loss /= len(loader_validationset)
 

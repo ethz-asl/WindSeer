@@ -1,6 +1,5 @@
 from torch.nn import Module
 import torch
-from nn_wind_prediction.utils import remove_terrain_data
 import nn_wind_prediction.utils as utils
 
 class VelocityGradientLoss(Module):
@@ -17,6 +16,7 @@ class VelocityGradientLoss(Module):
     __default_loss_method = 'MSE'
     __default_grid_size = [1, 1, 1]
     __default_scaling_factor = 1200 #found to work well (trial and error)
+    __default_exclude_terrain = True
 
     def __init__(self, **kwargs):
         super(VelocityGradientLoss, self).__init__()
@@ -38,6 +38,12 @@ class VelocityGradientLoss(Module):
             self.__grad_scaling = self.__default_scaling_factor
             print('DivergenceFreeLoss: scaling_factor not present in kwargs, using default value:',
                   self.__default_scaling_factor)
+        try:
+           self.__exclude_terrain =  kwargs['exclude_terrain']
+        except KeyError:
+            self.__exclude_terrain = self.__default_exclude_terrain
+            print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
+                  self.__default_exclude_terrain)
 
         if (self.__loss_method == 'MSE'):
             self.__loss = torch.nn.MSELoss()
@@ -46,7 +52,7 @@ class VelocityGradientLoss(Module):
         else:
             raise ValueError('Unknown loss type: ', self.__loss_method)
 
-    def forward(self, net_output, target, terrain=None):
+    def forward(self, net_output, target, input):
         if (net_output.shape != target.shape):
             raise ValueError('Prediction and target do not have the same shape')
 
@@ -57,19 +63,18 @@ class VelocityGradientLoss(Module):
             else:
                 raise ValueError('The loss is only defined for 5D data')
 
-        return self.compute_loss(net_output, target, terrain)
+        return self.compute_loss(net_output, target, input)
 
-    def compute_loss(self, net_output, target, terrain):
+    def compute_loss(self, net_output, target, input):
         target_grad = utils.gradient(target,self.__grid_size)
         net_output_grad = utils.gradient(net_output,self.__grid_size)
 
-        # remove data in terrain
-        if terrain is not None:
-            target = remove_terrain_data(target, terrain)
-            net_output = remove_terrain_data(net_output, terrain)
-            target_grad = remove_terrain_data(target_grad, terrain)
-            net_output_grad = remove_terrain_data(net_output_grad, terrain)
+        # compute terrain correction factor if exclude_terrain
+        terrain_correction_factor = 1
+        if self.__exclude_terrain:
+            terrain = input[:, 0]
+            terrain_correction_factor = utils.compute_terrain_factor(net_output, terrain)
 
         loss = self.__loss(target, net_output)
         loss += self.__grad_scaling*self.__loss(net_output_grad, target_grad)
-        return loss
+        return loss*terrain_correction_factor

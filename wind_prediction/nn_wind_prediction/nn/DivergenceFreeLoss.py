@@ -2,7 +2,6 @@ from torch.nn import Module
 import torch
 import torch.nn.functional as f
 import nn_wind_prediction.utils as utils
-from nn_wind_prediction.utils import remove_terrain_data
 
 class DivergenceFreeLoss(Module):
     '''
@@ -17,6 +16,7 @@ class DivergenceFreeLoss(Module):
     __default_loss_method = 'MSE'
     __default_grid_size = [1, 1, 1]
     __default_scaling_factor = 500 #found to work well (trial and error)
+    __default_exclude_terrain = True
 
     def __init__(self, **kwargs):
         super(DivergenceFreeLoss, self).__init__()
@@ -39,6 +39,13 @@ class DivergenceFreeLoss(Module):
             print('DivergenceFreeLoss: scaling_factor not present in kwargs, using default value:',
                   self.__default_scaling_factor)
 
+        try:
+           self.__exclude_terrain =  kwargs['exclude_terrain']
+        except KeyError:
+            self.__exclude_terrain = self.__default_exclude_terrain
+            print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
+                  self.__default_exclude_terrain)
+
         if (self.__loss_method == 'MSE'):
             self.__loss = torch.nn.MSELoss()
         elif (self.__loss_method == 'L1'):
@@ -46,7 +53,8 @@ class DivergenceFreeLoss(Module):
         else:
             raise ValueError('Unknown loss type: ', self.__loss_method)
 
-    def forward(self, net_output, target, terrain = None):
+
+    def forward(self, net_output, target, input):
         if (net_output.shape != target.shape):
             raise ValueError('Prediction and target do not have the same shape, pred:{}, target:{}'.format(net_output.shape,target.shape))
 
@@ -56,17 +64,17 @@ class DivergenceFreeLoss(Module):
             else:
              raise ValueError('The loss is only defined for 5D data')
 
-        return self.compute_loss(net_output, target, terrain)
+        return self.compute_loss(net_output, target, input)
 
-    def compute_loss(self, net_output, target, terrain):
+    def compute_loss(self, net_output, target, input):
         diverged_output = utils.divergence(net_output, self.__grid_size).unsqueeze(1)
 
-        # remove data in terrain
-        if terrain is not None:
-            target = remove_terrain_data(target, terrain)
-            net_output = remove_terrain_data(net_output, terrain)
-            diverged_output = remove_terrain_data(diverged_output, terrain)
+        # compute terrain correction factor if exclude_terrain
+        terrain_correction_factor = 1
+        if self.__exclude_terrain:
+            terrain = input[:, 0]
+            terrain_correction_factor = utils.compute_terrain_factor(net_output,terrain)
 
         loss = self.__loss(target, net_output)
         loss += self.__div_scaling *self.__loss(diverged_output, torch.zeros_like(diverged_output))
-        return loss
+        return loss*terrain_correction_factor

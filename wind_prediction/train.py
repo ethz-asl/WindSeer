@@ -120,14 +120,12 @@ scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step
                    gamma=run_params.run['learning_rate_decay'])
 
 # choose loss function
-scaled_loss = False
 if run_params.run['loss_function'] == 1:
     loss_fn = nn_custom.L1Loss()
 elif run_params.run['loss_function'] == 2:
     loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.loss_kwargs())
 elif run_params.run['loss_function'] == 3:
     loss_fn = nn_custom.ScaledLoss(**run_params.loss_kwargs())
-    scaled_loss = True
 elif run_params.run['loss_function'] == 4:
     loss_fn = nn_custom.DivergenceFreeLoss(**run_params.loss_kwargs())
 elif run_params.run['loss_function'] == 5:
@@ -162,7 +160,7 @@ net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optim
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
                        run_params.run['compute_validation_loss'], model_dir, args.use_writer,
-                       predict_uncertainty, uncertainty_train_mode,scaled_loss, warm_start_epoch)
+                       predict_uncertainty, uncertainty_train_mode, warm_start_epoch)
 
 # save the model if requested
 if (run_params.run['save_model']):
@@ -180,12 +178,8 @@ if (run_params.run['evaluate_testset']):
         for data in testloader:
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
-            terrain = inputs[:, 0, :, :, :].unsqueeze(1)
             outputs = net(inputs)
-            if scaled_loss:
-                loss += loss_fn(outputs, labels, inputs)
-            else:
-                loss += loss_fn(outputs, labels, terrain)
+            loss += loss_fn(outputs, labels, inputs)
 
         print('INFO: Average loss on test set: %s' % (loss.item()/len(testset)))
 

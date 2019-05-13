@@ -23,6 +23,7 @@ run:
     loss_kwargs: {
         # General
         loss_type: 'MSE', #MSE or L1
+        exclude_terrain: True,
 
         # Gaussian-Log-Likelihood
         uncertainty_loss_eps: 1.0E-9,
@@ -30,7 +31,6 @@ run:
         # ScaledLoss
         max_scale: 4,
         norm_threshold: 0.5,
-        exclude_terrain: True,
         no_scaling: False,
 
         #DFL or VGL
@@ -51,7 +51,7 @@ data:
     validationset_name: 'data/validation.tar'
     testset_name: 'data/test.tar'
     augmentation: True
-    augmentation_mode: 0 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
+    augmentation_mode: 1 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
     augmentation_kwargs: {
         subsampling: True,
         rotating: True
