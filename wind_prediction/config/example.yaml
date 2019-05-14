@@ -9,6 +9,7 @@ run:
     compute_validation_loss: True
     custom_init: False
     minibatch_epoch_loss: False
+    add_all_variables: True
 
     # options to store data
     save_model: True
@@ -38,12 +39,19 @@ data:
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    uhor_scaling: 6.5
-    uz_scaling: 0.7
-    turbulence_scaling: 1.1
+    ux_scaling: 1.0
+    uy_scaling: 1.0
+    uz_scaling: 1.0
+    turbulence_scaling: 1.0
+    p_scaling: 1.0
+    epsilon_scaling: 1.0
+    nut_scaling: 1.0
     terrain_scaling: 64.0
     use_grid_size: False
     use_turbulence: True
+    use_pressure: True
+    use_epsilon: True
+    use_nut: True
     autoscale: False
     normalize_terrain: False
 

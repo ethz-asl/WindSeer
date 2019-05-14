@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Script to test and benchmark the implementation of MyDataset
+Script to test and benchmark the implementation of FullDataset
 '''
 
 import matplotlib.pyplot as plt
@@ -14,38 +14,45 @@ from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
 compressed = False
-input_dataset = 'test.tar'
+input_dataset = '../wind_prediction/data/single_sample.tar'
 nx = 64
 ny = 64
 nz = 64
-input_mode = 1
+input_mode = 0
 subsample = False
 augmentation = False
-uhor_scaling = 1.0
+ux_scaling = 1.0
+uy_scaling = 1.0
 uz_scaling = 1.0
 turbulence_scaling = 1.0
+p_scaling = 1.0
+epsilon_scaling = 1.0
+nut_scaling = 1.0 
 terrain_scaling = 64.0
 plot_sample_num = 0
 dataset_rounds = 0
 use_turbulence = True
+use_pressure = True
+use_epsilon = True
+use_nut = True
 stride_hor = 1
 stride_vert = 1
-compute_dataset_statistics = True
+compute_dataset_statistics = False
 plot_divergence = True
-use_grid_size = True
-autoscale = False
-normalize_terrain = False
+autoscale = True
 #-----------------------------------------------------
 
 def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    db = nn_data.MyDataset(input_dataset, nx = nx, ny = ny, nz = nz, input_mode = input_mode,
+    db = nn_data.FullDataset(input_dataset, nx = nx, ny = ny, nz = nz, input_mode = input_mode,
                            subsample = subsample, augmentation = augmentation, autoscale = autoscale,
-                           stride_hor = stride_hor, stride_vert = stride_vert, normalize_terrain = normalize_terrain,
-                           turbulence_label = use_turbulence, scaling_uhor = uhor_scaling, scaling_terrain = terrain_scaling,
-                           scaling_uz = uz_scaling, scaling_turb = turbulence_scaling,
-                           compressed = compressed, use_grid_size = use_grid_size, return_grid_size = True)
+                           stride_hor = stride_hor, stride_vert = stride_vert, 
+                           turbulence_label = use_turbulence, pressure_label = use_pressure, epsilon_label = use_epsilon, 
+                           nut_label = use_nut, scaling_ux = ux_scaling, scaling_uy = uy_scaling, scaling_terrain = terrain_scaling,
+                           scaling_uz = uz_scaling, scaling_turb = turbulence_scaling, scaling_p = p_scaling, 
+                           scaling_epsilon = epsilon_scaling, scaling_nut = nut_scaling, compressed = compressed, 
+                        return_grid_size = True)
 
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
                                               shuffle=False, num_workers=0)
@@ -55,14 +62,23 @@ def main():
         uy = []
         uz = []
         turb = []
+        p = []
+        epsilon = []
+        nut = []
         ux_std = []
         uy_std = []
         uz_std = []
         turb_std = []
+        p_std = []
+        epsilon_std = []
+        nut_std = []
         ux_max = []
         uy_max = []
         uz_max = []
         turb_max = []
+        p_max = []
+        epsilon_max = []
+        nut_max = []
         reflow_ratio = []
         global dataset_rounds
         dataset_rounds = 1
@@ -96,6 +112,21 @@ def main():
                     turb.append(label[:,3,:].abs().mean().item())
                     turb_max.append(label[:,3,:].abs().max().item())
                     turb_std.append(label[:,3,:].abs().std().item())
+
+                if use_pressure:
+                    p.append(label[:,4,:].abs().mean().item())
+                    p_max.append(label[:,4,:].abs().max().item())
+                    p_std.append(label[:,4,:].abs().std().item())
+
+                if use_epsilon:
+                    epsilon.append(label[:,5,:].abs().mean().item())
+                    epsilon_max.append(label[:,5,:].abs().max().item())
+                    epsilon_std.append(label[:,5,:].abs().std().item())
+
+                if use_nut:
+                    nut.append(label[:,6,:].abs().mean().item())
+                    nut_max.append(label[:,6,:].abs().max().item())
+                    nut_std.append(label[:,6,:].abs().std().item())
 
                 # compute if a reflow is happening in the simulated flow
                 if label[:,0,:].mean().abs().item() > label[:,1,:].mean().abs().item():
@@ -144,6 +175,19 @@ def main():
             print('INFO: Mean turb: {} J/kg'.format(np.mean(turb)))
             print('INFO: Max turb:  {} J/kg'.format(np.mean(turb_max)))
             print('INFO: Std turb:  {} J/kg'.format(np.mean(turb_std)))
+        if use_pressure:
+            print('INFO: Mean pressure: {} Pa'.format(np.mean(p)))
+            print('INFO: Max pressure:  {} Pa'.format(np.mean(p_max)))
+            print('INFO: Std pressure:  {} Pa'.format(np.mean(p_std)))
+        if use_epsilon:
+            print('INFO: Mean dissipation: {} m^2/s^3'.format(np.mean(epsilon)))
+            print('INFO: Max dissipation:  {} m^2/s^3'.format(np.mean(epsilon_max)))
+            print('INFO: Std dissipation:  {} m^2/s^3'.format(np.mean(epsilon_std)))
+        if use_nut:
+            print('INFO: Mean turb. viscosity: {} m^2/s'.format(np.mean(nut)))
+            print('INFO: Max turb. viscosity:  {} m^2/s'.format(np.mean(nut_max)))
+            print('INFO: Std turb. viscosity:  {} m^2/s'.format(np.mean(nut_std)))
+        '''
         print('INFO: Number of cases with a reflow ratio of > 0.05: {}'.format(sum(i > 0.05 for i in reflow_ratio)))
         print('INFO: Number of cases with a reflow ratio of > 0.10: {}'.format(sum(i > 0.10 for i in reflow_ratio)))
         print('INFO: Number of cases with a reflow ratio of > 0.20: {}'.format(sum(i > 0.20 for i in reflow_ratio)))
@@ -153,6 +197,7 @@ def main():
         print('INFO: Number of cases with a reflow ratio of > 0.75: {}'.format(sum(i > 0.75 for i in reflow_ratio)))
         print('INFO: Number of cases with a reflow ratio of > 1.00: {}'.format(sum(i > 1.00 for i in reflow_ratio)))
         print('INFO: Number of cases with a reflow ratio of > 1.00: {}'.format(sum(i > 1.00 for i in reflow_ratio)))
+        
         print('INFO: Min dx:   {} m'.format(np.min(dx)))
         print('INFO: Max dx:   {} m'.format(np.max(dx)))
         print('INFO: Min dy:   {} m'.format(np.min(dy)))
@@ -161,6 +206,7 @@ def main():
         print('INFO: Max dz:   {} m'.format(np.max(dz)))
         print('INFO: Average divergence: {}'.format(np.mean(mean_div)))
         print('INFO: Maximum divergence: {}'.format(np.max(max_div)))
+        '''
         print('INFO: Min terrain height: {}'.format(np.min(terrain)))
         print('INFO: Max terrain height: {}'.format(np.max(terrain)))
         print('------------------------------------------------------------------------------')
@@ -170,6 +216,9 @@ def main():
             'uy': uy,
             'uz': uz,
             'turb': turb,
+            'p': p,
+            'epsilon': epsilon,
+            'nut': nut,
             'reflow_ratio': reflow_ratio,
             'dx': dx,
             'dy': dy,
@@ -181,6 +230,7 @@ def main():
         np.save('dataset_stats.npy', dataset_stats)
 
         # plotting of the statistics
+        '''
         plt.figure()
         plt.subplot(2, 3, 1)
         plt.hist(reflow_ratio, 10, facecolor='r')
@@ -249,9 +299,66 @@ def main():
         plt.xlabel('Uz [m/s]')
         plt.ylabel('N')
         plt.draw()
+        '''
+        plt.figure()
+
+        plt.subplot(2, 4, 1)
+        plt.hist(terrain, 10, facecolor='y')
+        plt.grid(True)
+        plt.xlabel('Terrain height [m]')
+        plt.ylabel('N')
+
+        plt.subplot(2, 4, 2)
+        plt.hist(ux, 10, facecolor='m')
+        plt.grid(True)
+        plt.xlabel('Ux [m/s]')
+        plt.ylabel('N')
+
+        plt.subplot(2, 4, 3)
+        plt.hist(uy, 10, facecolor='b')
+        plt.grid(True)
+        plt.xlabel('Uy [m/s]')
+        plt.ylabel('N')
+
+        plt.subplot(2, 4, 4)
+        plt.hist(uz, 10, facecolor='k')
+        plt.grid(True)
+        plt.xlabel('Uz [m/s]')
+        plt.ylabel('N')
+
+        plt.subplot(2, 4, 5)
+        plt.hist(turb, 10, facecolor='g')
+        plt.grid(True)
+        plt.xlabel('Turb. kin. energy [J/kg]')
+        plt.ylabel('N')
+
+        plt.subplot(2, 4, 6)
+        plt.hist(p, 10, facecolor='c')
+        plt.grid(True)
+        plt.xlabel('Pressure [Pa]')
+        plt.ylabel('N')
+
+        plt.subplot(2, 4, 7)
+        plt.hist(epsilon, 10, facecolor='r')
+        plt.grid(True)
+        plt.xlabel('Dissipation [m^2/s^3]')
+        plt.ylabel('N')
+
+        plt.subplot(2, 4, 8)
+        plt.hist(nut, 10, facecolor='orange')
+        plt.grid(True)
+        plt.xlabel('Turb. viscosity [m^2/s]')
+        plt.ylabel('N')
+
+        plt.draw()
+
 
     print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 
+    if autoscale:
+        input, label, scale, ds = db[plot_sample_num]
+    else:
+        input, label, ds = db[plot_sample_num]
     try:
         if autoscale:
             input, label, scale, ds = db[plot_sample_num]
@@ -271,7 +378,8 @@ def main():
     print(' ')
 
     # plot the sample
-    utils.plot_sample(input, label, input[0,:], plot_divergence, use_turbulence, ds)
+    #utils.plot_sample_all(input, label, input[0,:], use_turbulence, use_pressure, use_epsilon, use_nut, ds)
+    utils.plotting_nut(input, label, input[0,:])
 
 if __name__ == '__main__':
 #     try:

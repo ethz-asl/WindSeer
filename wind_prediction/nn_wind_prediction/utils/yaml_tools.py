@@ -22,6 +22,9 @@ class EDNNParameters(object):
             run_parameters = yaml.safe_load(fh)
 
         run_parameters['model']['model_args']['use_turbulence'] = run_parameters['data']['use_turbulence']
+        run_parameters['model']['model_args']['use_pressure'] = run_parameters['data']['use_pressure']
+        run_parameters['model']['model_args']['use_epsilon'] = run_parameters['data']['use_epsilon']
+        run_parameters['model']['model_args']['use_nut'] = run_parameters['data']['use_nut']
         run_parameters['model']['model_args']['use_grid_size'] = run_parameters['data']['use_grid_size']
         run_parameters['model']['model_args']['n_epochs'] = run_parameters['run']['n_epochs']
 
@@ -59,13 +62,20 @@ class EDNNParameters(object):
 
         return name
 
-    def MyDataset_kwargs(self):
+    def Dataset_kwargs(self):
         return {'stride_hor': self.data['stride_hor'],
                 'stride_vert': self.data['stride_vert'],
                 'turbulence_label': self.data['use_turbulence'],
-                'scaling_uhor': self.data['uhor_scaling'],
+                'pressure_label': self.data['use_pressure'],
+                'epsilon_label': self.data['use_epsilon'],
+                'nut_label': self.data['use_nut'],
+                'scaling_ux': self.data['ux_scaling'],
+                'scaling_uy': self.data['uy_scaling'],
                 'scaling_uz': self.data['uz_scaling'],
                 'scaling_turb': self.data['turbulence_scaling'],
+                'scaling_p': self.data['p_scaling'],
+                'scaling_epsilon': self.data['epsilon_scaling'],
+                'scaling_nut': self.data['nut_scaling'],
                 'scaling_terrain': self.data['terrain_scaling'],
                 'use_grid_size': self.data['use_grid_size'],
                 'input_mode': self.data['input_mode'],
@@ -101,7 +111,8 @@ class EDNNParameters(object):
         print('\t\t', self.model['model_args'])
         print(' ')
         print('Dataset Settings:')
-        print('\tUhor scaling:\t\t', self.data['uhor_scaling'])
+        print('\tUx scaling:\t\t', self.data['ux_scaling'])
+        print('\tUy scaling:\t\t', self.data['uy_scaling'])
         print('\tUz scaling:\t\t', self.data['uz_scaling'])
         print('\tTurbulence scaling:\t', self.data['turbulence_scaling'])
         print('\tHorizontal stride:\t', self.data['stride_hor'])

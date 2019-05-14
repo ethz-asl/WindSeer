@@ -20,6 +20,7 @@ class PlotUtils():
     Class providing the tools to plot the input and labels for the 2D and 3D case.
     '''
     def __init__(self, input, label, terrain, design, uncertainty_predicted = False, plot_divergence = False, plot_turbulence = False,
+                 plot_pressure = False, plot_epsilon = False, plot_nut = False,
                  ds = None, title_fontsize = 20, label_fontsize = 15, tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
         # Input is the prediction, label is CFD
         self.__axis = 'x-z'
@@ -27,6 +28,9 @@ class PlotUtils():
         self.__uncertainty_predicted = uncertainty_predicted
         self.__plot_divergence = plot_divergence
         self.__plot_turbulence = plot_turbulence
+        self.__plot_pressure = plot_pressure
+        self.__plot_epsilon = plot_epsilon
+        self.__plot_nut = plot_nut
 
         self.__title_fontsize = title_fontsize
         self.__label_fontsize = label_fontsize
@@ -47,6 +51,9 @@ class PlotUtils():
         self.__out_images = []
         self.__error_images = []
         self.__uncertainty_images = []
+
+        # NUT
+        self.__nut_images = []
 
         if self.__plot_divergence and ds and (len(list(label.shape)) > 3):
             label = torch.cat([label, torch.tensor(divergence(label.squeeze()[:3], ds, terrain.squeeze())).unsqueeze(0)])
@@ -101,6 +108,12 @@ class PlotUtils():
                 im.set_data(self.__uncertainty[i, :, :, self.__n_slice])
                 im.set_extent([0, self.__uncertainty.shape[2], 0, self.__uncertainty.shape[1]])
 
+            # NUT
+            for i, im in enumerate(self.__nut_images):
+                im.set_data(self.__label[6, :, :, self.__n_slice])
+                im.set_extent([0, self.__label.shape[2], 0, self.__label.shape[1]])
+
+
         elif self.__axis == '  x-y':
             for i, im in enumerate(self.__in_images):
                 im.set_data(self.__input[i, self.__n_slice, :, :])
@@ -118,6 +131,11 @@ class PlotUtils():
                 im.set_data(self.__uncertainty[i, self.__n_slice, :, :])
                 im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[2]])
 
+            # NUT
+            for i, im in enumerate(self.__nut_images):
+                im.set_data(self.__label[6, self.__n_slice, :, :])
+                im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[2]])
+
         else:
             for i, im in enumerate(self.__in_images):
                 im.set_data(self.__input[i, :, self.__n_slice, :])
@@ -134,6 +152,11 @@ class PlotUtils():
             for i, im in enumerate(self.__uncertainty_images):
                 im.set_data(self.__uncertainty[i, :, self.__n_slice, :])
                 im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[1]])
+
+            # NUT
+            for i, im in enumerate(self.__nut_images):
+                im.set_data(self.__label[6, :, self.__n_slice, :])
+                im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[2]])
 
         plt.draw()
 
@@ -198,7 +221,7 @@ class PlotUtils():
             self.__out_images.append(ah_in[1][1].imshow(self.__label[1,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #uy
             self.__out_images.append(ah_in[1][2].imshow(self.__label[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #uz
             if self.__plot_turbulence:
-                self.__out_images.append(ah_in[2][1].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
+                self.__out_images.append(ah_in[2][1].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) #turbulent kin. en.
                 chbar = fh_in.colorbar(self.__out_images[3], ax=ah_in[2][1])
                 ah_in[2][1].set_title('Prediction Turbulence', fontsize = self.__title_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -216,7 +239,7 @@ class PlotUtils():
                 else:
                     idx_div = 3
 
-                self.__out_images.append(ah_in[2][2].imshow(self.__label[idx_div,:,self.__n_slice,:], origin='lower', vmin=max(self.__label[idx_div,:,:,:].min(), -0.5), vmax=min(self.__label[idx_div,:,:,:].max(), 0.5), aspect = 'auto', cmap=self.__cmap)) #turbulence viscosity
+                self.__out_images.append(ah_in[2][2].imshow(self.__label[idx_div,:,self.__n_slice,:], origin='lower', vmin=max(self.__label[idx_div,:,:,:].min(), -0.5), vmax=min(self.__label[idx_div,:,:,:].max(), 0.5), aspect = 'auto', cmap=self.__cmap)) #turb. kin. en.
                 chbar = fh_in.colorbar(self.__out_images[-1], ax=ah_in[2][2])
                 ah_in[2][2].set_title('Velocity Divergence', fontsize = self.__title_fontsize)
                 plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -367,26 +390,151 @@ class PlotUtils():
 
         plt.show()
 
+    
+    def plot_sample_all(self):
+        '''
+        Creates the plots of a single sample according to the input and label data.
+        '''
+
+        # 3D data
+        fh_in, ah_in = plt.subplots(2, 4, figsize=(16,13))
+        fh_in.patch.set_facecolor('white')
+
+        # plot the label data
+
+        # Terrain
+        self.__in_images.append(ah_in[0][3].imshow(self.__input[0,:,self.__n_slice,:], origin='lower', vmin=self.__input[0,:,:,:].min(), vmax=self.__input[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+        ah_in[0][3].set_title('Terrain', fontsize = self.__title_fontsize)
+        chbar = fh_in.colorbar(self.__in_images[0], ax=ah_in[0][3])
+        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
+        # Velocity
+        self.__out_images.append(ah_in[0][0].imshow(self.__label[0,:,self.__n_slice,:], origin='lower', vmin=self.__label[0,:,:,:].min(), vmax=self.__label[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+        self.__out_images.append(ah_in[0][1].imshow(self.__label[1,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+        self.__out_images.append(ah_in[0][2].imshow(self.__label[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+        ah_in[0][0].set_title('Velocity X [m/s]', fontsize = self.__title_fontsize)
+        ah_in[0][1].set_title('Velocity Y [m/s]', fontsize = self.__title_fontsize)
+        ah_in[0][2].set_title('Velocity Z [m/s]', fontsize = self.__title_fontsize)
+        chbar = fh_in.colorbar(self.__out_images[0], ax=ah_in[0][0])
+        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+        chbar = fh_in.colorbar(self.__out_images[1], ax=ah_in[0][1])
+        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+        chbar = fh_in.colorbar(self.__out_images[2], ax=ah_in[0][2])
+        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+        
+        # Turb. kin. energy
+        if self.__plot_turbulence:
+            self.__out_images.append(ah_in[1][0].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+            chbar = fh_in.colorbar(self.__out_images[3], ax=ah_in[1][0])
+            ah_in[1][0].set_title('Turb. kin. energy [m^2/s^2]', fontsize = self.__title_fontsize)
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            plt.setp(ah_in[1][0].get_xticklabels(), fontsize=self.__tick_fontsize)
+            plt.setp(ah_in[1][0].get_yticklabels(), fontsize=self.__tick_fontsize)
+            ah_in[1][0].set_xticks([])
+            ah_in[1][0].set_yticks([])
+        else:
+            fh_in.delaxes(ah_in[1][0])
+
+        # Pressure
+        if self.__plot_pressure:
+            self.__out_images.append(ah_in[1][1].imshow(self.__label[4,:,self.__n_slice,:], origin='lower', vmin=self.__label[4,:,:,:].min(), vmax=self.__label[4,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+            chbar = fh_in.colorbar(self.__out_images[4], ax=ah_in[1][1])
+            ah_in[1][1].set_title('Norm. pressure [m^2/s^2]', fontsize = self.__title_fontsize)
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            plt.setp(ah_in[1][1].get_xticklabels(), fontsize=self.__tick_fontsize)
+            plt.setp(ah_in[1][1].get_yticklabels(), fontsize=self.__tick_fontsize)
+            ah_in[1][1].set_xticks([])
+            ah_in[1][1].set_yticks([])
+        else:
+            fh_in.delaxes(ah_in[1][1])
+
+        # Dissipation
+        if self.__plot_epsilon:
+            self.__out_images.append(ah_in[1][2].imshow(self.__label[5,:,self.__n_slice,:], origin='lower', vmin=self.__label[5,:,:,:].min(), vmax=self.__label[5,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+            chbar = fh_in.colorbar(self.__out_images[5], ax=ah_in[1][2])
+            ah_in[1][2].set_title('Dissipation [m^2/s^3]', fontsize = self.__title_fontsize)
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            plt.setp(ah_in[1][2].get_xticklabels(), fontsize=self.__tick_fontsize)
+            plt.setp(ah_in[1][2].get_yticklabels(), fontsize=self.__tick_fontsize)
+            ah_in[1][2].set_xticks([])
+            ah_in[1][2].set_yticks([])
+        else:
+            fh_in.delaxes(ah_in[1][2])
+
+        # Viscosity
+        if self.__plot_nut:
+            self.__out_images.append(ah_in[1][3].imshow(self.__label[6,:,self.__n_slice,:], origin='lower', vmin=self.__label[6,:,:,:].min(), vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+            chbar = fh_in.colorbar(self.__out_images[6], ax=ah_in[1][3])
+            ah_in[1][3].set_title('Turb. viscosity [m^2/s]', fontsize = self.__title_fontsize)
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            plt.setp(ah_in[1][3].get_xticklabels(), fontsize=self.__tick_fontsize)
+            plt.setp(ah_in[1][3].get_yticklabels(), fontsize=self.__tick_fontsize)
+            ah_in[1][3].set_xticks([])
+            ah_in[1][3].set_yticks([])
+        else:
+            fh_in.delaxes(ah_in[1][3])
+
+        ah_in[0][0].set_xticks([])
+        ah_in[0][0].set_yticks([])
+        ah_in[0][1].set_xticks([])
+        ah_in[0][1].set_yticks([])
+        ah_in[0][2].set_xticks([])
+        ah_in[0][2].set_yticks([])
+        ah_in[0][3].set_xticks([])
+        ah_in[0][3].set_yticks([])
+        ah_in[1][0].set_xticks([])
+        ah_in[1][0].set_yticks([])
+        ah_in[1][1].set_xticks([])
+        ah_in[1][1].set_yticks([])
+        ah_in[1][2].set_xticks([])
+        ah_in[1][2].set_yticks([])
+        ah_in[1][3].set_xticks([])
+        ah_in[1][3].set_yticks([])
+
+        # create slider to select the slice
+        self.__ax_slider = plt.axes(self.__slider_location)
+        self.__slider = Slider(self.__ax_slider, 'Slice', 0, self.__input.shape[2]-1, valinit=self.__n_slice, valfmt='%0.0f')
+        self.__slider.on_changed(self.slider_callback)
+
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.12)
+
+        # create button to select the axis along which the slices are made
+        rax = plt.axes(self.__button_location)
+        self.__button = RadioButtons(rax, ('  x-z', '  x-y', '  y-z'), active=0)
+        for circle in self.__button.circles:
+            circle.set_radius(0.1)
+        self.__button.on_clicked(self.radio_callback)
+        plt.show(block=False)
+
+        plt.show()
+
+
     def plot_prediction(self):
         if (len(self.__label.shape) > 3):
             turbulence_predicted = self.__label.shape[0] > 3
 
             if self.__uncertainty_predicted:
                 if turbulence_predicted:
-                    fh_in, ah_in = plt.subplots(4, self.__label.shape[0],figsize=(15,12))
+                    fh_in, ah_in = plt.subplots(4, 4,figsize=(15,12))
+                    nr_out = 4
                 else:
-                    fh_in, ah_in = plt.subplots(4, self.__label.shape[0],figsize=(12,12))
+                    fh_in, ah_in = plt.subplots(4, 3,figsize=(12,12))
+                    nr_out = 3
             else:
                 if turbulence_predicted:
-                    fh_in, ah_in = plt.subplots(3, self.__label.shape[0],figsize=(20,12))
+                    fh_in, ah_in = plt.subplots(3, 4,figsize=(20,12))
+                    nr_out = 4
                 else:
-                    fh_in, ah_in = plt.subplots(3, self.__label.shape[0],figsize=(15,12))
+                    fh_in, ah_in = plt.subplots(3, 3,figsize=(15,12))
+                    nr_out = 3
 
             fh_in.patch.set_facecolor('white')
 
             title = ['Vel X', 'Vel Y','Vel Z', 'Turbulence']
             units = ['[m/s]', '[m/s]', '[m/s]', '[J/kg]']
-            for i in range(self.__label.shape[0]):
+
+            for i in range(nr_out):
                 self.__out_images.append(ah_in[0][i].imshow(self.__label[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
                 self.__in_images.append(ah_in[1][i].imshow(self.__input[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
                 self.__error_images.append(ah_in[2][i].imshow(self.__error[i,:,self.__n_slice,:], origin='lower', vmin=self.__error[i,:,:,:].min(), vmax=self.__error[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
@@ -479,6 +627,235 @@ class PlotUtils():
 
         plt.show()
 
+
+    def plot_prediction_all(self):
+        
+
+        if self.__uncertainty_predicted:
+            fh_in1, ah_in1 = plt.subplots(4, 3,figsize=(6,6))
+        else:
+            fh_in1, ah_in1 = plt.subplots(3, 3,figsize=(8,6))
+
+
+        fh_in1.patch.set_facecolor('white')
+
+        title1 = ['Vel X', 'Vel Y','Vel Z']
+        units1 = ['[m/s]', '[m/s]', '[m/s]']
+        title2 = ['Turb. kin. en.', 'Norm pressure', 'Dissipation', 'Turb. viscosity']
+        units2 = ['[m^2/s^2]', '[m^2/s^2]', '[m^2/s^3]', '[m^2/s]']
+
+        for i in range(3):
+            self.__out_images.append(ah_in1[0][i].imshow(self.__label[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+            self.__in_images.append(ah_in1[1][i].imshow(self.__input[i,:,self.__n_slice,:], origin='lower', vmin=self.__label[i,:,:,:].min(), vmax=self.__label[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+            self.__error_images.append(ah_in1[2][i].imshow(self.__error[i,:,self.__n_slice,:], origin='lower', vmin=self.__error[i,:,:,:].min(), vmax=self.__error[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+
+            ah_in1[0][i].set_title(title1[i], fontsize = self.__title_fontsize)
+
+            ah_in1[0][i].set_xticks([])
+            ah_in1[0][i].set_yticks([])
+            ah_in1[1][i].set_xticks([])
+            ah_in1[1][i].set_yticks([])
+            ah_in1[2][i].set_xticks([])
+            ah_in1[2][i].set_yticks([])
+
+            chbar = fh_in1.colorbar(self.__out_images[i], ax=ah_in1[0][i])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            chbar = fh_in1.colorbar(self.__in_images[i], ax=ah_in1[1][i])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            chbar = fh_in1.colorbar(self.__error_images[i], ax=ah_in1[2][i])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
+            if self.__uncertainty_predicted:
+                self.__uncertainty_images.append(ah_in1[3][i].imshow(self.__uncertainty[i,:,self.__n_slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                chbar = fh_in1.colorbar(self.__uncertainty_images[i], ax=ah_in1[3][i])
+                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                plt.setp(ah_in1[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
+                plt.setp(ah_in1[3][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+
+                ah_in1[3][i].set_xticks([])
+                ah_in1[3][i].set_yticks([])
+
+            if (i == 0):
+                ah_in1[0][i].set_ylabel('CFD', fontsize=self.__label_fontsize)
+                ah_in1[1][i].set_ylabel('Prediction', fontsize=self.__label_fontsize)
+                ah_in1[2][i].set_ylabel('Error', fontsize=self.__label_fontsize)
+                if self.__uncertainty_predicted:
+                    ah_in1[3][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)
+
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.12)
+
+        # create slider to select the slice
+        self.__ax_slider = plt.axes(self.__slider_location)
+        self.__slider = Slider(self.__ax_slider, 'Slice', 0, self.__input.shape[2]-1, valinit=self.__n_slice, valfmt='%0.0f')
+        self.__slider.on_changed(self.slider_callback)
+
+        # create button to select the axis along which the slices are made
+        rax = plt.axes(self.__button_location)
+        self.__button = RadioButtons(rax, ('  x-z', '  x-y', '  y-z'), active=0)
+        for circle in self.__button.circles:
+            circle.set_radius(0.1)
+        self.__button.on_clicked(self.radio_callback)
+
+        plt.show()
+
+
+
+        if self.__uncertainty_predicted:
+            fh_in2, ah_in2 = plt.subplots(4, 4,figsize=(8,6))
+        else:
+            fh_in2, ah_in2 = plt.subplots(3, 4,figsize=(10,6))
+
+        fh_in2.patch.set_facecolor('white')
+
+        self.__out_images.append(ah_in2[0][0].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+        self.__in_images.append(ah_in2[1][0].imshow(self.__input[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+        self.__error_images.append(ah_in2[2][0].imshow(self.__error[3,:,self.__n_slice,:], origin='lower', vmin=self.__error[3,:,:,:].min(), vmax=self.__error[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+
+        self.__out_images.append(ah_in2[0][1].imshow(self.__label[4,:,self.__n_slice,:], origin='lower', vmin=self.__label[4,:,:,:].min(), vmax=self.__label[4,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+        self.__in_images.append(ah_in2[1][1].imshow(self.__input[4,:,self.__n_slice,:], origin='lower', vmin=self.__label[4,:,:,:].min(), vmax=self.__label[4,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+        self.__error_images.append(ah_in2[2][1].imshow(self.__error[4,:,self.__n_slice,:], origin='lower', vmin=self.__error[4,:,:,:].min(), vmax=self.__error[4,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+
+        self.__out_images.append(ah_in2[0][2].imshow(self.__label[5,:,self.__n_slice,:], origin='lower', vmin=0, vmax=0.01, aspect = 'auto', cmap=self.__cmap))
+        self.__in_images.append(ah_in2[1][2].imshow(self.__input[5,:,self.__n_slice,:], origin='lower', vmin=0, vmax=0.01, aspect = 'auto', cmap=self.__cmap))
+        error_nut = abs(self.__label[5,:,:,:] - self.__input[5,:,:,:])
+        self.__error_images.append(ah_in2[2][2].imshow(error_nut[:,self.__n_slice,:], origin='lower', vmin=0, vmax=1, aspect = 'auto', cmap=self.__cmap))
+
+        self.__out_images.append(ah_in2[0][3].imshow(self.__label[6,:,self.__n_slice,:], origin='lower', vmin=self.__label[6,:,:,:].min(), vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+        self.__in_images.append(ah_in2[1][3].imshow(self.__input[6,:,self.__n_slice,:], origin='lower', vmin=self.__label[6,:,:,:].min(), vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+        self.__error_images.append(ah_in2[2][3].imshow(self.__error[6,:,self.__n_slice,:], origin='lower', vmin=self.__error[6,:,:,:].min(), vmax=self.__error[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+
+        
+        for i in range(4):
+        
+            ah_in2[0][i].set_title(title2[i], fontsize = self.__title_fontsize)
+
+            ah_in2[0][i].set_xticks([])
+            ah_in2[0][i].set_yticks([])
+            ah_in2[1][i].set_xticks([])
+            ah_in2[1][i].set_yticks([])
+            ah_in2[2][i].set_xticks([])
+            ah_in2[2][i].set_yticks([])
+
+            chbar = fh_in2.colorbar(self.__out_images[i+3], ax=ah_in2[0][i])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            chbar = fh_in2.colorbar(self.__in_images[i+3], ax=ah_in2[1][i])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+            chbar = fh_in2.colorbar(self.__error_images[i+3], ax=ah_in2[2][i])
+            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
+            if self.__uncertainty_predicted:
+                self.__uncertainty_images.append(ah_in2[3][i].imshow(self.__uncertainty[i+3,:,self.__n_slice,:], origin='lower', vmin=self.__uncertainty[i+3,:,:,:].min(), vmax=self.__uncertainty[i+4,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                chbar = fh_in2.colorbar(self.__uncertainty_images[i+3], ax=ah_in2[3][i])
+                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                plt.setp(ah_in2[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
+                plt.setp(ah_in2[3][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+
+                ah_in2[3][i].set_xticks([])
+                ah_in2[3][i].set_yticks([])
+
+            if (i == 0):
+                ah_in2[0][i].set_ylabel('CFD', fontsize=self.__label_fontsize)
+                ah_in2[1][i].set_ylabel('Prediction', fontsize=self.__label_fontsize)
+                ah_in2[2][i].set_ylabel('Error', fontsize=self.__label_fontsize)
+                if self.__uncertainty_predicted:
+                    ah_in2[3][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)
+
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.12)
+        
+        # create slider to select the slice
+        self.__ax_slider = plt.axes(self.__slider_location)
+        self.__slider = Slider(self.__ax_slider, 'Slice', 0, self.__input.shape[2]-1, valinit=self.__n_slice, valfmt='%0.0f')
+        self.__slider.on_changed(self.slider_callback)
+
+        # create button to select the axis along which the slices are made
+        rax = plt.axes(self.__button_location)
+        self.__button = RadioButtons(rax, ('  x-z', '  x-y', '  y-z'), active=0)
+        for circle in self.__button.circles:
+            circle.set_radius(0.1)
+        self.__button.on_clicked(self.radio_callback)
+
+        plt.show()
+
+
+
+    def plotting_nut(self):
+
+        # 3D data
+        fh_in, ah_in = plt.subplots(2, 3, figsize=(10,7))
+
+
+        # Viscosity CFD
+        
+        self.__nut_images.append(ah_in[0][0].imshow(self.__label[6,:,self.__n_slice,:], origin='lower', vmin=0, vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+        chbar = fh_in.colorbar(self.__nut_images[0], ax=ah_in[0][0])
+        ah_in[0][0].set_title('CFD', fontsize = self.__title_fontsize)
+        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+        plt.setp(ah_in[0][0].get_xticklabels(), fontsize=self.__tick_fontsize)
+        plt.setp(ah_in[0][0].get_yticklabels(), fontsize=self.__tick_fontsize)
+        ah_in[0][0].set_xticks([])
+        ah_in[0][0].set_yticks([])
+
+        # Compute nu_t with the formula: 
+        c_mu = 0.09
+        k_square = np.multiply(self.__label[3,:,:,:],self.__label[3,:,:,:])
+        nut = c_mu * np.divide(k_square, self.__label[5,:,:,:])
+
+        self.__nut_images.append(ah_in[0][1].imshow(nut[:,self.__n_slice,:], origin='lower', vmin=0, vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+        chbar = fh_in.colorbar(self.__nut_images[1], ax=ah_in[0][1])
+        ah_in[0][1].set_title('Calculation', fontsize = self.__title_fontsize)
+        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+        plt.setp(ah_in[0][1].get_xticklabels(), fontsize=self.__tick_fontsize)
+        plt.setp(ah_in[0][1].get_yticklabels(), fontsize=self.__tick_fontsize)
+        ah_in[0][1].set_xticks([])
+        ah_in[0][1].set_yticks([])
+
+        # Compute the error between the CFD and the formula
+        error_nut = self.__label[6,:,:,:] - nut
+
+        print('------------------------------------------------------------------------------')
+        print('Viscosity: min. error: ', error_nut.min())
+        print('Viscosity: max. error: ', error_nut.max())
+        print('Viscosity: mean error: ', error_nut.mean())
+        #print('\n\n', error_nut[:,32,32])
+        #print('\n\n', error_nut[32,:,32])
+        #print('\n\n', error_nut[32,32,:])
+        print('------------------------------------------------------------------------------')
+
+        self.__error_images.append(ah_in[0][2].imshow(error_nut[:,self.__n_slice,:], origin='lower', vmin=-1, vmax=5, aspect = 'auto', cmap=self.__cmap)) 
+        chbar = fh_in.colorbar(self.__error_images[0], ax=ah_in[0][2])
+        ah_in[0][2].set_title('Error', fontsize = self.__title_fontsize)
+        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+        plt.setp(ah_in[0][2].get_xticklabels(), fontsize=self.__tick_fontsize)
+        plt.setp(ah_in[0][2].get_yticklabels(), fontsize=self.__tick_fontsize)
+        ah_in[0][2].set_xticks([])
+        ah_in[0][2].set_yticks([])
+
+
+
+
+        # create slider to select the slice
+        self.__ax_slider = plt.axes(self.__slider_location)
+        self.__slider = Slider(self.__ax_slider, 'Slice', 0, self.__input.shape[2]-1, valinit=self.__n_slice, valfmt='%0.0f')
+        self.__slider.on_changed(self.slider_callback)
+
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.12)
+
+        # create button to select the axis along which the slices are made
+        rax = plt.axes(self.__button_location)
+        self.__button = RadioButtons(rax, ('  x-z', '  x-y', '  y-z'), active=0)
+        for circle in self.__button.circles:
+            circle.set_radius(0.1)
+        self.__button.on_clicked(self.radio_callback)
+        plt.show(block=False)
+
+        plt.show()
+
+
+
+
 def plot_sample(input, label, terrain, plot_divergence = False, plot_turbulence = False, ds = None):
     '''
     Creates the plots according to the input and label data.
@@ -489,9 +866,21 @@ def plot_sample(input, label, terrain, plot_divergence = False, plot_turbulence 
     instance = PlotUtils(input, label, terrain, 0, False, plot_divergence, plot_turbulence, ds)
     instance.plot_sample()
 
+def plot_sample_all(input, label, terrain, plot_turbulence = False, plot_pressure = False, plot_epsilon = False, plot_nut = False, ds = None):
+    instance = PlotUtils(input, label, terrain, 0, False, False, plot_turbulence, plot_pressure, plot_epsilon, plot_nut, ds)
+    instance.plot_sample_all()
+
 def plot_prediction(output, label, terrain, uncertainty_predicted):
     instance = PlotUtils(output, label, terrain, 1, uncertainty_predicted)
     instance.plot_prediction()
+
+def plot_prediction_all(output, label, terrain, uncertainty_predicted):
+    instance = PlotUtils(output, label, terrain, 1, uncertainty_predicted)
+    instance.plot_prediction_all()
+
+def plotting_nut(output, label, terrain):
+    instance = PlotUtils(output, label, terrain, 1)
+    instance.plotting_nut()
 
 def violin_plot(labels, data, xlabel, ylabel, ylim=None):
     index = np.arange(len(labels))

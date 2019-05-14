@@ -31,6 +31,9 @@ class ModelEDNN3D(nn.Module):
     __default_pooling_method = 'striding'
     __default_use_grid_size = False
     __default_use_turbulence = True
+    __default_use_pressure = False
+    __default_use_epsilon = False
+    __default_use_nut = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -147,6 +150,27 @@ class ModelEDNN3D(nn.Module):
             if verbose:
                 print('EDNN3D: use_turbulence not present in kwargs, using default value:', self.__default_use_turbulence)
 
+        try:
+            self.__use_pressure = kwargs['use_pressure']
+        except KeyError:
+            self.__use_pressure = self.__default_use_pressure
+            if verbose:
+                print('EDNN3D: use_pressure not present in kwargs, using default value:', self.__default_use_pressure)
+
+        try:
+            self.__use_epsilon = kwargs['use_epsilon']
+        except KeyError:
+            self.__use_epsilon = self.__default_use_epsilon
+            if verbose:
+                print('EDNN3D: use_epsilon not present in kwargs, using default value:', self.__default_use_epsilon)
+
+        try:
+            self.__use_nut = kwargs['use_nut']
+        except KeyError:
+            self.__use_nut = self.__default_use_nut
+            if verbose:
+                print('EDNN3D: use_nut not present in kwargs, using default value:', self.__default_use_nut)
+
         if self.__n_downsample_layers <= 0:
             print('EDNN3D: Error, n_downsample_layers must be larger than 0')
             sys.exit()
@@ -159,7 +183,16 @@ class ModelEDNN3D(nn.Module):
             self.__num_inputs += 3 # x, y, z
 
         if self.__use_turbulence:
-            self.__num_outputs += 1 # turbulence
+            self.__num_outputs += 1 # turb. kin. en.
+
+        if self.__use_pressure:
+            self.__num_outputs += 1 # pressure
+
+        if self.__use_epsilon:
+            self.__num_outputs += 1 # dissipation
+
+        if self.__use_nut:
+            self.__num_outputs += 1 # viscosity
 
         try:
             self.__num_inputs = kwargs['force_num_inputs']
