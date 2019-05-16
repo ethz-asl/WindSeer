@@ -46,31 +46,42 @@ class VelocityGradientLoss(Module):
                   self.__default_exclude_terrain)
 
         if (self.__loss_type == 'MSE'):
-            self.__loss = torch.nn.MSELoss()
+            self.__loss = torch.nn.MSELoss(reduction='none')
         elif (self.__loss_type == 'L1'):
-            self.__loss = torch.nn.L1Loss()
+            self.__loss = torch.nn.L1Loss(reduction='none')
         else:
-            raise ValueError('Unknown loss type: ', self.__loss_type)
+            raise ValueError('VelocityGradientLoss: unknown loss type ', self.__loss_type)
 
-    def forward(self, net_output, target, input):
-        if (net_output.shape != target.shape):
-            raise ValueError('Prediction and target do not have the same shape')
+    def forward(self, predicted, target, input):
+        if (predicted.shape != target.shape):
+            raise ValueError('VelocityGradientLoss: predicted and target do not have the same shape, pred:{}, target:{}'
+                             .format(predicted.shape, target.shape))
 
-        if (len(net_output.shape) != 5):
-            raise ValueError('The loss is only defined for 5D data')
+        if (len(predicted.shape) != 5):
+            raise ValueError('VelocityGradientLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(net_output, target, input)
+        return self.compute_loss(predicted, target, input)
 
-    def compute_loss(self, net_output, target, input):
+    def compute_loss(self, predicted, target, input):
+        # compute gradients of prediction and target
         target_grad = utils.gradient(target,self.__grid_size)
-        net_output_grad = utils.gradient(net_output,self.__grid_size)
+        predicted_grad = utils.gradient(predicted,self.__grid_size)
 
-        # compute terrain correction factor if exclude_terrain
-        terrain_correction_factor = 1
+        # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            terrain = input[:, 0]
-            terrain_correction_factor = utils.compute_terrain_factor(net_output, terrain)
+            terrain = input[:, 0:1]
+            terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
+        else:
+            terrain_correction_factors = torch.ones(predicted.shape[0]).to(predicted.device)
 
-        loss = self.__loss(target, net_output)
-        loss += self.__grad_scaling*self.__loss(net_output_grad, target_grad)
-        return loss*terrain_correction_factor
+        # compute pixel loss for all elements and average losses over each sample in batch
+        loss = self.__loss(target, predicted).mean(tuple(range(1, len(predicted.shape))))
+
+        # add scaled mean physics loss for each samples
+        loss += self.__grad_scaling * self.__loss(predicted_grad, target_grad).mean(tuple(range(1, len(predicted.shape))))
+
+        # apply terrain correction factor to loss of each sample in batch
+        loss *= terrain_correction_factors
+
+        # return batchwise mean of loss
+        return loss.mean()

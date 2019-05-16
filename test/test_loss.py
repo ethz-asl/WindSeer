@@ -10,7 +10,7 @@ print('------------------------------------------------------------------')
 #test the GLLLoss first
 label = torch.randn(20,4,64,64,64, requires_grad=False)
 output = torch.randn(20,8,64,64,64, requires_grad=True)
-input = torch.randn(20,4,64,64,64, requires_grad=False)
+input = torch.rand(20,4,64,64,64, requires_grad=False)
 input[:,0,:10,:,:] = 0.0 # generate some terrain
 
 label, output, input = label.to(device), output.to(device), input.to(device)
@@ -55,14 +55,14 @@ configs.append({'Loss': 'MSELoss','loss_kwargs':{'exclude_terrain': True}})
 configs.append({'Loss': 'MSELoss','loss_kwargs':{'exclude_terrain': False}})
 configs.append({'Loss': 'L1Loss','loss_kwargs':{'exclude_terrain': True}})
 configs.append({'Loss': 'L1Loss','loss_kwargs':{'exclude_terrain': False}})
-configs.append({'Loss': 'DivergenceFreeLoss','loss_kwargs':{'loss_method': 'L1','exclude_terrain': True }})
-configs.append({'Loss': 'DivergenceFreeLoss','loss_kwargs':{'loss_method': 'L1','exclude_terrain': False}})
-configs.append({'Loss': 'DivergenceFreeLoss','loss_kwargs':{'loss_method': 'MSE','exclude_terrain': True}})
-configs.append({'Loss': 'DivergenceFreeLoss','loss_kwargs':{'loss_method': 'MSE','exclude_terrain': False}})
-configs.append({'Loss': 'VelocityGradientLoss','loss_kwargs':{'loss_method': 'L1','exclude_terrain': True}})
-configs.append({'Loss': 'VelocityGradientLoss','loss_kwargs':{'loss_method': 'L1','exclude_terrain': False}})
-configs.append({'Loss': 'VelocityGradientLoss','loss_kwargs':{'loss_method': 'MSE','exclude_terrain': True}})
-configs.append({'Loss': 'VelocityGradientLoss','loss_kwargs':{'loss_method': 'MSE','exclude_terrain': False}})
+configs.append({'Loss': 'DivergenceFreeLoss','loss_kwargs':{'loss_type': 'L1','exclude_terrain': True }})
+configs.append({'Loss': 'DivergenceFreeLoss','loss_kwargs':{'loss_type': 'L1','exclude_terrain': False}})
+configs.append({'Loss': 'DivergenceFreeLoss','loss_kwargs':{'loss_type': 'MSE','exclude_terrain': True}})
+configs.append({'Loss': 'DivergenceFreeLoss','loss_kwargs':{'loss_type': 'MSE','exclude_terrain': False}})
+configs.append({'Loss': 'VelocityGradientLoss','loss_kwargs':{'loss_type': 'L1','exclude_terrain': True}})
+configs.append({'Loss': 'VelocityGradientLoss','loss_kwargs':{'loss_type': 'L1','exclude_terrain': False}})
+configs.append({'Loss': 'VelocityGradientLoss','loss_kwargs':{'loss_type': 'MSE','exclude_terrain': True}})
+configs.append({'Loss': 'VelocityGradientLoss','loss_kwargs':{'loss_type': 'MSE','exclude_terrain': False}})
 
 
 # custom loss testing for loop

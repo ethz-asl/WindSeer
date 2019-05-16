@@ -13,29 +13,42 @@ class MSELoss(Module):
     def __init__(self, **kwargs):
         super(MSELoss, self).__init__()
 
-        self.__loss = torch.nn.MSELoss()
+        self.__loss = torch.nn.MSELoss(reduction='none')
 
         try:
             self.__exclude_terrain = kwargs['exclude_terrain']
         except KeyError:
             self.__exclude_terrain = self.__default_exclude_terrain
-            print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
+            print('MSELoss: exclude_terrain not present in kwargs, using default value:',
                   self.__default_exclude_terrain)
 
-    def forward(self, net_output, target, input):
+    def forward(self, predicted, target, input):
+        if (predicted.shape != target.shape):
+            raise ValueError('MSELoss: predicted and target do not have the same shape, pred:{}, target:{}'
+                             .format(predicted.shape, target.shape))
 
-        return self.compute_loss(net_output, target, input)
+        if (len(predicted.shape) != 5) or (len(input.shape) != 5):
+            raise ValueError('MSELoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-    def compute_loss(self, net_output, target, input):
+        return self.compute_loss(predicted, target, input)
 
-        # compute terrain correction factor if exclude_terrain
-        terrain_correction_factor = 1
+    def compute_loss(self, predicted, target, input):
+
+        # first compute mean loss for each sample in batch
+        loss = self.__loss(target, predicted).mean(tuple(range(1, len(predicted.shape))))
+
+        # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            terrain = input[:, 0]
-            terrain_correction_factor = utils.compute_terrain_factor(net_output,terrain)
+            terrain = input[:, 0:1]
+            terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
+        else:
+            terrain_correction_factors = torch.ones(predicted.shape[0]).to(predicted.device)
 
-        loss = self.__loss(target, net_output)*terrain_correction_factor
-        return loss
+        # apply terrain correction factor to loss of each sample in batch
+        loss *= terrain_correction_factors
+
+        # return batchwise mean of loss
+        return loss.mean()
 
 class L1Loss(Module):
     '''
@@ -47,26 +60,39 @@ class L1Loss(Module):
     def __init__(self, **kwargs):
         super(L1Loss, self).__init__()
 
-        self.__loss = torch.nn.L1Loss()
+        self.__loss = torch.nn.L1Loss(reduction='none')
 
         try:
             self.__exclude_terrain = kwargs['exclude_terrain']
         except KeyError:
             self.__exclude_terrain = self.__default_exclude_terrain
-            print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
+            print('L1Loss: exclude_terrain not present in kwargs, using default value:',
                   self.__default_exclude_terrain)
 
-    def forward(self, net_output, target, input):
+    def forward(self, predicted, target, input):
+        if (predicted.shape != target.shape):
+            raise ValueError('L1Loss: predicted and target do not have the same shape, pred:{}, target:{}'
+                             .format(predicted.shape, target.shape))
 
-        return self.compute_loss(net_output, target, input)
+        if (len(predicted.shape) != 5) or (len(input.shape) != 5):
+            raise ValueError('L1Loss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-    def compute_loss(self, net_output, target, input):
+        return self.compute_loss(predicted, target, input)
 
-        # compute terrain correction factor if exclude_terrain
-        terrain_correction_factor = 1
+    def compute_loss(self, predicted, target, input):
+
+        # first compute mean loss for each sample in batch
+        loss = self.__loss(target, predicted).mean(tuple(range(1, len(predicted.shape))))
+
+        # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            terrain = input[:, 0]
-            terrain_correction_factor = utils.compute_terrain_factor(net_output,terrain)
+            terrain = input[:, 0:1]
+            terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
+        else:
+            terrain_correction_factors = torch.ones(predicted.shape[0]).to(predicted.device)
 
-        loss = self.__loss(target, net_output)*terrain_correction_factor
-        return loss
+        # apply terrain correction factor to loss of each sample in batch
+        loss *= terrain_correction_factors
+
+        # return batchwise mean of loss
+        return loss.mean()

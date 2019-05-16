@@ -40,12 +40,21 @@ class GaussianLogLikelihoodLoss(Module):
 
         mean_error =  mean - label
 
-        # compute terrain correction factor if exclude_terrain
-        terrain_correction_factor = 1
+        # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            terrain = input[:, 0]
-            terrain_correction_factor = utils.compute_terrain_factor(label,terrain)
+            terrain = input[:, 0:1]
+            terrain_correction_factors = utils.compute_terrain_factor(mean_error, terrain)
+        else:
+            terrain_correction_factors = torch.ones(mean_error.shape[0]).to(mean_error.device)
 
+        # compute loss for all elements
         loss = log_variance + (mean_error * mean_error) / log_variance.exp().clamp(self.__eps)
 
-        return loss.mean()*terrain_correction_factor
+        # average loss over each sample in batch
+        loss = loss.mean(tuple(range(1, len(mean_error.shape))))
+
+        # apply terrain correction factor to loss of each sample in batch
+        loss *= terrain_correction_factors
+
+        # return batchwise mean of loss
+        return loss.mean()
