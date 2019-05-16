@@ -29,7 +29,6 @@ class ModelEDNN3D(nn.Module):
     __default_skipping = True
     __default_align_corners = None
     __default_pooling_method = 'striding'
-    __default_use_grid_size = False
     __default_use_turbulence = True
     __default_use_pressure = False
     __default_use_epsilon = False
@@ -137,13 +136,6 @@ class ModelEDNN3D(nn.Module):
                 print('EDNN3D: pooling_method not present in kwargs, using default value:', self.__default_pooling_method)
 
         try:
-            self.__use_grid_size = kwargs['use_grid_size']
-        except KeyError:
-            self.__use_grid_size = self.__default_use_grid_size
-            if verbose:
-                print('EDNN3D: use_grid_size not present in kwargs, using default value:', self.__default_use_grid_size)
-
-        try:
             self.__use_turbulence = kwargs['use_turbulence']
         except KeyError:
             self.__use_turbulence = self.__default_use_turbulence
@@ -178,9 +170,6 @@ class ModelEDNN3D(nn.Module):
         # construct the number of input and output channels based on the parameters
         self.__num_inputs = 4 # (terrain, u_x_in, u_y_in, u_z_in)
         self.__num_outputs = 3 # (u_x_out, u_y_out, u_z_out)
-
-        if self.__use_grid_size:
-            self.__num_inputs += 3 # x, y, z
 
         if self.__use_turbulence:
             self.__num_outputs += 1 # turb. kin. en.

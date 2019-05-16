@@ -193,8 +193,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                                                                           outputs,
                                                                           inputs[0,0] * params.data['terrain_scaling'],
                                                                           predict_uncertainty, device,
-                                                                          params.data['use_turbulence'],
-                                                                          params.data['normalize_terrain'])
+                                                                          params.data['use_turbulence'])
             for key in error_stats.keys():
                 if not np.isnan(error_stats[key]):
                     prediction_errors[key].append(error_stats[key])
@@ -350,6 +349,12 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
                 print('Loss: {}'.format(loss_fn(output[:int(num_channels/2)], label)))
         else:
             if loss_fn:
+                if len(output.shape) == 4:
+                    print('Loss ux: {}'.format(loss_fn(output[0], label[0])))
+                    print('Loss uy: {}'.format(loss_fn(output[1], label[1])))
+                    print('Loss uz: {}'.format(loss_fn(output[2], label[2])))
+                    if params.data['use_turbulence']:
+                        print('Loss k: {}'.format(loss_fn(output[3], label[3])))
                 print('Loss: {}'.format(loss_fn(output, label)))
 
         if savename is not None:

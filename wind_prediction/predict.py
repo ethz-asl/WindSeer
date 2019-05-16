@@ -54,11 +54,10 @@ params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yam
 # load dataset
 if args.add_all:
     testset = data.FullDataset(args.dataset, compressed = args.compressed,
-                               augmentation = False, subsample = False, return_grid_size = True, **params.Dataset_kwargs())
+                               augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
 else:
     testset = data.MyDataset(args.dataset, compressed = args.compressed,
-                             augmentation = False, subsample = False, return_grid_size = True, **params.Dataset_kwargs())
-
+                             augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1, # needs to be one
                                              shuffle=False, num_workers=num_worker)
 # load the model and its learnt parameters
@@ -85,11 +84,12 @@ if args.compute_prediction_error:
         args.index = worst_index
 
 # predict the wind, compute the loss and plot if requested
-input = testset[args.index][0]
-label = testset[args.index][1]
+data = testset[args.index]
+input = data[0]
+label = data[1]
 scale = 1.0
 if params.data['autoscale']:
-    scale = testset[args.index][2].item()
+    scale = data[2].item()
 
 print('Test index name: {0}'.format(testset.get_name(args.index)))
 if args.save_prediction:

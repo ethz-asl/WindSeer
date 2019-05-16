@@ -9,6 +9,11 @@ class ModelTwin(nn.Module):
     def __init__(self, **kwargs):
         super(ModelTwin, self).__init__()
 
+        try:
+            verbose = kwargs['verbose']
+        except KeyError:
+            verbose = False
+
         # determine the model class
         try:
             classModule = importlib.import_module('nn_wind_prediction.models.' + kwargs['submodel_type'])

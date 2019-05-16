@@ -64,32 +64,35 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if run_params.run['add_all_variables']:
 # define dataset and dataloader
   trainset = data.FullDataset(trainset_name, compressed = run_params.data['compressed'],
-                            subsample = run_params.data['trainset_subsample'], augmentation = run_params.data['trainset_augmentation'],
+                            augmentation = run_params.data['augmentation'], augmentation_mode = run_params.data['augmentation_mode'],
+                            augmentation_kwargs = run_params.data['augmentation_kwargs'],
                             **run_params.Dataset_kwargs())
 
   trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                                            shuffle=True, num_workers=run_params.run['num_workers'])
+shuffle=True, num_workers=run_params.run['num_workers'])
 
   validationset = data.FullDataset(validationset_name, compressed = run_params.data['compressed'],
-                                 subsample = False, augmentation = False, **run_params.Dataset_kwargs())
+subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
   validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                                            num_workers=run_params.run['num_workers'])
+num_workers=run_params.run['num_workers'])
 
 else:
 # define dataset and dataloader
   trainset = data.MyDataset(trainset_name, compressed = run_params.data['compressed'],
-                            subsample = run_params.data['trainset_subsample'], augmentation = run_params.data['trainset_augmentation'],
-                            **run_params.Dataset_kwargs())
+                          augmentation = run_params.data['augmentation'],
+                          augmentation_mode = run_params.data['augmentation_mode'],
+                          augmentation_kwargs = run_params.data['augmentation_kwargs'],
+                          **run_params.MyDataset_kwargs())
 
   trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                                            shuffle=True, num_workers=run_params.run['num_workers'])
+shuffle=True, num_workers=run_params.run['num_workers'])
 
   validationset = data.MyDataset(validationset_name, compressed = run_params.data['compressed'],
-                                 subsample = False, augmentation = False, **run_params.Dataset_kwargs())
+subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
   validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                                            num_workers=run_params.run['num_workers'])
+num_workers=run_params.run['num_workers'])
 
 
 
@@ -119,12 +122,14 @@ optimizer = torch.optim.Adam(net.parameters(), lr=run_params.run['learning_rate_
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 
+custom_loss = False
 if run_params.run['loss_function'] == 1:
     loss_fn = torch.nn.L1Loss()
 elif run_params.run['loss_function'] == 2:
-    loss_fn = nn_custom.GaussianLogLikelihoodLoss(run_params.run['uncertainty_loss_eps'])
+    loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.run['loss_kwargs'])
 elif run_params.run['loss_function'] == 3:
-    loss_fn = nn_custom.MyLoss()
+    custom_loss = True
+    loss_fn = nn_custom.ScaledLoss(**run_params.run['loss_kwargs'])
 else:
     loss_fn = torch.nn.MSELoss()
 
@@ -155,7 +160,7 @@ net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optim
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
                        run_params.run['compute_validation_loss'], model_dir, args.use_writer,
-                       predict_uncertainty, uncertainty_train_mode)
+                       predict_uncertainty, uncertainty_train_mode, custom_loss)
 
 # save the model if requested
 if (run_params.run['save_model']):
@@ -181,7 +186,10 @@ if (run_params.run['evaluate_testset']):
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
-            loss += loss_fn(outputs, labels)
+            if run_params.run['loss_function']:
+                loss += loss_fn(outputs, labels, inputs)
+            else:
+                loss += loss_fn(outputs, labels)
 
         print('INFO: Average loss on test set: %s' % (loss.item()/len(testset)))
 

@@ -5,16 +5,6 @@ import numpy as np
 from matplotlib.widgets import Slider, RadioButtons
 import torch
 
-# try importing mayavi
-mayavi_available = False # currently mayavi is disabled
-try:
-    from mayavi import mlab
-    from mayavi.tools.pipeline import streamline
-    from tvtk.api import tvtk, write_data
-except:
-    mayavi_available = False
-    print('ImportError: Mayavi not available, not plotting streamlines.')
-
 class PlotUtils():
     '''
     Class providing the tools to plot the input and labels for the 2D and 3D case.
@@ -63,11 +53,11 @@ class PlotUtils():
         # Set the input to be a masked array so that we specify a terrain colour
         self.__input = np.ma.MaskedArray(np.zeros(input.shape))
         is_terrain = np.logical_not(terrain.cpu().numpy().astype(bool))
-        for i, channel in enumerate(input):
+        for i, channel in enumerate(input.cpu()):
             self.__input[i] = np.ma.masked_where(is_terrain, channel)
 
         self.__label = np.ma.MaskedArray(np.zeros(label.shape))
-        for i, channel in enumerate(label):
+        for i, channel in enumerate(label.cpu()):
             self.__label[i] = np.ma.masked_where(is_terrain, channel)
         self.__uncertainty = None
 
@@ -291,32 +281,6 @@ class PlotUtils():
             self.__button.on_clicked(self.radio_callback)
             plt.show(block=False)
 
-            if mayavi_available:
-                # 3D plots
-                field = mlab.pipeline.vector_field(self.__label[2,:,:,:], self.__label[1,:,:,:], self.__label[0,:,:,:])
-                terrain = mlab.pipeline.vector_field(self.__input[0,:,:,:], self.__input[0,:,:,:], self.__input[0,:,:,:])
-
-                magnitude = mlab.pipeline.extract_vector_norm(field)
-                magnitude_terrain = mlab.pipeline.extract_vector_norm(terrain)
-                contours = mlab.pipeline.iso_surface(magnitude_terrain,
-                                                    contours=[0.01, 0.8, 3.8, ],
-                                                    transparent=False,
-                                                    opacity=1.0,
-                                                    colormap='YlGnBu',
-                                                    vmin=0, vmax=0)
-
-                field_lines = mlab.pipeline.streamline(magnitude, seedtype='plane',
-                                                       seed_scale = 1,
-                                                       seed_resolution = 200,
-                                                        integration_direction='both',
-                                                        colormap='bone')
-
-                field_lines.seed.widget.enabled = False
-                field_lines.seed.widget.point1 = [0, 0, 0]
-                field_lines.seed.widget.point2 = [0, 10, 10]
-                field_lines.seed.widget.resolution = 10
-
-                mlab.show()
         else:
             print('Warning: The 2D plotting has not been used for some time, it might be not working')
             # 2D data
