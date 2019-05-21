@@ -15,10 +15,15 @@ run:
     save_metadata: True
     evaluate_testset: False
     warm_start: False
-    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: ScaledLoss, else: MSE
+    save_model_every_n_epoch: 25
+    save_params_hist_every_n_epoch: 100
+
+    # loss function options
+    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: ScaledLoss, 4: DivergenceFreeLoss, 5: VelocityGradientLoss, else: MSE
     loss_kwargs: {
         # General
         loss_type: 'MSE', #MSE or L1
+        exclude_terrain: True,
 
         # Gaussian-Log-Likelihood
         uncertainty_loss_eps: 1.0E-9,
@@ -26,12 +31,11 @@ run:
         # ScaledLoss
         max_scale: 4,
         norm_threshold: 0.5,
-        exclude_terrain: True,
         no_scaling: False,
-    }
 
-    save_model_every_n_epoch: 25
-    save_params_hist_every_n_epoch: 100
+        #DFL or VGL
+        loss_scaling_factor: 500, # recommended values: 500 for DFL, 1200 for VGL (trial and error)
+    }
 
     # solver settings
     beta1: 0.9

@@ -8,8 +8,7 @@ import nn_wind_prediction.models as models
 import nn_wind_prediction.nn as nn_custom
 import nn_wind_prediction.utils as utils
 import os
-import random
-import string
+import re
 import time
 import torch
 import torch.nn as nn
@@ -77,15 +76,35 @@ validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, bat
 
 # define model and move to gpu if available
 NetworkType = getattr(models, run_params.model['model_type'])
+
+# get grid size
+grid_size = data.get_grid_size(trainset_name)
+run_params.model_kwargs()['grid_size'] = grid_size
+run_params.loss_kwargs()['grid_size'] = grid_size
+
+
 net = NetworkType(**run_params.model_kwargs())
 
+warm_start_epoch = 0
 if (run_params.run['warm_start']):
     try:
         net.load_state_dict(torch.load(os.path.join(model_dir, 'pretrained.model'), map_location=lambda storage, loc: storage))
     except:
-        print('Warning: Failed to load the model parameter, initializing parameter.')
-        if run_params.run['custom_init']:
-            net.init_params()
+        try:
+            print('Warm start warning: Failed to load pretrained.model. Using models from latest saved epoch.')
+
+            saved_model_epochs = []
+            for filename in os.listdir(model_dir):
+                if filename.startswith('e') and filename.endswith('model'):
+                    saved_model_epochs += [int(re.search(r'\d+', filename).group())]
+            warm_start_epoch = max(saved_model_epochs)
+
+            net.load_state_dict(torch.load(os.path.join(model_dir, 'e{}.model'.format(warm_start_epoch)),
+                                           map_location=lambda storage, loc: storage))
+        except:
+            print('Warm start warning: Failed to load the model parameter, initializing parameter.')
+            if run_params.run['custom_init']:
+                net.init_params()
 else:
     if run_params.run['custom_init']:
         net.init_params()
@@ -100,16 +119,19 @@ optimizer = torch.optim.Adam(net.parameters(), lr=run_params.run['learning_rate_
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 
-custom_loss = False
+# choose loss function
 if run_params.run['loss_function'] == 1:
-    loss_fn = torch.nn.L1Loss()
+    loss_fn = nn_custom.L1Loss(**run_params.loss_kwargs())
 elif run_params.run['loss_function'] == 2:
-    loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.run['loss_kwargs'])
+    loss_fn = nn_custom.GaussianLogLikelihoodLoss(**run_params.loss_kwargs())
 elif run_params.run['loss_function'] == 3:
-    custom_loss = True
-    loss_fn = nn_custom.ScaledLoss(**run_params.run['loss_kwargs'])
+    loss_fn = nn_custom.ScaledLoss(**run_params.loss_kwargs())
+elif run_params.run['loss_function'] == 4:
+    loss_fn = nn_custom.DivergenceFreeLoss(**run_params.loss_kwargs())
+elif run_params.run['loss_function'] == 5:
+    loss_fn = nn_custom.VelocityGradientLoss(**run_params.loss_kwargs())
 else:
-    loss_fn = torch.nn.MSELoss()
+    loss_fn = nn_custom.MSELoss(**run_params.loss_kwargs())
 
 # save the model parameter in the beginning
 run_params.save(model_dir)
@@ -138,7 +160,7 @@ net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optim
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
                        run_params.run['compute_validation_loss'], model_dir, args.use_writer,
-                       predict_uncertainty, uncertainty_train_mode, custom_loss)
+                       predict_uncertainty, uncertainty_train_mode, warm_start_epoch)
 
 # save the model if requested
 if (run_params.run['save_model']):
@@ -157,10 +179,7 @@ if (run_params.run['evaluate_testset']):
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = net(inputs)
-            if run_params.run['loss_function']:
-                loss += loss_fn(outputs, labels, inputs)
-            else:
-                loss += loss_fn(outputs, labels)
+            loss += loss_fn(outputs, labels, inputs)
 
         print('INFO: Average loss on test set: %s' % (loss.item()/len(testset)))
 
