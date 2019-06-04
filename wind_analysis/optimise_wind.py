@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import nn_wind_prediction.utils as utils
 import argparse
-
+from scipy.interpolate import RegularGridInterpolator
 
 def angle_wrap(angles):
     # Wrap angles to [-pi, pi)
@@ -74,6 +74,47 @@ best_rs = all_rs[best_method_index]
 wind_opt.reset_rotation_scale(rot=best_rs[-1,0], scale=best_rs[-1,1])
 print('Plotting for optimal method {0}, rotation = {1:0.3f} deg, scale = {2:0.3f}'.format(names[best_method_index],
       best_rs[-1, 0]*180.0/np.pi, best_rs[-1, 1]))
-utils.plot_prediction_observations(wind_opt.get_prediction().detach(), wind_opt._wind_blocks, wind_opt.terrain.network_terrain.squeeze(0))
+wind_prediction = wind_opt.get_prediction().detach()
+utils.plot_prediction_observations(wind_prediction, wind_opt._wind_blocks, wind_opt.terrain.network_terrain.squeeze(0))
+
+# Plot wind over time
+w_vanes = np.array([wind_opt._ulog_data['we'], wind_opt._ulog_data['wn'], wind_opt._ulog_data['wd']])
+w_ekfest = np.array([wind_opt._ulog_data['we_east'], wind_opt._ulog_data['we_north'], wind_opt._ulog_data['we_down']])
+all_winds = [w_vanes, w_ekfest]
+plot_time = (wind_opt._ulog_data['gp_time'] - wind_opt._ulog_data['gp_time'][0]) * 1e-6
+fig3, ax3 = utils.plot_wind_estimates(plot_time, all_winds, ['Raw vane estimates', 'On-board EKF estimate'], polar=False)
+
+x_terr2 = np.linspace(wind_opt.terrain.x_terr[0], wind_opt.terrain.x_terr[-1], wind_prediction.shape[-1])
+y_terr2 = np.linspace(wind_opt.terrain.y_terr[0], wind_opt.terrain.y_terr[-1], wind_prediction.shape[-2])
+z_terr2 = np.linspace(wind_opt.terrain.z_terr[0], wind_opt.terrain.z_terr[-1], wind_prediction.shape[-3])
+prediction_interp = []
+for pred_dim in wind_prediction:
+    prediction_interp.append(RegularGridInterpolator((z_terr2, y_terr2, x_terr2), pred_dim))
+
+# Get all the in bounds points
+inbounds = np.ones(wind_opt._ulog_data['x'].shape, dtype='bool')
+inbounds = np.logical_and.reduce([wind_opt._ulog_data['x'] > x_terr2[0], wind_opt._ulog_data['x'] < x_terr2[-1], inbounds])
+inbounds = np.logical_and.reduce([wind_opt._ulog_data['y'] > y_terr2[0], wind_opt._ulog_data['y'] < y_terr2[-1], inbounds])
+inbounds = np.logical_and.reduce([wind_opt._ulog_data['alt'] > z_terr2[0], wind_opt._ulog_data['alt'] < z_terr2[-1], inbounds])
+
+pred_t = (wind_opt._ulog_data['gp_time'][inbounds] - wind_opt._ulog_data['gp_time'][0])*1e-6
+points = np.array([wind_opt._ulog_data['alt'][inbounds], wind_opt._ulog_data['y'][inbounds], wind_opt._ulog_data['x'][inbounds]]).T
+pred_wind = [prediction_interp[0](points), prediction_interp[1](points), prediction_interp[2](points)]
+
+wind_opt.reset_rotation_scale(rot=0.0, scale=1.0)
+orig_wind_prediction = wind_opt.get_prediction().detach()
+orig_prediction_interp = []
+for pred_dim in orig_wind_prediction:
+    orig_prediction_interp.append(RegularGridInterpolator((z_terr2, y_terr2, x_terr2), pred_dim))
+orig_pred_wind = [orig_prediction_interp[0](points), orig_prediction_interp[1](points), orig_prediction_interp[2](points)]
+
+ax3[0].plot(pred_t, orig_pred_wind[0], 'g.', ms=3)
+ax3[1].plot(pred_t, orig_pred_wind[1], 'g.', ms=3)
+ax3[2].plot(pred_t, orig_pred_wind[2], 'g.', ms=3)
+ax3[0].plot(pred_t, pred_wind[0], 'r.', ms=3)
+ax3[1].plot(pred_t, pred_wind[1], 'r.', ms=3)
+ax3[2].plot(pred_t, pred_wind[2], 'r.', ms=3)
+
+ax3[0].legend(['Raw vane estimates', 'On-board EKF estimate', 'Pre-optimisation network estimate', 'Post-optimisation network estimate'])
 
 plt.show(block=False)

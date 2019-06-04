@@ -1,6 +1,6 @@
 import numpy as np
 import nn_wind_prediction.utils as utils
-from get_mapgeo_terrain import get_terrain
+from nn_wind_prediction.utils import get_terrain
 import matplotlib.pyplot as plt
 import os
 import nn_wind_prediction.cosmo as cosmo
@@ -104,11 +104,12 @@ if __name__ == "__main__":
             pred_V, pred_dir = utils.rec2polar(pred_wind[0], pred_wind[1], wind_bearing=True, deg=True)
             a2[0].plot(pred_t, pred_V, 'r.')
             a2[1].plot(pred_t, pred_dir, 'r.')
+
         else:
-            a2[0].plot(pred_t, pred_wind[0], 'r.')
+            a2[0].plot(pred_t, -pred_wind[0], 'r.')
             a2[1].plot(pred_t, pred_wind[1], 'r.')
         a2[2].plot(pred_t, pred_wind[2], 'r.')
-
+        a2[0].legend(['Raw vane estimate', 'On-board EKF estimate', 'Network estimate'])
         # Calculate RMSE - resample measured wind onto valid time stamps from
 
     # Nearest COSMO corner for vertical profile
@@ -128,7 +129,7 @@ if __name__ == "__main__":
         f2.savefig('fig/{0}{1}_wind.png'.format(cosmo_args.params['prediction_prefix'], bn), bbox_inches='tight')
         fp.savefig('fig/{0}{1}_windProfile.png'.format(cosmo_args.params['prediction_prefix'], bn), bbox_inches='tight')
         fv.savefig('fig/{0}{1}_windLateral.png'.format(cosmo_args.params['prediction_prefix'], bn), bbox_inches='tight')
-    plt.show(block=True)
+    plt.show(block=False)
 
 ## Alternative projections
 # proj_EGM96 = pyproj.Proj(init="EPSG:4326", geoidgrids="egm96_15.gtx") # init="EPSG:5773",

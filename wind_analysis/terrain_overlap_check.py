@@ -7,7 +7,7 @@ import os
 import pyproj
 import nn_wind_prediction.cosmo as cosmo
 from osgeo import gdal
-from get_mapgeo_terrain import get_terrain
+from nn_wind_prediction.utils import get_terrain
 
 
 cosmo_terrain='data/riemenstalden/cosmo-1_ethz_ana/cosmo-1_ethz_ana_const.nc'
