@@ -37,7 +37,7 @@ parser.add_argument('-cpe', dest='compute_prediction_error', action='store_true'
 parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', help='If set the worst prediction of the input dataset is shown. Needs compute_prediction_error to be true.')
 parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
 parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
-parser.add_argument('-a', dest='add_all', action='store_true', default=add_all, help='Add all variables (if false: add only U and k)')
+parser.add_argument('-a', dest='add_all', action='store_true', help='Add all variables (if false: add only U and k)')
 
 args = parser.parse_args()
 args.compressed = args.compressed or compressed

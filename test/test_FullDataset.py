@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
 compressed = False
-input_dataset = '../wind_prediction/data/single_sample.tar'
+input_dataset = 'wind_prediction/data/single_sample.tar'
 nx = 64
 ny = 64
 nz = 64

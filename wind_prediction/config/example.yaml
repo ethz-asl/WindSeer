@@ -9,7 +9,7 @@ run:
     compute_validation_loss: True
     custom_init: False
     minibatch_epoch_loss: False
-    add_all_variables: True
+    add_all_variables: False # Switch to true to build a model to predict all channels
 
     # options to store data
     save_model: True
