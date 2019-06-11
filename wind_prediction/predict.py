@@ -60,6 +60,12 @@ else:
                              augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1, # needs to be one
                                              shuffle=False, num_workers=num_worker)
+
+# get grid size of test dataset if potential flow is used
+if params.model_kwargs()['potential_flow']:
+    grid_size = data.get_grid_size(args.dataset)
+    params.model_kwargs()['grid_size'] = grid_size
+
 # load the model and its learnt parameters
 NetworkType = getattr(models, params.model['model_type'])
 net = NetworkType(**params.model_kwargs())

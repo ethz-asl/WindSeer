@@ -2,6 +2,7 @@ import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import nn_wind_prediction.utils as utils
 
 '''
 Encoder/Decoder Neural Network
@@ -33,6 +34,7 @@ class ModelEDNN3D(nn.Module):
     __default_use_pressure = False
     __default_use_epsilon = False
     __default_use_nut = False
+    __default_grid_size = [1, 1, 1]
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -136,6 +138,13 @@ class ModelEDNN3D(nn.Module):
                 print('EDNN3D: pooling_method not present in kwargs, using default value:', self.__default_pooling_method)
 
         try:
+            self.__grid_size = kwargs['grid_size']
+        except KeyError:
+            self.__grid_size = self.__default_grid_size
+            if verbose:
+                print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
+
+        try:
             self.__use_turbulence = kwargs['use_turbulence']
         except KeyError:
             self.__use_turbulence = self.__default_use_turbulence
@@ -229,7 +238,7 @@ class ModelEDNN3D(nn.Module):
         elif (self.__pooling_method == 'striding'):
             self.__pooling = nn.MaxPool3d(1, stride=2)
         else:
-            raise ValueError('The pooling method value is invalid: ' + pooling_method)
+            raise ValueError('The pooling method value is invalid: ' + self.__pooling_method)
 
         # upconvolution layers
         self.__deconv1 = nn.ModuleList()
@@ -254,10 +263,6 @@ class ModelEDNN3D(nn.Module):
         if self.__use_mapping_layer:
             # mapping layer
             self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
-
-        if self.__potential_flow:
-            self.__pf_convolution = nn.Conv3d(3,1,1)
-            self.__pf_pad = nn.ReplicationPad3d((0, 1, 0, 1, 0, 1))
 
     def new_epoch_callback(self, epoch):
         # nothing to do here
@@ -323,23 +328,30 @@ class ModelEDNN3D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(
-                    torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
-                               x_skip[i]], 1)))))
+                if (i == 0):
+                    # no nonlinearity in the output layer
+                    x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1))))))
+                else:
+                    x = self.__activation(self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1)))))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv1[i](self.__pad_deconv(
-                    F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                if (i == 0):
+                    # no nonlinearity in the output layer
+                    x = self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                else:
+                    x = self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners))))
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)
 
         if self.__potential_flow:
-            potential = self.__pf_convolution(self.__pf_pad(x[:,:3,:]))
-            x = torch.cat([(potential[:,:,:-1,:-1,1: ]-potential[:,:,:-1,:-1,:-1]), # U_x
-                           (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
-                           (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
-                            x[:,3:,:]], 1)
+            x = torch.cat([utils.curl(x, self.__grid_size), x[:, 3:, :]], 1)
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
