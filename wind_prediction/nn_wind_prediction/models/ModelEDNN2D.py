@@ -27,7 +27,6 @@ class ModelEDNN2D(nn.Module):
     __default_skipping = True
     __default_align_corners = None
     __default_pooling_method = 'striding'
-    __default_use_grid_size = False
     __default_use_turbulence = True
 
     def __init__(self, **kwargs):
@@ -124,13 +123,6 @@ class ModelEDNN2D(nn.Module):
                 print('EDNN2D: pooling_method not present in kwargs, using default value:', self.__default_pooling_method)
 
         try:
-            self.__use_grid_size = kwargs['use_grid_size']
-        except KeyError:
-            self.__use_grid_size = self.__default_use_grid_size
-            if verbose:
-                print('EDNN2D: use_grid_size not present in kwargs, using default value:', self.__default_use_grid_size)
-
-        try:
             self.__use_turbulence = kwargs['use_turbulence']
         except KeyError:
             self.__use_turbulence = self.__default_use_turbulence
@@ -142,9 +134,6 @@ class ModelEDNN2D(nn.Module):
 
         if self.__use_turbulence:
             self.__num_outputs += 1
-
-        if self.__use_grid_size:
-            self.__num_inputs += 3
 
         # convolution layers
         self.__conv = nn.ModuleList()
@@ -276,13 +265,24 @@ class ModelEDNN2D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(
-                    torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
-                               x_skip[i]], 1)))))
+                if (i == 0):
+                    # no nonlinearity in the output layer
+                    x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1))))))
+                else:
+                    x = self.__activation(self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1)))))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv1[i](self.__pad_deconv(
-                    F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                if (i == 0):
+                    # no nonlinearity in the output layer
+                    x = self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                else:
+                    x = self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners))))
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)
