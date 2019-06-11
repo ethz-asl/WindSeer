@@ -291,6 +291,7 @@ class ModelEDNN3D(nn.Module):
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
                 if (i == 0):
+                    # no nonlinearity in the output layer
                     x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
                         torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
                                    x_skip[i]], 1))))))
@@ -301,6 +302,7 @@ class ModelEDNN3D(nn.Module):
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
                 if (i == 0):
+                    # no nonlinearity in the output layer
                     x = self.__deconv1[i](self.__pad_deconv(
                         F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
                 else:
