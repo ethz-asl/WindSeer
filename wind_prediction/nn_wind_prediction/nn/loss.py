@@ -5,7 +5,6 @@ import sys
 import warnings
 import re
 
-
 class CombinedLoss(Module):
     '''
     Loss which can combine all of the different loss functions into one using learnable homoscedastic uncertainty factors.
