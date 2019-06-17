@@ -103,9 +103,6 @@ if (run_params.run['warm_start']):
                 if filename.startswith('e') and filename.endswith('model'):
                     saved_model_epochs += [int(re.search(r'\d+', filename).group())]
             warm_start_epoch = max(saved_model_epochs)
-            state_dict = torch.load(os.path.join(model_dir, 'e{}.model'.format(warm_start_epoch)),
-                                           map_location=lambda storage, loc: storage)
-
             net.load_state_dict(torch.load(os.path.join(model_dir, 'e{}.model'.format(warm_start_epoch)),
                                            map_location=lambda storage, loc: storage))
             if loss_fn.learn_scaling:
