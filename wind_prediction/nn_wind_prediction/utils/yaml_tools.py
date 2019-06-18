@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import os
-import string
 import yaml
 
 class EDNNParameters(object):
@@ -12,6 +11,7 @@ class EDNNParameters(object):
         self.model = run_parameters['model']
         self.data = run_parameters['data']
         self.run = run_parameters['run']
+        self.loss = run_parameters['loss']
         self.name = self._build_name()
 
 
@@ -75,14 +75,19 @@ class EDNNParameters(object):
     def model_kwargs(self):
         return self.model['model_args']
 
-    def loss_kwargs(self):
-        return self.run['loss_kwargs']
+    def pass_grid_size_to_loss(self, grid_size):
+        '''
+        Small function to pass the grid size to the kwargs of the loss functions that need it.
+        '''
+        for i, loss_component in enumerate(self.loss['loss_components']):
+            if 'DivergenceFree' in loss_component or 'VelocityGradient' in loss_component:
+                self.loss[loss_component + '_kwargs']['grid_size'] = grid_size
 
     def save(self, dir=None):
         if dir is None:
             dir = self.name
         with open(os.path.join(dir, 'params.yaml'), 'wt') as fh:
-            yaml.safe_dump({'run': self.run, 'data': self.data, 'model': self.model}, fh)
+            yaml.safe_dump({'run': self.run, 'loss': self.loss, 'data': self.data, 'model': self.model}, fh)
 
     def print(self):
         print('Train Settings:')
@@ -93,9 +98,13 @@ class EDNNParameters(object):
         print('\tBatchsize:\t\t', self.run['batchsize'])
         print('\tEpochs:\t\t\t', self.run['n_epochs'])
         print('\tMinibatch epoch loss:\t', self.run['minibatch_epoch_loss'])
-        print('\tLoss function:\t', self.run['loss_function'])
-        print('\tLoss function args:')
-        print('\t\t', self.run['loss_kwargs'])
+        print(' ')
+        print('Loss Settings:')
+        print('\tLoss component(s):\t', self.loss['loss_components'])
+        if len(self.loss['loss_components']) > 1:
+            print('\tLearn loss scaling factors:\t', self.loss['learn_scaling'])
+        for i, loss_component in enumerate(self.loss['loss_components']):
+            print('\t'+loss_component, 'kwargs :',self.loss[loss_component + '_kwargs'])
         print(' ')
         print('Model Settings:')
         print('\t Model prefix:\t\t', self.model['name_prefix'])
@@ -109,3 +118,5 @@ class EDNNParameters(object):
         print('\tTurbulence scaling:\t', self.data['turbulence_scaling'])
         print('\tHorizontal stride:\t', self.data['stride_hor'])
         print('\tVertical stride:\t', self.data['stride_vert'])
+        print('\tAugmentation mode:\t', self.data['augmentation_mode'])
+        print('\tAugmentation params:\t', self.data['augmentation_kwargs'])
