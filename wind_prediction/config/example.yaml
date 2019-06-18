@@ -28,27 +28,30 @@ run:
 
 # loss parameters
 loss:
-    # combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss'].
-    # multiple instances of one loss type can be used. Just add numbering behind 'Loss', e.g. 'L1Loss1/2/3'.
-    # for 'LPLoss', P can be replaced with the desired order (int>0). If fractional order desired use LPLoss with p in kwargs.
-    # 'GaussianLogLikelihoodLoss' can only be used alone
+    # Combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss'].
+    # Multiple instances of one loss type can be used. Just add numbering behind 'Loss', e.g. 'L1Loss1/2/3'.
+    # For 'LPLoss', P can be replaced with the desired order (int>0). If decimal order desired use LPLoss with p in kwargs.
+    # 'GaussianLogLikelihoodLoss' can only be used alone.
     loss_components: ['L2Loss']
 
-    # if the scaling of the losses should be learnt during training
+    # If the homoscedastic uncertainty factors of the losses should be learnt during training. Auto disable if 1 loss comp.
     learn_scaling: True
 
-    # settings for all of the available loss functions, loss_factor_init sets the initial scaling of the losses
-    L1Loss_kwargs: {exclude_terrain: True, loss_factor_init: 0.0}
-    L2Loss_kwargs: {exclude_terrain: True, loss_factor_init: 0.0}
-    L4Loss_kwargs: {exclude_terrain: True, loss_factor_init: 0.0}
+    # Settings for all of the available loss functions. No need to keep unused ones.
+    # loss_factor_init sets the initial value of the learnable homoscedastic factors. If learning is disabled, they will
+    # remain at this initial value, otherwise they will be adjusted during learning. No need to set it, if only 1 comp.
+    # A loss factor of 0.0 == no scaling, due to the homoscedatic formulation: L += L_q*exp(-q) + q
+    L1Loss_kwargs: {exclude_terrain: True, loss_factor_init: -0.5}
+    L2Loss_kwargs: {exclude_terrain: True, loss_factor_init: -0.5}
+    L4Loss_kwargs: {exclude_terrain: True, loss_factor_init: 1.5}
     LPLoss_kwargs: {exclude_terrain: True, 'p': 1.7, loss_factor_init: 0.0}
     ScaledLoss_kwargs: {exclude_terrain: True, no_scaling: True, max_scale: 4, norm_threshold: 0.5, loss_factor_init: 0.0}
-    DivergenceFreeLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: 0.0}
-    VelocityGradientLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: 0.0}
+    DivergenceFreeLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
+    VelocityGradientLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
     GaussianLogLikelihoodLoss_kwargs: {exclude_terrain: True, uncertainty_loss_eps: 1e-8}
 
-    # if the individual loss components and their factors should be plotted in tensorboard
-    plot_loss_components: True
+    # If the individual loss components and their factors should be logged using tensorboard
+    log_loss_components: True
 
 # dataset parameters
 data:

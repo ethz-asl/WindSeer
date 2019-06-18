@@ -61,6 +61,7 @@ class CombinedLoss(Module):
                     self.loss_factors += [loss_factor_init]
 
             else:
+                # using a factor of 0.0 == no loss scaling, due to the homoscedastic uncertainty expression. see below.
                 self.loss_factors += [torch.Tensor([0.0])]
                 self.learn_scaling = False
 
@@ -84,7 +85,7 @@ class CombinedLoss(Module):
             # store this value in the buffer dict
             self.last_computed_loss_components[self.loss_component_names[k]] = loss_component.item()
 
-            # apply the homoscedastic uncertainty factor
+            # apply the homoscedastic uncertainty factor: L += L_q*exp(-q)+q
             loss += loss_component *torch.exp(-factor) + factor
 
         return loss
@@ -110,7 +111,7 @@ class LPLoss(Module):
         self.__p = p
 
         # validity check and warning for p
-        if self.__p < 0:
+        if self.__p <= 0:
             raise ValueError('LPLoss: loss order p should be greater than 0, p = {} was used!'.format(self.__p))
         if self.__p < 1:
             warnings.warn('LPLoss: loss order p is fractional, p = {}'.format(self.__p))
@@ -140,11 +141,9 @@ class LPLoss(Module):
         if self.__exclude_terrain:
             terrain = input[:, 0:1]
             terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
-        else:
-            terrain_correction_factors = torch.ones(predicted.shape[0]).to(predicted.device)
 
-        # apply terrain correction factor to loss of each sample in batch
-        loss *= terrain_correction_factors
+            # apply terrain correction factor to loss of each sample in batch
+            loss *= terrain_correction_factors
 
         # return batchwise mean of loss
         return loss.mean()
@@ -294,18 +293,16 @@ class DivergenceFreeLoss(Module):
         # compute divergence of the prediction
         predicted_divergence = utils.divergence(predicted, self.__grid_size).unsqueeze(1)
 
+        # compute physics loss for all elements and average losses over each sample in batch
+        loss =self.__loss(predicted_divergence,target).mean(tuple(range(1, len(predicted.shape))))
+
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
             terrain = input[:, 0:1]
             terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
-        else:
-            terrain_correction_factors = 1.0
 
-        # compute physics loss for all elements and average losses over each sample in batch
-        loss =self.__loss(predicted_divergence,target).mean(tuple(range(1, len(predicted.shape))))
-
-        # apply terrain correction factor to loss of each sample in batch
-        loss *= terrain_correction_factors
+            # apply terrain correction factor to loss of each sample in batch
+            loss *= terrain_correction_factors
 
         # return batchwise mean of loss
         return loss.mean()
@@ -367,18 +364,16 @@ class VelocityGradientLoss(Module):
         target_grad = utils.gradient(target,self.__grid_size)
         predicted_grad = utils.gradient(predicted,self.__grid_size)
 
+        # compute physics loss for all elements and average losses over each sample in batch
+        loss = self.__loss(predicted_grad, target_grad).mean(tuple(range(1, len(predicted.shape))))
+
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
             terrain = input[:, 0:1]
             terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
-        else:
-            terrain_correction_factors = 1.0
 
-        # compute physics loss for all elements and average losses over each sample in batch
-        loss = self.__loss(predicted_grad, target_grad).mean(tuple(range(1, len(predicted.shape))))
-
-        # apply terrain correction factor to loss of each sample in batch
-        loss *= terrain_correction_factors
+            # apply terrain correction factor to loss of each sample in batch
+            loss *= terrain_correction_factors
 
         # return batchwise mean of loss
         return loss.mean()
@@ -422,21 +417,19 @@ class GaussianLogLikelihoodLoss(Module):
 
         mean_error =  mean - label
 
-        # compute terrain correction factor for each sample in batch
-        if self.__exclude_terrain:
-            terrain = input[:, 0:1]
-            terrain_correction_factors = utils.compute_terrain_factor(mean_error, terrain)
-        else:
-            terrain_correction_factors = torch.ones(mean_error.shape[0]).to(mean_error.device)
-
         # compute loss for all elements
         loss = log_variance + (mean_error * mean_error) / log_variance.exp().clamp(self.__eps)
 
         # average loss over each sample in batch
         loss = loss.mean(tuple(range(1, len(mean_error.shape))))
 
-        # apply terrain correction factor to loss of each sample in batch
-        loss *= terrain_correction_factors
+        # compute terrain correction factor for each sample in batch
+        if self.__exclude_terrain:
+            terrain = input[:, 0:1]
+            terrain_correction_factors = utils.compute_terrain_factor(mean_error, terrain)
+
+            # apply terrain correction factor to loss of each sample in batch
+            loss *= terrain_correction_factors
 
         # return batchwise mean of loss
         return loss.mean()

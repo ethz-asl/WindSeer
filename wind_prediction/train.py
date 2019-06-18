@@ -162,17 +162,17 @@ except KeyError as e:
 
 # if the loss components and their respective factors should be plotted in tensorboard
 try:
-    plot_loss_components = run_params.loss['plot_loss_components'] and len(loss_fn.loss_components)>1
+    log_loss_components = run_params.loss['log_loss_components'] and len(loss_fn.loss_components)>1
 except:
-    plot_loss_components = False
-    print('train.py: plot_loss_components key not available, setting default value: ', plot_loss_components)
+    log_loss_components = False
+    print('train.py: log_loss_components key not available, setting default value: ', log_loss_components)
 
 # start the actual training
 net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer,
                        loss_fn, device, run_params.run['n_epochs'],
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
-                       run_params.run['compute_validation_loss'], plot_loss_components,
+                       run_params.run['compute_validation_loss'], log_loss_components,
                        model_dir, args.use_writer, predict_uncertainty, uncertainty_train_mode, warm_start_epoch)
 
 # save the model if requested

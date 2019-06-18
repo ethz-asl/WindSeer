@@ -22,7 +22,7 @@ def signal_handler(sig, frame):
 
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
-                save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss, plot_loss_components,
+                save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss, log_loss_components,
                 model_directory, use_writer, predict_uncertainty, uncertainty_train_mode, start_epoch=0):
     '''
     Train the model according to the specified loss function and params
@@ -273,7 +273,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 writer.add_scalar('Training/LearningRate', scheduler_lr.get_lr()[0], epoch + 1)
 
                 # record components of the loss
-                if plot_loss_components:
+                if log_loss_components:
                     for name, value in train_loss_components.items():
                         writer.add_scalar('Train/LC_' + name, value, epoch + 1)
                     if compute_validation_loss:
@@ -281,7 +281,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                             writer.add_scalar('Val/LC_' + name, value, epoch + 1)
 
                 # record learnable loss factors
-                if loss_fn.learn_scaling and plot_loss_components:
+                if loss_fn.learn_scaling and log_loss_components:
                         for i, loss_component in enumerate(loss_fn.loss_component_names):
                             writer.add_scalar('LossFactors/'+loss_component, loss_fn.loss_factors[i], epoch + 1)
 
