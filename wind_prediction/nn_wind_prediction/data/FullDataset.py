@@ -357,7 +357,7 @@ class FullDataset(Dataset):
                 start_x = self.__rand.randint(0,data_shape[2]-self.__nx)
                 start_y = self.__rand.randint(0,data_shape[1]-self.__ny)
                 # gauss distribution
-#                 start_z = int(min(np.abs(self.__rand.gauss(0.0,(data_shape[0]-self.__nz)/3.0)), (data_shape[0]-self.__nz)))
+                # start_z = int(min(np.abs(self.__rand.gauss(0.0,(data_shape[0]-self.__nz)/3.0)), (data_shape[0]-self.__nz)))
                 # triangle distribution
                 start_z = int(self.__rand.triangular(0,(data_shape[0]-self.__nz),0))
 
@@ -372,8 +372,8 @@ class FullDataset(Dataset):
 
             elif (self.__input_mode == 1):
                 # This interpolation is slower (at least on a cpu)
-#                 input = torch.cat([data[0,:,:,:].unsqueeze(0),
-#                                    self.__interpolator.edge_interpolation_batch(data[1:4,:,:,:].unsqueeze(0)).squeeze()])
+                # input = torch.cat([data[0,:,:,:].unsqueeze(0),
+                # self.__interpolator.edge_interpolation_batch(data[1:4,:,:,:].unsqueeze(0)).squeeze()])
 
                 # interpolating the vertical edges
                 input = torch.cat([data[0,:,:,:].unsqueeze(0), self.__interpolator.edge_interpolation(data[1:4,:,:,:])])

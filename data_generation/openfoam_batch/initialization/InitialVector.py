@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 
-
 import numpy as np
-import io
-import linecache as lc
-import time
-import os
 import torch
 import argparse
 
@@ -26,12 +21,8 @@ xMax = 1500
 yMax = 1500
 zMax = int(args.zMax)
 
-
-
-
 west_coord = np.loadtxt('WestCoordinates')
 n_west =len(west_coord)
-
 
 #find nearest y
 iy_west = west_coord[:,1]
@@ -70,13 +61,8 @@ for j in range(0,n_west):
         west[j,:] = prediction[:,int(iz_west[j])+i,int(iy_west[j]),0]
 
 
-
-
-
-
 east_coord = np.loadtxt('EastCoordinates')
 n_east =len(east_coord)
-
 
 #find nearest y
 iy_east = east_coord[:,1]
@@ -113,13 +99,8 @@ for j in range(0,n_east):
         i=i+1
         east[j,:] = prediction[:,int(iz_east[j])+i,int(iy_east[j]),63]
 
-
-
-
-
 hill_coord = np.loadtxt('HillCoordinates')
 n_hill =len(hill_coord)
-
 
 #find nearest x
 ix_hill = hill_coord[:,0]
@@ -133,7 +114,6 @@ for i in range(0,64):
     x0=x
     x=x+xMax/64
 
-
 #find nearest y
 iy_hill = hill_coord[:,1]
 
@@ -146,8 +126,7 @@ for i in range(0,64):
     y0=y
     y=y+yMax/64
 
-
-#find nearest z (prendo quello sopra il terreno)
+#find nearest z (only if it is above the ground)
 iz_hill = hill_coord[:,2]
 
 z0=0
@@ -170,9 +149,6 @@ for j in range(0,n_hill):
     while hill[j,5] == 0.0:
         i=i+1
         hill[j,:] = prediction[:,int(iz_hill[j])+i,int(iy_hill[j]),int(ix_hill[j])]
-
-
-
 
 # Internal field
 cells_coord = np.loadtxt('CellCoordinates')
@@ -202,7 +178,6 @@ for i in range(0,64):
     y0=y
     y=y+yMax/64
 
-
 #find nearest z (solo se sopra il terreno)
 iz_cell = cells_coord[:,2]
 
@@ -224,9 +199,6 @@ for b in range(0,n_cells):
     while cells[b,5] == 0.0:
         i=i+1
         cells[b,:] = prediction[:,int(iz_cell[b])+i,int(iy_cell[b]),int(ix_cell[b])]
-
-
-
 
 # epsilon
 with open("OF_0/epsilon_in",'w') as epsilon_in:

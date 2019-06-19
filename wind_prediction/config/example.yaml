@@ -69,10 +69,8 @@ data:
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    uhor_scaling: 0.5 # used for MyDataset
-
-    ux_scaling: 1.0 # used for FullDataset
-    uy_scaling: 1.0 # used for FullDataset
+    ux_scaling: 1.0
+    uy_scaling: 1.0
     uz_scaling: 0.1
     turbulence_scaling: 0.01
     p_scaling: 24

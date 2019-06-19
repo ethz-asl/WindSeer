@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
 compressed = False
-input_dataset = 'wind_prediction/data/single_sample.tar'
+input_dataset = '../wind_prediction/data/single_sample.tar'
 nx = 64
 ny = 64
 nz = 64
@@ -355,10 +355,6 @@ def main():
 
     print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 
-    if autoscale:
-        input, label, scale, ds = db[plot_sample_num]
-    else:
-        input, label, ds = db[plot_sample_num]
     try:
         if autoscale:
             input, label, scale, ds = db[plot_sample_num]
@@ -378,8 +374,7 @@ def main():
     print(' ')
 
     # plot the sample
-    #utils.plot_sample_all(input, label, input[0,:], use_turbulence, use_pressure, use_epsilon, use_nut, ds)
-    utils.plotting_nut(input, label, input[0,:])
+    utils.plot_sample_all(input, label, input[0,:], use_turbulence, use_pressure, use_epsilon, use_nut, ds)
 
 if __name__ == '__main__':
 #     try:
