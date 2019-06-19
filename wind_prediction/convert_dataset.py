@@ -18,7 +18,7 @@ def main():
     '''
     parser = argparse.ArgumentParser(description='Script to remove bad data from a database')
     parser.add_argument('-i', dest='infile', required=True, help='input tar file')
-    parser.add_argument('-o', dest='outfile', help='output tar file, if none provided the input file name is prepended with "converted_"')
+    parser.add_argument('-o', dest='outfile', help='output hdf5 file name, if none provided the input file name is used')
     parser.add_argument('-vlim', type=float, default=1000.0, help='limit of the velocity magnitude in one dimension')
     parser.add_argument('-klim', type=float, default=1000.0, help='limit of the turbulent viscosity')
     parser.add_argument('-v', dest='verbose', action='store_true', help='verbose')
@@ -27,9 +27,6 @@ def main():
     parser.add_argument('-a', dest='add_all', action='store_true',help='Add all variables (if false: add only U and k)')
     args = parser.parse_args()
 
-    if (args.outfile == args.infile):
-        print('WARNING: The outfile cannot be the same file as the infile, prepending "converted_"')
-        args.outfile = None
 
     if (not args.outfile):
         in_splitted = args.infile.split('/')
@@ -38,13 +35,13 @@ def main():
             for elem in in_splitted[0:-1]:
                 out = out + elem + '/'
 
-            args.outfile = out + 'converted_' + in_splitted[-1]
+            args.outfile = out + in_splitted[-1]
 
-        else:
-            args.outfile = 'converted_' + args.infile
+        # remove .tar file extension
+        args.outfile = args.outfile[0:-4]
 
     start_time = time.time()
-    convert_dataset(args.infile, args.outfile, args.vlim, args.klim, args.boolean_terrain, args.verbose, args.compress, args.add_all)
+    convert_dataset(args.infile, args.outfile, args.vlim, args.klim, args.boolean_terrain, args.verbose)
     print("INFO: Converting the database took %s seconds" % (time.time() - start_time))
 
 if __name__ == "__main__":

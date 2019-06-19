@@ -13,6 +13,7 @@ import shutil
 import tarfile
 import time
 import torch
+import h5py
 
 def save_data(tensor, ds, name, compress):
     if compress:
@@ -69,7 +70,7 @@ def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
     tar.close()
     shutil.rmtree(tempfolder)
 
-def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, compress = False, add_all = True):
+def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True):
     '''
     Function which loops through the files of the input tar file.
     The velocity is checked and files are rejected if a single dimension
@@ -84,7 +85,6 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
         klim: Maximum allowed turbulence kinetik energy
         boolean_terrain: If true the terrain is represented by a boolean variable, if false by a distance field
         verbose: Show the stats of the deleted files
-        add_all: add all variables (not only U and k)
     '''
     # open the file
     tar = tarfile.open(infile, 'r')
@@ -113,6 +113,20 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
 
     print('INFO: Looping through all the files')
     rejection_counter = 0
+
+    # check output file extension
+    if not outfile.endswith('.hdf5'):
+        outfile = outfile + '.hdf5'
+
+    # create h5 file where all the data wll be stored
+    if os.path.exists(outfile):
+        os.remove(outfile)
+    ouput_file = h5py.File(outfile)
+
+    # create list of channel names
+    channels = ['terrain', 'u_x', 'u_y', 'u_z', 'turb', 'p', 'epsilon', 'nut']
+
+    # iterate over the csv files
     for i, member in enumerate(tar.getmembers()):
         f = tar.extractfile(member)
 
@@ -128,6 +142,9 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                 print('U:0 not in {0}'.format(member.name))
 
             else:
+                # create group in hdf5 file for the current sample
+                ouput_file.create_group(member.name)
+
                 # get dimensions of the grid
                 x = np.unique(wind_data['Points:0'])
                 y = np.unique(wind_data['Points:1'])
@@ -194,12 +211,9 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                     u_z = wind_data.get('U:2').values.reshape(channel_shape)
                     turb = wind_data.get('k').values.reshape(channel_shape)
                     terrain = np.less(wind_data.get('vtkValidPointMask').values.reshape(channel_shape), 0.5).astype(np.float32)
-
-                    # extract additional variables
-                    if add_all:
-                        p = wind_data.get('p').values.reshape(channel_shape)
-                        epsilon = wind_data.get('epsilon').values.reshape(channel_shape)
-                        nut = wind_data.get('nut').values.reshape(channel_shape)
+                    p = wind_data.get('p').values.reshape(channel_shape)
+                    epsilon = wind_data.get('epsilon').values.reshape(channel_shape)
+                    nut = wind_data.get('nut').values.reshape(channel_shape)
 
                     # filter out bad terrain pixels, paraview sometimes fails to interpolate the flow although it seems to be correct
                     terrain = np.insert(terrain, 0, np.ones(slice_shape), axis = 0)
@@ -282,11 +296,9 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         u_y[iz, iy, ix] = (mul[0]*u_y[i1] + mul[1]*u_y[i2] + mul[2]*u_y[i3] + mul[3]*u_y[i4] + mul[4]*u_y[i5] + mul[5]*u_y[i6]) / denom
                         u_z[iz, iy, ix] = (mul[0]*u_z[i1] + mul[1]*u_z[i2] + mul[2]*u_z[i3] + mul[3]*u_z[i4] + mul[4]*u_z[i5] + mul[5]*u_z[i6]) / denom
                         turb[iz, iy, ix] = (mul[0]*turb[i1] + mul[1]*turb[i2] + mul[2]*turb[i3] + mul[3]*turb[i4] + mul[4]*turb[i5] + mul[5]*turb[i6]) / denom
-
-                        if add_all:
-                            p[iz, iy, ix] = (mul[0]*p[i1] + mul[1]*p[i2] + mul[2]*p[i3] + mul[3]*p[i4] + mul[4]*p[i5] + mul[5]*p[i6]) / denom
-                            epsilon[iz, iy, ix] = (mul[0]*epsilon[i1] + mul[1]*epsilon[i2] + mul[2]*epsilon[i3] + mul[3]*epsilon[i4] + mul[4]*epsilon[i5] + mul[5]*epsilon[i6]) / denom
-                            nut[iz, iy, ix] = (mul[0]*nut[i1] + mul[1]*nut[i2] + mul[2]*nut[i3] + mul[3]*nut[i4] + mul[4]*nut[i5] + mul[5]*nut[i6]) / denom
+                        p[iz, iy, ix] = (mul[0]*p[i1] + mul[1]*p[i2] + mul[2]*p[i3] + mul[3]*p[i4] + mul[4]*p[i5] + mul[5]*p[i6]) / denom
+                        epsilon[iz, iy, ix] = (mul[0]*epsilon[i1] + mul[1]*epsilon[i2] + mul[2]*epsilon[i3] + mul[3]*epsilon[i4] + mul[4]*epsilon[i5] + mul[5]*epsilon[i6]) / denom
+                        nut[iz, iy, ix] = (mul[0]*nut[i1] + mul[1]*nut[i2] + mul[2]*nut[i3] + mul[3]*nut[i4] + mul[4]*nut[i5] + mul[5]*nut[i6]) / denom
 
                     if verbose:
                         print('------------------------------------')
@@ -294,35 +306,31 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
 
                     is_wind = np.less(terrain, 0.5).astype(np.float32)
 
+                    # if the terrain channel should be a binary class or a distance field
                     if boolean_terrain:
                         distance_field_in = is_wind[1:,:]
                     else:
                         distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
                         distance_field_in = distance_field_in[1:, :]
 
-                    # store the stacked data
-                    if add_all:
-                        out = np.stack([distance_field_in, u_x, u_y, u_z, turb, p, epsilon, nut])
-                    else:
-                        out = np.stack([distance_field_in, u_x, u_y, u_z, turb])
-                    out_tensor = torch.from_numpy(out)
-                    save_data(out_tensor, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '.tp', compress)
+                    # stack the data for easy iteration
+                    out = np.stack([distance_field_in, u_x, u_y, u_z, turb, p, epsilon, nut])
+
+                    # add each channel to the hdf5 file for each sample
+                    for k, channel in enumerate(channels):
+                        ouput_file[member.name].create_dataset(channel, data=out[k,:,:,:], compression="lzf")
+
+                    # add the grid size to the hdf5 file
+                    ouput_file[member.name].create_dataset('ds', data=(dx, dy, dz))
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
             print(trunc((i+1)/num_files*100), '%')
 
     print('INFO: Finished parsing all the files, rejecting', rejection_counter, 'out of', num_files)
 
-    # collecting all files in the tmp folder to a tar
-    out_tar = tarfile.open(outfile, 'w')
-    for filename in os.listdir(tempfolder):
-        out_tar.add(tempfolder + filename, arcname = filename)
-
-    # cleaning up
-    out_tar.close()
-    tar.close()
+    # close hdf5 file and clean up
+    ouput_file.close()
     shutil.rmtree(tempfolder)
-
 
 def sample_dataset(dbloader, output_dataset, n_sampling_rounds, compressed):
     # create temp directory to store all serialized arrays
