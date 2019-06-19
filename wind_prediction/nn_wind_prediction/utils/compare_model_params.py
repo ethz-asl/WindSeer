@@ -1,9 +1,6 @@
 from __future__ import print_function
 
-import tensorflow
 import torch
-
-import pdb # TODO remove
 
 def compare_model_weights(model1, model2):
     param1 = torch.load(model1)

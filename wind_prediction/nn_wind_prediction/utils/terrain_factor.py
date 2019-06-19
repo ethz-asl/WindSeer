@@ -5,8 +5,8 @@ def compute_terrain_factor(samples, terrain):
     underestimated (data is 0 in the terrain). Thus samples with more terrain must have a higher terrain factor.
 
     Input params:
-        net_output: 5D tensor [samples, input channels, Z, Y, X]
-        terrain: 5D tensor [samples, terrain, Z, Y, X]. Must be for the same samples as input.
+        samples: 5D tensor [batch, input channels, Z, Y, X]
+        terrain: 5D tensor [batch, terrain, Z, Y, X]. Must be for the same samples as input.
 
     Output:
         terrain_factors: vector containing the ratio of the amount of data in the samples terrain to the total amount of

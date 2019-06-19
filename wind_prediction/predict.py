@@ -18,6 +18,7 @@ dataset = 'data/test.tar'
 index = 0 # plot the prediction for the following sample in the set, 1434
 model_name = 'model_1'
 model_version = 'latest'
+print_loss = False
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
@@ -33,6 +34,7 @@ parser.add_argument('-ds', dest='dataset', default=dataset, help='The test datas
 parser.add_argument('-i', dest='index', type=int, default=index, help='The index of the sample in the dataset')
 parser.add_argument('-model_name', dest='model_name', default=model_name, help='The model name')
 parser.add_argument('-model_version', dest='model_version', default=model_version, help='The model version')
+parser.add_argument('-pl', dest='print_loss', action='store_true', help='If the loss used for training should be computed for the sample and then printed')
 parser.add_argument('-cpe', dest='compute_prediction_error', action='store_true', help='If set the velocity prediction errors over the full dataset is computed')
 parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', help='If set the worst prediction of the input dataset is shown. Needs compute_prediction_error to be true.')
 parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
@@ -41,6 +43,7 @@ parser.add_argument('-a', dest='add_all', action='store_true', help='Add all var
 
 args = parser.parse_args()
 args.compressed = args.compressed or compressed
+args.print_loss = args.print_loss or print_loss
 args.compute_prediction_error = args.compute_prediction_error or compute_prediction_error
 args.plot_worst_prediction = args.plot_worst_prediction or plot_worst_prediction
 args.plot_prediction = args.plot_prediction or plot_prediction
@@ -70,7 +73,12 @@ if params.model_kwargs()['potential_flow']:
 NetworkType = getattr(models, params.model['model_type'])
 net = NetworkType(**params.model_kwargs())
 
-net.load_state_dict(torch.load('trained_models/' + args.model_name + '/' + args.model_version + '.model', map_location=lambda storage, loc: storage))
+# load state dict
+state_dict = torch.load('trained_models/' + args.model_name + '/' + args.model_version + '.model',
+                                                                            map_location=lambda storage, loc: storage)
+
+# load params
+net.load_state_dict(state_dict)
 net.to(device)
 
 try:
@@ -78,12 +86,50 @@ try:
 except AttributeError:
     pass
 
-# define loss function
-loss_fn = torch.nn.MSELoss()
+# define combined loss
+loss_fn = nn_custom.CombinedLoss(**params.loss)
+
+# if homoscedastic loss factors were learned during training, recover them
+if loss_fn.learn_scaling:
+    loss_state_dict = torch.load('trained_models/' + args.model_name + '/' + args.model_version + '.loss',
+                                                                            map_location=lambda storage, loc: storage)
+    loss_fn.load_state_dict(loss_state_dict)
+
+# print the loss if requested
+if args.print_loss:
+    with torch.no_grad():
+        i = 0
+        for data in testloader:
+            if i == args.index:
+                input = data[0]
+                label = data[1]
+                input, label = input.to(device), label.to(device)
+                output = net(input)
+                print('\n------------------------------------------------------------')
+                print('\tEvaluation w/ loss(es) used in training\n')
+                for k in range(len(loss_fn.loss_components)):
+                    component_loss = loss_fn.loss_components[k](output, label, input)
+                    print(loss_fn.loss_component_names[k], ':', component_loss.item(), end='')
+
+                    if len(loss_fn.loss_components) >1:
+                        factor = loss_fn.loss_factors[k]
+                        if loss_fn.learn_scaling:
+                            print(', homoscedastic factor :', factor.item())
+                        else:
+                            print(', const factor :', factor.item())
+
+                if len(loss_fn.loss_components) > 1:
+                    print('Combined :', loss_fn(output, label, input).item())
+                print('\n------------------------------------------------------------')
+            i+=1
+
+# prediction criterion
+criterion = torch.nn.MSELoss()
+print('\tPrediction w/ criterion: ', criterion.__class__.__name__,'\n')
 
 # compute the errors on the dataset
 if args.compute_prediction_error:
-    prediction_errors, losses, worst_index, maxloss = nn_custom.dataset_prediction_error(net, device, params, loss_fn, testloader)
+    prediction_errors, losses, worst_index, maxloss = nn_custom.dataset_prediction_error(net, device, params, criterion, testloader)
     np.savez('prediction_errors_' + args.model_name + '.npz', prediction_errors=prediction_errors, losses=losses)
 
     if args.plot_worst_prediction:
@@ -104,8 +150,6 @@ else:
     savename = None
 
 if args.add_all:
-    nn_custom.predict_all(input, label, scale, device, net, params, args.plot_prediction, loss_fn=loss_fn, savename=savename)
+    nn_custom.predict_all(input, label, scale, device, net, params, args.plot_prediction, loss_fn=criterion, savename=savename)
 else:
-    nn_custom.predict_wind_and_turbulence(input, label, scale, device, net, params, args.plot_prediction, loss_fn=loss_fn, savename=savename)
-
-
+    nn_custom.predict_wind_and_turbulence(input, label, scale, device, net, params, args.plot_prediction, loss_fn=criterion, savename=savename)

@@ -22,7 +22,7 @@ def signal_handler(sig, frame):
 
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
-                save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss,
+                save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss, log_loss_components,
                 model_directory, use_writer, predict_uncertainty, uncertainty_train_mode, start_epoch=0):
     '''
     Train the model according to the specified loss function and params
@@ -89,9 +89,14 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             break
         epoch_start = time.time()
 
-        net.new_epoch_callback(epoch)
+        # access to new epoch callback depends on of the model has been parallelized
+        try:
+            net.module.new_epoch_callback(epoch)
+        except AttributeError:
+            net.new_epoch_callback(epoch)
 
         train_loss = 0
+        train_loss_components = dict.fromkeys(loss_fn.last_computed_loss_components, 0.0)
         running_loss = 0.0
         train_avg_mean = 0.0
         train_avg_uncertainty = 0.0
@@ -139,6 +144,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             # print statistics
             running_loss += loss.item()
             train_loss += loss.item()
+            for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
             # print every plot_every_n_batches mini-batches
             if i % plot_every_n_batches == (plot_every_n_batches - 1) and plot_every_n_batches > 0:
@@ -151,11 +157,21 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
 
         # save model every save_model_every_n_epoch epochs
         if (epoch % save_model_every_n_epoch == (save_model_every_n_epoch - 1)) and save_model_every_n_epoch > 0:
-            torch.save(net.state_dict(), os.path.join(model_directory, 'e{}.model'.format(epoch + 1)))
+            try:
+                state_dict = net.module.state_dict() #for when the model is trained on multi-gpu
+            except AttributeError:
+                state_dict = net.state_dict()
+
+            torch.save(state_dict, os.path.join(model_directory, 'e{}.model'.format(epoch + 1)))
+
+            # save the learnable scaling of the loss function
+            if loss_fn.learn_scaling:
+                torch.save(loss_fn.state_dict(), os.path.join(model_directory, 'e{}.loss'.format(epoch + 1)))
 
         with torch.no_grad():
             if not minibatch_loss:
                 train_loss = 0.0
+                train_loss_components = dict.fromkeys(loss_fn.last_computed_loss_components, 0.0)
                 train_avg_mean = 0.0
                 train_avg_uncertainty = 0.0
                 train_max_uncertainty = float('-inf')
@@ -176,6 +192,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                             loss = mse_loss(mean, labels)
                         else:
                             loss = loss_fn.compute_loss(mean, uncertainty, labels)
+                            for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
                         # compute training statistics
                         train_loss += loss.item()
@@ -186,14 +203,18 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
+                        # mean of loss_fn is taken in case the loss is parallelized over multiple-gpus
                         loss = loss_fn(outputs, labels, inputs)
                         train_loss += loss.item()
+                        for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
             train_loss /= len(loader_trainset)
+            for k,v in train_loss_components.items(): v/= len(loader_trainset)
             train_avg_mean /= len(loader_trainset)
             train_avg_uncertainty /= len(loader_trainset)
 
             validation_loss = 0.0
+            validation_loss_components = dict.fromkeys(loss_fn.last_computed_loss_components, 0.0)
             validation_avg_mean = 0.0
             validation_avg_uncertainty = 0.0
             validation_max_uncertainty = float('-inf')
@@ -215,6 +236,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                             loss = mse_loss(mean, labels)
                         else:
                             loss = loss_fn.compute_loss(mean, uncertainty, labels)
+                            for k, v in validation_loss_components.items(): validation_loss_components[k] += loss_fn.last_computed_loss_components[k]
 
                         # compute training statistics
                         validation_loss += loss.item()
@@ -227,7 +249,10 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         outputs = net(inputs)
                         loss = loss_fn(outputs, labels, inputs)
                         validation_loss += loss.item()
+                        for k, v in validation_loss_components.items(): validation_loss_components[k] += loss_fn.last_computed_loss_components[k]
+
                 validation_loss /= len(loader_validationset)
+                for k, v in validation_loss_components.items(): v /= len(loader_validationset)
 
             if use_writer and not should_exit:
                 writer.add_scalar('Train/Loss', train_loss, epoch + 1)
@@ -246,6 +271,19 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         writer.add_scalar('Val/MinUncertainty', validation_min_uncertainty, epoch + 1)
 
                 writer.add_scalar('Training/LearningRate', scheduler_lr.get_lr()[0], epoch + 1)
+
+                # record components of the loss
+                if log_loss_components:
+                    for name, value in train_loss_components.items():
+                        writer.add_scalar('Train/LC_' + name, value, epoch + 1)
+                    if compute_validation_loss:
+                        for name, value in validation_loss_components.items():
+                            writer.add_scalar('Val/LC_' + name, value, epoch + 1)
+
+                # record learnable loss factors
+                if loss_fn.learn_scaling and log_loss_components:
+                        for i, loss_component in enumerate(loss_fn.loss_component_names):
+                            writer.add_scalar('LossFactors/'+loss_component, loss_fn.loss_factors[i], epoch + 1)
 
                 if epoch % save_params_hist_every_n_epoch == (save_params_hist_every_n_epoch - 1):
                     for tag, value in net.named_parameters():
