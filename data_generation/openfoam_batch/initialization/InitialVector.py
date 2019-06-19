@@ -126,7 +126,7 @@ for i in range(0,64):
     y0=y
     y=y+yMax/64
 
-#find nearest z (only if it is above the ground)
+#find nearest z (only if it is above the terrain)
 iz_hill = hill_coord[:,2]
 
 z0=0
@@ -178,7 +178,7 @@ for i in range(0,64):
     y0=y
     y=y+yMax/64
 
-#find nearest z (solo se sopra il terreno)
+#find nearest z (only if it is above the terrain)
 iz_cell = cells_coord[:,2]
 
 z0=0

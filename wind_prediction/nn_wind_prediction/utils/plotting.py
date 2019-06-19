@@ -661,10 +661,6 @@ class PlotUtils():
             circle.set_radius(0.1)
         self.__button.on_clicked(self.radio_callback)
 
-        plt.show()
-
-
-
         if self.__uncertainty_predicted:
             fh_in2, ah_in2 = plt.subplots(4, 4,figsize=(8,6))
         else:

@@ -164,7 +164,7 @@ class FullDataset(Dataset):
         except KeyError:
             self.__subsample = self.__default_subsample
             if verbose:
-                print('FullDataset: subsample not present in kwargs, using default value:', self.subsample)
+                print('FullDataset: subsample not present in kwargs, using default value:', self.__default_subsample)
 
         try:
             self.__augmentation = kwargs['augmentation']
@@ -299,6 +299,10 @@ class FullDataset(Dataset):
             if verbose:
                 print('FullDataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
 
+        # augmentation warning. New modes must still be implemented
+        if self.__augmentation:
+            print('Warning: Newer augmentation modes are not yet implemented for FullDataset! Only basic flip in y direction for now.')
+
         # extract data from the tar file
         self.__num_files = len(tar.getnames())
         self.__memberslist = tar.getmembers()
@@ -381,9 +385,6 @@ class FullDataset(Dataset):
             else:
                 print('FullDataset Error: Input mode ', self.__input_mode, ' is not supported')
                 sys.exit()
-
-            input_permute = [0,2,1,3]
-
 
             num_outputs = 3 # velocity
             if self.__turbulence_label:
