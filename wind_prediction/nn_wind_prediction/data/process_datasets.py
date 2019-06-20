@@ -70,7 +70,7 @@ def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
     tar.close()
     shutil.rmtree(tempfolder)
 
-def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, create_zero_samples = True):
+def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, create_zero_samples = True, compress = False):
     '''
     Function which loops through the files of the input tar file.
     The velocity is checked and files are rejected if a single dimension
@@ -90,6 +90,12 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
     # open the file
     tar = tarfile.open(infile, 'r')
     num_files = len(tar.getnames())
+
+    # define compression
+    if compress:
+        compression_type = "lzf"
+    else:
+        compression_type = None
 
     # define types of csv files
     types = {"p": np.float32,
@@ -118,7 +124,7 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
     ouput_file = h5py.File(outfile)
 
     # create list of channel names
-    channels = ['terrain', 'u_x', 'u_y', 'u_z', 'turb', 'p', 'epsilon', 'nut']
+    channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
 
     # iterate over the csv files
     for i, member in enumerate(tar.getmembers()):
@@ -319,7 +325,7 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
 
                     # add each channel to the hdf5 file for the current sample
                     for k, channel in enumerate(channels):
-                        ouput_file[sample].create_dataset(channel, data=out[k,:,:,:], compression="lzf")
+                        ouput_file[sample].create_dataset(channel, data=out[k,:,:,:], compression= compression_type)
 
                     # add the grid size to the hdf5 file for the current sample
                     ouput_file[sample].create_dataset('ds', data=(dx, dy, dz))
@@ -332,12 +338,12 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         ouput_file.create_group(zero_sample)
 
                         # add terrain to the hdf5 file for the zero sample
-                        ouput_file[zero_sample].create_dataset(channels[0], data=out[0, :, :, :], compression="lzf")
+                        ouput_file[zero_sample].create_dataset(channels[0], data=out[0, :, :, :], compression=compression_type)
 
                         # add all zero fields to the hdf5 file for the zero sample
                         for k, channel in enumerate(channels):
                             if k>0:
-                                ouput_file[zero_sample].create_dataset(channel, data=np.zeros_like(out[k, :, :, :]), compression="lzf")
+                                ouput_file[zero_sample].create_dataset(channel, data=np.zeros_like(out[k, :, :, :]), compression=compression_type)
 
                         # add the grid size to the hdf5 file for the zero sample
                         ouput_file[zero_sample].create_dataset('ds', data=(dx, dy, dz))

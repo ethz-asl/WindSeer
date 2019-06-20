@@ -41,7 +41,7 @@ class HDF5Dataset(Dataset):
     __default_stride_hor = 1
     __default_stride_vert = 1
     __default_turbulence_label = True
-    __default_scaling_dict = {'terrain': 1.0, 'u_x': 1.0, 'u_y': 1.0, 'u_z': 1.0, 'turb': 1.0, 'p': 1.0, 'epsilon': 1.0, 'nut': 1.0}
+    __default_scaling_dict = {'terrain': 1.0, 'ux': 1.0, 'uy': 1.0, 'uz': 1.0, 'turb': 1.0, 'p': 1.0, 'epsilon': 1.0, 'nut': 1.0}
     __default_return_grid_size = False
     __default_return_name = False
     __default_autoscale = False
@@ -115,7 +115,7 @@ class HDF5Dataset(Dataset):
         self.__label_indices = []
 
         # this block makes sure that the input_channels and label_channels lists are correctly ordered
-        default_channels = ['terrain', 'u_x', 'u_y', 'u_z', 'turb', 'p', 'epsilon', 'nut']
+        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
         for index, channel in enumerate(default_channels):
             if channel in input_channels or channel in label_channels:
                 self.__channels_to_load += [channel]
@@ -131,6 +131,11 @@ class HDF5Dataset(Dataset):
         except IOError as e:
             print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, filename))
             sys.exit()
+
+        # extract info from the h5 file
+        self.__num_files = len(h5_file.keys())
+        self.__memberslist = list(h5_file.keys())
+        h5_file.close()
 
         try:
             verbose = kwargs['verbose']
@@ -241,18 +246,14 @@ class HDF5Dataset(Dataset):
 
         # create scaling dict for each channel
         self.__scaling_dict = dict()
-        for channel in input_channels:
+        for channel in self.__channels_to_load:
             try:
                 self.__scaling_dict[channel] = kwargs['scaling_' + channel]
             except KeyError:
                 self.__scaling_dict[channel] = self.__default_scaling_dict[channel]
                 if verbose:
-                    print('HDF5Dataset: scaling_', channel, ' not present in kwargs, using default value:',
+                    print('HDF5Dataset: ', 'scaling_' + channel, 'not present in kwargs, using default value:',
                           self.__default_scaling_dict[channel])
-
-        # extract info from the h5 file
-        self.__num_files = len(h5_file.keys())
-        self.__memberslist = h5_file.keys()
 
         # initialize random number generator used for the subsampling
         self.__rand = random.SystemRandom()
@@ -266,14 +267,14 @@ class HDF5Dataset(Dataset):
         print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
     def __getitem__(self, index):
-        h5_file = h5py.File(self.__filename, 'r')
-        sample = h5_file[list(self.__memberslist)[index]]
+        h5_file = h5py.File(self.__filename, 'r', swmr=True)
+        sample = h5_file[self.__memberslist[index]]
 
         # load the data
         data = torch.Tensor()
         for channel in self.__channels_to_load:
             # extract channel data and apply scaling
-            channel_data = torch.from_numpy(sample[channel][...]) / self.__scaling_dict[channel]
+            channel_data = torch.from_numpy(sample[channel][...]).unsqueeze(0) / self.__scaling_dict[channel]
             data = torch.cat((data, channel_data) , 0)
 
         # send full data to device
@@ -349,12 +350,12 @@ class HDF5Dataset(Dataset):
                             print('WARNING: Unknown augmentation mode in HDF5Dataset ', self.__augmentation_mode,
                                   ', not augmenting the data')
 
-                else:
-                    # no data augmentation
-                    data = data[:,:self.__nz, :self.__ny, :self.__nx]
-                    if self.__augmentation:
-                        print('HDF5Dataset: augmentation not applied, not all of the needed channels '
-                              '(terrain, u_x, u_y, u_z) were requested.')
+            else:
+                # no data augmentation
+                data = data[:,:self.__nz, :self.__ny, :self.__nx]
+                if self.__augmentation:
+                    print('HDF5Dataset: augmentation not applied, not all of the needed channels '
+                          '(terrain, u_x, u_y, u_z) were requested.')
 
             # generate the input channels
             input_data = torch.index_select(data, 0, self.__input_indices)
