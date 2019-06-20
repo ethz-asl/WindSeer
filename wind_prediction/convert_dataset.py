@@ -22,9 +22,8 @@ def main():
     parser.add_argument('-vlim', type=float, default=1000.0, help='limit of the velocity magnitude in one dimension')
     parser.add_argument('-klim', type=float, default=1000.0, help='limit of the turbulent viscosity')
     parser.add_argument('-v', dest='verbose', action='store_true', help='verbose')
-    parser.add_argument('-c', dest='compress', action='store_true', help='compress the individual tensors')
     parser.add_argument('-b', dest='boolean_terrain', action='store_true', help='If flag is set the terrain is represented by a boolean variable, else by a distance field.')
-    parser.add_argument('-a', dest='add_all', action='store_true',help='Add all variables (if false: add only U and k)')
+    parser.add_argument('-czs', dest='create_zero_samples', action='store_true',help='Indicates if all zero samples should be created and saved for each different terrain')
     args = parser.parse_args()
 
 
@@ -41,7 +40,7 @@ def main():
         args.outfile = args.outfile[0:-4]
 
     start_time = time.time()
-    convert_dataset(args.infile, args.outfile, args.vlim, args.klim, args.boolean_terrain, args.verbose)
+    convert_dataset(args.infile, args.outfile, args.vlim, args.klim, args.boolean_terrain, args.verbose, args.create_zero_samples)
     print("INFO: Converting the database took %s seconds" % (time.time() - start_time))
 
 if __name__ == "__main__":

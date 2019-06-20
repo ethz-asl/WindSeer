@@ -70,7 +70,7 @@ def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
     tar.close()
     shutil.rmtree(tempfolder)
 
-def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True):
+def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, create_zero_samples = True):
     '''
     Function which loops through the files of the input tar file.
     The velocity is checked and files are rejected if a single dimension
@@ -85,18 +85,11 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
         klim: Maximum allowed turbulence kinetik energy
         boolean_terrain: If true the terrain is represented by a boolean variable, if false by a distance field
         verbose: Show the stats of the deleted files
+        create_zero_samples: Indicates if all zero samples should be created and saved for each new terrain encountered
     '''
     # open the file
     tar = tarfile.open(infile, 'r')
     num_files = len(tar.getnames())
-
-    # create temp directory to store all serialized arrays
-    if (os.path.isdir("/cluster/scratch/")):
-        tempfolder = '/scratch/tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-    else:
-        tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-
-    os.makedirs(tempfolder)
 
     # define types of csv files
     types = {"p": np.float32,
@@ -113,6 +106,7 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
 
     print('INFO: Looping through all the files')
     rejection_counter = 0
+    zero_samples_created = 0
 
     # check output file extension
     if not outfile.endswith('.hdf5'):
@@ -130,6 +124,12 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
     for i, member in enumerate(tar.getmembers()):
         f = tar.extractfile(member)
 
+        # detect if a new terrain (a new W01 sample) is encountered
+        if '_W01_' in member.name:
+            new_terrain = True
+        else:
+            new_terrain = False
+
         if f is not None:
             try:
                 wind_data = pd.read_csv(f, header=0, dtype = types)
@@ -143,7 +143,8 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
 
             else:
                 # create group in hdf5 file for the current sample
-                ouput_file.create_group(member.name)
+                sample = member.name.replace('.csv','')
+                ouput_file.create_group(sample)
 
                 # get dimensions of the grid
                 x = np.unique(wind_data['Points:0'])
@@ -316,21 +317,41 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                     # stack the data for easy iteration
                     out = np.stack([distance_field_in, u_x, u_y, u_z, turb, p, epsilon, nut])
 
-                    # add each channel to the hdf5 file for each sample
+                    # add each channel to the hdf5 file for the current sample
                     for k, channel in enumerate(channels):
-                        ouput_file[member.name].create_dataset(channel, data=out[k,:,:,:], compression="lzf")
+                        ouput_file[sample].create_dataset(channel, data=out[k,:,:,:], compression="lzf")
 
-                    # add the grid size to the hdf5 file
-                    ouput_file[member.name].create_dataset('ds', data=(dx, dy, dz))
+                    # add the grid size to the hdf5 file for the current sample
+                    ouput_file[sample].create_dataset('ds', data=(dx, dy, dz))
+
+                    # add the zero sample if new terrain and creating zero samples is enabled
+                    if create_zero_samples and new_terrain:
+                        zero_sample = sample.replace('_W01_', '_W00_')
+
+                        # add zero sample to hdf5 file
+                        ouput_file.create_group(zero_sample)
+
+                        # add terrain to the hdf5 file for the zero sample
+                        ouput_file[zero_sample].create_dataset(channels[0], data=out[0, :, :, :], compression="lzf")
+
+                        # add all zero fields to the hdf5 file for the zero sample
+                        for k, channel in enumerate(channels):
+                            if k>0:
+                                ouput_file[zero_sample].create_dataset(channel, data=np.zeros_like(out[k, :, :, :]), compression="lzf")
+
+                        # add the grid size to the hdf5 file for the zero sample
+                        ouput_file[zero_sample].create_dataset('ds', data=(dx, dy, dz))
+                        zero_samples_created += 1
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
             print(trunc((i+1)/num_files*100), '%')
 
     print('INFO: Finished parsing all the files, rejecting', rejection_counter, 'out of', num_files)
+    if create_zero_samples:
+        print('INFO: Created ', zero_samples_created, 'zero sample(s)')
 
-    # close hdf5 file and clean up
+    # close hdf5 file
     ouput_file.close()
-    shutil.rmtree(tempfolder)
 
 def sample_dataset(dbloader, output_dataset, n_sampling_rounds, compressed):
     # create temp directory to store all serialized arrays
