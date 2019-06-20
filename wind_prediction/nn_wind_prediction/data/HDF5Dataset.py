@@ -9,6 +9,7 @@ import sys
 import torch
 from torch.utils.data.dataset import Dataset
 import h5py
+import time
 
 class HDF5Dataset(Dataset):
     '''
@@ -114,15 +115,18 @@ class HDF5Dataset(Dataset):
         self.__input_indices = []
         self.__label_indices = []
 
-        # this block makes sure that the input_channels and label_channels lists are correctly ordered
+        # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
         default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
-        for index, channel in enumerate(default_channels):
+        index = 0
+        for channel in default_channels:
             if channel in input_channels or channel in label_channels:
                 self.__channels_to_load += [channel]
                 if channel in input_channels:
                     self.__input_indices += [index]
                 if channel in label_channels:
                     self.__label_indices += [index]
+                index += 1
+
         self.__input_indices = torch.LongTensor(self.__input_indices)
         self.__label_indices = torch.LongTensor(self.__label_indices)
 
@@ -271,11 +275,11 @@ class HDF5Dataset(Dataset):
         sample = h5_file[self.__memberslist[index]]
 
         # load the data
-        data = torch.Tensor()
-        for channel in self.__channels_to_load:
+        data_from_channels = []
+        for i, channel in enumerate(self.__channels_to_load):
             # extract channel data and apply scaling
-            channel_data = torch.from_numpy(sample[channel][...]).unsqueeze(0) / self.__scaling_dict[channel]
-            data = torch.cat((data, channel_data) , 0)
+            data_from_channels += [torch.from_numpy(sample[channel][...]).unsqueeze(0) / self.__scaling_dict[channel]]
+        data = torch.cat(data_from_channels , 0)
 
         # send full data to device
         data = data.to(self.__device)
@@ -375,9 +379,9 @@ class HDF5Dataset(Dataset):
                 print('HDF5Dataset Error: Input mode ', self.__input_mode, ' is not supported')
                 sys.exit()
 
-            output = torch.index_select(data, 0, self.__label_indices)
+            label = torch.index_select(data, 0, self.__label_indices)
 
-            out = [input, output]
+            out = [input, label]
 
             if self.__autoscale:
                 out.append(scale)
