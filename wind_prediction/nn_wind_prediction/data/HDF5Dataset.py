@@ -9,7 +9,6 @@ import sys
 import torch
 from torch.utils.data.dataset import Dataset
 import h5py
-import time
 
 class HDF5Dataset(Dataset):
     '''
