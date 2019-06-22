@@ -37,8 +37,12 @@ int main(int argc, const char * argv[]) {
     stringstream line_i;
     
     // Default path:
-    string mesh_dir = PM_dir;
-    string coord_dir = IN_dir+"/coord";
+    string batch_number = argv[1];
+    string batch_direction = argv[2];
+    string batch = argv[3];
+    string scratch = argv[4];
+    string mesh_dir = scratch+"/"+batch+"/"+batch+"_"+batch_number+"_"+batch_direction+"/simpleFoam/constant/polyMesh";
+    string coord_dir = scratch+"/intel_wind/data_generation/openfoam_batch/initialization/coord";
     
     
     
@@ -95,6 +99,22 @@ int main(int argc, const char * argv[]) {
             line_i << line;
             line_i >> a >> b >> c;
             
+            if(line.find("e-") != string::npos)
+            {
+                if(a.find("e-") != string::npos)
+                {
+                    a="0";
+                }
+                if(b.find("e-") != string::npos)
+                {
+                    b="0";
+                }
+                if(c.find("e-") != string::npos)
+                {
+                    c="0";
+                }
+            }
+            
             points_x[j] = stof(a);
             points_y[j] = stof(b);
             points_z[j] = stof(c);
@@ -103,7 +123,8 @@ int main(int argc, const char * argv[]) {
     }
     
     points_file.close();
-
+    
+    
     
     
     //
@@ -153,7 +174,7 @@ int main(int argc, const char * argv[]) {
         i++;
         if(i>=l_begin && j<n_faces && line != "")
         {
-                
+            
             a = line[0];
             b = line[1];
             
@@ -251,7 +272,7 @@ int main(int argc, const char * argv[]) {
     }
     
     faces_file.close();
-
+    
     
     
     //
@@ -345,7 +366,7 @@ int main(int argc, const char * argv[]) {
     
     boundary_file.clear();
     boundary_file.seekg(0, ios::beg);
-
+    
     
     // hill_geometry
     
@@ -394,7 +415,7 @@ int main(int argc, const char * argv[]) {
     // Write boundary
     
     ofstream east;
-    east.open(coord_dir+"/EastCoordinates");
+    east.open(coord_dir+"/EastCoordinates_"+batch_number+"_"+batch_direction);
     for(int k=start_east; k<start_east+n_east; k++)
     {
         east<<faces_x[k]<<" "<<faces_y[k]<<" "<<faces_z[k]<<endl;
@@ -402,7 +423,7 @@ int main(int argc, const char * argv[]) {
     east.close();
     
     ofstream west;
-    west.open(coord_dir+"/WestCoordinates");
+    west.open(coord_dir+"/WestCoordinates_"+batch_number+"_"+batch_direction);
     for(int k=start_west; k<start_west+n_west; k++)
     {
         west<<faces_x[k]<<" "<<faces_y[k]<<" "<<faces_z[k]<<endl;
@@ -410,14 +431,14 @@ int main(int argc, const char * argv[]) {
     west.close();
     
     ofstream hill;
-    hill.open(coord_dir+"/HillCoordinates");
+    hill.open(coord_dir+"/HillCoordinates_"+batch_number+"_"+batch_direction);
     for(int k=start_hill; k<start_hill+n_hill; k++)
     {
         hill<<faces_x[k]<<" "<<faces_y[k]<<" "<<faces_z[k]<<endl;
     }
     hill.close();
     
-   
+    
     
     //
     // OWNER
@@ -508,7 +529,7 @@ int main(int argc, const char * argv[]) {
     }
     
     neighbour_file.close();
-
+    
     
     
     //
@@ -548,28 +569,28 @@ int main(int argc, const char * argv[]) {
     
     cell_file.close();
     
-     
+    
     // Find cell centroid
     vector<float> cells_x(n_cell);
     vector<float> cells_y(n_cell);
     vector<float> cells_z(n_cell);
     
-    vector<list<float>> cells_x_list(n_cell);
-    vector<list<float>> cells_y_list(n_cell);
-    vector<list<float>> cells_z_list(n_cell);
-   
+    vector<list<float> > cells_x_list(n_cell);
+    vector<list<float> > cells_y_list(n_cell);
+    vector<list<float> > cells_z_list(n_cell);
+    
     for(int k=0; k<n_faces; k++)
     {
-        cells_x_list[owner[k]].emplace_back(faces_x[k]);
-        cells_y_list[owner[k]].emplace_back(faces_y[k]);
-        cells_z_list[owner[k]].emplace_back(faces_z[k]);
+        cells_x_list[owner[k]].__emplace_back(faces_x[k]);
+        cells_y_list[owner[k]].__emplace_back(faces_y[k]);
+        cells_z_list[owner[k]].__emplace_back(faces_z[k]);
     }
     
     for(int k=0; k<n_neig; k++)
     {
-        cells_x_list[neighbour[k]].emplace_back(faces_x[k]);
-        cells_y_list[neighbour[k]].emplace_back(faces_y[k]);
-        cells_z_list[neighbour[k]].emplace_back(faces_z[k]);
+        cells_x_list[neighbour[k]].__emplace_back(faces_x[k]);
+        cells_y_list[neighbour[k]].__emplace_back(faces_y[k]);
+        cells_z_list[neighbour[k]].__emplace_back(faces_z[k]);
     }
     
     for(int k=0; k<n_cell; k++)
@@ -578,17 +599,19 @@ int main(int argc, const char * argv[]) {
         cells_y[k] = accumulate(cells_y_list[k].begin(), cells_y_list[k].end(), 0.0) / cells_y_list[k].size();
         cells_z[k] = accumulate(cells_z_list[k].begin(), cells_z_list[k].end(), 0.0) / cells_z_list[k].size();
     }
-
+    
     
     // Save cell coordinates
     ofstream coord;
-    coord.open(coord_dir+"/CellCoordinates");
+    coord.open(coord_dir+"/CellCoordinates_"+batch_number+"_"+batch_direction);
     for(int k=0; k<n_cell; k++)
     {
         coord<<cells_x[k]<<" "<<cells_y[k]<<" "<<cells_z[k]<<endl;
     }
     coord.close();
     
+
+    cout << "End c++ "+batch_number+"_"+batch_direction << endl;
     
     return 0;
 }
