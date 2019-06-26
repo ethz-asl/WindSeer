@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
 compressed = False
-tensor_dataset = '../wind_prediction/data/MD_bigger_test.tar'
-hdf5_dataset = '../wind_prediction/data/bigger_test.hdf5'
+tensor_dataset = '../wind_prediction/data/test.tar'
+hdf5_dataset = '../wind_prediction/data/test.hdf5'
 nx = 64
 ny = 64
 nz = 64
@@ -29,7 +29,7 @@ terrain_scaling = 64.0
 stride_hor = 1
 stride_vert = 1
 autoscale = False
-dataset_rounds = 5
+dataset_rounds = 1
 input_channels = ['terrain', 'ux', 'uy', 'uz']
 label_channels = ['ux', 'uy', 'uz', 'turb']
 use_turbulence = 'turb' in label_channels
@@ -45,11 +45,10 @@ def main():
     TensorDataset = nn_data.MyDataset(tensor_dataset, nx = nx, ny = ny, nz = nz, input_mode = input_mode,
                            subsample = subsample, augmentation = augmentation, autoscale = autoscale,
                            stride_hor = stride_hor, stride_vert = stride_vert, augmentation_mode=aug_mode,
-                           turbulence_label = use_turbulence, pressure_label = use_pressure, epsilon_label = use_epsilon,
-                           nut_label = use_nut, scaling_ux = ux_scaling, scaling_uy = uy_scaling, scaling_terrain = terrain_scaling,
-                           scaling_uz = uz_scaling, scaling_turb = turbulence_scaling, scaling_p = p_scaling,
-                           scaling_epsilon = epsilon_scaling, scaling_nut = nut_scaling, compressed = compressed,
-                        return_grid_size = True, verbose=True)
+                           turbulence_label = use_turbulence,scaling_ux = ux_scaling, scaling_uy = uy_scaling,
+                           scaling_uz = uz_scaling, scaling_terrain = terrain_scaling,
+                           scaling_turb = turbulence_scaling, compressed = compressed,
+                           return_grid_size = True, verbose=True)
 
     TDloader = torch.utils.data.DataLoader(TensorDataset, batch_size=1,
                                               shuffle=False, num_workers=4)
@@ -64,8 +63,9 @@ def main():
 
     print('Input shape: ', input.shape)
     print('Label shape: ', label.shape)
+    print('Last sample name: ', TensorDataset.get_name(i))
 
-    print('INFO: Time to get all samples in the tensor dataset', dataset_rounds, 'times took', (time.time() - start_time),
+    print('INFO: Time to get all samples in the tensor dataset', dataset_rounds, 'time(s) took', (time.time() - start_time),
           'seconds')
 
     HDF5Dataset = nn_data.HDF5Dataset(hdf5_dataset, input_channels = input_channels, label_channels = label_channels,
@@ -91,7 +91,8 @@ def main():
     print('Input shape: ', input.shape)
     print('Label shape: ', label.shape)
 
-    print('INFO: Time to get all samples in the hdf5 dataset', dataset_rounds, 'times took', (time.time() - start_time),
+
+    print('INFO: Time to get all samples in the hdf5 dataset', dataset_rounds, 'time(s) took', (time.time() - start_time),
           'seconds')
 
 if __name__ == '__main__':

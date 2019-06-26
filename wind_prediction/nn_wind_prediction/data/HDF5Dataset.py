@@ -12,22 +12,24 @@ import h5py
 
 class HDF5Dataset(Dataset):
     '''
-    Class to handle the dataset with containing velocities and the turbulent kinetic energy (k).
+    Class to handle the dataset with the containing velocities, pressure, turbulent kinetic energy, turbulent dissipation
+     and turbulent viscosity.
 
-    The dataset is a single tar file containing all the samples stored as 4D-pytorch tensors.
+    The dataset is a single hdf5 file containing groups for all of the samples which contain 4D arrays for each of the
+    channels.
     The four dimensions are: [channels, z, y, x].
     The channel ordering is: [terrain, u_x, u_y, u_z, turb, p, epsilon, nut]
 
-    The raw data is split up to an input tensor and output tensor. The input tensor contains the velocities and the terrain
-    information in the following order: [terrain, ux_in, *uy_in, uz_in], where uy_in is only present in the 3D case.
-    The number of output channels is configurable but always contains at least the velocities:
-    [ux_out, *uy_out, uz_out, *k, *dx, *dy, *dz].
-    uy_out is only present in the 3D case and it can be chosen if also the turbulent kinetic energy (k) and the grid sizes
-    (dx, dy, dz) are contained in the output tensor.
+    The raw data is split up to an input tensor and label tensor. The input and label tensor channels are specified and
+    contain information in the following order: [terrain, u_x, u_y*, u_z, turb, p, epsilon, nut], where uy_in is only
+    present in the 3D case.
+    The number of label  channels is configurable.
+    The grid sizes (dx, dy, dz) are contained in the output tensor.
 
     TODO:
     - Check if it is feasible also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
     - Reimplement the 2D data handling
+    - If possible, generalize augmentation modes to be non dependant on provided channels
     '''
 
     __default_device = 'cpu'
@@ -68,7 +70,8 @@ class HDF5Dataset(Dataset):
                     0: The inflow condition is copied over the full domain
                     1: The vertical edges are interpolated over the full domain, default 0
             augmentation:
-                If true the data is augmented according to the mode and augmentation_kwargs
+                If true the data is augmented according to the mode and augmentation_kwargs. The terrain and the velocities
+                must be requested to use this mode for now
             augmentation_mode:
                 Specifies the data augmentation mode
                     0: Rotating and subsampling the data without interpolation (rotation in 90deg steps, shift in integer steps)
@@ -104,18 +107,26 @@ class HDF5Dataset(Dataset):
         '''
         self.__filename = filename
         
-        if len(input_channels) == 0:
-            raise ValueError('HDF5Dataset: List of input channels cannot be empty')
+        if len(input_channels) == 0 or len(label_channels) == 0:
+            raise ValueError('HDF5Dataset: List of input or label channels cannot be empty')
 
-        if len(label_channels) == 0:
-            raise ValueError('HDF5Dataset: List of labels channels cannot be empty')
+        # make sure that all requested channels are possible
+        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        for channel in input_channels:
+            if channel not in default_channels:
+                raise ValueError('HDF5Dataset: Incorrect input_channel detected: \'{}\', '
+                                 'correct channels are {}'.format(channel,default_channels))
+
+        for channel in label_channels:
+            if channel not in default_channels:
+                raise ValueError('HDF5Dataset: Incorrect label_channel detected: \'{}\', '
+                                 'correct channels are {}'.format(channel,default_channels))
 
         self.__channels_to_load = []
         self.__input_indices = []
         self.__label_indices = []
 
         # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
-        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
         index = 0
         for channel in default_channels:
             if channel in input_channels or channel in label_channels:
@@ -290,17 +301,23 @@ class HDF5Dataset(Dataset):
         # 3D data transforms
         if (len(data_shape) == 3):
             # apply autoscale if requested, needs all velocity channels to be loaded
-            if self.__autoscale and all(elem in self.__channels_to_load for elem in ['u_x', 'u_y', 'u_z']):
+            if self.__autoscale and all(elem in self.__channels_to_load for elem in ['ux', 'uy', 'uz']):
                 scale = self.__get_scale(data[1:4, :, :, :])
+
+                # applying the autoscale to the velocities
                 data[1:4, :, :, :] /= scale
+
+                # applying the autoscale to the other channels (except terrain)
+                data[4:, :, :, :] /= scale * scale
+
             elif self.__autoscale:
-                print('HDF5Dataset: autoscale not applied, not all velocity channels were requested')
+                print('HDF5Dataset: autoscale not applied, not all velocity channels were requested to be loaded')
 
             # downscale if requested
             data = data[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
 
             # augment if requested according to the augmentation mode. Only works for now if all velocities and terrain are loaded
-            if self.__augmentation and all(elem in self.__channels_to_load for elem in ['terrain', 'u_x', 'u_y', 'u_z']):
+            if self.__augmentation and all(elem in self.__channels_to_load for elem in ['terrain', 'ux', 'uy', 'uz']):
                 if self.__augmentation_mode == 0:
                     # subsampling
                     if self.__subsample:
@@ -401,7 +418,7 @@ class HDF5Dataset(Dataset):
             sys.exit()
 
     def get_name(self, index):
-        return self.__memberslist[index].name
+        return self.__memberslist[index]
 
     def __len__(self):
         return self.__num_files

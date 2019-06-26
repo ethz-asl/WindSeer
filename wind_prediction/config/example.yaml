@@ -60,6 +60,9 @@ data:
     trainset_name: 'data/train.tar'
     validationset_name: 'data/validation.tar'
     testset_name: 'data/test.tar'
+    # channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+    input_channels : ['terrain', 'ux', 'uy', 'uz'] # these are required for EDNN3D
+    label_channels : ['ux', 'uy', 'uz', 'turb', 'p','epsilon', 'nut']  # velocities are required for EDNN training
     augmentation: True
     augmentation_mode: 1 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
     augmentation_kwargs: {
@@ -72,15 +75,11 @@ data:
     ux_scaling: 1.0
     uy_scaling: 1.0
     uz_scaling: 0.1
-    turbulence_scaling: 0.01
-    p_scaling: 24
+    turb_scaling: 0.01
+    p_scaling: 1.0
     epsilon_scaling: 1.0
-    nut_scaling: 97
+    nut_scaling: 1.0
     terrain_scaling: 1.0
-    use_turbulence: True
-    use_pressure: True
-    use_epsilon: True
-    use_nut: True
     autoscale: True
 
 # model parameters

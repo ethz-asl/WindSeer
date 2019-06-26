@@ -1,4 +1,4 @@
-import tarfile
+import h5py
 import torch
 
 def get_grid_size(dataset_filename):
@@ -14,13 +14,10 @@ def get_grid_size(dataset_filename):
     '''
 
     # read the dataset tar file
-    tar = tarfile.open(dataset_filename, 'r')
-    memberslist = tar.getmembers()
-    file = tar.extractfile(memberslist[0])
+    h5_file = h5py.File(dataset_filename, 'r', swmr=True)
+    sample = h5_file[list(h5_file.keys())[0]]
 
     # extract the spacing of the grid which is contained in the second component of the dataset
-    grid_size = torch.load(file)[1]
+    grid_size = torch.from_numpy(sample['ds'][...]).tolist()
 
-    # change type to list of floats
-    grid_size = torch.as_tensor(grid_size, dtype=torch.float).tolist()
     return grid_size

@@ -62,7 +62,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 if run_params.run['add_all_variables']:
 # define dataset and dataloader
-    trainset = data.FullDataset(trainset_name, compressed = run_params.data['compressed'],
+    trainset = data.HDF5Dataset(trainset_name, compressed = run_params.data['compressed'],
                             augmentation = run_params.data['augmentation'],
                             augmentation_mode = run_params.data['augmentation_mode'],
                             augmentation_kwargs = run_params.data['augmentation_kwargs'],
@@ -79,7 +79,7 @@ if run_params.run['add_all_variables']:
 
 else:
 # define dataset and dataloader
-    trainset = data.MyDataset(trainset_name, compressed = run_params.data['compressed'],
+    trainset = data.HDF5Dataset(trainset_name, compressed = run_params.data['compressed'],
                           augmentation = run_params.data['augmentation'],
                           augmentation_mode = run_params.data['augmentation_mode'],
                           augmentation_kwargs = run_params.data['augmentation_kwargs'],
@@ -88,7 +88,7 @@ else:
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
                     shuffle=True, num_workers=run_params.run['num_workers'])
 
-    validationset = data.MyDataset(validationset_name, compressed = run_params.data['compressed'],
+    validationset = data.HDF5Dataset(validationset_name, compressed = run_params.data['compressed'],
                     subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
     validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
@@ -98,9 +98,9 @@ else:
 NetworkType = getattr(models, run_params.model['model_type'])
 
 # get grid size and pass to model and loss kwargs
-grid_size = data.get_grid_size(trainset_name)
-run_params.model_kwargs()['grid_size'] = grid_size
-run_params.pass_grid_size_to_loss(grid_size)
+# grid_size = data.get_grid_size(trainset_name)
+# run_params.model_kwargs()['grid_size'] = grid_size
+# run_params.pass_grid_size_to_loss(grid_size)
 
 # initialize model
 net = NetworkType(**run_params.model_kwargs())

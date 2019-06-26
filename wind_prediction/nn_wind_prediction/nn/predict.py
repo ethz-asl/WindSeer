@@ -154,7 +154,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                     outputs[3] *= scale * scale * params.data['turbulence_scaling']
 
             else:
-                print('dataset_prediction_error: unknown dimension of the data:', len(output.shape))
+                print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
                 raise ValueError
 
             # compute the overall loss
@@ -185,7 +185,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                     losses['loss_turb'][i] = loss_fn(outputs[2], labels[2])
 
             else:
-                print('dataset_prediction_error: unknown dimension of the data:', len(output.shape))
+                print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
                 raise ValueError
 
             # compute the prediction errors and extract the data
@@ -193,7 +193,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                                                                           outputs,
                                                                           inputs[0,0] * params.data['terrain_scaling'],
                                                                           predict_uncertainty, device,
-                                                                          params.data['use_turbulence'])
+                                                                          params.model_kwargs()['use_turbulence'])
             for key in error_stats.keys():
                 if not np.isnan(error_stats[key]):
                     prediction_errors[key].append(error_stats[key])
@@ -212,11 +212,11 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['all_tot_mean'])))
         print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_hor_mean'])))
         print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['all_ver_mean'])))
-        print('\tmean tubulence velocity error:    %s [J/kg]' % (np.mean(prediction_errors['all_turb_mean'])))
+        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['all_turb_mean'])))
         print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['all_tot_median'])))
         print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['all_hor_median'])))
         print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_ver_median'])))
-        print('\tmedian tubulence velocity error:  %s [J/kg]' % (np.mean(prediction_errors['all_turb_median'])))
+        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['all_turb_median'])))
         print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['all_tot_max'])))
         print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['all_hor_max'])))
         print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['all_ver_max'])))
@@ -227,11 +227,11 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['all_tot_mean_rel'])))
         print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['all_hor_mean_rel'])))
         print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['all_ver_mean_rel'])))
-        print('\tmean tubulence velocity error:    %s' % (np.mean(prediction_errors['all_turb_mean_rel'])))
+        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['all_turb_mean_rel'])))
         print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['all_tot_median_rel'])))
         print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['all_hor_median_rel'])))
         print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['all_ver_median_rel'])))
-        print('\tmedian tubulence velocity error:  %s' % (np.mean(prediction_errors['all_turb_median_rel'])))
+        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['all_turb_median_rel'])))
         print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['all_tot_max_rel'])))
         print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['all_hor_max_rel'])))
         print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['all_ver_max_rel'])))
@@ -242,60 +242,60 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['high_tot_mean'])))
         print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_hor_mean'])))
         print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['high_ver_mean'])))
-        print('\tmean tubulence velocity error:    %s [J/kg]' % (np.mean(prediction_errors['high_turb_mean'])))
+        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['high_turb_mean'])))
         print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['high_tot_median'])))
         print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['high_hor_median'])))
         print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_ver_median'])))
-        print('\tmedian tubulence velocity error:  %s [J/kg]' % (np.mean(prediction_errors['high_turb_median'])))
+        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['high_turb_median'])))
         print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['high_tot_max'])))
         print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['high_hor_max'])))
         print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['high_ver_max'])))
-        print('\tmax tubulence velocity error:     %s [J/kg]' % (np.mean(prediction_errors['high_turb_max'])))
+        print('\tmax turbulent kinetic energy error:     %s [J/kg]' % (np.mean(prediction_errors['high_turb_max'])))
         print('')
 
         print('INFO: High above terrain errors, relative:')
         print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['high_tot_mean_rel'])))
         print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['high_hor_mean_rel'])))
         print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['high_ver_mean_rel'])))
-        print('\tmean tubulence velocity error:    %s' % (np.mean(prediction_errors['high_turb_mean_rel'])))
+        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['high_turb_mean_rel'])))
         print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['high_tot_median_rel'])))
         print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['high_hor_median_rel'])))
         print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['high_ver_median_rel'])))
-        print('\tmedian tubulence velocity error:  %s' % (np.mean(prediction_errors['high_turb_median_rel'])))
+        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['high_turb_median_rel'])))
         print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['high_tot_max_rel'])))
         print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['high_hor_max_rel'])))
         print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['high_ver_max_rel'])))
-        print('\tmax tubulence velocity error:     %s' % (np.mean(prediction_errors['high_turb_max_rel'])))
+        print('\tmax turbulent kinetic energy error:     %s' % (np.mean(prediction_errors['high_turb_max_rel'])))
         print('')
 
         print('INFO: Close to terrain errors, absolute:')
         print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['low_tot_mean'])))
         print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_hor_mean'])))
         print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['low_ver_mean'])))
-        print('\tmean tubulence velocity error:    %s [J/kg]' % (np.mean(prediction_errors['low_turb_mean'])))
+        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['low_turb_mean'])))
         print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_tot_median'])))
         print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['low_hor_median'])))
         print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_ver_median'])))
-        print('\tmedian tubulence velocity error:  %s [J/kg]' % (np.mean(prediction_errors['low_turb_median'])))
+        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['low_turb_median'])))
         print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['low_tot_max'])))
         print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['low_hor_max'])))
         print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_ver_max'])))
-        print('\tmax tubulence velocity error:     %s [J/kg]' % (np.mean(prediction_errors['low_turb_max'])))
+        print('\tmax turbulent kinetic energy error:     %s [J/kg]' % (np.mean(prediction_errors['low_turb_max'])))
         print('')
 
         print('INFO: Close to terrain errors, relative:')
         print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['low_tot_mean_rel'])))
         print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['low_hor_mean_rel'])))
         print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['low_ver_mean_rel'])))
-        print('\tmean tubulence velocity error:    %s' % (np.mean(prediction_errors['low_turb_mean_rel'])))
+        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['low_turb_mean_rel'])))
         print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['low_tot_median_rel'])))
         print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['low_hor_median_rel'])))
         print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['low_ver_median_rel'])))
-        print('\tmedian tubulence velocity error:  %s' % (np.mean(prediction_errors['low_turb_median_rel'])))
+        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['low_turb_median_rel'])))
         print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['low_tot_max_rel'])))
         print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['low_hor_max_rel'])))
         print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['low_ver_max_rel'])))
-        print('\tmax tubulence velocity error:     %s' % (np.mean(prediction_errors['low_turb_max_rel'])))
+        print('\tmax turbulent kinetic energy error:     %s' % (np.mean(prediction_errors['low_turb_max_rel'])))
         print('')
 
         return prediction_errors, losses, worst_index, maxloss
@@ -363,8 +363,7 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
         if plotting_prediction:
             utils.plot_prediction(output, label, input[0], predict_uncertainty)
 
-
-def predict_all(input, label, scale, device, net, params, plotting_prediction, loss_fn = None, savename=None):
+def predict_channels(channels_to_predict, input, label, scale, device, net, params, channels_to_plot, loss_fn = None, savename=None):
     with torch.no_grad():
         # predict and measure how long it takes
         input, label = input.to(device), label.to(device)
@@ -374,76 +373,28 @@ def predict_all(input, label, scale, device, net, params, plotting_prediction, l
         input = input.squeeze()
         output = output.squeeze()
 
+        # make sure the channels to predict exist and are properly ordered
+        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        for channel in channels_to_predict:
+            if channel not in default_channels:
+                raise ValueError('Incorrect label_channel detected: \'{}\', '
+                                 'correct channels are {}'.format(channel, default_channels))
+        channels_to_predict = [x for x in default_channels if x in channels_to_predict]
+
         # rescale the labels and predictions
-        #if len(output.shape) == 7:
-        output[0] *= scale * params.data['ux_scaling']
-        output[1] *= scale * params.data['uy_scaling']
-        output[2] *= scale * params.data['uz_scaling']
-        label[0] *= scale * params.data['ux_scaling']
-        label[1] *= scale * params.data['uy_scaling']
-        label[2] *= scale * params.data['uz_scaling']
-        i = 2
-        if params.data['use_turbulence']:
-            i+=1
-            output[i] *=  scale * scale * params.data['turbulence_scaling']
-            label[i] *= scale * scale * params.data['turbulence_scaling']
-
-        if params.data['use_pressure']:
-            i+=1
-            output[i] *= scale * scale * params.data['p_scaling']
-            label[i] *= scale * scale * params.data['p_scaling']
-
-        if params.data['use_epsilon']:
-            i+=1
-            output[i] *= scale * scale * scale * params.data['epsilon_scaling']
-            label[i] *= scale * scale * scale * params.data['epsilon_scaling']
-            if params.data['use_nut']:
-                i+=1
-                output[i] *=  scale * params.data['nut_scaling']
-                label[i] *=  scale * params.data['nut_scaling']
-        else:
-            if params.data['use_nut']:
-                i+=1
-
-                output[i] *=  scale * params.data['nut_scaling']
-                label[i] *=  scale * params.data['nut_scaling']
-
-                output = torch.cat([output[0:i,:,:,:], output[i-1:,:,:,:]], 0)
-                label = torch.cat([label[0:i,:,:,:], label[i-1:,:,:,:]], 0)
-
-                c_mu = 0.09
-
-                k_square_out = np.multiply(output[3],output[3])
-                output[5] = c_mu * (k_square_out/output[6])
-                output[5] = torch.where(torch.isnan(output[5]),torch.zeros_like(output[5]), output[5])
-
-
-                k_square_lab = np.multiply(label[3],label[3])
-                label[5] = c_mu * (k_square_lab/label[6])
-                label[5] = torch.where(torch.isnan(label[5]),torch.zeros_like(label[5]), label[5])
-
-        '''
-        else:
-            print('predict_all: Unknown dimension of the output:', len(output.shape))
-            exit()
-        '''
-        #check if uncertainty is predicted
-
-        
-        # import torch.nn.functional as f
-        # print(f.mse_loss(label[0], output[0]))
-        # print(f.mse_loss(label[1], output[1]))
-        # print(f.mse_loss(label[2], output[2]))
-        # print(f.mse_loss(label[3], output[3]))
-        # print(f.mse_loss(label[4], output[4]))
-        # print(f.mse_loss(label[6], output[6]))
-
+        for i, channel in enumerate(channels_to_predict):
+            if channel == 'terrain':
+                output[i] *= params.data[channel + '_scaling']
+            if channel.startswith('u'):
+                output[i] *= scale * params.data[channel +'_scaling']
+            else:
+                output[i] *= scale * scale * params.data[channel + '_scaling']
 
         try:
             predict_uncertainty = params.model['model_args']['predict_uncertainty']
         except KeyError as e:
             predict_uncertainty = False
-            print('predict_all: predict_uncertainty key not available, setting default value: False')
+            print('predict_channel: predict_uncertainty key not available, setting default value: False')
 
         if predict_uncertainty:
             num_channels = output.shape[0]
@@ -451,17 +402,15 @@ def predict_all(input, label, scale, device, net, params, plotting_prediction, l
                 print('Loss: {}'.format(loss_fn(output[:int(num_channels/2)], label)))
         else:
             if loss_fn:
+                for i, channel in enumerate(channels_to_predict):
+                    print('Loss ' + channel + ': {}'.format(loss_fn(output[i], label[i])))
                 print('Loss: {}'.format(loss_fn(output, label)))
 
         if savename is not None:
             np.save(savename, output.cpu().numpy())
 
-        if plotting_prediction:
-            utils.plot_prediction_all(output, label, input[0], predict_uncertainty)
-            #utils.plotting_nut(output, label, input[0,:])
-
-        
-
+        if channels_to_plot:
+            utils.plot_prediction(channels_to_predict, channels_to_plot, output, label, input[0], predict_uncertainty)
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
     if len(models_list) == 0:
