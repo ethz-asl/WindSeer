@@ -28,8 +28,6 @@ class PlotUtils():
         tick_fontsize: font size of the tick
         cmap: color map to use
         terrain_color: color of the terrain
-
-
     '''
     def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design,
                  uncertainty_predicted = False, plot_divergence = False, ds = None, title_fontsize = 16,
@@ -514,7 +512,7 @@ class PlotUtils():
 
         # Viscosity CFD
         
-        self.__nut_images.append(ah_in[0][0].imshow(self.__label[6,:,self.__n_slice,:], origin='lower', vmin=0, vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+        self.__nut_images.append(ah_in[0][0].imshow(self.__label[6,:,self.__n_slices[0],:], origin='lower', vmin=0, vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
         chbar = fh_in.colorbar(self.__nut_images[0], ax=ah_in[0][0])
         ah_in[0][0].set_title('CFD', fontsize = self.__title_fontsize)
         plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -528,7 +526,7 @@ class PlotUtils():
         k_square = np.multiply(self.__label[3,:,:,:],self.__label[3,:,:,:])
         nut = c_mu * np.divide(k_square, self.__label[5,:,:,:])
 
-        self.__nut_images.append(ah_in[0][1].imshow(nut[:,self.__n_slice,:], origin='lower', vmin=0, vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
+        self.__nut_images.append(ah_in[0][1].imshow(nut[:,self.__n_slices[0],:], origin='lower', vmin=0, vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
         chbar = fh_in.colorbar(self.__nut_images[1], ax=ah_in[0][1])
         ah_in[0][1].set_title('Calculation', fontsize = self.__title_fontsize)
         plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -549,7 +547,7 @@ class PlotUtils():
         #print('\n\n', error_nut[32,32,:])
         print('------------------------------------------------------------------------------')
 
-        self.__error_images.append(ah_in[0][2].imshow(error_nut[:,self.__n_slice,:], origin='lower', vmin=-1, vmax=5, aspect = 'auto', cmap=self.__cmap)) 
+        self.__error_images.append(ah_in[0][2].imshow(error_nut[:,self.__n_slices[0],:], origin='lower', vmin=-1, vmax=5, aspect = 'auto', cmap=self.__cmap))
         chbar = fh_in.colorbar(self.__error_images[0], ax=ah_in[0][2])
         ah_in[0][2].set_title('Error', fontsize = self.__title_fontsize)
         plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -558,24 +556,22 @@ class PlotUtils():
         ah_in[0][2].set_xticks([])
         ah_in[0][2].set_yticks([])
 
-
-
-
-        # create slider to select the slice
-        self.__ax_slider = plt.axes(self.__slider_location)
-        self.__slider = Slider(self.__ax_slider, 'Slice', 0, self.__input.shape[2]-1, valinit=self.__n_slice, valfmt='%0.0f')
-        self.__slider.on_changed(self.slider_callback)
-
         plt.tight_layout()
         plt.subplots_adjust(bottom=0.12)
 
+        # create slider to select the slice
+        self.__ax_sliders[0] = plt.axes(self.__slider_location)
+        self.__sliders[0] = Slider(self.__ax_sliders[0], 'Slice', 0, self.__input.shape[2] - 1,
+                                   valinit=self.__n_slices[0], valfmt='%0.0f')
+        self.__sliders[0].on_changed(self.slider_callback)
+
         # create button to select the axis along which the slices are made
         rax = plt.axes(self.__button_location)
-        self.__button = RadioButtons(rax, ('  x-z', '  x-y', '  y-z'), active=0)
-        for circle in self.__button.circles:
+        label = ('  x-z', '  x-y', '  y-z')
+        self.__buttons[0] = RadioButtons(rax, label, active=0)
+        for circle in self.__buttons[0].circles:
             circle.set_radius(0.1)
-        self.__button.on_clicked(self.radio_callback)
-        plt.show(block=False)
+        self.__buttons[0].on_clicked(self.radio_callback)
 
         plt.show()
 
