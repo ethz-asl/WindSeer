@@ -16,8 +16,8 @@ class PlotUtils():
         provided_channels: a list of the channels that were passed to input (and output for prediction mode)
         channels_to_plot: subset of provided channels, indicates the channels which will be in the plot. 'all' can be
                           used to plot all of the provided channels.
-        input: 4D tensor with [channels, z, y, x]
-        label: 4D tensor with [channels, z, y, x]
+        input: 4D tensor with [channels, z, y, x]. Channels must be ordered as in default_channels.
+        label: 4D tensor with [channels, z, y, x]. Channels must be ordered as in default_channels.
         terrain: 3D tensor of terrain data [z, y, x]
         design: 0 or 1. Indicates the desired design.
         uncertainty_predicted: if the uncertainty is predicted and not the actual channels. Used in prediction mode.
@@ -28,6 +28,12 @@ class PlotUtils():
         tick_fontsize: font size of the tick
         cmap: color map to use
         terrain_color: color of the terrain
+
+    the default channels for sample plotting
+    ['ux_in', 'uy_in', 'uz_in','terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb', 'p', 'epsilon', 'nut']
+
+    the default channels for prediction plotting
+    ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     '''
     def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design,
                  uncertainty_predicted = False, plot_divergence = False, ds = None, title_fontsize = 16,
