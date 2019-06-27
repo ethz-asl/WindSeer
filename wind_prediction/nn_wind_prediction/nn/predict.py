@@ -3,6 +3,7 @@
 import h5py
 from math import trunc
 import nn_wind_prediction.utils as utils
+import nn_wind_prediction.data as nn_data
 import numpy as np
 import time
 import torch
@@ -363,7 +364,8 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
         if plotting_prediction:
             utils.plot_prediction(output, label, input[0], predict_uncertainty)
 
-def predict_channels(channels_to_predict, input, label, scale, device, net, params, channels_to_plot, loss_fn = None, savename=None):
+def predict_channels(channels_to_predict, input, label, scale, device, net, params, channels_to_plot, dataset,
+                     plot_divergence = False, loss_fn = None, savename=None):
     with torch.no_grad():
         # predict and measure how long it takes
         input, label = input.to(device), label.to(device)
@@ -410,7 +412,8 @@ def predict_channels(channels_to_predict, input, label, scale, device, net, para
             np.save(savename, output.cpu().numpy())
 
         if channels_to_plot:
-            utils.plot_prediction(channels_to_predict, channels_to_plot, output, label, input[0], predict_uncertainty)
+            utils.plot_prediction(channels_to_predict, channels_to_plot, output, label, input[0],predict_uncertainty,
+                                  plot_divergence, ds=nn_data.get_grid_size(dataset))
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
     if len(models_list) == 0:

@@ -14,9 +14,9 @@ from torch.utils.data import DataLoader
 
 # ----  Default Params --------------------------------------------------------------
 compressed = False
-dataset = 'data/test.tar'
+dataset = 'data/test.hdf5'
 index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'model_1'
+model_name = 'test_model'
 model_version = 'latest'
 print_loss = False
 compute_prediction_error = False
@@ -39,7 +39,6 @@ parser.add_argument('-cpe', dest='compute_prediction_error', action='store_true'
 parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', help='If set the worst prediction of the input dataset is shown. Needs compute_prediction_error to be true.')
 parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
 parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
-parser.add_argument('-a', dest='add_all', action='store_true', help='Add all variables (if false: add only U and k)')
 
 args = parser.parse_args()
 args.compressed = args.compressed or compressed
@@ -55,11 +54,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yaml')
 
 # load dataset
-if args.add_all:
-    testset = nn_data.FullDataset(args.dataset, compressed = args.compressed,
-                               augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
-else:
-    testset = nn_data.MyDataset(args.dataset, compressed = args.compressed,
+testset = nn_data.HDF5Dataset(args.dataset, compressed = args.compressed,
                              augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1, # needs to be one
                                              shuffle=False, num_workers=num_worker)
@@ -151,4 +146,5 @@ if args.save_prediction:
 else:
     savename = None
 
-nn_custom.predict_channels(params.data['label_channels'], input, label, scale, device, net, params, args.plot_prediction, loss_fn=criterion, savename=savename)
+nn_custom.predict_channels(params.data['label_channels'], input, label, scale, device, net, params, 'all', args.dataset,
+                           plot_divergence =False, loss_fn=criterion, savename=savename)

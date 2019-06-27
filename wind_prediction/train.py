@@ -60,47 +60,29 @@ else:
 #check if gpu is available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-if run_params.run['add_all_variables']:
 # define dataset and dataloader
-    trainset = data.HDF5Dataset(trainset_name, compressed = run_params.data['compressed'],
-                            augmentation = run_params.data['augmentation'],
-                            augmentation_mode = run_params.data['augmentation_mode'],
-                            augmentation_kwargs = run_params.data['augmentation_kwargs'],
-                            **run_params.Dataset_kwargs())
+trainset = data.HDF5Dataset(trainset_name, compressed = run_params.data['compressed'],
+                      augmentation = run_params.data['augmentation'],
+                      augmentation_mode = run_params.data['augmentation_mode'],
+                      augmentation_kwargs = run_params.data['augmentation_kwargs'],
+                      **run_params.Dataset_kwargs())
 
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                        shuffle=True, num_workers=run_params.run['num_workers'])
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
+                shuffle=True, num_workers=run_params.run['num_workers'])
 
-    validationset = data.FullDataset(validationset_name, compressed = run_params.data['compressed'],
-                        subsample = False, augmentation = False, **run_params.Dataset_kwargs())
+validationset = data.HDF5Dataset(validationset_name, compressed = run_params.data['compressed'],
+                subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
-    validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                        num_workers=run_params.run['num_workers'])
-
-else:
-# define dataset and dataloader
-    trainset = data.HDF5Dataset(trainset_name, compressed = run_params.data['compressed'],
-                          augmentation = run_params.data['augmentation'],
-                          augmentation_mode = run_params.data['augmentation_mode'],
-                          augmentation_kwargs = run_params.data['augmentation_kwargs'],
-                          **run_params.Dataset_kwargs())
-
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                    shuffle=True, num_workers=run_params.run['num_workers'])
-
-    validationset = data.HDF5Dataset(validationset_name, compressed = run_params.data['compressed'],
-                    subsample = False, augmentation = False, **run_params.Dataset_kwargs())
-
-    validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                    num_workers=run_params.run['num_workers'])
+validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
+                num_workers=run_params.run['num_workers'])
 
 # define model
 NetworkType = getattr(models, run_params.model['model_type'])
 
 # get grid size and pass to model and loss kwargs
-# grid_size = data.get_grid_size(trainset_name)
-# run_params.model_kwargs()['grid_size'] = grid_size
-# run_params.pass_grid_size_to_loss(grid_size)
+grid_size = data.get_grid_size(trainset_name)
+run_params.model_kwargs()['grid_size'] = grid_size
+run_params.pass_grid_size_to_loss(grid_size)
 
 # initialize model
 net = NetworkType(**run_params.model_kwargs())

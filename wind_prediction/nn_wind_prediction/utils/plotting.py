@@ -9,9 +9,31 @@ import math
 class PlotUtils():
     '''
     Class providing the tools to plot the input and labels for the 2D and 3D case.
+
+    Params:
+        plot_mode: 'sample' or 'prediction'. Sample plot mode only requires input channels and terrain, whereas prediction
+                    mode requires label as well.
+        provided_channels: a list of the channels that were passed to input (and output for prediction mode)
+        channels_to_plot: subset of provided channels, indicates the channels which will be in the plot. 'all' can be
+                          used to plot all of the provided channels.
+        input: 4D tensor with [channels, z, y, x]
+        label: 4D tensor with [channels, z, y, x]
+        terrain: 3D tensor of terrain data [z, y, x]
+        design: 0 or 1. Indicates the desired design.
+        uncertainty_predicted: if the uncertainty is predicted and not the actual channels. Used in prediction mode.
+        plot_divergence: if the divergence field should be plotted. Note that ds must then be passed to kwargs
+        ds: grid size of the data, used for plotting the divergence field
+        title_fontsize: font size of the title
+        label_fontsize: font size of the label
+        tick_fontsize: font size of the tick
+        cmap: color map to use
+        terrain_color: color of the terrain
+
+
     '''
-    def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design, uncertainty_predicted = False, plot_divergence = False,
-                 ds = None, title_fontsize = 16, label_fontsize = 15,tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
+    def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design,
+                 uncertainty_predicted = False, plot_divergence = False, ds = None, title_fontsize = 16,
+                 label_fontsize = 15,tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
 
         if plot_mode != 'sample' and plot_mode !='prediction':
             raise ValueError('Unrecognized plot mode: {}'.format(plot_mode))
@@ -46,24 +68,38 @@ class PlotUtils():
         self.__channels_to_plot = [x for x in default_channels if x in channels_to_plot]
         self.__provided_channels = [x for x in default_channels if x in provided_channels]
 
+        # divergence plotting handling. depends on plot mode
+        if plot_mode == 'sample':
+            if plot_divergence and ds and all(elem in self.__provided_channels for elem in ['ux_cfd', 'uy_cfd', 'uz_cfd']):
+                self.__plot_divergence = True
+                vel_indices = torch.LongTensor([self.__provided_channels.index(channel) for channel in ['ux_cfd', 'uy_cfd', 'uz_cfd']]).to(input.device)
+                div = divergence(input.index_select(0,vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
+                input = torch.cat((input, div), 0)
+                self.__channels_to_plot += ['div']
+                self.__provided_channels += ['div']
+            else:
+                self.__plot_divergence = False
+        else:
+            if plot_divergence and ds and all(elem in self.__provided_channels for elem in ['ux', 'uy', 'uz']):
+                self.__plot_divergence = True
+                vel_indices = torch.LongTensor([self.__provided_channels.index(channel) for channel in ['ux', 'uy', 'uz']]).to(input.device)
+                input_div = divergence(input.index_select(0, vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
+                label_div = divergence(label.index_select(0, vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
+                input = torch.cat((input, input_div), 0)
+                label = torch.cat((label, label_div), 0)
+                self.__channels_to_plot += ['div']
+                self.__provided_channels += ['div']
+            else:
+                self.__plot_divergence = False
+
         # get the number of channels to plot:
         self.__n_channels = len(self.__channels_to_plot)
-
-        if plot_divergence and ds and all(elem in self.__channels_to_plot for elem in ['ux_cfd', 'uy_cfd', 'uz_cfd']):
-            self.__plot_divergence = True
-            vel_indices = torch.LongTensor([self.__provided_channels.index(channel) for channel in ['ux_cfd', 'uy_cfd', 'uz_cfd']]).to(input.device)
-            div = torch.tensor(divergence(input.index_select(0,vel_indices).unsqueeze(0), ds).squeeze()).unsqueeze(0)
-            input = torch.cat((input, div), 0)
-            self.__channels_to_plot += ['div']
-            self.__provided_channels += ['div']
-
-        else:
-            self.__plot_divergence = False
 
         # get the indices of the channels that must be plotted
         self.__indices_to_plot = torch.LongTensor(
             [self.__provided_channels.index(channel) for channel in self.__channels_to_plot]).to(input.device)
 
+        # construct the title dictionary and reduce tensors to plot to the wanted channels
         if plot_mode == 'sample':
             self.__title_dict = {'terrain': 'Distance field', 'ux_in': ' Input Velocity X [m/s]', 'uy_in': 'Input Velocity Y [m/s]',
                                  'uz_in': 'Input Velocity Z [m/s]', 'ux_cfd': ' CFD Velocity X [m/s]', 'uy_cfd': 'CFD Velocity Y [m/s]',
@@ -72,7 +108,7 @@ class PlotUtils():
                                  'epsilon': 'CFD Dissipation [m^2/s^3]', 'nut': 'CFD Turb. viscosity [m^2/s]',
                                  'div': 'Divergence [1/s]'}
 
-            # reduce the input to what is plotted. No need for label if plotting sample
+            # reduce the input to what is plotted. No need for label if plotting mode is sample
             input = torch.index_select(input, 0, self.__indices_to_plot)
             label = input
 
@@ -82,7 +118,7 @@ class PlotUtils():
             self.__title_dict = {'terrain': 'Distance field', 'ux': 'Velocity X [m/s]', 'uy': 'Velocity Y [m/s]',
                                  'uz': 'Velocity Z [m/s]',
                                  'turb': 'Turb. kin. energy [m^2/s^2]', 'p': 'Rho-norm. pressure [m^2/s^2]',
-                                 'epsilon': 'Dissipation [m^2/s^3]', 'nut': 'Turb. viscosity [m^2/s]'}
+                                 'epsilon': 'Dissipation [m^2/s^3]', 'nut': 'Turb. viscosity [m^2/s]','div': 'Divergence [1/s]'}
 
             # reduce the input and label to what is plotted
             input = torch.index_select(input,0, self.__indices_to_plot)
@@ -97,16 +133,19 @@ class PlotUtils():
         self.__buttons = []
         self.__n_slices = []
 
+        # prealocate lists to the correct size
         for j in range(self.__n_figures):
             self.__ax_sliders += [None]
             self.__sliders += [None]
             self.__buttons += [None]
             self.__n_slices += [0]
 
+        # get the fontsizes
         self.__title_fontsize = title_fontsize
         self.__label_fontsize = label_fontsize
         self.__tick_fontsize = tick_fontsize
 
+        # choose design layout
         if design == 1:
             self.__slider_location = [0.15, 0.025, 0.77, 0.04]
             self.__button_location = [0.05, 0.01, 0.05, 0.08]
@@ -115,6 +154,7 @@ class PlotUtils():
             self.__slider_location = [0.15, 0.025, 0.77, 0.04]#[0.09, 0.02, 0.82, 0.04]
             self.__button_location = [0.05, 0.01, 0.05, 0.08]#[0.80, 0.16, 0.05, 0.10]
 
+        # initialize the images to be displayed
         self.__in_images = []
         self.__out_images = []
         self.__error_images = []
@@ -124,7 +164,6 @@ class PlotUtils():
         self.__nut_images = []
 
         # Set the input to be a masked array so that we specify a terrain colour
-        print(input.shape)
         self.__input = np.ma.MaskedArray(np.zeros(input.shape))
         is_terrain = np.logical_not(terrain.cpu().numpy().astype(bool))
         for i, channel in enumerate(input.cpu()):
@@ -138,6 +177,7 @@ class PlotUtils():
         self.__cmap = cmap
         self.__cmap.set_bad(terrain_color)
 
+        # handle uncertainty prediction case
         if uncertainty_predicted and plot_mode == 'prediction':
             self.__uncertainty = self.__input[int(self.__n_channels/2):,:]
             print('Warning: Uncertainty plotting has not been used in a while. It might be broken.')
@@ -260,8 +300,9 @@ class PlotUtils():
         '''
         Creates the plots of a single sample according to the input and label data.
         '''
+        # 3D data
         if (len(list(self.__input.shape)) > 3):
-            # 3D data
+
             n_rows = math.ceil(self.__n_channels/4)
             n_columns = min(self.__n_channels, 4)
 
@@ -269,6 +310,7 @@ class PlotUtils():
             fig_in.patch.set_facecolor('white')
             data_index = 0
             for j in range(n_rows):
+                n_columns = min(self.__n_channels - 4 * (j), 4)
                 for i in range(n_columns):
                     self.__out_images.append(
                         ah_in[j][i].imshow(self.__input[data_index, :, self.__n_slices[0], :], origin='lower',
@@ -284,6 +326,9 @@ class PlotUtils():
                     chbar = fig_in.colorbar(self.__out_images[data_index], ax=ah_in[j][i])
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                     data_index += 1
+                if n_columns<4:
+                    for i in range(n_columns, 4):
+                        fig_in.delaxes(ah_in[j][i])
 
             plt.tight_layout()
             plt.subplots_adjust(bottom=0.12)
@@ -304,9 +349,11 @@ class PlotUtils():
 
             plt.show()
 
+        # 2D data
         else:
-            print('Warning: The 2D plotting has not been used for some time, it might be not working')
-            # 2D data
+            raise NotImplementedError('Sorry, 2D sample plotting needs to be reimplemented.')
+
+            #-------------------------- this code does not work anymore -----------------------------------------------
             fh_in, ah_in = plt.subplots(3, 2, figsize=(20,13))
             fh_in.patch.set_facecolor('white')
 
@@ -377,199 +424,87 @@ class PlotUtils():
 
         plt.show()
 
-    def plot_sample_all(self):
-        '''
-        Creates the plots of a single sample according to the input and label data.
-        '''
-
-        # 3D data
-        fh_in, ah_in = plt.subplots(2, 4, figsize=(16,13))
-        fh_in.patch.set_facecolor('white')
-
-        # plot the label data
-
-        # Terrain
-        self.__in_images.append(ah_in[0][3].imshow(self.__input[0,:,self.__n_slice,:], origin='lower', vmin=self.__input[0,:,:,:].min(), vmax=self.__input[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
-        ah_in[0][3].set_title('Terrain', fontsize = self.__title_fontsize)
-        chbar = fh_in.colorbar(self.__in_images[0], ax=ah_in[0][3])
-        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-
-        # Velocity
-        self.__out_images.append(ah_in[0][0].imshow(self.__label[0,:,self.__n_slice,:], origin='lower', vmin=self.__label[0,:,:,:].min(), vmax=self.__label[0,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
-        self.__out_images.append(ah_in[0][1].imshow(self.__label[1,:,self.__n_slice,:], origin='lower', vmin=self.__label[1,:,:,:].min(), vmax=self.__label[1,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
-        self.__out_images.append(ah_in[0][2].imshow(self.__label[2,:,self.__n_slice,:], origin='lower', vmin=self.__label[2,:,:,:].min(), vmax=self.__label[2,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
-        ah_in[0][0].set_title('Velocity X [m/s]', fontsize = self.__title_fontsize)
-        ah_in[0][1].set_title('Velocity Y [m/s]', fontsize = self.__title_fontsize)
-        ah_in[0][2].set_title('Velocity Z [m/s]', fontsize = self.__title_fontsize)
-        chbar = fh_in.colorbar(self.__out_images[0], ax=ah_in[0][0])
-        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-        chbar = fh_in.colorbar(self.__out_images[1], ax=ah_in[0][1])
-        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-        chbar = fh_in.colorbar(self.__out_images[2], ax=ah_in[0][2])
-        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-        
-        # Turb. kin. energy
-        if self.__plot_turbulence:
-            self.__out_images.append(ah_in[1][0].imshow(self.__label[3,:,self.__n_slice,:], origin='lower', vmin=self.__label[3,:,:,:].min(), vmax=self.__label[3,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
-            chbar = fh_in.colorbar(self.__out_images[3], ax=ah_in[1][0])
-            ah_in[1][0].set_title('Turb. kin. energy [m^2/s^2]', fontsize = self.__title_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][0].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][0].get_yticklabels(), fontsize=self.__tick_fontsize)
-            ah_in[1][0].set_xticks([])
-            ah_in[1][0].set_yticks([])
-        else:
-            fh_in.delaxes(ah_in[1][0])
-
-        # Pressure
-        if self.__plot_pressure:
-            self.__out_images.append(ah_in[1][1].imshow(self.__label[4,:,self.__n_slice,:], origin='lower', vmin=self.__label[4,:,:,:].min(), vmax=self.__label[4,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
-            chbar = fh_in.colorbar(self.__out_images[4], ax=ah_in[1][1])
-            ah_in[1][1].set_title('Norm. pressure [m^2/s^2]', fontsize = self.__title_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][1].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][1].get_yticklabels(), fontsize=self.__tick_fontsize)
-            ah_in[1][1].set_xticks([])
-            ah_in[1][1].set_yticks([])
-        else:
-            fh_in.delaxes(ah_in[1][1])
-
-        # Dissipation
-        if self.__plot_epsilon:
-            self.__out_images.append(ah_in[1][2].imshow(self.__label[5,:,self.__n_slice,:], origin='lower', vmin=self.__label[5,:,:,:].min(), vmax=self.__label[5,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
-            chbar = fh_in.colorbar(self.__out_images[5], ax=ah_in[1][2])
-            ah_in[1][2].set_title('Dissipation [m^2/s^3]', fontsize = self.__title_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][2].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][2].get_yticklabels(), fontsize=self.__tick_fontsize)
-            ah_in[1][2].set_xticks([])
-            ah_in[1][2].set_yticks([])
-        else:
-            fh_in.delaxes(ah_in[1][2])
-
-        # Viscosity
-        if self.__plot_nut:
-            self.__out_images.append(ah_in[1][3].imshow(self.__label[6,:,self.__n_slice,:], origin='lower', vmin=self.__label[6,:,:,:].min(), vmax=self.__label[6,:,:,:].max(), aspect = 'auto', cmap=self.__cmap)) 
-            chbar = fh_in.colorbar(self.__out_images[6], ax=ah_in[1][3])
-            ah_in[1][3].set_title('Turb. viscosity [m^2/s]', fontsize = self.__title_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][3].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][3].get_yticklabels(), fontsize=self.__tick_fontsize)
-            ah_in[1][3].set_xticks([])
-            ah_in[1][3].set_yticks([])
-        else:
-            fh_in.delaxes(ah_in[1][3])
-
-        ah_in[0][0].set_xticks([])
-        ah_in[0][0].set_yticks([])
-        ah_in[0][1].set_xticks([])
-        ah_in[0][1].set_yticks([])
-        ah_in[0][2].set_xticks([])
-        ah_in[0][2].set_yticks([])
-        ah_in[0][3].set_xticks([])
-        ah_in[0][3].set_yticks([])
-        ah_in[1][0].set_xticks([])
-        ah_in[1][0].set_yticks([])
-        ah_in[1][1].set_xticks([])
-        ah_in[1][1].set_yticks([])
-        ah_in[1][2].set_xticks([])
-        ah_in[1][2].set_yticks([])
-        ah_in[1][3].set_xticks([])
-        ah_in[1][3].set_yticks([])
-
-        # create slider to select the slice
-        self.__ax_slider = plt.axes(self.__slider_location)
-        self.__slider = Slider(self.__ax_slider, 'Slice', 0, self.__input.shape[2]-1, valinit=self.__n_slice, valfmt='%0.0f')
-        self.__slider.on_changed(self.slider_callback)
-
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.12)
-
-        # create button to select the axis along which the slices are made
-        rax = plt.axes(self.__button_location)
-        self.__button = RadioButtons(rax, ('  x-z', '  x-y', '  y-z'), active=0)
-        for circle in self.__button.circles:
-            circle.set_radius(0.1)
-        self.__button.on_clicked(self.radio_callback)
-        plt.show(block=False)
-
-        plt.show()
-
     def plot_prediction(self):
+        # 3D case
+        if (len(list(self.__input.shape)) > 3):
 
-        # loop over the channels to plot in each figure
-        for j in range(self.__n_figures):
+            # loop over the channels to plot in each figure
+            for j in range(self.__n_figures):
 
-            # get the number of columns for this figure
-            n_columns = min(self.__n_channels-4*(j), 4)
+                # get the number of columns for this figure
+                n_columns = min(self.__n_channels-4*(j), 4)
 
-            column_size = 5
+                column_size = 5
 
-            # create new figure
-            if self.__uncertainty_predicted:
-                fig_in, ah_in = plt.subplots(4, n_columns,figsize=(n_columns* column_size,12), squeeze=False)
-            else:
-                fig_in, ah_in = plt.subplots(3, n_columns,figsize=(n_columns* column_size,12), squeeze=False)
-
-            fig_in.patch.set_facecolor('white')
-            slice = self.__n_slices[j]
-
-            for i in range(n_columns):
-                data_index = i+j*4
-                self.__out_images.append(ah_in[0][i].imshow(self.__label[data_index,:,slice,:], origin='lower', vmin=self.__label[data_index,:,:,:].min(), vmax=self.__label[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                self.__in_images.append(ah_in[1][i].imshow(self.__input[data_index,:,slice,:], origin='lower', vmin=self.__label[data_index,:,:,:].min(), vmax=self.__label[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                self.__error_images.append(ah_in[2][i].imshow(self.__error[data_index,:,slice,:], origin='lower', vmin=self.__error[data_index,:,:,:].min(), vmax=self.__error[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-
-                ah_in[0][i].set_title(self.__title_dict[self.__channels_to_plot[data_index]], fontsize = self.__title_fontsize)
-
-                ah_in[0][i].set_xticks([])
-                ah_in[0][i].set_yticks([])
-                ah_in[1][i].set_xticks([])
-                ah_in[1][i].set_yticks([])
-                ah_in[2][i].set_xticks([])
-                ah_in[2][i].set_yticks([])
-
-                chbar = fig_in.colorbar(self.__out_images[i], ax=ah_in[0][i])
-                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                chbar = fig_in.colorbar(self.__in_images[i], ax=ah_in[1][i])
-                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                chbar = fig_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
-                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-
+                # create new figure
                 if self.__uncertainty_predicted:
-                    self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                    chbar = self.__figures[j].colorbar(self.__uncertainty_images[i], ax=ah_in[3][i])
+                    fig_in, ah_in = plt.subplots(4, n_columns,figsize=(n_columns* column_size,12), squeeze=False)
+                else:
+                    fig_in, ah_in = plt.subplots(3, n_columns,figsize=(n_columns* column_size,12), squeeze=False)
+
+                fig_in.patch.set_facecolor('white')
+                slice = self.__n_slices[j]
+
+                for i in range(n_columns):
+                    data_index = i+j*4
+                    self.__out_images.append(ah_in[0][i].imshow(self.__label[data_index,:,slice,:], origin='lower', vmin=self.__label[data_index,:,:,:].min(), vmax=self.__label[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                    self.__in_images.append(ah_in[1][i].imshow(self.__input[data_index,:,slice,:], origin='lower', vmin=self.__label[data_index,:,:,:].min(), vmax=self.__label[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                    self.__error_images.append(ah_in[2][i].imshow(self.__error[data_index,:,slice,:], origin='lower', vmin=self.__error[data_index,:,:,:].min(), vmax=self.__error[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+
+                    ah_in[0][i].set_title(self.__title_dict[self.__channels_to_plot[data_index]], fontsize = self.__title_fontsize)
+
+                    ah_in[0][i].set_xticks([])
+                    ah_in[0][i].set_yticks([])
+                    ah_in[1][i].set_xticks([])
+                    ah_in[1][i].set_yticks([])
+                    ah_in[2][i].set_xticks([])
+                    ah_in[2][i].set_yticks([])
+
+                    chbar = fig_in.colorbar(self.__out_images[i], ax=ah_in[0][i])
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                    plt.setp(ah_in[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
-                    plt.setp(ah_in[3][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+                    chbar = fig_in.colorbar(self.__in_images[i], ax=ah_in[1][i])
+                    plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                    chbar = fig_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
+                    plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
-                    ah_in[3][i].set_xticks([])
-                    ah_in[3][i].set_yticks([])
-
-                if (i == 0):
-                    ah_in[0][i].set_ylabel('CFD', fontsize=self.__label_fontsize)
-                    ah_in[1][i].set_ylabel('Prediction', fontsize=self.__label_fontsize)
-                    ah_in[2][i].set_ylabel('Error', fontsize=self.__label_fontsize)
                     if self.__uncertainty_predicted:
-                        ah_in[3][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)
+                        self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                        chbar = self.__figures[j].colorbar(self.__uncertainty_images[i], ax=ah_in[3][i])
+                        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                        plt.setp(ah_in[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
+                        plt.setp(ah_in[3][i].get_yticklabels(), fontsize=self.__tick_fontsize)
 
-            plt.tight_layout()
-            plt.subplots_adjust(bottom=0.12)
+                        ah_in[3][i].set_xticks([])
+                        ah_in[3][i].set_yticks([])
 
-            # create slider to select the slice
-            self.__ax_sliders[j] = plt.axes(self.__slider_location)
-            self.__sliders[j] = Slider(self.__ax_sliders[j], 'Slice', 0, self.__input.shape[2]-1, valinit=slice, valfmt='%0.0f')
-            self.__sliders[j].on_changed(self.slider_callback)
+                    if (i == 0):
+                        ah_in[0][i].set_ylabel('CFD', fontsize=self.__label_fontsize)
+                        ah_in[1][i].set_ylabel('Prediction', fontsize=self.__label_fontsize)
+                        ah_in[2][i].set_ylabel('Error', fontsize=self.__label_fontsize)
+                        if self.__uncertainty_predicted:
+                            ah_in[3][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)
 
-            # create button to select the axis along which the slices are made
-            rax = plt.axes(self.__button_location)
-            label = ('  x-z', '  x-y', '  y-z')
-            self.__buttons[j] = RadioButtons(rax, label, active=0)
-            for circle in self.__buttons[j].circles:
-                circle.set_radius(0.1)
-            self.__buttons[j].on_clicked(self.radio_callback)
+                plt.tight_layout()
+                plt.subplots_adjust(bottom=0.12)
 
-        plt.show()
+                # create slider to select the slice
+                self.__ax_sliders[j] = plt.axes(self.__slider_location)
+                self.__sliders[j] = Slider(self.__ax_sliders[j], 'Slice', 0, self.__input.shape[2]-1, valinit=slice, valfmt='%0.0f')
+                self.__sliders[j].on_changed(self.slider_callback)
+
+                # create button to select the axis along which the slices are made
+                rax = plt.axes(self.__button_location)
+                label = ('  x-z', '  x-y', '  y-z')
+                self.__buttons[j] = RadioButtons(rax, label, active=0)
+                for circle in self.__buttons[j].circles:
+                    circle.set_radius(0.1)
+                self.__buttons[j].on_clicked(self.radio_callback)
+
+            plt.show()
+
+        # 2D case
+        else:
+            raise NotImplementedError('Sorry, 2D prediction plotting needs to be reimplemented.')
 
     def plotting_nut(self):
 
@@ -654,12 +589,13 @@ def plot_sample(provided_channels, channels_to_plot, input, label, terrain, plot
     instance = PlotUtils('sample',provided_channels, channels_to_plot, input, label, terrain, 0, False, plot_divergence, ds)
     instance.plot_sample()
 
-def plot_prediction(provided_channels, channels_to_plot, output, label, terrain, uncertainty_predicted):
-    instance = PlotUtils('prediction',provided_channels, channels_to_plot, output, label, terrain, 1, uncertainty_predicted)
+def plot_prediction(provided_channels, channels_to_plot, output, label, terrain, uncertainty_predicted = False, plot_divergence = False,
+                 ds = None):
+    instance = PlotUtils('prediction',provided_channels, channels_to_plot, output, label, terrain, 1, uncertainty_predicted, plot_divergence, ds)
     instance.plot_prediction()
 
-def plotting_nut(output, label, terrain):
-    instance = PlotUtils(output, label, terrain, 1)
+def plotting_nut(provided_channels, channels_to_plot, output, label, terrain):
+    instance = PlotUtils('sample',provided_channels, channels_to_plot, output, label, terrain, 1)
     instance.plotting_nut()
 
 def violin_plot(labels, data, xlabel, ylabel, ylim=None):

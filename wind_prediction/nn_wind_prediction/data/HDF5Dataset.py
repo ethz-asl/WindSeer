@@ -365,10 +365,10 @@ class HDF5Dataset(Dataset):
                         data = data.flip(2)
                         data[2,:,:,:] *= -1.0
 
-                    else:
-                        if not self.__augmentation_warning_printed:
-                            print('WARNING: Unknown augmentation mode in HDF5Dataset ', self.__augmentation_mode,
-                                  ', not augmenting the data')
+                else:
+                    if not self.__augmentation_warning_printed:
+                        print('WARNING: Unknown augmentation mode in HDF5Dataset ', self.__augmentation_mode,
+                              ', not augmenting the data')
 
             else:
                 # no data augmentation
