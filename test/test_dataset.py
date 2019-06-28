@@ -260,7 +260,7 @@ def main():
         plt.grid(True)
         plt.xlabel('Uz [m/s]')
         plt.ylabel('N')
-        plt.show()
+        plt.draw()
 
     print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 

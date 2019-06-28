@@ -21,8 +21,10 @@ class PlotUtils():
         terrain: 3D tensor of terrain data [z, y, x]
         design: 0 or 1. Indicates the desired design.
         uncertainty_predicted: if the uncertainty is predicted and not the actual channels. Used in prediction mode.
-        plot_divergence: if the divergence field should be plotted. Note that ds must then be passed to kwargs
+        plot_divergence: if the divergence field should be plotted. Note that ds must then be passed to kwargs and that
+                         the velocities (ux, uy, uz) or (ux_cfd, uy_cfd, uz_cfd) need to be present.
         ds: grid size of the data, used for plotting the divergence field
+        title_dict: an optional title dict can be passed, if one would like to replace the default titles
         title_fontsize: font size of the title
         label_fontsize: font size of the label
         tick_fontsize: font size of the tick
@@ -36,8 +38,8 @@ class PlotUtils():
     ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     '''
     def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design,
-                 uncertainty_predicted = False, plot_divergence = False, ds = None, title_fontsize = 16,
-                 label_fontsize = 15,tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
+                 uncertainty_predicted = False, plot_divergence = False, ds = None, title_dict = None,
+                 title_fontsize = 16, label_fontsize = 15, tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
 
         if plot_mode != 'sample' and plot_mode !='prediction':
             raise ValueError('Unrecognized plot mode: {}'.format(plot_mode))
@@ -52,49 +54,71 @@ class PlotUtils():
         if len(provided_channels) == 0 or len(channels_to_plot) == 0:
             raise ValueError('PlotUtils: List of channels cannot be empty')
 
-        # make sure that all requested channels are possible
+        # set the default channels and titles based on plotting mode
         if plot_mode == 'sample':
             default_channels = ['ux_in', 'uy_in', 'uz_in','terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb', 'p', 'epsilon', 'nut']
+            default_title_dict = {'terrain': 'Distance field', 'ux_in': ' Input Velocity X [m/s]',
+                                  'uy_in': 'Input Velocity Y [m/s]',
+                                  'uz_in': 'Input Velocity Z [m/s]', 'ux_cfd': ' CFD Velocity X [m/s]',
+                                  'uy_cfd': 'CFD Velocity Y [m/s]',
+                                  'uz_cfd': 'CFD Velocity Z [m/s]',
+                                  'turb': 'CFD Turb. kin. energy [m^2/s^2]', 'p': 'CFD Rho-norm. pressure [m^2/s^2]',
+                                  'epsilon': 'CFD Dissipation [m^2/s^3]', 'nut': 'CFD Turb. viscosity [m^2/s]',
+                                  'div': 'Divergence [1/s]'}
         else:
             default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+            default_title_dict = {'terrain': 'Distance field', 'ux': 'Velocity X [m/s]', 'uy': 'Velocity Y [m/s]',
+             'uz': 'Velocity Z [m/s]',
+             'turb': 'Turb. kin. energy [m^2/s^2]', 'p': 'Rho-norm. pressure [m^2/s^2]',
+             'epsilon': 'Dissipation [m^2/s^3]', 'nut': 'Turb. viscosity [m^2/s]',
+             'div': 'Divergence [1/s]'}
+
+        # set the title dict
+        self.__title_dict = title_dict if title_dict else default_title_dict
 
         for channel in provided_channels:
             if channel not in default_channels:
-                raise ValueError('PlotUtils: Incorrect provided_channel detected: \'{}\', '
+                print('PlotUtils warning: None default provided_channel detected: \'{}\', '
                                  'correct channels are {}'.format(channel, default_channels))
+                if title_dict is None:
+                    raise ValueError('PlotUtils: None default channel provided, but no custom title dict')
 
         for channel in channels_to_plot:
             if channel not in default_channels:
-                raise ValueError('PlotUtils: Incorrect channel_to_plot detected: \'{}\', '
+                print('PlotUtils warning: None default channel_to_plot detected: \'{}\', '
                                  'correct channels are {}'.format(channel, default_channels))
+                if title_dict is None:
+                    raise ValueError('PlotUtils: None default channel provided, but no custom title dict')
 
         # order the channels in the right order
-        self.__channels_to_plot = [x for x in default_channels if x in channels_to_plot]
-        self.__provided_channels = [x for x in default_channels if x in provided_channels]
+        # self.__channels_to_plot = [x for x in default_channels if x in channels_to_plot]
+        # self.__provided_channels = [x for x in default_channels if x in provided_channels]
+        self.__channels_to_plot = channels_to_plot
+        self.__provided_channels = provided_channels
 
         # divergence plotting handling. depends on plot mode
         if plot_mode == 'sample':
-            if plot_divergence and ds and all(elem in self.__provided_channels for elem in ['ux_cfd', 'uy_cfd', 'uz_cfd']):
-                self.__plot_divergence = True
-                vel_indices = torch.LongTensor([self.__provided_channels.index(channel) for channel in ['ux_cfd', 'uy_cfd', 'uz_cfd']]).to(input.device)
-                div = divergence(input.index_select(0,vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
-                input = torch.cat((input, div), 0)
-                self.__channels_to_plot += ['div']
-                self.__provided_channels += ['div']
-            else:
-                self.__plot_divergence = False
+            div_required_channels = ['ux_cfd', 'uy_cfd', 'uz_cfd']
         else:
-            if plot_divergence and ds and all(elem in self.__provided_channels for elem in ['ux', 'uy', 'uz']):
-                self.__plot_divergence = True
-                vel_indices = torch.LongTensor([self.__provided_channels.index(channel) for channel in ['ux', 'uy', 'uz']]).to(input.device)
-                input_div = divergence(input.index_select(0, vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
+            div_required_channels = ['ux', 'uy', 'uz']
+        if plot_divergence and ds and all(elem in self.__provided_channels for elem in div_required_channels ):
+            self.__channels_to_plot += ['div']
+            self.__provided_channels += ['div']
+            vel_indices = torch.LongTensor([self.__provided_channels.index(channel) for channel in ['ux_cfd', 'uy_cfd', 'uz_cfd']]).to(input.device)
+
+            # get divergence of input field
+            input_div = divergence(input.index_select(0,vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
+            input = torch.cat((input, input_div), 0)
+
+            if plot_mode == 'prediction':
+                # get divergence of label field for prediciton
                 label_div = divergence(label.index_select(0, vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
-                input = torch.cat((input, input_div), 0)
                 label = torch.cat((label, label_div), 0)
-                self.__channels_to_plot += ['div']
-                self.__provided_channels += ['div']
-            else:
-                self.__plot_divergence = False
+
+        elif plot_divergence and not ds:
+            print('PlotUtils warning: cannot plot divergence, grid size not passed')
+        elif plot_divergence and not all(elem in self.__provided_channels for elem in div_required_channels):
+            print('PlotUtils warning: cannot plot divergence, missing some or all of the required channels: {}'.format(div_required_channels))
 
         # get the number of channels to plot:
         self.__n_channels = len(self.__channels_to_plot)
@@ -103,32 +127,21 @@ class PlotUtils():
         self.__indices_to_plot = torch.LongTensor(
             [self.__provided_channels.index(channel) for channel in self.__channels_to_plot]).to(input.device)
 
-        # construct the title dictionary and reduce tensors to plot to the wanted channels
+        # reduce tensors to plot to the wanted channels
         if plot_mode == 'sample':
-            self.__title_dict = {'terrain': 'Distance field', 'ux_in': ' Input Velocity X [m/s]', 'uy_in': 'Input Velocity Y [m/s]',
-                                 'uz_in': 'Input Velocity Z [m/s]', 'ux_cfd': ' CFD Velocity X [m/s]', 'uy_cfd': 'CFD Velocity Y [m/s]',
-                                 'uz_cfd': 'CFD Velocity Z [m/s]',
-                                 'turb': 'CFD Turb. kin. energy [m^2/s^2]', 'p': 'CFD Rho-norm. pressure [m^2/s^2]',
-                                 'epsilon': 'CFD Dissipation [m^2/s^3]', 'nut': 'CFD Turb. viscosity [m^2/s]',
-                                 'div': 'Divergence [1/s]'}
-
             # reduce the input to what is plotted. No need for label if plotting mode is sample
             input = torch.index_select(input, 0, self.__indices_to_plot)
             label = input
 
+            # set the number of figures to plot
             self.__n_figures = 1
 
         else:
-            self.__title_dict = {'terrain': 'Distance field', 'ux': 'Velocity X [m/s]', 'uy': 'Velocity Y [m/s]',
-                                 'uz': 'Velocity Z [m/s]',
-                                 'turb': 'Turb. kin. energy [m^2/s^2]', 'p': 'Rho-norm. pressure [m^2/s^2]',
-                                 'epsilon': 'Dissipation [m^2/s^3]', 'nut': 'Turb. viscosity [m^2/s]','div': 'Divergence [1/s]'}
-
             # reduce the input and label to what is plotted
             input = torch.index_select(input,0, self.__indices_to_plot)
             label = torch.index_select(label,0, self.__indices_to_plot)
 
-            # get  the number of figures to plot
+            # get the number of figures to plot
             self.__n_figures = math.ceil(math.ceil(self.__n_channels / 4))
 
         # create list of buttons and sliders for each figure
@@ -195,11 +208,14 @@ class PlotUtils():
         else:
             self.__error = None # in this case the error plot will not be executed anyway
 
+        # the number of already open figures, used in slider and button callbacks
+        self.__n_already_open_figures = 0
+
     def update_images(self):
         '''
         Updates the images according to the slice and axis which should be displayed. 
         '''
-        j = plt.gcf().number - 1
+        j = plt.gcf().number - 1 -self.__n_already_open_figures
         slice_number = self.__n_slices[j]
         if self.__axis == '  y-z':
             for i, im in enumerate(self.__in_images):
@@ -273,7 +289,7 @@ class PlotUtils():
         '''
         Callback for the slider to change the slice to display.
         '''
-        figure = plt.gcf().number - 1
+        figure = plt.gcf().number - 1 -self.__n_already_open_figures
         self.__n_slices[figure] = int(round(val))
         self.update_images()
 
@@ -281,7 +297,7 @@ class PlotUtils():
         '''
         Callback for the radio button to change the axis along which the slices are made.
         '''
-        figure = plt.gcf().number -1
+        figure = plt.gcf().number - 1 -self.__n_already_open_figures
         if label != self.__axis:
             if label == '  y-z':
                 max_slice = self.__input.shape[3] - 1
@@ -304,6 +320,9 @@ class PlotUtils():
         '''
         Creates the plots of a single sample according to the input and label data.
         '''
+
+        # get the number of already open figures, used in slider and button callbacks
+        self.__n_already_open_figures = len(list(map(plt.figure, plt.get_fignums())))
         # 3D data
         if (len(list(self.__input.shape)) > 3):
 
@@ -330,7 +349,9 @@ class PlotUtils():
                     chbar = fig_in.colorbar(self.__out_images[data_index], ax=ah_in[j][i])
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                     data_index += 1
-                if n_columns<4:
+
+                # remove the extra empty figures
+                if n_columns<4 and n_rows>1:
                     for i in range(n_columns, 4):
                         fig_in.delaxes(ah_in[j][i])
 
@@ -429,6 +450,9 @@ class PlotUtils():
         plt.show()
 
     def plot_prediction(self):
+        # get the number of already open figures, used in slider and button callbacks
+        self.__n_already_open_figures = len(list(map(plt.figure, plt.get_fignums())))
+
         # 3D case
         if (len(list(self.__input.shape)) > 3):
 
@@ -581,19 +605,21 @@ class PlotUtils():
 
         plt.show()
 
-def plot_sample(provided_channels, channels_to_plot, input, label, terrain, plot_divergence = False, ds = None):
+def plot_sample(provided_channels, channels_to_plot, input, label, terrain, plot_divergence = False, ds = None, title_dict = None):
     '''
     Creates the plots according to the input and label data.
     Can handle 2D as well as 3D input. For the 3D input only slices are shown.
     The axes along which the slices are made as well as the location of the slice
     can be set using sliders and buttons in the figure.
     '''
-    instance = PlotUtils('sample',provided_channels, channels_to_plot, input, label, terrain, 0, False, plot_divergence, ds)
+    instance = PlotUtils('sample',provided_channels, channels_to_plot, input, label, terrain, 0, False, plot_divergence,
+                         ds, title_dict =title_dict)
     instance.plot_sample()
 
 def plot_prediction(provided_channels, channels_to_plot, output, label, terrain, uncertainty_predicted = False, plot_divergence = False,
-                 ds = None):
-    instance = PlotUtils('prediction',provided_channels, channels_to_plot, output, label, terrain, 1, uncertainty_predicted, plot_divergence, ds)
+                 ds = None, title_dict = None):
+    instance = PlotUtils('prediction',provided_channels, channels_to_plot, output, label, terrain, 1, uncertainty_predicted,
+                         plot_divergence, ds, title_dict =title_dict)
     instance.plot_prediction()
 
 def plotting_nut(provided_channels, channels_to_plot, output, label, terrain):

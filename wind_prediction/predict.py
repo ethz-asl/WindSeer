@@ -22,7 +22,7 @@ print_loss = False
 compute_prediction_error = False
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
-plot_prediction = True
+plot_prediction = False
 prediction_level = 10
 num_worker = 0
 add_all = False
@@ -146,5 +146,10 @@ if args.save_prediction:
 else:
     savename = None
 
-nn_custom.predict_channels(params.data['label_channels'], input, label, scale, device, net, params, 'all', args.dataset,
+if args.plot_prediction:
+    channels_to_plot = 'all'
+else:
+    channels_to_plot = None
+
+nn_custom.predict_channels(params.data['label_channels'], input, label, scale, device, net, params, channels_to_plot, args.dataset,
                            plot_divergence =False, loss_fn=criterion, savename=savename)
