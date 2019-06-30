@@ -55,24 +55,44 @@ else:
     validationset_name = run_params.data['validationset_name']
     testset_name = run_params.data['testset_name']
 
+
+
 #check if gpu is available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+if run_params.run['add_all_variables']:
 # define dataset and dataloader
-trainset = data.MyDataset(trainset_name, compressed = run_params.data['compressed'],
+    trainset = data.FullDataset(trainset_name, compressed = run_params.data['compressed'],
+                            augmentation = run_params.data['augmentation'],
+                            augmentation_mode = run_params.data['augmentation_mode'],
+                            augmentation_kwargs = run_params.data['augmentation_kwargs'],
+                            **run_params.Dataset_kwargs())
+
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
+                        shuffle=True, num_workers=run_params.run['num_workers'])
+
+    validationset = data.FullDataset(validationset_name, compressed = run_params.data['compressed'],
+                        subsample = False, augmentation = False, **run_params.Dataset_kwargs())
+
+    validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
+                        num_workers=run_params.run['num_workers'])
+
+else:
+# define dataset and dataloader
+    trainset = data.MyDataset(trainset_name, compressed = run_params.data['compressed'],
                           augmentation = run_params.data['augmentation'],
                           augmentation_mode = run_params.data['augmentation_mode'],
                           augmentation_kwargs = run_params.data['augmentation_kwargs'],
-                          **run_params.MyDataset_kwargs())
+                          **run_params.Dataset_kwargs())
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                                          shuffle=True, num_workers=run_params.run['num_workers'])
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
+                    shuffle=True, num_workers=run_params.run['num_workers'])
 
-validationset = data.MyDataset(validationset_name, compressed = run_params.data['compressed'],
-                               augmentation = False, **run_params.MyDataset_kwargs())
+    validationset = data.MyDataset(validationset_name, compressed = run_params.data['compressed'],
+                    subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
-validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                                          num_workers=run_params.run['num_workers'])
+    validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
+                    num_workers=run_params.run['num_workers'])
 
 # define model
 NetworkType = getattr(models, run_params.model['model_type'])
@@ -189,8 +209,15 @@ if (run_params.run['save_model']):
 
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
-    testset = utils.MyDataset(testset_name, compressed = run_params.data['compressed'],
-                              augmentation = False, **run_params.MyDataset_kwargs())
+
+    if run_params.run['add_all_variables']:
+      testset = utils.FullDataset(testset_name, compressed = run_params.data['compressed'],
+                                augmentation = False, subsample = False, **run_params.Dataset_kwargs())
+    else:
+      testset = utils.MyDataset(testset_name, compressed = run_params.data['compressed'],
+                                augmentation = False, subsample = False, **run_params.Dataset_kwargs())
+
+
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                              shuffle=False, num_workers=run_params.data['num_workers'])
 

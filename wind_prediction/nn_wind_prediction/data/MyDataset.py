@@ -43,7 +43,8 @@ class MyDataset(Dataset):
     __default_stride_hor = 1
     __default_stride_vert = 1
     __default_turbulence_label = True
-    __default_scaling_uhor = 1.0
+    __default_scaling_ux = 1.0
+    __default_scaling_uy = 1.0
     __default_scaling_uz = 1.0
     __default_scaling_turb = 1.0
     __default_scaling_terrain = 1.0
@@ -166,11 +167,18 @@ class MyDataset(Dataset):
                 print('MyDataset: turbulence_label not present in kwargs, using default value:', self.__default_turbulence_label)
 
         try:
-            self.__scaling_uhor = kwargs['scaling_uhor']
+            self.__scaling_ux = kwargs['scaling_ux']
         except KeyError:
-            self.__scaling_uhor = self.__default_scaling_uhor
+            self.__scaling_ux = self.__default_scaling_ux
             if verbose:
-                print('MyDataset: scaling_uhor not present in kwargs, using default value:', self.__default_scaling_uhor)
+                print('MyDataset: scaling_ux not present in kwargs, using default value:', self.__default_scaling_ux)
+
+        try:
+            self.__scaling_uy = kwargs['scaling_uy']
+        except KeyError:
+            self.__scaling_uy = self.__default_scaling_uy
+            if verbose:
+                print('MyDataset: scaling_uy not present in kwargs, using default value:', self.__default_scaling_uy)
 
         try:
             self.__scaling_uz = kwargs['scaling_uz']
@@ -290,8 +298,8 @@ class MyDataset(Dataset):
                 scale = 1.0
 
             data[0, :, :, :] /= self.__scaling_terrain # terrain
-            data[1, :, :, :] /= scale * self.__scaling_uhor # in u_x
-            data[2, :, :, :] /= scale * self.__scaling_uhor # in u_y
+            data[1, :, :, :] /= scale * self.__scaling_ux # in u_x
+            data[2, :, :, :] /= scale * self.__scaling_uy # in u_y
             data[3, :, :, :] /= scale * self.__scaling_uz # in u_z
             data[4, :, :, :] /= scale * scale * self.__scaling_turb # label turbulence
 

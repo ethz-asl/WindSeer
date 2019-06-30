@@ -69,7 +69,7 @@ def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
     tar.close()
     shutil.rmtree(tempfolder)
 
-def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, compress = False):
+def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, compress = False, add_all = True):
     '''
     Function which loops through the files of the input tar file.
     The velocity is checked and files are rejected if a single dimension
@@ -81,9 +81,10 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
         infile: Input archive name
         outfile: Output archive name
         vlim: Maximum allowed velocity [m/s]
-        klim: Maximum allowed turbulence viscosity
+        klim: Maximum allowed turbulence kinetik energy
         boolean_terrain: If true the terrain is represented by a boolean variable, if false by a distance field
         verbose: Show the stats of the deleted files
+        add_all: add all variables (not only U and k)
     '''
     # open the file
     tar = tarfile.open(infile, 'r')
@@ -194,6 +195,12 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                     turb = wind_data.get('k').values.reshape(channel_shape)
                     terrain = np.less(wind_data.get('vtkValidPointMask').values.reshape(channel_shape), 0.5).astype(np.float32)
 
+                    # extract additional variables
+                    if add_all:
+                        p = wind_data.get('p').values.reshape(channel_shape)
+                        epsilon = wind_data.get('epsilon').values.reshape(channel_shape)
+                        nut = wind_data.get('nut').values.reshape(channel_shape)
+
                     # filter out bad terrain pixels, paraview sometimes fails to interpolate the flow although it seems to be correct
                     terrain = np.insert(terrain, 0, np.ones(slice_shape), axis = 0)
                     terrain_old = np.zeros(terrain.shape)
@@ -276,6 +283,11 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         u_z[iz, iy, ix] = (mul[0]*u_z[i1] + mul[1]*u_z[i2] + mul[2]*u_z[i3] + mul[3]*u_z[i4] + mul[4]*u_z[i5] + mul[5]*u_z[i6]) / denom
                         turb[iz, iy, ix] = (mul[0]*turb[i1] + mul[1]*turb[i2] + mul[2]*turb[i3] + mul[3]*turb[i4] + mul[4]*turb[i5] + mul[5]*turb[i6]) / denom
 
+                        if add_all:
+                            p[iz, iy, ix] = (mul[0]*p[i1] + mul[1]*p[i2] + mul[2]*p[i3] + mul[3]*p[i4] + mul[4]*p[i5] + mul[5]*p[i6]) / denom
+                            epsilon[iz, iy, ix] = (mul[0]*epsilon[i1] + mul[1]*epsilon[i2] + mul[2]*epsilon[i3] + mul[3]*epsilon[i4] + mul[4]*epsilon[i5] + mul[5]*epsilon[i6]) / denom
+                            nut[iz, iy, ix] = (mul[0]*nut[i1] + mul[1]*nut[i2] + mul[2]*nut[i3] + mul[3]*nut[i4] + mul[4]*nut[i5] + mul[5]*nut[i6]) / denom
+
                     if verbose:
                         print('------------------------------------')
                         print('File ', member.name, ' is ok, contains ', len(idx_1D), ' bad pixels.')
@@ -289,7 +301,10 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         distance_field_in = distance_field_in[1:, :]
 
                     # store the stacked data
-                    out = np.stack([distance_field_in, u_x, u_y, u_z, turb])
+                    if add_all:
+                        out = np.stack([distance_field_in, u_x, u_y, u_z, turb, p, epsilon, nut])
+                    else:
+                        out = np.stack([distance_field_in, u_x, u_y, u_z, turb])
                     out_tensor = torch.from_numpy(out)
                     save_data(out_tensor, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '.tp', compress)
 

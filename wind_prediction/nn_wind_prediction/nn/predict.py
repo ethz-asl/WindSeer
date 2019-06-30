@@ -132,11 +132,11 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 scale = data[2].item()
 
             if len(labels.shape) == 4:
-                labels[0] *= scale * params.data['uhor_scaling']
-                labels[1] *= scale * params.data['uhor_scaling']
+                labels[0] *= scale * params.data['ux_scaling']
+                labels[1] *= scale * params.data['uy_scaling']
                 labels[2] *= scale * params.data['uz_scaling']
-                outputs[0] *= scale * params.data['uhor_scaling']
-                outputs[1] *= scale * params.data['uhor_scaling']
+                outputs[0] *= scale * params.data['ux_scaling']
+                outputs[1] *= scale * params.data['uy_scaling']
                 outputs[2] *= scale * params.data['uz_scaling']
 
                 if params.data['use_turbulence']:
@@ -144,9 +144,9 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                     outputs[3] *= scale * scale * params.data['turbulence_scaling']
 
             elif len(labels.shape) == 3:
-                labels[0] *= scale * params.data['uhor_scaling']
+                labels[0] *= scale * params.data['ux_scaling']
                 labels[1] *= scale * params.data['uz_scaling']
-                outputs[0] *= scale * params.data['uhor_scaling']
+                outputs[0] *= scale * params.data['ux_scaling']
                 outputs[1] *= scale * params.data['uz_scaling']
 
                 if params.data['use_turbulence']:
@@ -312,20 +312,20 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
 
         # rescale the labels and predictions
         if len(output.shape) == 4:
-            output[0] *= scale * params.data['uhor_scaling']
-            output[1] *= scale * params.data['uhor_scaling']
+            output[0] *= scale * params.data['ux_scaling']
+            output[1] *= scale * params.data['uy_scaling']
             output[2] *= scale * params.data['uz_scaling']
-            label[0] *= scale * params.data['uhor_scaling']
-            label[1] *= scale * params.data['uhor_scaling']
+            label[0] *= scale * params.data['ux_scaling']
+            label[1] *= scale * params.data['uy_scaling']
             label[2] *= scale * params.data['uz_scaling']
             if params.data['use_turbulence']:
                 output[3] *= scale * scale * params.data['turbulence_scaling']
                 label[3] *= scale * scale * params.data['turbulence_scaling']
 
         elif len(output.shape) == 3:
-            output[0] *= scale * params.data['uhor_scaling']
+            output[0] *= scale * params.data['ux_scaling']
             output[1] *= scale * params.data['uz_scaling']
-            label[0] *= scale * params.data['uhor_scaling']
+            label[0] *= scale * params.data['ux_scaling']
             label[1] *= scale * params.data['uz_scaling']
 
             if params.data['use_turbulence']:
@@ -362,6 +362,106 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
 
         if plotting_prediction:
             utils.plot_prediction(output, label, input[0], predict_uncertainty)
+
+
+def predict_all(input, label, scale, device, net, params, plotting_prediction, loss_fn = None, savename=None):
+    with torch.no_grad():
+        # predict and measure how long it takes
+        input, label = input.to(device), label.to(device)
+        start_time = time.time()
+        output = net(input.unsqueeze(0))
+        print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
+        input = input.squeeze()
+        output = output.squeeze()
+
+        # rescale the labels and predictions
+        #if len(output.shape) == 7:
+        output[0] *= scale * params.data['ux_scaling']
+        output[1] *= scale * params.data['uy_scaling']
+        output[2] *= scale * params.data['uz_scaling']
+        label[0] *= scale * params.data['ux_scaling']
+        label[1] *= scale * params.data['uy_scaling']
+        label[2] *= scale * params.data['uz_scaling']
+        i = 2
+        if params.data['use_turbulence']:
+            i+=1
+            output[i] *=  scale * scale * params.data['turbulence_scaling']
+            label[i] *= scale * scale * params.data['turbulence_scaling']
+
+        if params.data['use_pressure']:
+            i+=1
+            output[i] *= scale * scale * params.data['p_scaling']
+            label[i] *= scale * scale * params.data['p_scaling']
+
+        if params.data['use_epsilon']:
+            i+=1
+            output[i] *= scale * scale * scale * params.data['epsilon_scaling']
+            label[i] *= scale * scale * scale * params.data['epsilon_scaling']
+            if params.data['use_nut']:
+                i+=1
+                output[i] *=  scale * params.data['nut_scaling']
+                label[i] *=  scale * params.data['nut_scaling']
+        else:
+            if params.data['use_nut']:
+                i+=1
+
+                output[i] *=  scale * params.data['nut_scaling']
+                label[i] *=  scale * params.data['nut_scaling']
+
+                output = torch.cat([output[0:i,:,:,:], output[i-1:,:,:,:]], 0)
+                label = torch.cat([label[0:i,:,:,:], label[i-1:,:,:,:]], 0)
+
+                c_mu = 0.09
+
+                k_square_out = np.multiply(output[3],output[3])
+                output[5] = c_mu * (k_square_out/output[6])
+                output[5] = torch.where(torch.isnan(output[5]),torch.zeros_like(output[5]), output[5])
+
+
+                k_square_lab = np.multiply(label[3],label[3])
+                label[5] = c_mu * (k_square_lab/label[6])
+                label[5] = torch.where(torch.isnan(label[5]),torch.zeros_like(label[5]), label[5])
+
+        '''
+        else:
+            print('predict_all: Unknown dimension of the output:', len(output.shape))
+            exit()
+        '''
+        #check if uncertainty is predicted
+
+        
+        # import torch.nn.functional as f
+        # print(f.mse_loss(label[0], output[0]))
+        # print(f.mse_loss(label[1], output[1]))
+        # print(f.mse_loss(label[2], output[2]))
+        # print(f.mse_loss(label[3], output[3]))
+        # print(f.mse_loss(label[4], output[4]))
+        # print(f.mse_loss(label[6], output[6]))
+
+
+        try:
+            predict_uncertainty = params.model['model_args']['predict_uncertainty']
+        except KeyError as e:
+            predict_uncertainty = False
+            print('predict_all: predict_uncertainty key not available, setting default value: False')
+
+        if predict_uncertainty:
+            num_channels = output.shape[0]
+            if loss_fn:
+                print('Loss: {}'.format(loss_fn(output[:int(num_channels/2)], label)))
+        else:
+            if loss_fn:
+                print('Loss: {}'.format(loss_fn(output, label)))
+
+        if savename is not None:
+            np.save(savename, output.cpu().numpy())
+
+        if plotting_prediction:
+            utils.plot_prediction_all(output, label, input[0], predict_uncertainty)
+            #utils.plotting_nut(output, label, input[0,:])
+
+        
+
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
     if len(models_list) == 0:
@@ -409,8 +509,8 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                             exit()
 
                     if len(outputs.shape) == 4:
-                        outputs[0] *= scale * params.data['uhor_scaling']
-                        outputs[1] *= scale * params.data['uhor_scaling']
+                        outputs[0] *= scale * params.data['ux_scaling']
+                        outputs[1] *= scale * params.data['uy_scaling']
                         outputs[2] *= scale * params.data['uz_scaling']
 
                         if model['params'].data['use_turbulence']:
@@ -436,11 +536,11 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 labels = labels.squeeze()
                 inputs = inputs.squeeze()
 
-                labels[0] *= scale * params.data['uhor_scaling']
-                labels[1] *= scale * params.data['uhor_scaling']
+                labels[0] *= scale * params.data['ux_scaling']
+                labels[1] *= scale * params.data['uy_scaling']
                 labels[2] *= scale * params.data['uz_scaling']
-                inputs[1] *= scale * params.data['uhor_scaling']
-                inputs[2] *= scale * params.data['uhor_scaling']
+                inputs[1] *= scale * params.data['ux_scaling']
+                inputs[2] *= scale * params.data['uy_scaling']
                 inputs[3] *= scale * params.data['uz_scaling']
                 if model['params'].data['use_turbulence']:
                     labels[3] *= scale * scale * params.data['turbulence_scaling']

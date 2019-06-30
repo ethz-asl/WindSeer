@@ -12,6 +12,7 @@ run:
     minibatch_epoch_loss: False
     evaluate_testset: False
     warm_start: False
+    add_all_variables: False # Switch to true to build a model to predict all channels
 
     # options to store data
     save_model: True
@@ -68,11 +69,18 @@ data:
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    uhor_scaling: 0.5
+    ux_scaling: 1.0
+    uy_scaling: 1.0
     uz_scaling: 0.1
     turbulence_scaling: 0.01
+    p_scaling: 24
+    epsilon_scaling: 1.0
+    nut_scaling: 97
     terrain_scaling: 1.0
     use_turbulence: True
+    use_pressure: True
+    use_epsilon: True
+    use_nut: True
     autoscale: True
 
 # model parameters
