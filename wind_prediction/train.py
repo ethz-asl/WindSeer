@@ -35,9 +35,9 @@ if run_params.run['save_model'] and (not os.path.exists(model_dir)):
 if (os.path.isdir("/cluster/scratch/")):
     tempfolder = os.environ['TMPDIR'] + '/'
     print('Script is running on the cluster, copying files to', tempfolder)
-    trainset_name = tempfolder + 'train.tar'
-    validationset_name = tempfolder + 'validation.tar'
-    testset_name = tempfolder + 'test.tar'
+    trainset_name = tempfolder + 'train.hdf5'
+    validationset_name = tempfolder + 'validation.hdf5'
+    testset_name = tempfolder + 'test.hdf5'
     t_start = time.time()
     os.system('cp '  + run_params.data['trainset_name'] + ' ' + trainset_name)
     print("INFO: Finished copying trainset in %s seconds" % (time.time() - t_start))
@@ -192,7 +192,7 @@ if (run_params.run['save_model']):
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
 
-    testset = utils.HDF5Dataset(testset_name, compressed = run_params.data['compressed'],
+    testset = data.HDF5Dataset(testset_name, compressed = run_params.data['compressed'],
                     subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
 
