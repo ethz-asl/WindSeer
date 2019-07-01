@@ -192,12 +192,8 @@ if (run_params.run['save_model']):
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
 
-    if run_params.run['add_all_variables']:
-      testset = utils.FullDataset(testset_name, compressed = run_params.data['compressed'],
-                                augmentation = False, subsample = False, **run_params.Dataset_kwargs())
-    else:
-      testset = utils.MyDataset(testset_name, compressed = run_params.data['compressed'],
-                                augmentation = False, subsample = False, **run_params.Dataset_kwargs())
+    testset = utils.HDF5Dataset(testset_name, compressed = run_params.data['compressed'],
+                    subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
 
     testloader = torch.utils.data.DataLoader(testset, batch_size=1,
