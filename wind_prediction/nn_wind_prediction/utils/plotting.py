@@ -49,18 +49,15 @@ class PlotUtils():
         self.__uncertainty_predicted = uncertainty_predicted
 
         if channels_to_plot == 'all':
-            channels_to_plot = provided_channels
+            channels_to_plot = list(provided_channels)
 
         if len(provided_channels) == 0 or len(channels_to_plot) == 0:
             raise ValueError('PlotUtils: List of channels cannot be empty')
 
-        # set the default channels and titles based on plotting mode
-        if plot_mode == 'sample':
-            default_channels = ['ux_in', 'uy_in', 'uz_in','terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd', 'p_cfd', 'epsilon_cfd', 'nut_cfd']
-        else:
-            default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        # set the default channels and titles
+        default_channels = [ 'terrain','ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut','ux_in', 'uy_in', 'uz_in', 'ux_cfd',
+                                 'uy_cfd', 'uz_cfd', 'turb_cfd', 'p_cfd', 'epsilon_cfd', 'nut_cfd']
 
-        # create default title dict
         default_title_dict = {'terrain': 'Distance field','ux': 'Velocity X [m/s]', 'uy': 'Velocity Y [m/s]',
                               'uz': 'Velocity Z [m/s]', 'turb': 'Turb. kin. energy [m^2/s^2]', 'p': 'Rho-norm. pressure [m^2/s^2]',
                                 'epsilon': 'Dissipation [m^2/s^3]', 'nut': 'Turb. viscosity [m^2/s]', 'ux_in': ' Input Velocity X [m/s]',
@@ -94,7 +91,8 @@ class PlotUtils():
             div_required_channels = ['ux_cfd', 'uy_cfd', 'uz_cfd']
         else:
             div_required_channels = ['ux', 'uy', 'uz']
-        if plot_divergence and ds and all(elem in self.__provided_channels for elem in div_required_channels ):
+
+        if plot_divergence and ds and all(elem in self.__provided_channels for elem in div_required_channels):
             self.__channels_to_plot += ['div']
             self.__provided_channels += ['div']
             vel_indices = torch.LongTensor([self.__provided_channels.index(channel) for channel in ['ux_cfd', 'uy_cfd', 'uz_cfd']]).to(input.device)
@@ -370,77 +368,6 @@ class PlotUtils():
         # 2D data
         else:
             raise NotImplementedError('Sorry, 2D sample plotting needs to be reimplemented.')
-
-            #-------------------------- this code does not work anymore -----------------------------------------------
-            fh_in, ah_in = plt.subplots(3, 2, figsize=(20,13))
-            fh_in.patch.set_facecolor('white')
-
-            h_ux_in = ah_in[0][0].imshow(self.__input[1,:,:], origin='lower', vmin=self.__label[0,:,:].min(), vmax=self.__label[0,:,:].max(), cmap=self.__cmap)
-            h_uz_in = ah_in[0][1].imshow(self.__input[2,:,:], origin='lower', vmin=self.__label[1,:,:].min(), vmax=self.__label[1,:,:].max(), cmap=self.__cmap)
-            ah_in[0][0].set_title('Input Vel X', fontsize = self.__title_fontsize)
-            ah_in[0][1].set_title('Input Vel Z', fontsize = self.__title_fontsize)
-            chbar = fh_in.colorbar(h_ux_in, ax=ah_in[0][0])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-            chbar = fh_in.colorbar(h_uz_in, ax=ah_in[0][1])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-
-            h_ux_in = ah_in[1][0].imshow(self.__label[0,:,:], origin='lower', vmin=self.__label[0,:,:].min(), vmax=self.__label[0,:,:].max(), cmap=self.__cmap)
-            h_uz_in = ah_in[1][1].imshow(self.__label[1,:,:], origin='lower', vmin=self.__label[1,:,:].min(), vmax=self.__label[1,:,:].max(), cmap=self.__cmap)
-            ah_in[1][0].set_title('CFD Vel X', fontsize = self.__title_fontsize)
-            ah_in[1][1].set_title('CFD Vel Z', fontsize = self.__title_fontsize)
-            chbar = fh_in.colorbar(h_ux_in, ax=ah_in[1][0])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-            chbar = fh_in.colorbar(h_uz_in, ax=ah_in[1][1])
-            chbar.set_label('[m/s]', fontsize = self.__label_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-
-            h_ux_in = ah_in[2][0].imshow(self.__input[0,:,:], origin='lower', vmin=self.__input[0,:,:].min(), vmax=self.__input[0,:,:].max(), cmap=self.__cmap)
-            try:
-                h_uz_in = ah_in[2][1].imshow(self.__label[2,:,:], origin='lower', vmin=self.__label[2,:,:].min(), vmax=self.__label[2,:,:].max(), cmap=self.__cmap)
-                ah_in[2][1].set_title('Turbulence viscosity label', fontsize = self.__title_fontsize)
-                chbar = fh_in.colorbar(h_uz_in, ax=ah_in[2][1])
-                chbar.set_label('[J/kg]', fontsize = self.__label_fontsize)
-                plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                plt.setp(ah_in[2][1].get_xticklabels(), fontsize=self.__tick_fontsize)
-                plt.setp(ah_in[2][1].get_yticklabels(), fontsize=self.__tick_fontsize)
-                ah_in[2][1].set_xlabel('x', fontsize=self.__label_fontsize)
-                ah_in[2][1].set_ylabel('z', fontsize=self.__label_fontsize)
-
-            except:
-                fh_in.delaxes(ah_in[2][1])
-                print('INFO: Turbulence viscosity not present as a label')
-
-            ah_in[2][0].set_title('Terrain', fontsize = self.__title_fontsize)
-            chbar = fh_in.colorbar(h_ux_in, ax=ah_in[2][0])
-            chbar.set_label('-', fontsize = self.__label_fontsize)
-            plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-
-            plt.setp(ah_in[0][0].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[0][1].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][0].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][1].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[2][0].get_xticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[0][0].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[0][1].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][0].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[1][1].get_yticklabels(), fontsize=self.__tick_fontsize)
-            plt.setp(ah_in[2][0].get_yticklabels(), fontsize=self.__tick_fontsize)
-            ah_in[0][0].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[0][1].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[1][0].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[1][1].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[2][0].set_xlabel('x', fontsize=self.__label_fontsize)
-            ah_in[0][0].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[0][1].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[1][0].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[1][1].set_ylabel('z', fontsize=self.__label_fontsize)
-            ah_in[2][0].set_ylabel('z', fontsize=self.__label_fontsize)
-            plt.tight_layout()
-
-        plt.show()
 
     def plot_prediction(self):
         # get the number of already open figures, used in slider and button callbacks

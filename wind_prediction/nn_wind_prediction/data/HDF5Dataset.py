@@ -39,7 +39,7 @@ class HDF5Dataset(Dataset):
     __default_input_mode = 0
     __default_augmentation = False
     __default_augmentation_mode = 0
-    __default_augmentation_kwargs = None
+    __default_augmentation_kwargs = {'subsampling': True, 'rotating': True,}
     __default_stride_hor = 1
     __default_stride_vert = 1
     __default_turbulence_label = True
@@ -240,20 +240,35 @@ class HDF5Dataset(Dataset):
             if verbose:
                 print('HDF5Dataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
 
+        # check that all the required channels are present for autoscale for augmentation
+        # this is due to the get_scale method which needs the the velocities to compute the scale for autoscaling
+        # augmentation mode 1 and 0 use indexing, the first 4 channels are required
+        if not all(elem in self.__channels_to_load for elem in ['terrain','ux', 'uy', 'uz']):
+            print('HDF5Dataset: augmentation and autoscale will not be applied, not all of the required channels (terrain,ux, uy, uz) were requested')
+            self.__autoscale = False
+            self.__augmentation = False
+
         # parse the augmentation_kwargs depending on the augmentation_mode
         if self.__augmentation:
             # mode 1 has no options
             if self.__augmentation_mode == 0:
                 try:
-                    self.__subsample = kwargs['augmentation_kwargs']['subsampling']
+                    self.__augmentation_kwargs = kwargs['augmentation_kwargs']
                 except KeyError:
+                    self.__augmentation_kwargs = self.__default_augmentation_kwargs
+                    if verbose:
+                        print('HDF5Dataset: augmentation_kwargs not present in kwargs, using default value:',
+                              self.__default_augmentation_kwargs)
+                try:
+                    self.__subsample = self.__augmentation_kwargs['subsampling']
+                except:
                     self.__subsample = True
                     if verbose:
                         print('HDF5Dataset: subsampling not present in augmentation_kwargs, using default value:', True)
 
                 try:
-                    self.__rotating = kwargs['augmentation_kwargs']['rotating']
-                except KeyError:
+                    self.__rotating = self.__augmentation_kwargs['rotating']
+                except:
                     self.__rotating = True
                     if verbose:
                         print('HDF5Dataset: rotating not present in augmentation_kwargs, using default value:', True)
@@ -300,24 +315,36 @@ class HDF5Dataset(Dataset):
 
         # 3D data transforms
         if (len(data_shape) == 3):
-            # apply autoscale if requested, needs all velocity channels and terrain to be loaded
-            if self.__autoscale and all(elem in self.__channels_to_load for elem in ['terrain','ux', 'uy', 'uz']):
+            # apply autoscale if requested
+            if self.__autoscale:
+                # the velocities are indices 1,2,3
                 scale = self.__get_scale(data[1:4, :, :, :])
 
                 # applying the autoscale to the velocities
                 data[1:4, :, :, :] /= scale
 
-                # applying the autoscale to the other channels (except terrain)
-                data[4:, :, :, :] /= scale * scale
+                # turb handling
+                if 'turb' in self.__channels_to_load:
+                    data[self.__channels_to_load.index('turb'), :, :, :] /= scale * scale
 
-            elif self.__autoscale:
-                print('HDF5Dataset: autoscale not applied, not all of the required channels (terrain,ux, uy, uz) were loaded')
+                # p handling
+                if 'p' in self.__channels_to_load:
+                    data[self.__channels_to_load.index('p'),:,:,:] /= scale*scale
+
+                # epsilon handling
+                if 'epsilon' in self.__channels_to_load:
+                    data[self.__channels_to_load.index('epsilon'),:,:,:] /= scale*scale*scale
+
+                # nut handling
+                if 'nut' in self.__channels_to_load:
+                    data[self.__channels_to_load.index('nut'), :, :, :] /= scale
+
 
             # downscale if requested
             data = data[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
 
-            # augment if requested according to the augmentation mode. Only works for now if all velocities and terrain are loaded
-            if self.__augmentation and all(elem in self.__channels_to_load for elem in ['terrain', 'ux', 'uy', 'uz']):
+            # augment if requested according to the augmentation mode
+            if self.__augmentation:
                 if self.__augmentation_mode == 0:
                     # subsampling
                     if self.__subsample:
@@ -345,10 +372,10 @@ class HDF5Dataset(Dataset):
                         # rotate 90 degrees
                         if (self.__rand.randint(0,1)):
                             data = data.transpose(2,3).flip(3)
-                            data = data[[0,2,1,3,4]]
+                            data = torch.cat((data[[0,2,1]], data[3:]),0)
                             data[1,:,:,:] *= -1.0
 
-                            ds = (ds[1], ds[0], ds[2])
+                            ds = torch.tensor([ds[1], ds[0], ds[2]])
 
                 elif self.__augmentation_mode == 1:
                     # use the numpy implementation as it is more accurate and slightly faster
@@ -373,9 +400,6 @@ class HDF5Dataset(Dataset):
             else:
                 # no data augmentation
                 data = data[:,:self.__nz, :self.__ny, :self.__nx]
-                if self.__augmentation:
-                    print('HDF5Dataset: augmentation not applied, not all of the needed channels '
-                          '(terrain, u_x, u_y, u_z) were requested.')
 
             # generate the input channels
             input_data = torch.index_select(data, 0, self.__input_indices)

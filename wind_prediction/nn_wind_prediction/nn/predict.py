@@ -390,12 +390,15 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
             if channel == 'terrain':
                 output[i] *= params.data[channel + '_scaling']
                 label[i] *= params.data[channel + '_scaling']
-            elif channel.startswith('u'):
+            elif channel.startswith('u') or channel == 'nut':
                 output[i] *= scale * params.data[channel +'_scaling']
                 label[i] *= scale * params.data[channel + '_scaling']
-            else:
+            elif channel == 'p' or channel == 'turb':
                 output[i] *= scale * scale * params.data[channel + '_scaling']
                 label[i] *= scale * scale * params.data[channel + '_scaling']
+            elif channel == 'epsilon':
+                output[i] *= scale * scale * scale * params.data[channel + '_scaling']
+                label[i] *= scale * scale * scale * params.data[channel + '_scaling']
 
         try:
             predict_uncertainty = params.model['model_args']['predict_uncertainty']

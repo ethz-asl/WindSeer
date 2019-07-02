@@ -59,9 +59,11 @@ data:
     trainset_name: 'data/train.hdf5'
     validationset_name: 'data/validation.hdf5'
     testset_name: 'data/test.hdf5'
+
     # channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
-    input_channels : ['terrain', 'ux', 'uy', 'uz'] # these are required for EDNN3D
-    label_channels : ['ux', 'uy', 'uz', 'turb', 'p','epsilon', 'nut']  # velocities are required for EDNN training
+    input_channels : ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities must be loaded for EDNN3D
+    label_channels : ['ux', 'uy', 'uz']  # velocities are required for EDNN training
+
     augmentation: True
     augmentation_mode: 1 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
     augmentation_kwargs: {

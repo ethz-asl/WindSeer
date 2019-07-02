@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Script to test and benchmark the implementation of MyDataset
+Script to test and benchmark the implementation of HDF5Dataset
 '''
 
 import matplotlib.pyplot as plt
@@ -21,8 +21,12 @@ nx = 64
 ny = 64
 nz = 64
 input_mode = 1
-subsample = False
-augmentation = False
+augmentation = True
+augmentation_mode = 0
+augmentation_kwargs = {
+    'subsampling': True,
+    'rotating': True,
+    }
 ux_scaling = 1.0
 uy_scaling = 1.0
 uz_scaling = 1.0
@@ -34,22 +38,16 @@ terrain_scaling = 1.0
 stride_hor = 1
 stride_vert = 1
 autoscale = False
-aug_mode = 1
 input_channels = ['terrain', 'ux', 'uy', 'uz']
 label_channels = ['ux', 'uy', 'uz', 'turb']
-use_turbulence = 'turb' in label_channels
-use_pressure = 'p' in label_channels
-use_epsilon = 'epsilon' in label_channels
-use_nut = 'nut' in label_channels
 plot_divergence = True
 #-----------------------------------------------------
 
 def main():
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     db = nn_data.HDF5Dataset(input_dataset, input_channels=input_channels, label_channels=label_channels,
-                                      nx=nx, ny=ny, nz=nz, input_mode=input_mode, augmentation_mode=aug_mode,
-                                      subsample=subsample, augmentation=augmentation, autoscale=autoscale,
+                                      nx=nx, ny=ny, nz=nz, input_mode=input_mode, augmentation_mode=augmentation_mode,
+                                      augmentation=augmentation, autoscale=autoscale, augmentation_kwargs= augmentation_kwargs,
                                       stride_hor=stride_hor, stride_vert=stride_vert,
                                       scaling_ux=ux_scaling, scaling_uy=uy_scaling,
                                       scaling_terrain=terrain_scaling,
@@ -59,6 +57,8 @@ def main():
 
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
                                               shuffle=False, num_workers=4)
+
+    use_turbulence = 'turb' in label_channels
 
     if compute_dataset_statistics:
         ux = []
@@ -283,7 +283,7 @@ def main():
     print(' ')
 
     # plot the sample
-    provided_channels = ['ux_in', 'uy_in', 'uz_in', 'terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb']
+    provided_channels = ['ux_in', 'uy_in', 'uz_in', 'terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd']
     terrain = input[:1]
     input = torch.cat((input[1:4], terrain, label), 0)
     utils.plot_sample(provided_channels, 'all', input, None, terrain.squeeze(), plot_divergence, nn_data.get_grid_size(input_dataset))
