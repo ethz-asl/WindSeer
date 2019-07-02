@@ -56,32 +56,22 @@ class PlotUtils():
 
         # set the default channels and titles based on plotting mode
         if plot_mode == 'sample':
-            default_channels = ['ux_in', 'uy_in', 'uz_in','terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb', 'p', 'epsilon', 'nut']
-            default_title_dict = {'terrain': 'Distance field', 'ux_in': ' Input Velocity X [m/s]',
-                                  'uy_in': 'Input Velocity Y [m/s]',
-                                  'uz_in': 'Input Velocity Z [m/s]', 'ux_cfd': ' CFD Velocity X [m/s]',
-                                  'uy_cfd': 'CFD Velocity Y [m/s]',
-                                  'uz_cfd': 'CFD Velocity Z [m/s]',
-                                  'turb': 'CFD Turb. kin. energy [m^2/s^2]', 'p': 'CFD Rho-norm. pressure [m^2/s^2]',
-                                  'epsilon': 'CFD Dissipation [m^2/s^3]', 'nut': 'CFD Turb. viscosity [m^2/s]',
-                                  'div': 'Divergence [1/s]'}
+            default_channels = ['ux_in', 'uy_in', 'uz_in','terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd', 'p_cfd', 'epsilon_cfd', 'nut_cfd']
         else:
             default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
-            default_title_dict = {'terrain': 'Distance field', 'ux': 'Velocity X [m/s]', 'uy': 'Velocity Y [m/s]',
-             'uz': 'Velocity Z [m/s]',
-             'turb': 'Turb. kin. energy [m^2/s^2]', 'p': 'Rho-norm. pressure [m^2/s^2]',
-             'epsilon': 'Dissipation [m^2/s^3]', 'nut': 'Turb. viscosity [m^2/s]',
-             'div': 'Divergence [1/s]'}
 
-        # set the title dict
-        self.__title_dict = title_dict if title_dict else default_title_dict
+        # create default title dict
+        default_title_dict = {'terrain': 'Distance field','ux': 'Velocity X [m/s]', 'uy': 'Velocity Y [m/s]',
+                              'uz': 'Velocity Z [m/s]', 'turb': 'Turb. kin. energy [m^2/s^2]', 'p': 'Rho-norm. pressure [m^2/s^2]',
+                                'epsilon': 'Dissipation [m^2/s^3]', 'nut': 'Turb. viscosity [m^2/s]', 'ux_in': ' Input Velocity X [m/s]',
+                              'uy_in': 'Input Velocity Y [m/s]', 'uz_in': 'Input Velocity Z [m/s]', 'ux_cfd': ' CFD Velocity X [m/s]',
+                              'uy_cfd': 'CFD Velocity Y [m/s]', 'uz_cfd': 'CFD Velocity Z [m/s]', 'turb_cfd': 'CFD Turb. kin. energy [m^2/s^2]',
+                              'p_cfd': 'CFD Rho-norm. pressure [m^2/s^2]', 'epsilon_cfd': 'CFD Dissipation [m^2/s^3]',
+                              'nut_cfd': 'CFD Turb. viscosity [m^2/s]', 'div': 'Divergence [1/s]'}
 
-        for channel in provided_channels:
-            if channel not in default_channels:
-                print('PlotUtils warning: None default provided_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel, default_channels))
-                if title_dict is None:
-                    raise ValueError('PlotUtils: None default channel provided, but no custom title dict')
+        for channel in channels_to_plot:
+            if channel not in provided_channels:
+                raise ValueError('PlotUtils: channels_to_plot contains a channel that is not in provided_channels: {}'.format(channel))
 
         for channel in channels_to_plot:
             if channel not in default_channels:
@@ -90,9 +80,12 @@ class PlotUtils():
                 if title_dict is None:
                     raise ValueError('PlotUtils: None default channel provided, but no custom title dict')
 
-        # order the channels in the right order
-        # self.__channels_to_plot = [x for x in default_channels if x in channels_to_plot]
-        # self.__provided_channels = [x for x in default_channels if x in provided_channels]
+        # set the title dict
+        if title_dict is not None:
+            default_title_dict.update(title_dict)
+        self.__title_dict = default_title_dict
+
+        # set the channels
         self.__channels_to_plot = channels_to_plot
         self.__provided_channels = provided_channels
 
@@ -488,16 +481,16 @@ class PlotUtils():
                     ah_in[2][i].set_xticks([])
                     ah_in[2][i].set_yticks([])
 
-                    chbar = fig_in.colorbar(self.__out_images[i], ax=ah_in[0][i])
+                    chbar = fig_in.colorbar(self.__out_images[data_index], ax=ah_in[0][i])
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                    chbar = fig_in.colorbar(self.__in_images[i], ax=ah_in[1][i])
+                    chbar = fig_in.colorbar(self.__in_images[data_index], ax=ah_in[1][i])
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                    chbar = fig_in.colorbar(self.__error_images[i], ax=ah_in[2][i])
+                    chbar = fig_in.colorbar(self.__error_images[data_index], ax=ah_in[2][i])
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
                     if self.__uncertainty_predicted:
                         self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                        chbar = self.__figures[j].colorbar(self.__uncertainty_images[i], ax=ah_in[3][i])
+                        chbar = self.__figures[j].colorbar(self.__uncertainty_images[data_index], ax=ah_in[3][i])
                         plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                         plt.setp(ah_in[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
                         plt.setp(ah_in[3][i].get_yticklabels(), fontsize=self.__tick_fontsize)

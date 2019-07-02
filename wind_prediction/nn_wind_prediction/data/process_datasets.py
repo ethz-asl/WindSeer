@@ -111,6 +111,8 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
              "Points:2": np.float32}
 
     print('INFO: Looping through all the files')
+    if create_zero_samples:
+        print('INFO: Zero sample creation enabled')
     rejection_counter = 0
     zero_samples_created = 0
 
@@ -148,10 +150,6 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                 print('U:0 not in {0}'.format(member.name))
 
             else:
-                # create group in hdf5 file for the current sample
-                sample = member.name.replace('.csv','')
-                ouput_file.create_group(sample)
-
                 # get dimensions of the grid
                 x = np.unique(wind_data['Points:0'])
                 y = np.unique(wind_data['Points:1'])
@@ -205,6 +203,10 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         print('------------------------------------')
 
                 else:
+                    # create group in hdf5 file for the current sample
+                    sample = member.name.replace('.csv', '')
+                    ouput_file.create_group(sample)
+
                     channel_shape = [nz, nx]
                     slice_shape = (1, nx)
 
@@ -337,13 +339,14 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         # add zero sample to hdf5 file
                         ouput_file.create_group(zero_sample)
 
-                        # add terrain to the hdf5 file for the zero sample
-                        ouput_file[zero_sample].create_dataset(channels[0], data=out[0, :, :, :], compression=compression_type)
-
-                        # add all zero fields to the hdf5 file for the zero sample
+                        # add all the channels to the zero sample
                         for k, channel in enumerate(channels):
-                            if k>0:
-                                ouput_file[zero_sample].create_dataset(channel, data=np.zeros_like(out[k, :, :, :]), compression=compression_type)
+                            if k==0:
+                                # add terrain to the hdf5 file for the zero sample
+                                ouput_file[zero_sample].create_dataset(channel, data=out[k,:,:,:], compression=compression_type)
+                            else:
+                                # add terrain to the hdf5 file for the zero sample
+                                ouput_file[zero_sample].create_dataset(channel, data= np.zeros_like(out[k,:,:,:]), compression=compression_type)
 
                         # add the grid size to the hdf5 file for the zero sample
                         ouput_file[zero_sample].create_dataset('ds', data=(dx, dy, dz))

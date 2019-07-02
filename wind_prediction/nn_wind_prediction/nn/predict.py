@@ -364,7 +364,7 @@ def predict_wind_and_turbulence(input, label, scale, device, net, params, plotti
         if plotting_prediction:
             utils.plot_prediction(output, label, input[0], predict_uncertainty)
 
-def predict_channels(channels_to_predict, input, label, scale, device, net, params, channels_to_plot, dataset,
+def predict_channels(input, label, scale, device, net, params, channels_to_plot, dataset,
                      plot_divergence = False, loss_fn = None, savename=None):
     with torch.no_grad():
         # predict and measure how long it takes
@@ -374,6 +374,8 @@ def predict_channels(channels_to_predict, input, label, scale, device, net, para
         print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
         input = input.squeeze()
         output = output.squeeze()
+
+        channels_to_predict = params.data['label_channels']
 
         # make sure the channels to predict exist and are properly ordered
         default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
@@ -387,10 +389,13 @@ def predict_channels(channels_to_predict, input, label, scale, device, net, para
         for i, channel in enumerate(channels_to_predict):
             if channel == 'terrain':
                 output[i] *= params.data[channel + '_scaling']
-            if channel.startswith('u'):
+                label[i] *= params.data[channel + '_scaling']
+            elif channel.startswith('u'):
                 output[i] *= scale * params.data[channel +'_scaling']
+                label[i] *= scale * params.data[channel + '_scaling']
             else:
                 output[i] *= scale * scale * params.data[channel + '_scaling']
+                label[i] *= scale * scale * params.data[channel + '_scaling']
 
         try:
             predict_uncertainty = params.model['model_args']['predict_uncertainty']

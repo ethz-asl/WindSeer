@@ -288,7 +288,7 @@ class HDF5Dataset(Dataset):
         data_from_channels = []
         for i, channel in enumerate(self.__channels_to_load):
             # extract channel data and apply scaling
-            data_from_channels += [torch.from_numpy(sample[channel][...]).unsqueeze(0) / self.__scaling_dict[channel]]
+            data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
         data = torch.cat(data_from_channels , 0)
 
         # send full data to device
@@ -300,8 +300,8 @@ class HDF5Dataset(Dataset):
 
         # 3D data transforms
         if (len(data_shape) == 3):
-            # apply autoscale if requested, needs all velocity channels to be loaded
-            if self.__autoscale and all(elem in self.__channels_to_load for elem in ['ux', 'uy', 'uz']):
+            # apply autoscale if requested, needs all velocity channels and terrain to be loaded
+            if self.__autoscale and all(elem in self.__channels_to_load for elem in ['terrain','ux', 'uy', 'uz']):
                 scale = self.__get_scale(data[1:4, :, :, :])
 
                 # applying the autoscale to the velocities
@@ -311,7 +311,7 @@ class HDF5Dataset(Dataset):
                 data[4:, :, :, :] /= scale * scale
 
             elif self.__autoscale:
-                print('HDF5Dataset: autoscale not applied, not all velocity channels were requested to be loaded')
+                print('HDF5Dataset: autoscale not applied, not all of the required channels (terrain,ux, uy, uz) were loaded')
 
             # downscale if requested
             data = data[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
@@ -582,7 +582,15 @@ class HDF5Dataset(Dataset):
     def __get_scale(self, x):
         shape = x.shape
 
+        # get data from corners of sample
         corners = torch.index_select(x, 2, torch.tensor([0,shape[2]-1]))
         corners = torch.index_select(corners, 3, torch.tensor([0,shape[3]-1]))
 
-        return corners.norm(dim=0).mean(dim=0).max()
+        # compute the scale
+        scale = corners.norm(dim=0).mean(dim=0).max()
+
+        # account for unfeasible scales (e.g. from zero samples)
+        if scale > 0:
+            return scale
+        else:
+            return torch.tensor(1.0)
