@@ -150,7 +150,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 outputs[0] *= scale * params.data['ux_scaling']
                 outputs[1] *= scale * params.data['uz_scaling']
 
-                if params.data['use_turbulence']:
+                if params.model['use_turbulence']:
                     labels[3] *= scale * scale * params.data['turbulence_scaling']
                     outputs[3] *= scale * scale * params.data['turbulence_scaling']
 
@@ -176,13 +176,13 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
                 losses['loss_uy'][i] = loss_fn(outputs[1], labels[1])
                 losses['loss_uz'][i] = loss_fn(outputs[2], labels[2])
-                if params.data['use_turbulence']:
+                if params.model['use_turbulence']:
                     losses['loss_turb'][i] = loss_fn(outputs[3], labels[3])
 
             elif len(labels.shape) == 3:
                 losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
                 losses['loss_uz'][i] = loss_fn(outputs[1], labels[1])
-                if params.data['use_turbulence']:
+                if params.model['use_turbulence']:
                     losses['loss_turb'][i] = loss_fn(outputs[2], labels[2])
 
             else:
@@ -300,69 +300,6 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         print('')
 
         return prediction_errors, losses, worst_index, maxloss
-
-def predict_wind_and_turbulence(input, label, scale, device, net, params, plotting_prediction, loss_fn = None, savename=None):
-    with torch.no_grad():
-        # predict and measure how long it takes
-        input, label = input.to(device), label.to(device)
-        start_time = time.time()
-        output = net(input.unsqueeze(0))
-        print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
-        input = input.squeeze()
-        output = output.squeeze()
-
-        # rescale the labels and predictions
-        if len(output.shape) == 4:
-            output[0] *= scale * params.data['ux_scaling']
-            output[1] *= scale * params.data['uy_scaling']
-            output[2] *= scale * params.data['uz_scaling']
-            label[0] *= scale * params.data['ux_scaling']
-            label[1] *= scale * params.data['uy_scaling']
-            label[2] *= scale * params.data['uz_scaling']
-            if params.data['use_turbulence']:
-                output[3] *= scale * scale * params.data['turbulence_scaling']
-                label[3] *= scale * scale * params.data['turbulence_scaling']
-
-        elif len(output.shape) == 3:
-            output[0] *= scale * params.data['ux_scaling']
-            output[1] *= scale * params.data['uz_scaling']
-            label[0] *= scale * params.data['ux_scaling']
-            label[1] *= scale * params.data['uz_scaling']
-
-            if params.data['use_turbulence']:
-                output[2] *= scale * scale * params.data['turbulence_scaling']
-                label[2] *= scale * scale * params.data['turbulence_scaling']
-
-        else:
-            print('predict_wind_and_turbulence: Unknown dimension of the output:', len(output.shape))
-            exit()
-
-        # check if uncertainty is predicted
-        try:
-            predict_uncertainty = params.model['model_args']['predict_uncertainty']
-        except KeyError as e:
-            predict_uncertainty = False
-            print('predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False')
-
-        if predict_uncertainty:
-            num_channels = output.shape[0]
-            if loss_fn:
-                print('Loss: {}'.format(loss_fn(output[:int(num_channels/2)], label)))
-        else:
-            if loss_fn:
-                if len(output.shape) == 4:
-                    print('Loss ux: {}'.format(loss_fn(output[0], label[0])))
-                    print('Loss uy: {}'.format(loss_fn(output[1], label[1])))
-                    print('Loss uz: {}'.format(loss_fn(output[2], label[2])))
-                    if params.data['use_turbulence']:
-                        print('Loss k: {}'.format(loss_fn(output[3], label[3])))
-                print('Loss: {}'.format(loss_fn(output, label)))
-
-        if savename is not None:
-            np.save(savename, output.cpu().numpy())
-
-        if plotting_prediction:
-            utils.plot_prediction(output, label, input[0], predict_uncertainty)
 
 def predict_channels(input, label, scale, device, net, params, channels_to_plot, dataset,
                      plot_divergence = False, loss_fn = None, savename=None):
