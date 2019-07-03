@@ -12,7 +12,6 @@ run:
     minibatch_epoch_loss: False
     evaluate_testset: False
     warm_start: False
-    add_all_variables: False # Switch to true to build a model to predict all channels
 
     # options to store data
     save_model: True
@@ -57,9 +56,14 @@ loss:
 # dataset parameters
 data:
     compressed: False
-    trainset_name: 'data/train.tar'
-    validationset_name: 'data/validation.tar'
-    testset_name: 'data/test.tar'
+    trainset_name: 'data/train.hdf5'
+    validationset_name: 'data/validation.hdf5'
+    testset_name: 'data/test.hdf5'
+
+    # channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+    input_channels : ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities must be loaded for EDNN3D
+    label_channels : ['ux', 'uy', 'uz']  # velocities are required for EDNN training
+
     augmentation: True
     augmentation_mode: 1 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
     augmentation_kwargs: {
@@ -72,15 +76,11 @@ data:
     ux_scaling: 1.0
     uy_scaling: 1.0
     uz_scaling: 0.1
-    turbulence_scaling: 0.01
-    p_scaling: 24
+    turb_scaling: 0.01
+    p_scaling: 1.0
     epsilon_scaling: 1.0
-    nut_scaling: 97
+    nut_scaling: 1.0
     terrain_scaling: 1.0
-    use_turbulence: True
-    use_pressure: True
-    use_epsilon: True
-    use_nut: True
     autoscale: True
 
 # model parameters

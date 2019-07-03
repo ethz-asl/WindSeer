@@ -3,33 +3,33 @@ from __future__ import print_function
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 
 from interpolation.splines import UCGrid, eval_linear
-from io import BytesIO
-import lz4.frame
 import numpy as np
 import random
 import sys
-import tarfile
 import torch
 from torch.utils.data.dataset import Dataset
+import h5py
 
-class MyDataset(Dataset):
+class HDF5Dataset(Dataset):
     '''
-    Class to handle the dataset with containing velocities and the turbulent kinetic energy (k).
+    Class to handle the dataset with the containing velocities, pressure, turbulent kinetic energy, turbulent dissipation
+     and turbulent viscosity.
 
-    The dataset is a single tar file containing all the samples stored as 4D-pytorch tensors, possibly compressed with LZ4.
+    The dataset is a single hdf5 file containing groups for all of the samples which contain 4D arrays for each of the
+    channels.
     The four dimensions are: [channels, z, y, x].
-    The channel ordering is: [terrain, ux, uy, uz, k].
+    The channel ordering is: [terrain, u_x, u_y, u_z, turb, p, epsilon, nut]
 
-    The raw data is split up to an input tensor and output tensor. The input tensor contains the velocities and the terrain
-    information in the following order: [terrain, ux_in, *uy_in, uz_in], where uy_in is only present in the 3D case.
-    The number of output channels is configurable but always contains at least the velocities:
-    [ux_out, *uy_out, uz_out, *k, *dx, *dy, *dz].
-    uy_out is only present in the 3D case and it can be chosen if also the turbulent kinetic energy (k) and the grid sizes
-    (dx, dy, dz) are contained in the output tensor.
+    The raw data is split up to an input tensor and label tensor. The input and label tensor channels are specified and
+    contain information in the following order: [terrain, u_x, u_y*, u_z, turb, p, epsilon, nut], where uy_in is only
+    present in the 3D case.
+    The number of label  channels is configurable.
+    The grid sizes (dx, dy, dz) are contained in the output tensor.
 
     TODO:
     - Check if it is feasible also to store the filedescriptors or how much faster it will make the dataloading (using Lock when accessing the file descriptors
     - Reimplement the 2D data handling
+    - If possible, generalize augmentation modes to be non dependant on provided channels
     '''
 
     __default_device = 'cpu'
@@ -39,27 +39,26 @@ class MyDataset(Dataset):
     __default_input_mode = 0
     __default_augmentation = False
     __default_augmentation_mode = 0
-    __default_augmentation_kwargs = None
+    __default_augmentation_kwargs = {'subsampling': True, 'rotating': True,}
     __default_stride_hor = 1
     __default_stride_vert = 1
     __default_turbulence_label = True
-    __default_scaling_ux = 1.0
-    __default_scaling_uy = 1.0
-    __default_scaling_uz = 1.0
-    __default_scaling_turb = 1.0
-    __default_scaling_terrain = 1.0
-    __default_compressed = False
+    __default_scaling_dict = {'terrain': 1.0, 'ux': 1.0, 'uy': 1.0, 'uz': 1.0, 'turb': 1.0, 'p': 1.0, 'epsilon': 1.0, 'nut': 1.0}
     __default_return_grid_size = False
     __default_return_name = False
     __default_autoscale = False
 
-    def __init__(self, filename, **kwargs):
+    def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
         Params:
             device:
                 Device (CPU or GPU) on which the tensor operations are executed, default 'cpu'
             filename (required):
                 The name of the tar file containing the dataset
+            input_channels (required):
+                A list of the channels to be returned in the input tensor
+            label_channels (required):
+                A list of the channels to be returned in the label tensor
             nx:
                 Number of grid points in x-direction of the output, default 64
             ny:
@@ -71,7 +70,8 @@ class MyDataset(Dataset):
                     0: The inflow condition is copied over the full domain
                     1: The vertical edges are interpolated over the full domain, default 0
             augmentation:
-                If true the data is augmented according to the mode and augmentation_kwargs
+                If true the data is augmented according to the mode and augmentation_kwargs. The terrain and the velocities
+                must be requested to use this mode for now
             augmentation_mode:
                 Specifies the data augmentation mode
                     0: Rotating and subsampling the data without interpolation (rotation in 90deg steps, shift in integer steps)
@@ -88,8 +88,16 @@ class MyDataset(Dataset):
                 Scaling factor for the vertical velocity component, default 1.0
             scaling_turb:
                 Scaling factor for the turbulent kinetic energy, default 1.0
-            compressed:
-                Specifies if the input tensors are compressed using LZ4, default False
+            scaling_turb:
+                Scaling factor for the turbulent kinetic energy, default 1.0
+            scaling_p:
+                Scaling factor for the pressure, default 1.0
+            scaling_epsilon:
+                Scaling factor for dissipation, default 1.0
+            scaling_nut:
+                Scaling factor for viscosity, default 1.0
+            scaling_terrain:
+                Scaling factor for terrain channel, default 1.0
             return_grid_size:
                 If true a tuple of the grid size is returned in addition to the input and output tensors, default False
             return_name:
@@ -98,12 +106,50 @@ class MyDataset(Dataset):
                 Automatically scale the input and return the scale, default False
         '''
         self.__filename = filename
+        
+        if len(input_channels) == 0 or len(label_channels) == 0:
+            raise ValueError('HDF5Dataset: List of input or label channels cannot be empty')
+
+        # make sure that all requested channels are possible
+        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        for channel in input_channels:
+            if channel not in default_channels:
+                raise ValueError('HDF5Dataset: Incorrect input_channel detected: \'{}\', '
+                                 'correct channels are {}'.format(channel,default_channels))
+
+        for channel in label_channels:
+            if channel not in default_channels:
+                raise ValueError('HDF5Dataset: Incorrect label_channel detected: \'{}\', '
+                                 'correct channels are {}'.format(channel,default_channels))
+
+        self.__channels_to_load = []
+        self.__input_indices = []
+        self.__label_indices = []
+
+        # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
+        index = 0
+        for channel in default_channels:
+            if channel in input_channels or channel in label_channels:
+                self.__channels_to_load += [channel]
+                if channel in input_channels:
+                    self.__input_indices += [index]
+                if channel in label_channels:
+                    self.__label_indices += [index]
+                index += 1
+
+        self.__input_indices = torch.LongTensor(self.__input_indices)
+        self.__label_indices = torch.LongTensor(self.__label_indices)
 
         try:
-            tar = tarfile.open(filename, 'r')
+            h5_file = h5py.File(filename, 'r')
         except IOError as e:
             print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, filename))
             sys.exit()
+
+        # extract info from the h5 file
+        self.__num_files = len(h5_file.keys())
+        self.__memberslist = list(h5_file.keys())
+        h5_file.close()
 
         try:
             verbose = kwargs['verbose']
@@ -115,155 +161,128 @@ class MyDataset(Dataset):
         except KeyError:
             self.__device = self.__default_device
             if verbose:
-                print('MyDataset: device not present in kwargs, using default value:', self.__default_device)
+                print('HDF5Dataset: device not present in kwargs, using default value:', self.__default_device)
 
         try:
             self.__nx = kwargs['nx']
         except KeyError:
             self.__nx = self.__default_nx
             if verbose:
-                print('MyDataset: nx not present in kwargs, using default value:', self.__default_nx)
+                print('HDF5Dataset: nx not present in kwargs, using default value:', self.__default_nx)
 
         try:
             self.__ny = kwargs['ny']
         except KeyError:
             self.__ny = self.__default_ny
             if verbose:
-                print('MyDataset: ny not present in kwargs, using default value:', self.__default_ny)
+                print('HDF5Dataset: ny not present in kwargs, using default value:', self.__default_ny)
 
         try:
             self.__nz = kwargs['nz']
         except KeyError:
             self.__nz = self.__default_nz
             if verbose:
-                print('MyDataset: nz not present in kwargs, using default value:', self.__default_nz)
+                print('HDF5Dataset: nz not present in kwargs, using default value:', self.__default_nz)
 
         try:
             self.__input_mode = kwargs['input_mode']
         except KeyError:
             self.__input_mode = self.__default_input_mode
             if verbose:
-                print('MyDataset: input_mode not present in kwargs, using default value:', self.__default_input_mode)
+                print('HDF5Dataset: input_mode not present in kwargs, using default value:', self.__default_input_mode)
 
         try:
             self.__augmentation = kwargs['augmentation']
         except KeyError:
             self.__augmentation = self.__default_augmentation
             if verbose:
-                print('MyDataset: augmentation not present in kwargs, using default value:', self.__default_augmentation)
+                print('HDF5Dataset: augmentation not present in kwargs, using default value:', self.__default_augmentation)
 
         try:
             self.__augmentation_mode = kwargs['augmentation_mode']
         except KeyError:
             self.__augmentation_mode = self.__default_augmentation_mode
             if verbose:
-                print('MyDataset: augmentation_mode not present in kwargs, using default value:', self.__default_augmentation_mode)
-
-        try:
-            self.__turbulence_label = kwargs['turbulence_label']
-        except KeyError:
-            self.__turbulence_label = self.__default_turbulence_label
-            if verbose:
-                print('MyDataset: turbulence_label not present in kwargs, using default value:', self.__default_turbulence_label)
-
-        try:
-            self.__scaling_ux = kwargs['scaling_ux']
-        except KeyError:
-            self.__scaling_ux = self.__default_scaling_ux
-            if verbose:
-                print('MyDataset: scaling_ux not present in kwargs, using default value:', self.__default_scaling_ux)
-
-        try:
-            self.__scaling_uy = kwargs['scaling_uy']
-        except KeyError:
-            self.__scaling_uy = self.__default_scaling_uy
-            if verbose:
-                print('MyDataset: scaling_uy not present in kwargs, using default value:', self.__default_scaling_uy)
-
-        try:
-            self.__scaling_uz = kwargs['scaling_uz']
-        except KeyError:
-            self.__scaling_uz = self.__default_scaling_uz
-            if verbose:
-                print('MyDataset: scaling_uz not present in kwargs, using default value:', self.__default_scaling_uz)
-
-        try:
-            self.__scaling_turb = kwargs['scaling_turb']
-        except KeyError:
-            self.__scaling_turb = self.__default_scaling_turb
-            if verbose:
-                print('MyDataset: scaling_turb not present in kwargs, using default value:', self.__default_scaling_turb)
-
-        try:
-            self.__scaling_terrain = kwargs['scaling_terrain']
-        except KeyError:
-            self.__scaling_terrain = self.__default_scaling_terrain
-            if verbose:
-                print('MyDataset: scaling_terrain not present in kwargs, using default value:', self.__default_scaling_terrain)
+                print('HDF5Dataset: augmentation_mode not present in kwargs, using default value:', self.__default_augmentation_mode)
 
         try:
             self.__stride_hor = kwargs['stride_hor']
         except KeyError:
             self.__stride_hor = self.__default_stride_hor
             if verbose:
-                print('MyDataset: stride_hor not present in kwargs, using default value:', self.__default_stride_hor)
+                print('HDF5Dataset: stride_hor not present in kwargs, using default value:', self.__default_stride_hor)
 
         try:
             self.__stride_vert = kwargs['stride_vert']
         except KeyError:
             self.__stride_vert = self.__default_stride_vert
             if verbose:
-                print('MyDataset: stride_vert not present in kwargs, using default value:', self.__default_stride_vert)
-
-        try:
-            self.__compressed = kwargs['compressed']
-        except KeyError:
-            self.__compressed = self.__default_compressed
-            if verbose:
-                print('MyDataset: compressed not present in kwargs, using default value:', self.__default_compressed)
+                print('HDF5Dataset: stride_vert not present in kwargs, using default value:', self.__default_stride_vert)
 
         try:
             self.__return_grid_size = kwargs['return_grid_size']
         except KeyError:
             self.__return_grid_size = self.__default_return_grid_size
             if verbose:
-                print('MyDataset: return_grid_size not present in kwargs, using default value:', self.__default_return_grid_size)
+                print('HDF5Dataset: return_grid_size not present in kwargs, using default value:', self.__default_return_grid_size)
 
         try:
             self.__return_name = kwargs['return_name']
         except KeyError:
             self.__return_name = self.__default_return_name
             if verbose:
-                print('MyDataset: return_name not present in kwargs, using default value:', self.__default_return_name)
+                print('HDF5Dataset: return_name not present in kwargs, using default value:', self.__default_return_name)
 
         try:
             self.__autoscale = kwargs['autoscale']
         except KeyError:
             self.__autoscale = self.__default_autoscale
             if verbose:
-                print('MyDataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
+                print('HDF5Dataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
+
+        # check that all the required channels are present for autoscale for augmentation
+        # this is due to the get_scale method which needs the the velocities to compute the scale for autoscaling
+        # augmentation mode 1 and 0 use indexing, the first 4 channels are required
+        if not all(elem in self.__channels_to_load for elem in ['terrain','ux', 'uy', 'uz']):
+            print('HDF5Dataset: augmentation and autoscale will not be applied, not all of the required channels (terrain,ux, uy, uz) were requested')
+            self.__autoscale = False
+            self.__augmentation = False
 
         # parse the augmentation_kwargs depending on the augmentation_mode
         if self.__augmentation:
             # mode 1 has no options
             if self.__augmentation_mode == 0:
                 try:
-                    self.__subsample = kwargs['augmentation_kwargs']['subsampling']
+                    self.__augmentation_kwargs = kwargs['augmentation_kwargs']
                 except KeyError:
+                    self.__augmentation_kwargs = self.__default_augmentation_kwargs
+                    if verbose:
+                        print('HDF5Dataset: augmentation_kwargs not present in kwargs, using default value:',
+                              self.__default_augmentation_kwargs)
+                try:
+                    self.__subsample = self.__augmentation_kwargs['subsampling']
+                except:
                     self.__subsample = True
                     if verbose:
-                        print('MyDataset: subsampling not present in augmentation_kwargs, using default value:', True)
+                        print('HDF5Dataset: subsampling not present in augmentation_kwargs, using default value:', True)
 
                 try:
-                    self.__rotating = kwargs['augmentation_kwargs']['rotating']
-                except KeyError:
+                    self.__rotating = self.__augmentation_kwargs['rotating']
+                except:
                     self.__rotating = True
                     if verbose:
-                        print('MyDataset: rotating not present in augmentation_kwargs, using default value:', True)
+                        print('HDF5Dataset: rotating not present in augmentation_kwargs, using default value:', True)
 
-        # extract data from the tar file
-        self.__num_files = len(tar.getnames())
-        self.__memberslist = tar.getmembers()
+        # create scaling dict for each channel
+        self.__scaling_dict = dict()
+        for channel in self.__channels_to_load:
+            try:
+                self.__scaling_dict[channel] = kwargs['scaling_' + channel]
+            except KeyError:
+                self.__scaling_dict[channel] = self.__default_scaling_dict[channel]
+                if verbose:
+                    print('HDF5Dataset: ', 'scaling_' + channel, 'not present in kwargs, using default value:',
+                          self.__default_scaling_dict[channel])
 
         # initialize random number generator used for the subsampling
         self.__rand = random.SystemRandom()
@@ -274,34 +293,52 @@ class MyDataset(Dataset):
         # avoids printing a warning multiple times
         self.__augmentation_warning_printed = False
 
-        print('MyDataset: ' + filename + ' contains {} samples'.format(self.__num_files))
+        print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
     def __getitem__(self, index):
-        tar = tarfile.open(self.__filename, 'r')
-        file = tar.extractfile(self.__memberslist[index])
+        h5_file = h5py.File(self.__filename, 'r', swmr=True)
+        sample = h5_file[self.__memberslist[index]]
 
         # load the data
-        if self.__compressed:
-            data, ds = torch.load(BytesIO(lz4.frame.decompress(file.read())))
+        data_from_channels = []
+        for i, channel in enumerate(self.__channels_to_load):
+            # extract channel data and apply scaling
+            data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
+        data = torch.cat(data_from_channels , 0)
 
-        else:
-            data, ds = torch.load(file)
-
+        # send full data to device
         data = data.to(self.__device)
 
-        data_shape = data[0,:].shape
-        if (len(data_shape) == 3):
-            # scale the data according to the specifications
-            if self.__autoscale:
-                scale = self.__get_scale(data[1:4, :, :, :])
-            else:
-                scale = 1.0
+        ds = torch.from_numpy(sample['ds'][...])
 
-            data[0, :, :, :] /= self.__scaling_terrain # terrain
-            data[1, :, :, :] /= scale * self.__scaling_ux # in u_x
-            data[2, :, :, :] /= scale * self.__scaling_uy # in u_y
-            data[3, :, :, :] /= scale * self.__scaling_uz # in u_z
-            data[4, :, :, :] /= scale * scale * self.__scaling_turb # label turbulence
+        data_shape = data[0,:].shape
+
+        # 3D data transforms
+        if (len(data_shape) == 3):
+            # apply autoscale if requested
+            if self.__autoscale:
+                # the velocities are indices 1,2,3
+                scale = self.__get_scale(data[1:4, :, :, :])
+
+                # applying the autoscale to the velocities
+                data[1:4, :, :, :] /= scale
+
+                # turb handling
+                if 'turb' in self.__channels_to_load:
+                    data[self.__channels_to_load.index('turb'), :, :, :] /= scale * scale
+
+                # p handling
+                if 'p' in self.__channels_to_load:
+                    data[self.__channels_to_load.index('p'),:,:,:] /= scale*scale
+
+                # epsilon handling
+                if 'epsilon' in self.__channels_to_load:
+                    data[self.__channels_to_load.index('epsilon'),:,:,:] /= scale*scale*scale
+
+                # nut handling
+                if 'nut' in self.__channels_to_load:
+                    data[self.__channels_to_load.index('nut'), :, :, :] /= scale
+
 
             # downscale if requested
             data = data[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
@@ -335,10 +372,10 @@ class MyDataset(Dataset):
                         # rotate 90 degrees
                         if (self.__rand.randint(0,1)):
                             data = data.transpose(2,3).flip(3)
-                            data = data[[0,2,1,3,4]]
+                            data = torch.cat((data[[0,2,1]], data[3:]),0)
                             data[1,:,:,:] *= -1.0
 
-                            ds = (ds[1], ds[0], ds[2])
+                            ds = torch.tensor([ds[1], ds[0], ds[2]])
 
                 elif self.__augmentation_mode == 1:
                     # use the numpy implementation as it is more accurate and slightly faster
@@ -357,7 +394,7 @@ class MyDataset(Dataset):
 
                 else:
                     if not self.__augmentation_warning_printed:
-                        print('WARNING: Unknown augmentation mode in MyDatatset ', self.__augmentation_mode,
+                        print('WARNING: Unknown augmentation mode in HDF5Dataset ', self.__augmentation_mode,
                               ', not augmenting the data')
 
             else:
@@ -365,28 +402,26 @@ class MyDataset(Dataset):
                 data = data[:,:self.__nz, :self.__ny, :self.__nx]
 
             # generate the input channels
+            input_data = torch.index_select(data, 0, self.__input_indices)
             if (self.__input_mode == 0):
                 # copy the inflow condition across the full domain
-                input = torch.cat([data[0,:,:,:].unsqueeze(0), data[1:4,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)])
+                input = torch.cat((input_data[0,:,:,:].unsqueeze(0), input_data[1:,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)))
 
             elif (self.__input_mode == 1):
                 # This interpolation is slower (at least on a cpu)
-#                 input = torch.cat([data[0,:,:,:].unsqueeze(0),
-#                                    self.__interpolator.edge_interpolation_batch(data[1:4,:,:,:].unsqueeze(0)).squeeze()])
+                # input = torch.cat([data[0,:,:,:].unsqueeze(0),
+                # self.__interpolator.edge_interpolation_batch(data[1:4,:,:,:].unsqueeze(0)).squeeze()])
 
                 # interpolating the vertical edges
-                input = torch.cat([data[0,:,:,:].unsqueeze(0), self.__interpolator.edge_interpolation(data[1:4,:,:,:])])
+                input = torch.cat((input_data[0,:,:,:].unsqueeze(0), self.__interpolator.edge_interpolation(input_data[1:,:,:,:])))
 
             else:
-                print('MyDataset Error: Input mode ', self.__input_mode, ' is not supported')
+                print('HDF5Dataset Error: Input mode ', self.__input_mode, ' is not supported')
                 sys.exit()
 
-            if self.__turbulence_label:
-                output = data[1:,:,:,:]
-            else:
-                output = data[1:4,:,:,:]
+            label = torch.index_select(data, 0, self.__label_indices)
 
-            out = [input, output]
+            out = [input, label]
 
             if self.__autoscale:
                 out.append(scale)
@@ -395,19 +430,19 @@ class MyDataset(Dataset):
                 out.append(ds)
 
             if self.__return_name:
-                out.append(self.__memberslist[index].name)
+                out.append(sample)
 
             return out
 
         elif (len(data_shape) == 2):
-            print('MyDataset Error: 2D data handling is not implemented yet')
+            print('HDF5Dataset Error: 2D data handling is not implemented yet')
             sys.exit()
         else:
-            print('MyDataset Error: Data dimension of ', len(data_shape), ' is not supported')
+            print('HDF5Dataset Error: Data dimension of ', len(data_shape), ' is not supported')
             sys.exit()
 
     def get_name(self, index):
-        return self.__memberslist[index].name
+        return self.__memberslist[index]
 
     def __len__(self):
         return self.__num_files
@@ -571,7 +606,15 @@ class MyDataset(Dataset):
     def __get_scale(self, x):
         shape = x.shape
 
+        # get data from corners of sample
         corners = torch.index_select(x, 2, torch.tensor([0,shape[2]-1]))
         corners = torch.index_select(corners, 3, torch.tensor([0,shape[3]-1]))
 
-        return corners.norm(dim=0).mean(dim=0).max()
+        # compute the scale
+        scale = corners.norm(dim=0).mean(dim=0).max()
+
+        # account for unfeasible scales (e.g. from zero samples)
+        if scale > 0:
+            return scale
+        else:
+            return torch.tensor(1.0)

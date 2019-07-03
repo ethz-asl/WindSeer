@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Script to test and benchmark the implementation of MyDataset
+Script to test scaling of data
 '''
 
 import matplotlib.pyplot as plt
@@ -14,11 +14,14 @@ from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
 compressed = False
-input_dataset = 'test.tar'
+input_dataset = 'test.hdf5'
+input_channels = ['terrain', 'ux', 'uy', 'uz']
+label_channels = ['ux', 'uy', 'uz']
 #-----------------------------------------------------
 
 def main():
-    db = nn_data.MyDataset(input_dataset, autoscale = True, input_mode = 1)
+    db = nn_data.HDF5Dataset(input_dataset, input_channels = input_channels, label_channels= label_channels,
+                            autoscale = True, input_mode = 1)
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
                                               shuffle=False, num_workers=0)
 

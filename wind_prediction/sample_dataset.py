@@ -9,10 +9,12 @@ from torch.utils.data import DataLoader
 #---------------- default config ---------------------------------------------------------------
 # input dataset params
 input_compressed = False
-input_dataset = 'data/input.tar'
+input_dataset = 'data/input.hdf5'
 
 # output dataset params
-output_dataset = 'data/resampled.tar'
+output_dataset = 'data/resampled.hdf5'
+input_channels = ['terrain', 'ux', 'uy', 'uz']
+label_channels = ['ux', 'uy', 'uz']
 nx = 64
 ny = 64
 nz = 64
@@ -46,8 +48,8 @@ parser.add_argument('-n', dest='sampling_rounds', type=int, default=n_sampling_r
 
 args = parser.parse_args()
 
-dbloader = data.MyDataset(args.infile, nx = args.nx, ny = args.ny, nz = args.nz,
-                          input_mode = args.input_mode, augmentation = augmentation,
+dbloader = data.HDF5Dataset(args.infile, input_channels=input_channels, label_channels=label_channels, nx = args.nx,
+                          ny = args.ny, nz = args.nz, input_mode = args.input_mode, augmentation = augmentation,
                           augmentation_mode = args.augmentation_mode, augmentation_kwargs = augmentation_kwargs,
                           stride_hor = stride_hor, stride_vert = stride_vert, turbulence_label = True,
                           compressed = args.input_compressed, return_grid_size = True,

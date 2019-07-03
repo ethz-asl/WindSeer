@@ -43,10 +43,10 @@ for item in models:
     params = utils.EDNNParameters('trained_models/' + item['name'] + '/params.yaml')
 
     if dataset_kwargs == None:
-        dataset_kwargs = params.MyDataset_kwargs()
+        dataset_kwargs = params.Dataset_kwargs()
 
     else:
-        if dataset_kwargs != params.MyDataset_kwargs():
+        if dataset_kwargs != params.Dataset_kwargs():
             print('ERROR: Dataset arguments are not consistent')
             exit()
 
@@ -54,7 +54,7 @@ for item in models:
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # load dataset
-testset = data.MyDataset(args.dataset, compressed = args.compressed,
+testset = data.HDF5Dataset(args.dataset, compressed = args.compressed,
                          augmentation = False, **dataset_kwargs)
 
 for item in models:
