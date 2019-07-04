@@ -17,6 +17,7 @@ The first input layer is assumed to be terrain information. It should be zero in
 class ModelEDNN3D(nn.Module):
     __default_activation = nn.LeakyReLU
     __default_activation_kwargs = {'negative_slope': 0.1}
+    __default_filter_kernel_size = 3
     __default_n_downsample_layers = 4
     __default_use_terrain_mask = True
     __default_use_mapping_layer = False
@@ -57,6 +58,13 @@ class ModelEDNN3D(nn.Module):
             self.__n_downsample_layers = self.__default_n_downsample_layers
             if verbose:
                 print('EDNN3D: n_downsample_layers not present in kwargs, using default value:', self.__default_n_downsample_layers)
+
+        try:
+            self.__filter_kernel_size = kwargs['filter_kernel_size']
+        except KeyError:
+            self.__filter_kernel_size = self.__default_filter_kernel_size
+            if verbose:
+                print('EDNN3D: filter_kernel_size not present in kwargs, using default value:', self.__default_filter_kernel_size)
 
         try:
             self.__use_mapping_layer = kwargs['use_mapping_layer']
@@ -176,6 +184,10 @@ class ModelEDNN3D(nn.Module):
             print('EDNN3D: Error, n_downsample_layers must be larger than 0')
             sys.exit()
 
+        # input variable check
+        if (self.__filter_kernel_size % 2 == 0) or (self.__filter_kernel_size < 1):
+            raise ValueError('The filter kernel size needs to be odd and larger than 0.')
+
         # construct the number of input and output channels based on the parameters
         self.__num_inputs = 4 # (terrain, u_x_in, u_y_in, u_z_in)
         self.__num_outputs = 3 # (u_x_out, u_y_out, u_z_out)
@@ -206,9 +218,9 @@ class ModelEDNN3D(nn.Module):
         self.__conv = nn.ModuleList()
         for i in range(self.__n_downsample_layers):
             if i == 0:
-                self.__conv += [nn.Conv3d(self.__num_inputs, 8, 3)]
+                self.__conv += [nn.Conv3d(self.__num_inputs, 8, self.__filter_kernel_size)]
             else:
-                self.__conv += [nn.Conv3d(4*2**i, 8*2**i, 3)]
+                self.__conv += [nn.Conv3d(4*2**i, 8*2**i, self.__filter_kernel_size)]
 
         if self.__use_fc_layers:
             # fully connected layers
@@ -220,8 +232,9 @@ class ModelEDNN3D(nn.Module):
             self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
 
         # modules
-        self.__pad_conv = nn.ReplicationPad3d(1)
-        self.__pad_deconv = nn.ReplicationPad3d((1, 2, 1, 2, 1, 2))
+        padding_required = int((self.__filter_kernel_size - 1) / 2)
+        self.__pad_conv = nn.ReplicationPad3d(padding_required)
+        self.__pad_deconv = nn.ReplicationPad3d((padding_required, padding_required+1, padding_required, padding_required+1, padding_required, padding_required+1))
 
         # Check if we have defined a specific activation layer
         try:
@@ -247,18 +260,18 @@ class ModelEDNN3D(nn.Module):
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(16, 8, 4)]
-                    self.__deconv2 += [nn.Conv3d(8, self.__num_outputs, 4)]
+                    self.__deconv1 += [nn.Conv3d(16, 8, self.__filter_kernel_size+1)]
+                    self.__deconv2 += [nn.Conv3d(8, self.__num_outputs, self.__filter_kernel_size+1)]
                 else:
-                    self.__deconv1 += [nn.Conv3d(16*2**i, 8*2**i, 4)]
-                    self.__deconv2 += [nn.Conv3d(8*2**i, 4*2**i, 4)]
+                    self.__deconv1 += [nn.Conv3d(16*2**i, 8*2**i, self.__filter_kernel_size+1)]
+                    self.__deconv2 += [nn.Conv3d(8*2**i, 4*2**i, self.__filter_kernel_size+1)]
 
         else:
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(8, self.__num_outputs, 4)]
+                    self.__deconv1 += [nn.Conv3d(8, self.__num_outputs, self.__filter_kernel_size+1)]
                 else:
-                    self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, 4)]
+                    self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, self.__filter_kernel_size+1)]
 
         if self.__use_mapping_layer:
             # mapping layer

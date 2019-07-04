@@ -95,6 +95,7 @@ model:
         n_y: 64,
         n_z: 64,
         n_downsample_layers: 4,
+        filter_kernel_size: 3,
         interpolation_mode: 'nearest',
         align_corners: False,
         skipping: True,
