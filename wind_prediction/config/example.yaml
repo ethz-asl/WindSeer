@@ -95,6 +95,8 @@ model:
         n_y: 64,
         n_z: 64,
         n_downsample_layers: 4,
+        n_first_conv_channels: 8,
+        channel_multiplier: 2,
         filter_kernel_size: 3,
         interpolation_mode: 'nearest',
         align_corners: False,
