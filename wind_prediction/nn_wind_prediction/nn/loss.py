@@ -289,16 +289,16 @@ class DivergenceFreeLoss(Module):
 
     def compute_loss(self, predicted, target, input):
         target = torch.zeros_like(target).to(predicted.device)
+        terrain = input[:, 0:1]
 
         # compute divergence of the prediction
-        predicted_divergence = utils.divergence(predicted, self.__grid_size).unsqueeze(1)
+        predicted_divergence = utils.divergence(predicted, self.__grid_size, terrain.squeeze(1)).unsqueeze(1)
 
         # compute physics loss for all elements and average losses over each sample in batch
         loss =self.__loss(predicted_divergence,target).mean(tuple(range(1, len(predicted.shape))))
 
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            terrain = input[:, 0:1]
             terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
 
             # apply terrain correction factor to loss of each sample in batch
@@ -360,16 +360,17 @@ class VelocityGradientLoss(Module):
         return self.compute_loss(predicted, target, input)
 
     def compute_loss(self, predicted, target, input):
+        terrain = input[:, 0:1]
+
         # compute gradients of prediction and target
-        target_grad = utils.gradient(target,self.__grid_size)
-        predicted_grad = utils.gradient(predicted,self.__grid_size)
+        target_grad = utils.gradient(target,self.__grid_size,terrain.squeeze(1))
+        predicted_grad = utils.gradient(predicted,self.__grid_size,terrain.squeeze(1))
 
         # compute physics loss for all elements and average losses over each sample in batch
         loss = self.__loss(predicted_grad, target_grad).mean(tuple(range(1, len(predicted.shape))))
 
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            terrain = input[:, 0:1]
             terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
 
             # apply terrain correction factor to loss of each sample in batch

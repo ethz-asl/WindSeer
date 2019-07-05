@@ -98,12 +98,12 @@ class PlotUtils():
             vel_indices = torch.LongTensor([self.__provided_channels.index(channel) for channel in ['ux_cfd', 'uy_cfd', 'uz_cfd']]).to(input.device)
 
             # get divergence of input field
-            input_div = divergence(input.index_select(0,vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
+            input_div = divergence(input.index_select(0,vel_indices).unsqueeze(0), ds, terrain.unsqueeze(0)).squeeze().unsqueeze(0)
             input = torch.cat((input, input_div), 0)
 
             if plot_mode == 'prediction':
                 # get divergence of label field for prediciton
-                label_div = divergence(label.index_select(0, vel_indices).unsqueeze(0), ds).squeeze().unsqueeze(0)
+                label_div = divergence(label.index_select(0, vel_indices).unsqueeze(0), ds, terrain.unsqueeze(0)).squeeze().unsqueeze(0)
                 label = torch.cat((label, label_div), 0)
 
         elif plot_divergence and not ds:
