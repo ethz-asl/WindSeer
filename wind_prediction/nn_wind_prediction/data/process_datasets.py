@@ -35,10 +35,10 @@ def change_dataset_compression(infile, outfile, s_hor, s_ver, compress):
         print('Removing old file')
         os.remove(outfile)
 
-    ouput_file = h5py.File(outfile)
+    output_file = h5py.File(outfile)
 
     for name in memberslist:
-        ouput_file.create_group(name)
+        output_file.create_group(name)
 
         sample = h5_infile[name]
         fields_list = list(sample.keys())
@@ -56,11 +56,11 @@ def change_dataset_compression(infile, outfile, s_hor, s_ver, compress):
                 data[1] *= s_hor
                 data[2] *= s_ver
 
-            ouput_file[name].create_dataset(field,
+            output_file[name].create_dataset(field,
                                             data=data,
                                             compression=compression_type)
 
-    ouput_file.close()
+    output_file.close()
     h5_infile.close()
 
 def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, create_zero_samples = True, compress = False):
@@ -116,7 +116,7 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
     # create h5 file where all the data wll be stored
     if os.path.exists(outfile):
         os.remove(outfile)
-    ouput_file = h5py.File(outfile)
+    output_file = h5py.File(outfile)
 
     # create list of channel names
     channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
@@ -198,7 +198,7 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                 else:
                     # create group in hdf5 file for the current sample
                     sample = member.name.replace('.csv', '')
-                    ouput_file.create_group(sample)
+                    output_file.create_group(sample)
 
                     channel_shape = [nz, nx]
                     slice_shape = (1, nx)
@@ -320,29 +320,29 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
 
                     # add each channel to the hdf5 file for the current sample
                     for k, channel in enumerate(channels):
-                        ouput_file[sample].create_dataset(channel, data=out[k,:,:,:], compression= compression_type)
+                        output_file[sample].create_dataset(channel, data=out[k,:,:,:], compression= compression_type)
 
                     # add the grid size to the hdf5 file for the current sample
-                    ouput_file[sample].create_dataset('ds', data=(dx, dy, dz))
+                    output_file[sample].create_dataset('ds', data=(dx, dy, dz))
 
                     # add the zero sample if new terrain and creating zero samples is enabled
                     if create_zero_samples and new_terrain:
                         zero_sample = sample.replace('_W01_', '_W00_')
 
                         # add zero sample to hdf5 file
-                        ouput_file.create_group(zero_sample)
+                        output_file.create_group(zero_sample)
 
                         # add all the channels to the zero sample
                         for k, channel in enumerate(channels):
                             if k==0:
                                 # add terrain to the hdf5 file for the zero sample
-                                ouput_file[zero_sample].create_dataset(channel, data=out[k,:,:,:], compression=compression_type)
+                                output_file[zero_sample].create_dataset(channel, data=out[k,:,:,:], compression=compression_type)
                             else:
                                 # add terrain to the hdf5 file for the zero sample
-                                ouput_file[zero_sample].create_dataset(channel, data= np.zeros_like(out[k,:,:,:]), compression=compression_type)
+                                output_file[zero_sample].create_dataset(channel, data= np.zeros_like(out[k,:,:,:]), compression=compression_type)
 
                         # add the grid size to the hdf5 file for the zero sample
-                        ouput_file[zero_sample].create_dataset('ds', data=(dx, dy, dz))
+                        output_file[zero_sample].create_dataset('ds', data=(dx, dy, dz))
                         zero_samples_created += 1
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
@@ -353,7 +353,7 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
         print('INFO: Created ', zero_samples_created, 'zero sample(s)')
 
     # close hdf5 file
-    ouput_file.close()
+    output_file.close()
 
 def sample_dataset(dbloader, outfile, n_sampling_rounds, compress, input_channels, label_channels):
     # define compression
@@ -370,7 +370,7 @@ def sample_dataset(dbloader, outfile, n_sampling_rounds, compress, input_channel
     if os.path.exists(outfile):
         print('Removing old file')
         os.remove(outfile)
-    ouput_file = h5py.File(outfile)
+    output_file = h5py.File(outfile)
 
     # get the channels list (terrain + label channels)
     channels = [input_channels[0]] + label_channels
@@ -382,17 +382,17 @@ def sample_dataset(dbloader, outfile, n_sampling_rounds, compress, input_channel
             resampled_name = name + '_' + str(j)
 
             # create the dataset group
-            ouput_file.create_group(resampled_name)
+            output_file.create_group(resampled_name)
 
             # combine the data
             out = torch.cat([input[0].unsqueeze(0), label], dim=0).numpy()
 
             # add each channel to the hdf5 file for the current sample
             for k, channel in enumerate(channels):
-                ouput_file[resampled_name].create_dataset(channel, data=out[k,:,:,:], compression=compression_type)
+                output_file[resampled_name].create_dataset(channel, data=out[k,:,:,:], compression=compression_type)
 
             # add the grid size to the hdf5 file for the current sample
-            ouput_file[resampled_name].create_dataset('ds', data=ds.numpy())
+            output_file[resampled_name].create_dataset('ds', data=ds.numpy())
 
     # close hdf5 file
-    ouput_file.close()
+    output_file.close()
