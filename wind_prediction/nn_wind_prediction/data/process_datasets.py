@@ -362,27 +362,44 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
     # close hdf5 file
     ouput_file.close()
 
-def sample_dataset(dbloader, output_dataset, n_sampling_rounds, compressed):
-    # create temp directory to store all serialized arrays
-    if (os.path.isdir("/cluster/scratch/")):
-        tempfolder = os.environ['TMPDIR'] + '/'
+def sample_dataset(dbloader, outfile, n_sampling_rounds, compress, input_channels, label_channels):
+    # define compression
+    if compress:
+        compression_type = "lzf"
     else:
-        tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-        os.makedirs(tempfolder)
+        compression_type = None
+
+    # check output file extension
+    if not outfile.endswith('.hdf5'):
+        outfile = outfile + '.hdf5'
+
+    # create h5 file where all the data wll be stored
+    if os.path.exists(outfile):
+        print('Removing old file')
+        os.remove(outfile)
+    ouput_file = h5py.File(outfile)
+
+    # get the channels list (terrain + label channels)
+    channels = [input_channels[0]] + label_channels
 
     for j in range(n_sampling_rounds):
         for i, data in enumerate(dbloader):
-            input, output, ds, name = data
-            splitted = name.split('.')
-            data = torch.cat([input[0,:].unsqueeze(0), output[:4,:]])
-            save_data(data, ds, tempfolder + splitted[0] + '_v' + str(j) + '.' + splitted[1], compressed)
+            input, label, ds, name = data
 
-    # collecting all files in the tmp folder to a tar
-    out_tar = tarfile.open(output_dataset, 'w')
-    for filename in os.listdir(tempfolder):
-        out_tar.add(tempfolder + filename, arcname = filename)
+            resampled_name = name + '_' + str(j)
 
-    # cleaning up
-    out_tar.close()
-    if not (os.path.isdir("/cluster/scratch/")):
-        os.system('rm -r '  + tempfolder)
+            # create the dataset group
+            ouput_file.create_group(resampled_name)
+
+            # combine the data
+            out = torch.cat([input[0].unsqueeze(0), label], dim=0).numpy()
+
+            # add each channel to the hdf5 file for the current sample
+            for k, channel in enumerate(channels):
+                ouput_file[resampled_name].create_dataset(channel, data=out[k,:,:,:], compression=compression_type)
+
+            # add the grid size to the hdf5 file for the current sample
+            ouput_file[resampled_name].create_dataset('ds', data=ds.numpy())
+
+    # close hdf5 file
+    ouput_file.close()

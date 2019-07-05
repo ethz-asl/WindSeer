@@ -42,7 +42,6 @@ class HDF5Dataset(Dataset):
     __default_augmentation_kwargs = {'subsampling': True, 'rotating': True,}
     __default_stride_hor = 1
     __default_stride_vert = 1
-    __default_turbulence_label = True
     __default_scaling_dict = {'terrain': 1.0, 'ux': 1.0, 'uy': 1.0, 'uz': 1.0, 'turb': 1.0, 'p': 1.0, 'epsilon': 1.0, 'nut': 1.0}
     __default_return_grid_size = False
     __default_return_name = False
@@ -80,14 +79,10 @@ class HDF5Dataset(Dataset):
                 Horizontal stride, used to reduce the size of the output tensors, default 1
             stride_vert:
                 Vertical stride, used to reduce the size of the output tensors, default 1
-            turbulence_label:
-                Specifies if the turbulent kinetic energy is contained in the output, default True
             scaling_uhor:
                 Scaling factor for the horizontal velocity components, default 1.0
             scaling_uz:
                 Scaling factor for the vertical velocity component, default 1.0
-            scaling_turb:
-                Scaling factor for the turbulent kinetic energy, default 1.0
             scaling_turb:
                 Scaling factor for the turbulent kinetic energy, default 1.0
             scaling_p:
@@ -430,7 +425,7 @@ class HDF5Dataset(Dataset):
                 out.append(ds)
 
             if self.__return_name:
-                out.append(sample)
+                out.append(self.__memberslist[index])
 
             return out
 
