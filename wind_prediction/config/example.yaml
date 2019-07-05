@@ -55,7 +55,6 @@ loss:
 
 # dataset parameters
 data:
-    compressed: False
     trainset_name: 'data/train.hdf5'
     validationset_name: 'data/validation.hdf5'
     testset_name: 'data/test.hdf5'

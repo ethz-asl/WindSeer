@@ -3,7 +3,6 @@
 from __future__ import print_function
 
 import io
-import lz4.frame
 from math import trunc
 from scipy import ndimage
 import numpy as np
@@ -15,60 +14,54 @@ import time
 import torch
 import h5py
 
-def save_data(tensor, ds, name, compress):
+def change_dataset_compression(infile, outfile, s_hor, s_ver, compress):
+    # define compression
     if compress:
-        bytes = io.BytesIO()
-        torch.save((tensor, ds), bytes)
-        f = open(name, 'wb')
-        f.write(lz4.frame.compress(bytes.getvalue(), compression_level = -20))
-        f.close()
+        compression_type = "lzf"
     else:
-        torch.save((tensor, ds), name)
+        compression_type = None
 
-def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
-    # open the file
-    tar = tarfile.open(infile, 'r')
-    num_files = len(tar.getnames())
+    # open the existing dataset and get the members list
+    try:
+        h5_infile = h5py.File(infile, 'r')
+    except IOError as e:
+        print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, infile))
+        sys.exit()
 
-    # create temp directory to store all serialized arrays
-    if (os.path.isdir("/cluster/scratch/")):
-        tempfolder = '/scratch/tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-    else:
-        tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
+    memberslist = list(h5_infile.keys())
 
-    os.makedirs(tempfolder)
+    # create the new dataset
+    if os.path.exists(outfile):
+        print('Removing old file')
+        os.remove(outfile)
 
-    print('INFO: Looping through all the files')
-    for i, member in enumerate(tar.getmembers()):
-        file = tar.extractfile(member)
+    ouput_file = h5py.File(outfile)
 
-        if input_compressed:
-            data, ds = torch.load(io.BytesIO(lz4.frame.decompress(file.read())))
+    for name in memberslist:
+        ouput_file.create_group(name)
 
-        else:
-            data, ds = torch.load(file)
+        sample = h5_infile[name]
+        fields_list = list(sample.keys())
 
-        if (len(list(data.size())) > 3):
-            out = data[:,::s_ver,::s_hor, ::s_hor].clone()
-        else:
-            out = data[:,::s_ver, ::s_hor].clone()
+        for field in fields_list:
+            data = sample[field][...]
 
-        save_data(out, (ds[0]*s_hor, ds[1]*s_hor, ds[2]*s_ver), tempfolder + member.name, compress)
+            if len(data.shape) == 3:
+                data = data[::s_ver, ::s_hor, ::s_hor]
+            elif len(data.shape) == 2:
+                data = data[::s_ver, ::s_hor]
 
-        if ((i % np.ceil(num_files/10.0)) == 0.0):
-            print(trunc((i+1)/num_files*100), '%')
+            if field == 'ds':
+                data[0] *= s_hor
+                data[1] *= s_hor
+                data[2] *= s_ver
 
-    print('INFO: Finished compressing all the files')
+            ouput_file[name].create_dataset(field,
+                                            data=data,
+                                            compression=compression_type)
 
-    # collecting all files in the tmp folder to a tar
-    out_tar = tarfile.open(outfile, 'w')
-    for filename in os.listdir(tempfolder):
-        out_tar.add(tempfolder + filename, arcname = filename)
-
-    # cleaning up
-    out_tar.close()
-    tar.close()
-    shutil.rmtree(tempfolder)
+    ouput_file.close()
+    h5_infile.close()
 
 def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, create_zero_samples = True, compress = False):
     '''
