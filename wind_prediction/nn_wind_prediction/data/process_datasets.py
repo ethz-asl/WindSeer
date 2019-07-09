@@ -13,6 +13,7 @@ import tarfile
 import time
 import torch
 import h5py
+import sys
 
 def change_dataset_compression(infile, outfile, s_hor, s_ver, compress):
     # define compression

@@ -13,7 +13,6 @@ import torch
 from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
-compressed = False
 input_dataset = 'test.hdf5'
 input_channels = ['terrain', 'ux', 'uy', 'uz']
 label_channels = ['ux', 'uy', 'uz']

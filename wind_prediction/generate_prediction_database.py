@@ -12,7 +12,6 @@ import torch
 from torch.utils.data import DataLoader
 
 # ----  Default Params --------------------------------------------------------------
-compressed = False
 dataset = 'data/test.tar'
 savename = 'prediction.hdf5'
 # -----------------------------------------------------------------------------------
@@ -30,12 +29,10 @@ models.append({'name': 'model_3',
                'prediction_level': 10})
 
 parser = argparse.ArgumentParser(description='Script to plot a prediction of the network')
-parser.add_argument('-c', dest='compressed', action='store_true', help='Input tar file compressed')
 parser.add_argument('-d', dest='dataset', default=dataset, help='The test dataset')
 parser.add_argument('-save_name', dest='savename', default=savename, help='The name of the prediction database')
 
 args = parser.parse_args()
-args.compressed = args.compressed or compressed
 
 # check if the dataset arguments are consistent
 dataset_kwargs = None
@@ -54,8 +51,7 @@ for item in models:
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # load dataset
-testset = data.HDF5Dataset(args.dataset, compressed = args.compressed,
-                         augmentation = False, **dataset_kwargs)
+testset = data.HDF5Dataset(args.dataset, augmentation = False, **dataset_kwargs)
 
 for item in models:
     params = utils.EDNNParameters('trained_models/' + item['name'] + '/params.yaml')

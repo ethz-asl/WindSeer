@@ -61,7 +61,7 @@ else:
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define dataset and dataloader
-trainset = data.HDF5Dataset(trainset_name, compressed = run_params.data['compressed'],
+trainset = data.HDF5Dataset(trainset_name,
                       augmentation = run_params.data['augmentation'],
                       augmentation_mode = run_params.data['augmentation_mode'],
                       augmentation_kwargs = run_params.data['augmentation_kwargs'],
@@ -70,7 +70,7 @@ trainset = data.HDF5Dataset(trainset_name, compressed = run_params.data['compres
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
                 shuffle=True, num_workers=run_params.run['num_workers'])
 
-validationset = data.HDF5Dataset(validationset_name, compressed = run_params.data['compressed'],
+validationset = data.HDF5Dataset(validationset_name,
                 subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
 validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
@@ -192,7 +192,7 @@ if (run_params.run['save_model']):
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
 
-    testset = data.HDF5Dataset(testset_name, compressed = run_params.data['compressed'],
+    testset = data.HDF5Dataset(testset_name,
                     subsample = False, augmentation = False, **run_params.Dataset_kwargs())
 
 

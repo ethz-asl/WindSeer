@@ -15,7 +15,6 @@ from torch.utils.data import DataLoader
 #------ Params to modidify ---------------------------
 compute_dataset_statistics = False
 plot_sample_num = 0
-compressed = False
 input_dataset = '../wind_prediction/data/test.hdf5'
 nx = 64
 ny = 64
