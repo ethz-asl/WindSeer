@@ -135,7 +135,7 @@ input = data[0]
 label = data[1]
 scale = 1.0
 if params.data['autoscale']:
-    scale = data[2].item()
+    scale = data[3].item()
 
 print('Test index name: {0}'.format(testset.get_name(args.index)))
 if args.save_prediction:

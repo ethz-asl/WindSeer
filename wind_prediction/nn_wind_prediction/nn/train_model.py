@@ -8,6 +8,7 @@ from tensorboardX import SummaryWriter
 import time
 import torch
 from torch.nn.functional import mse_loss
+import nn_wind_prediction.utils as utils
 
 should_exit = False
 sig_dict = dict((k, v) for v, k in reversed(sorted(signal.__dict__.items())) if v.startswith('SIG') and not v.startswith('SIG_'))
@@ -110,10 +111,11 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             if should_exit:
                 break
 
-            # get the inputs
+            # get the inputs, labels and loss weights
             inputs = data[0]
             labels = data[1]
-            inputs, labels = inputs.to(device), labels.to(device)
+            W = data[2]
+            inputs, labels, W = inputs.to(device), labels.to(device), W.to(device)
 
             # zero the parameter gradients
             optimizer.zero_grad()
@@ -126,7 +128,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 if uncertainty_train_mode == 1:
                     loss = mse_loss(mean, labels)
                 else:
-                    loss = loss_fn.compute_loss(mean, uncertainty, labels)
+                    loss = loss_fn.compute_loss(mean, uncertainty, labels, W)
 
                 # compute training statistics
                 train_avg_mean += mse_loss(mean, labels).item()
@@ -136,7 +138,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
             else:
                 outputs = net(inputs)
-                loss = loss_fn(outputs, labels, inputs)
+                loss = loss_fn(outputs, labels, inputs, W)
 
             loss.backward()
             optimizer.step()

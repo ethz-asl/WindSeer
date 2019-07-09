@@ -387,10 +387,10 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
 
                 scale = 1.0
                 if params.data['autoscale']:
-                    scale = data[2].item()
-                    ds = data[3]
+                    scale = data[3].item()
+                    ds = data[4]
                 else:
-                    ds = data[2]
+                    ds = data[3]
 
                 inputs, labels = inputs.to(device), labels.to(device)
 

@@ -8,12 +8,13 @@ print('Using device: ', device)
 print('------------------------------------------------------------------')
 
 # test combined loss
-input = torch.rand(20,4,64,64,64, requires_grad=False)
-label = torch.rand(20,4,64,64,64, requires_grad=False)
-output = torch.rand(20,4,64,64,64, requires_grad=True)
+input = torch.rand(10,4,64,64,64, requires_grad=False)
+label = torch.rand(10,4,64,64,64, requires_grad=False)
+output = torch.rand(10,4,64,64,64, requires_grad=True)
 input[:,0,:10,:,:] = 0.0 # generate some terrain
+W = torch.ones(10,1,64,64,64) # generate a weighting function for the loss
 
-label, output, input = label.to(device), output.to(device), input.to(device)
+label, output, input, W = label.to(device), output.to(device), input.to(device), W.to(device)
 
 #------------------------------------------ ADD CONFIGS TO TEST HERE ---------------------------------------------------
 configs = []
@@ -129,10 +130,10 @@ for k, config in enumerate(configs):
     start_time = time.time()
     if 'GaussianLogLikelihoodLoss' in config['loss_components']:
         start_time = time.time()
-        loss = loss_fn(torch.cat((output, output), 1), label, input)
+        loss = loss_fn(torch.cat((output, output), 1), label, input, W)
     else:
         start_time = time.time()
-        loss = loss_fn(output, label, input)
+        loss = loss_fn(output, label, input, W)
     print('[{}] '.format(k),'Forward took', (time.time() - start_time), 'seconds')
     print('[{}] '.format(k), 'Computed Loss:', loss.item())
 
@@ -147,10 +148,10 @@ for k, config in enumerate(configs):
 
         if 'GaussianLogLikelihoodLoss' in config['loss_components']:
             start_time = time.time()
-            loss = loss_fn(torch.cat((output,output),1), label, input)
+            loss = loss_fn(torch.cat((output,output),1), label, input, W)
         else:
             start_time = time.time()
-            loss = loss_fn(output, label, input)
+            loss = loss_fn(output, label, input, W)
         print('[{}] '.format(k), 'Forward pass #2 took', (time.time() - start_time), 'seconds')
         print('[{}] '.format(k), 'Computed Loss #2:', loss.item())
     print('------------------------------------------------------------------')

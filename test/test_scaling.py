@@ -28,7 +28,7 @@ def main():
     
     start_time = time.time()
     for i, data in enumerate(dbloader):
-        input, label, scale = data
+        input, label, W, scale = data
 
         name = db.get_name(i)
         windspeed = float(name.split("_", 5)[4][1:])
