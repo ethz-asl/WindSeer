@@ -115,7 +115,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             inputs = data[0]
             labels = data[1]
             W = data[2]
-            inputs, labels, W = inputs.to(device), labels.to(device), W.to(device)
+            inputs, labels = inputs.to(device), labels.to(device)
 
             # zero the parameter gradients
             optimizer.zero_grad()

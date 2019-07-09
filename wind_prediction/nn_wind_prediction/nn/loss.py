@@ -65,9 +65,15 @@ class CombinedLoss(Module):
                 self.loss_factors += [torch.Tensor([0.0])]
                 self.learn_scaling = False
 
-    def forward(self, predicted, target, input, W=1.0):
+    def forward(self, predicted, target, input, W=None):
         if (len(predicted.shape) != 5):
             raise ValueError('CombinedLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
+
+        # make sure weighting matrix is not empty or None
+        if not W:
+            W = torch.tensor(1.0)
+        # send weighting matrix to same device as target
+        W = W.to(target.device)
 
         return self.compute_loss(predicted, target, input, W)
 
@@ -137,7 +143,7 @@ class LPLoss(Module):
         # first compute the p-loss for each sample in the batch
         loss = (abs(predicted - target)) ** self.__p
 
-        # weight the loss with the pixel-wise weighting matrix
+        # weight the loss with the pixel-wise weighting matrix and take the mean over the volume
         loss = (loss*W).mean(-1).mean(-1).mean(-1).mean(-1)
 
         # compute terrain correction factor for each sample in batch
@@ -208,7 +214,7 @@ class ScaledLoss(Module):
             raise ValueError('max_scale must be larger than 0.0')
 
     def forward(self, prediction, label, input, W=1.0):
-        # compute the loss per pixel
+        # compute the loss per pixel, apply weighting and take the mean over the channels
         loss = (self.__loss(prediction, label)*W).mean(dim=1)
 
         if self.__no_scaling:
@@ -297,7 +303,7 @@ class DivergenceFreeLoss(Module):
         # compute divergence of the prediction
         predicted_divergence = utils.divergence(predicted, self.__grid_size, terrain.squeeze(1)).unsqueeze(1)
 
-        # compute physics loss for all elements and average losses over each sample in batch
+        # compute physics loss for all elements, weight it by pixel, and average losses over each sample in batch
         loss =(self.__loss(predicted_divergence,target)*W).mean(tuple(range(1, len(predicted.shape))))
 
         # compute terrain correction factor for each sample in batch
@@ -369,7 +375,7 @@ class VelocityGradientLoss(Module):
         target_grad = utils.gradient(target,self.__grid_size,terrain.squeeze(1))
         predicted_grad = utils.gradient(predicted,self.__grid_size,terrain.squeeze(1))
 
-        # compute physics loss for all elements and average losses over each sample in batch
+        # compute physics loss for all elements, weight it by pixel, and average losses over each sample in batch
         loss = (self.__loss(predicted_grad, target_grad)*W).mean(tuple(range(1, len(predicted.shape))))
 
         # compute terrain correction factor for each sample in batch
@@ -424,7 +430,7 @@ class GaussianLogLikelihoodLoss(Module):
         # compute loss for all elements
         loss = log_variance + (mean_error * mean_error) / log_variance.exp().clamp(self.__eps)
 
-        # average loss over each sample in batch
+        # average weighted loss over each sample in batch
         loss = (loss*W).mean(tuple(range(1, len(mean_error.shape))))
 
         # compute terrain correction factor for each sample in batch

@@ -659,10 +659,10 @@ class HDF5Dataset(Dataset):
         '''
         # no weighting
         if weighting_fn == 0:
-            W = torch.ones_like(data[0].unsqueeze(0))
+            return []
 
         # squared pressure fluctuations weighting function
-        elif weighting_fn == 1:
+        if weighting_fn == 1:
 
             # get pressure and mean pressure per sample
             p_index = self.__channels_to_load.index('p')

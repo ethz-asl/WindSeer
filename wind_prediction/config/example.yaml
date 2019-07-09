@@ -54,7 +54,7 @@ loss:
     log_loss_components: True
 
     # the weighting function of the loss
-    loss_weighting_fn: 1
+    loss_weighting_fn: 0
 
 # dataset parameters
 data:
