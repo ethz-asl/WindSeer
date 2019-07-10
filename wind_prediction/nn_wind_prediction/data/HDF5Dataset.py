@@ -451,7 +451,7 @@ class HDF5Dataset(Dataset):
                 out.append(ds)
 
             if self.__return_name:
-                out.append(self.__memberslist[index])
+                out.append(self.get_name(index))
 
             return out
 
