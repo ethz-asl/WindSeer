@@ -13,9 +13,8 @@ import torch
 from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
-compute_dataset_statistics = True
+compute_dataset_statistics = False
 plot_sample_num = 0
-compressed = False
 input_dataset = '../wind_prediction/data/test.hdf5'
 nx = 64
 ny = 64
@@ -41,6 +40,7 @@ autoscale = False
 input_channels = ['terrain', 'ux', 'uy', 'uz']
 label_channels = ['ux', 'uy', 'uz', 'turb']
 plot_divergence = True
+dataset_rounds = 0
 #-----------------------------------------------------
 
 def main():

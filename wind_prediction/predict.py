@@ -13,7 +13,6 @@ import os
 from torch.utils.data import DataLoader
 
 # ----  Default Params --------------------------------------------------------------
-compressed = False
 dataset = 'data/test.hdf5'
 index = 0 # plot the prediction for the following sample in the set, 1434
 model_name = 'test_model'
@@ -29,7 +28,6 @@ add_all = False
 # -----------------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser(description='Script to plot a prediction of the network')
-parser.add_argument('-c', dest='compressed', action='store_true', help='Input tar file compressed')
 parser.add_argument('-ds', dest='dataset', default=dataset, help='The test dataset')
 parser.add_argument('-i', dest='index', type=int, default=index, help='The index of the sample in the dataset')
 parser.add_argument('-model_name', dest='model_name', default=model_name, help='The model name')
@@ -41,7 +39,6 @@ parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='
 parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
 
 args = parser.parse_args()
-args.compressed = args.compressed or compressed
 args.print_loss = args.print_loss or print_loss
 args.compute_prediction_error = args.compute_prediction_error or compute_prediction_error
 args.plot_worst_prediction = args.plot_worst_prediction or plot_worst_prediction
@@ -54,7 +51,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yaml')
 
 # load dataset
-testset = nn_data.HDF5Dataset(args.dataset, compressed = args.compressed,
+testset = nn_data.HDF5Dataset(args.dataset,
                              augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1, # needs to be one
                                              shuffle=False, num_workers=num_worker)
