@@ -70,7 +70,7 @@ class CombinedLoss(Module):
             raise ValueError('CombinedLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
         # make sure weighting matrix is not empty or None
-        if not W:
+        if W is None or W.shape[-1] ==0:
             W = torch.tensor(1.0)
         # send weighting matrix to same device as target
         W = W.to(target.device)

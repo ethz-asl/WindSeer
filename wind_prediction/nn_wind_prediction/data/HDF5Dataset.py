@@ -48,6 +48,7 @@ class HDF5Dataset(Dataset):
     __default_return_name = False
     __default_autoscale = False
     __default_loss_weighting_fn = 0
+    __default_loss_weighting_clamp = False
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -115,6 +116,13 @@ class HDF5Dataset(Dataset):
             self.__loss_weighting_fn = self.__default_loss_weighting_fn
             if verbose:
                 print('HDF5Dataset: loss_weighting_fn not present in kwargs, using default value:', self.__default_loss_weighting_fn)
+
+        try:
+            self.__loss_weighting_clamp = kwargs['loss_weighting_clamp']
+        except KeyError:
+            self.__loss_weighting_clamp = self.__default_loss_weighting_clamp
+            if verbose:
+                print('HDF5Dataset: loss_weighting_clamp not present in kwargs, using default value:', self.__default_loss_weighting_clamp)
 
         try:
             self.__device = kwargs['device']
@@ -657,9 +665,9 @@ class HDF5Dataset(Dataset):
         Output:
             W: 4D tensor [weighting, Z, Y, X] containing the pixel-wise weights.
         '''
-        # no weighting
+        # no weighting, return empty tensor
         if weighting_fn == 0:
-            return []
+            return torch.Tensor([])
 
         # squared pressure fluctuations weighting function
         if weighting_fn == 1:
@@ -669,8 +677,14 @@ class HDF5Dataset(Dataset):
             p = data[p_index].unsqueeze(0)
             p_mean = p.mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(p)
 
-            # remove mean, square and divide by its volume integral for each sample
-            W = (p - p_mean) ** 2 / (((p - p_mean) ** 2).mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(p))
+            # remove mean, square and remove outliers
+            W = (p - p_mean) ** 2
+
+            if self.__loss_weighting_clamp:
+                W = W.clamp(0.0435)
+
+            # normalize by its volume integral per sample
+            W =  W/ (W.mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(p))
 
         # l2-norm pressure gradient weighting function
         elif weighting_fn == 2:
@@ -680,10 +694,13 @@ class HDF5Dataset(Dataset):
             # get terrain
             terrain = data[self.__channels_to_load.index('terrain')].unsqueeze(0)
 
-            # compute the spatial pressure gradient components and take the l2-norm of the gradient
+            # compute the spatial pressure gradient components and take the l2-norm of the gradient and remove outliers
             W = (utils.derive(p, 3, ds[0], terrain) ** 2
                  + utils.derive(p, 2, ds[1], terrain) ** 2 +
                  utils.derive(p, 1, ds[2], terrain) ** 2) ** 0.5
+
+            if self.__loss_weighting_clamp:
+                W = W.clamp(0.000814)
 
             # normalize by its volume integral per sample
             W = (W / ((W).mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(W)))
@@ -699,8 +716,11 @@ class HDF5Dataset(Dataset):
             # get terrain
             terrain = data[self.__channels_to_load.index('terrain')].unsqueeze(0)
 
-            # compute the spatial gradient tensor of the velocity gradient and take the l2-norm of the gradient per sample
+            # compute the spatial gradient tensor of the velocity gradient and take the l2-norm of the gradient per sample and remove outliers
             W = (utils.gradient(U, ds, terrain) ** 2).sum(1) ** 0.5
+
+            if self.__loss_weighting_clamp:
+                W = W.clamp(0.00175)
 
             # normalize by its volume integral per sample
             W = (W / ((W).mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(W)))
