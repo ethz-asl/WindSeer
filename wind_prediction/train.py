@@ -164,7 +164,7 @@ except KeyError as e:
 
 # if the loss components and their respective factors should be plotted in tensorboard
 try:
-    log_loss_components = run_params.loss['log_loss_components'] and len(loss_fn.loss_components)>1
+    log_loss_components = run_params.loss['log_loss_components']
 except:
     log_loss_components = False
     print('train.py: log_loss_components key not available, setting default value: ', log_loss_components)
