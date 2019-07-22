@@ -490,6 +490,9 @@ def compute_prediction_metrics(net, device, params, loader_testset, save=True, s
         inputs = data[0]
         labels = data[1]
 
+        if inputs.shape[0] != 1:
+            raise ValueError('A data loader with batch size 1 must be used!')
+
         inputs, labels = inputs.to(device), labels.to(device)
 
         outputs = net(inputs)
@@ -516,19 +519,19 @@ def compute_prediction_metrics(net, device, params, loader_testset, save=True, s
         outputs = outputs.view(outputs.shape[0], -1).permute(1,0).cpu().detach()
         labels = labels.view(labels.shape[0], -1).permute(1,0).cpu().detach()
 
-        mean_squared_error += [metrics.mean_squared_error(labels, outputs,multioutput='raw_values')]
-        mean_absolute_error += [metrics.mean_absolute_error(labels, outputs,multioutput='raw_values')]
+        mean_squared_error += [metrics.mean_squared_error(labels, outputs)]
+        mean_absolute_error += [metrics.mean_absolute_error(labels, outputs)]
         max_error += [metrics.max_error(labels, outputs)]
         median_absolute_error += [metrics.median_absolute_error(labels, outputs)]
-        explained_variance_score += [metrics.explained_variance_score(labels, outputs,multioutput='raw_values')]
-        r2_score += [metrics.r2_score(labels, outputs,multioutput='raw_values')]
+        explained_variance_score += [metrics.explained_variance_score(labels, outputs)]
+        r2_score += [metrics.r2_score(labels, outputs)]
 
-    prediction_metrics = pd.DataFrame({'mean_squared_error': np.mean(mean_squared_error),
-                                       'mean_absolute_error': np.mean(mean_absolute_error),
-                                       'max_error': np.max(max_error),
-                                       'median_absolute_error': np.mean(median_absolute_error),
-                                       'explained_variance_score' : np.mean(explained_variance_score),
-                                       'r2_score': np.mean(r2_score)}, index = [model_name])
+    prediction_metrics = pd.DataFrame({'mean_squared_error': mean_squared_error,
+                                       'mean_absolute_error': mean_absolute_error,
+                                       'max_error': max_error,
+                                       'median_absolute_error': median_absolute_error,
+                                       'explained_variance_score' : explained_variance_score,
+                                       'r2_score': r2_score})
 
     # printing
     if show:

@@ -211,7 +211,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
             train_loss /= len(loader_trainset)
-            for k,v in train_loss_components.items(): v/= len(loader_trainset)
+            for k,v in train_loss_components.items(): train_loss_components[k] /= len(loader_trainset)
             train_avg_mean /= len(loader_trainset)
             train_avg_uncertainty /= len(loader_trainset)
 
@@ -254,7 +254,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         for k, v in validation_loss_components.items(): validation_loss_components[k] += loss_fn.last_computed_loss_components[k]
 
                 validation_loss /= len(loader_validationset)
-                for k, v in validation_loss_components.items(): v /= len(loader_validationset)
+                for k, v in validation_loss_components.items(): validation_loss_components[k] /=len(loader_validationset)
 
             if use_writer and not should_exit:
                 writer.add_scalar('Train/Loss', train_loss, epoch + 1)
@@ -282,10 +282,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         for name, value in validation_loss_components.items():
                             writer.add_scalar('Val/LC_' + name, value, epoch + 1)
 
-                # record learnable loss factors
-                if loss_fn.learn_scaling and log_loss_components:
-                        for i, loss_component in enumerate(loss_fn.loss_component_names):
-                            writer.add_scalar('LossFactors/'+loss_component, loss_fn.loss_factors[i], epoch + 1)
+                    # record learnable loss factors
+                    for i, loss_component in enumerate(loss_fn.loss_component_names):
+                        writer.add_scalar('LossFactors/'+loss_component, loss_fn.loss_factors[i], epoch + 1)
 
                 if epoch % save_params_hist_every_n_epoch == (save_params_hist_every_n_epoch - 1):
                     for tag, value in net.named_parameters():
