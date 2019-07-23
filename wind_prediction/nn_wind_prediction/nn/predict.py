@@ -140,7 +140,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 outputs[1] *= scale * params.data['uy_scaling']
                 outputs[2] *= scale * params.data['uz_scaling']
 
-                if params.data['use_turbulence']:
+                if 'turb' in  params.data['label_channels']:
                     labels[3] *= scale * scale * params.data['turbulence_scaling']
                     outputs[3] *= scale * scale * params.data['turbulence_scaling']
 
@@ -150,7 +150,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 outputs[0] *= scale * params.data['ux_scaling']
                 outputs[1] *= scale * params.data['uz_scaling']
 
-                if params.model['use_turbulence']:
+                if 'turb' in  params.data['label_channels']:
                     labels[3] *= scale * scale * params.data['turbulence_scaling']
                     outputs[3] *= scale * scale * params.data['turbulence_scaling']
 
@@ -176,13 +176,13 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
                 losses['loss_uy'][i] = loss_fn(outputs[1], labels[1])
                 losses['loss_uz'][i] = loss_fn(outputs[2], labels[2])
-                if params.model['use_turbulence']:
+                if 'turb' in  params.data['label_channels']:
                     losses['loss_turb'][i] = loss_fn(outputs[3], labels[3])
 
             elif len(labels.shape) == 3:
                 losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
                 losses['loss_uz'][i] = loss_fn(outputs[1], labels[1])
-                if params.model['use_turbulence']:
+                if 'turb' in  params.data['label_channels']:
                     losses['loss_turb'][i] = loss_fn(outputs[2], labels[2])
 
             else:
@@ -194,7 +194,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                                                                           outputs,
                                                                           inputs[0,0] * params.data['terrain_scaling'],
                                                                           predict_uncertainty, device,
-                                                                          params.model_kwargs()['use_turbulence'])
+                                                                          'turb' in  params.data['label_channels'])
             for key in error_stats.keys():
                 if not np.isnan(error_stats[key]):
                     prediction_errors[key].append(error_stats[key])
@@ -410,13 +410,13 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                         outputs[1] *= scale * params.data['uy_scaling']
                         outputs[2] *= scale * params.data['uz_scaling']
 
-                        if model['params'].data['use_turbulence']:
+                        if 'turb' in  model['params'].data['label_channels']:
                             outputs[3] *= scale * scale * params.data['turbulence_scaling']
 
                         outputs = outputs.cpu()
 
                         wind = outputs[:3].numpy()
-                        if model['params'].data['use_turbulence']:
+                        if 'turb' in  model['params'].data['label_channels']:
                             turbulence = outputs[3].numpy()
                         else:
                             turbulence = np.zeros_like(outputs[0].numpy())
@@ -439,13 +439,13 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 inputs[1] *= scale * params.data['ux_scaling']
                 inputs[2] *= scale * params.data['uy_scaling']
                 inputs[3] *= scale * params.data['uz_scaling']
-                if model['params'].data['use_turbulence']:
+                if 'turb' in  params.data['label_channels']:
                     labels[3] *= scale * scale * params.data['turbulence_scaling']
 
                 inputs, labels = inputs.cpu(), labels.cpu()
 
                 wind_label = labels[:3].numpy()
-                if model['params'].data['use_turbulence']:
+                if 'turb' in  model['params'].data['label_channels']:
                     turbulence_label = labels[3].numpy()
                 else:
                     turbulence_label = np.zeros_like(labels[0].numpy())
@@ -466,12 +466,12 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 grp.create_dataset('predictions/zerowind/turbulence', data = np.zeros_like(turbulence_label), dtype='f')
 
                 # save the grid information
-                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0].numpy(), 0)) * ds[2]
-                dset_terr = grp.create_dataset('terrain', data = terrain.numpy(), dtype='f')
+                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0].numpy(), 0)) * ds[0,2].numpy()
+                dset_terr = grp.create_dataset('terrain', data = terrain, dtype='f')
 
                 grp.create_dataset('grid_info/nx', data = gridshape[2], dtype='i')
                 grp.create_dataset('grid_info/ny', data = gridshape[1], dtype='i')
                 grp.create_dataset('grid_info/nz', data = gridshape[0], dtype='i')
 
-                grp.create_dataset('grid_info/resolution_horizontal', data = ds[0].item(), dtype='f')
-                grp.create_dataset('grid_info/resolution_vertical', data = ds[2].item(), dtype='f')
+                grp.create_dataset('grid_info/resolution_horizontal', data = ds[0,0].item(), dtype='f')
+                grp.create_dataset('grid_info/resolution_vertical', data = ds[0,2].item(), dtype='f')
