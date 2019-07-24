@@ -12,7 +12,7 @@ import torch
 from torch.utils.data import DataLoader
 
 # ----  Default Params --------------------------------------------------------------
-dataset = 'data/test.tar'
+dataset = 'data/test.hdf5'
 savename = 'prediction.hdf5'
 # -----------------------------------------------------------------------------------
 
@@ -22,9 +22,6 @@ models.append({'name': 'model_1',
                'version': 'latest',
                'prediction_level': 10})
 models.append({'name': 'model_2',
-               'version': 'latest',
-               'prediction_level': 10})
-models.append({'name': 'model_3',
                'version': 'latest',
                'prediction_level': 10})
 
@@ -49,6 +46,8 @@ for item in models:
 
 # check if gpu available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+dataset_kwargs['return_grid_size'] = True
 
 # load dataset
 testset = data.HDF5Dataset(args.dataset, augmentation = False, **dataset_kwargs)

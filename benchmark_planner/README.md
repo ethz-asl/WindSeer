@@ -26,12 +26,17 @@ This folder contains the source code for the benchmark planner. This is a RRT* s
     source cluster_setup.sh
 ```
 
-3. Start an interactive shell to build it on the cluster and not on the login node:
+3. Install ompl
+```
+    bsub -n 4 -W 4:00 -R "rusage[mem=4096]" source cluster_build_ompl.sh
+```
+
+4. Start an interactive shell to build it on the cluster and not on the login node:
 ```
     bsub -Is -n 4 -W 4:00 -R "rusage[mem=4096]" bash
 ```
 
-4. Change to the build folder and run cmake:
+5. Change to the build folder and run cmake:
 ```
     cmake -DCMAKE_PREFIX_PATH=~/software/ompl/build/lib/ ../
 ```
