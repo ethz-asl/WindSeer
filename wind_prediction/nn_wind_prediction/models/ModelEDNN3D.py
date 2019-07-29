@@ -284,7 +284,7 @@ class ModelEDNN3D(nn.Module):
                     self.__deconv1 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
                                                  self.__filter_kernel_size+1)]
-        print(self.__channel_multiplier)
+
         # mapping layer
         if self.__use_mapping_layer:
             self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
