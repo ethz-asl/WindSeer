@@ -50,6 +50,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 dataset_kwargs['return_grid_size'] = True
 
 # load dataset
+dataset_kwargs['return_grid_size'] = True
 testset = data.HDF5Dataset(args.dataset, augmentation = False, **dataset_kwargs)
 
 for item in models:
