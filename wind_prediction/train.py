@@ -139,6 +139,7 @@ optimizer = torch.optim.Adam(param_list, lr=run_params.run['learning_rate_initia
                              amsgrad = run_params.run['amsgrad'])
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
+scheduler.last_epoch = warm_start_epoch
 
 
 # save the model parameter in the beginning
