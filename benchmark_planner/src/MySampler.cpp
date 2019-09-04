@@ -217,7 +217,14 @@ bool MySampler::hasInformedMeasure() const {
 
 double MySampler::getInformedMeasure(const ob::Cost &currentCost) const {
   double informedMeasure = 0.0;
-  informedMeasure = phsPtr_->getPhsMeasure(currentCost.value() * maxSpeed_);
+
+  double diam = currentCost.value() * maxSpeed_;
+  if (diam < phsPtr_->getMinTransverseDiameter()) {
+    // could actually happen because of numerical errors
+    diam = phsPtr_->getMinTransverseDiameter();
+  }
+
+  informedMeasure = phsPtr_->getPhsMeasure(diam);
 
   // If the space is compound, further multiplied by the measure of the uniformed subspace
   if (InformedSampler::space_->isCompound() == true) {

@@ -440,7 +440,7 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 inputs[1] *= scale * params.data['ux_scaling']
                 inputs[2] *= scale * params.data['uy_scaling']
                 inputs[3] *= scale * params.data['uz_scaling']
-                if 'turb' in  params.data['label_channels']:
+                if 'turb' in model['params'].data['label_channels']:
                     labels[3] *= scale * scale * params.data['turbulence_scaling']
 
                 inputs, labels = inputs.cpu(), labels.cpu()
@@ -467,15 +467,15 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 grp.create_dataset('predictions/zerowind/turbulence', data = np.zeros_like(turbulence_label), dtype='f')
 
                 # save the grid information
-                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0].numpy(), 0)) * ds[0,2].numpy()
+                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0].numpy(), 0)) * ds[0][2].item()
                 dset_terr = grp.create_dataset('terrain', data = terrain, dtype='f')
 
                 grp.create_dataset('grid_info/nx', data = gridshape[2], dtype='i')
                 grp.create_dataset('grid_info/ny', data = gridshape[1], dtype='i')
                 grp.create_dataset('grid_info/nz', data = gridshape[0], dtype='i')
 
-                grp.create_dataset('grid_info/resolution_horizontal', data = ds[0,0].item(), dtype='f')
-                grp.create_dataset('grid_info/resolution_vertical', data = ds[0,2].item(), dtype='f')
+                grp.create_dataset('grid_info/resolution_horizontal', data = ds[0][0].item(), dtype='f')
+                grp.create_dataset('grid_info/resolution_vertical', data = ds[0][2].item(), dtype='f')
 
 def compute_prediction_metrics(net, device, params, loader_testset, save=True, show=True):
     model_name = params.model['name_prefix']
