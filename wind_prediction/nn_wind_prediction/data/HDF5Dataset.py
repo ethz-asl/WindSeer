@@ -48,7 +48,7 @@ class HDF5Dataset(Dataset):
     __default_return_name = False
     __default_autoscale = False
     __default_loss_weighting_fn = 0
-    __default_loss_weighting_clamp = False
+    __default_loss_weighting_clamp = True
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''

@@ -55,7 +55,7 @@ loss:
 
     # the weighting function of the loss
     loss_weighting_fn: 0 # 0: off, 1: pressure fluct, 2: pressure grad, 3: vel grad
-    loss_weighting_clamp: False
+    loss_weighting_clamp: True
 
 # dataset parameters
 data:
