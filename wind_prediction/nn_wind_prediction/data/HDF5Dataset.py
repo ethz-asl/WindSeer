@@ -681,6 +681,7 @@ class HDF5Dataset(Dataset):
             W = (p - p_mean) ** 2
 
             if self.__loss_weighting_clamp:
+                # TODO: make the clamping value a parameter that can be set from the YAML config file
                 W = W.clamp(0.0435)
 
             # normalize by its volume integral per sample
@@ -700,6 +701,7 @@ class HDF5Dataset(Dataset):
                  utils.derive(p, 1, ds[2], terrain) ** 2) ** 0.5
 
             if self.__loss_weighting_clamp:
+                # TODO: make the clamping value a parameter that can be set from the YAML config file
                 W = W.clamp(0.000814)
 
             # normalize by its volume integral per sample
@@ -720,6 +722,7 @@ class HDF5Dataset(Dataset):
             W = (utils.gradient(U, ds, terrain) ** 2).sum(1) ** 0.5
 
             if self.__loss_weighting_clamp:
+                # TODO: make the clamping value a parameter that can be set from the YAML config file
                 W = W.clamp(0.00175)
 
             # normalize by its volume integral per sample
