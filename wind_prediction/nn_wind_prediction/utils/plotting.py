@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 from matplotlib.widgets import Slider, RadioButtons
+import matplotlib.colors as colors
 import torch
 import math
 
@@ -37,6 +38,7 @@ class PlotUtils():
     the default channels for prediction plotting
     ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     '''
+
     def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design,
                  uncertainty_predicted = False, plot_divergence = False, ds = None, title_dict = None,
                  title_fontsize = 16, label_fontsize = 15, tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
@@ -182,8 +184,13 @@ class PlotUtils():
             self.__label[i] = np.ma.masked_where(is_terrain, channel)
         self.__uncertainty = None
 
+        # colormap for the wind values
         self.__cmap = cmap
-        self.__cmap.set_bad(terrain_color)
+        self.__cmap.set_bad(invalid_color)
+
+        # color for the terrain
+        self.__cmap_terrain = colors.LinearSegmentedColormap.from_list('custom', colors.to_rgba_array([terrain_color, terrain_color]), 2) #cm.binary_r
+        self.__cmap_terrain.set_bad('grey', 0.0)
 
         # handle uncertainty prediction case
         if uncertainty_predicted and plot_mode == 'prediction':
@@ -213,12 +220,24 @@ class PlotUtils():
                 im.set_data(self.__input[i, :, :, slice_number])
                 im.set_extent([0, self.__input.shape[2], 0, self.__input.shape[1]])
 
+            for i, im in enumerate(self.__in_images_terrain):
+                im.set_data(self.__terrain_mask[:, :, self.__n_slice])
+                im.set_extent([0, self.__input.shape[2], 0, self.__input.shape[1]])
+
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, :, :, slice_number])
                 im.set_extent([0, self.__label.shape[2], 0, self.__label.shape[1]])
 
+            for i, im in enumerate(self.__out_images_terrain):
+                im.set_data(self.__terrain_mask[:, :, self.__n_slice])
+                im.set_extent([0, self.__label.shape[2], 0, self.__label.shape[1]])
+
             for i, im in enumerate(self.__error_images):
                 im.set_data(self.__error[i, :, :, slice_number])
+                im.set_extent([0, self.__error.shape[2], 0, self.__error.shape[1]])
+
+            for i, im in enumerate(self.__error_images_terrain):
+                im.set_data(self.__terrain_mask[:, :, self.__n_slice])
                 im.set_extent([0, self.__error.shape[2], 0, self.__error.shape[1]])
 
             for i, im in enumerate(self.__uncertainty_images):
@@ -230,14 +249,21 @@ class PlotUtils():
                 im.set_data(self.__label[6, :, :, slice_number])
                 im.set_extent([0, self.__label.shape[2], 0, self.__label.shape[1]])
 
-
         elif self.__axis == '  x-y':
             for i, im in enumerate(self.__in_images):
                 im.set_data(self.__input[i, slice_number, :, :])
                 im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[2]])
 
+            for i, im in enumerate(self.__in_images_terrain):
+                im.set_data(self.__terrain_mask[self.__n_slice, :, :])
+                im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[2]])
+
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, slice_number, :, :])
+                im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[2]])
+
+            for i, im in enumerate(self.__out_images_terrain):
+                im.set_data(self.__terrain_mask[self.__n_slice, :, :])
                 im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[2]])
 
             for i, im in enumerate(self.__error_images):
@@ -258,12 +284,24 @@ class PlotUtils():
                 im.set_data(self.__input[i, :, slice_number, :])
                 im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[1]])
 
+            for i, im in enumerate(self.__in_images_terrain):
+                im.set_data(self.__terrain_mask[:, self.__n_slice, :])
+                im.set_extent([0, self.__input.shape[3], 0, self.__input.shape[1]])
+
             for i, im in enumerate(self.__out_images):
                 im.set_data(self.__label[i, :, slice_number, :])
                 im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[1]])
 
+            for i, im in enumerate(self.__out_images_terrain):
+                im.set_data(self.__terrain_mask[:, self.__n_slice, :])
+                im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[1]])
+
             for i, im in enumerate(self.__error_images):
                 im.set_data(self.__error[i, :, slice_number, :])
+                im.set_extent([0, self.__error.shape[3], 0, self.__error.shape[1]])
+
+            for i, im in enumerate(self.__error_images_terrain):
+                im.set_data(self.__terrain_mask[:, self.__n_slice, :])
                 im.set_extent([0, self.__error.shape[3], 0, self.__error.shape[1]])
 
             for i, im in enumerate(self.__uncertainty_images):
@@ -274,6 +312,7 @@ class PlotUtils():
             for i, im in enumerate(self.__nut_images):
                 im.set_data(self.__label[6, :, slice_number, :])
                 im.set_extent([0, self.__label.shape[3], 0, self.__label.shape[2]])
+
         plt.draw()
 
     def slider_callback(self, val):
@@ -361,6 +400,7 @@ class PlotUtils():
             self.__buttons[0] = RadioButtons(rax, label, active=0)
             for circle in self.__buttons[0].circles:
                 circle.set_radius(0.1)
+
             self.__buttons[0].on_clicked(self.radio_callback)
 
             plt.show()
@@ -381,6 +421,7 @@ class PlotUtils():
 
                 # get the number of columns for this figure
                 n_columns = min(self.__n_channels-4*(j), 4)
+
 
                 column_size = 5
 

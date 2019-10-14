@@ -136,3 +136,77 @@ class EDNNParameters(object):
         print('\tVertical stride:\t', self.data['stride_vert'])
         print('\tAugmentation mode:\t', self.data['augmentation_mode'])
         print('\tAugmentation params:\t', self.data['augmentation_kwargs'])
+
+        
+class BasicParameters(object):
+    def __init__(self, yaml_config, subdict=None):
+        self.subdict = subdict
+        self.yaml_file = yaml_config
+        if subdict is None:
+            self.params = self._load_yaml(self.yaml_file)
+        else:
+            self.params = self._load_yaml(self.yaml_file)[subdict]
+
+    @staticmethod
+    def _load_yaml(file, str='Using YAML config: '):
+        print("{0} {1}".format(str, file))
+        with open(file, 'rt') as fh:
+            run_parameters = yaml.safe_load(fh)
+        return run_parameters
+
+    def _save(self, dir=None, file='params.yaml'):
+        if dir is None:
+            dir = self.name
+        with open(os.path.join(dir, file), 'wt') as fh:
+            if self.subdict is None:
+                yaml.safe_dump(fh)
+            else:
+                yaml.safe_dump({self.subdict: self.params}, fh)
+
+    def _print(self, header_str='Parameters:'):
+        print(header_str)
+        for key, item in self.params.items():
+            print('\t{0}:\t{1}'.format(key, item))
+
+
+class COSMOParameters(BasicParameters):
+    def __init__(self, yaml_config):
+        super(COSMOParameters, self).__init__(yaml_config, subdict='cosmo')
+        if ('time' not in self.params) or (self.params['time'].lower() == 'auto'):
+            try:
+                # Assume time is last two digits of filename
+                bn = os.path.splitext(os.path.basename(self.params['file']))[0]
+                self.params['time'] = int(bn[-2:])
+            except:
+                print('Automatic time extraction failed on file: {0}. Setting time to 00'.format(self.params['file']))
+                self.params['time'] = 0
+
+    def load_yaml(self, file):
+        return self._load_yaml(file, "Using YAML COSMO config: ")
+
+    def save(self, dir=None):
+        self._save(dir, 'cosmo.yaml')
+
+    def print(self):
+        self._print('COSMO parameters:')
+
+    def get_cosmo_time(self, target_time):
+        delta_t = target_time - self.params['time']
+        if delta_t < 0:
+            print('WARNING: Requested time {0} is before COSMO time {1}, returning time index 0'.format(target_time, self.params['time']))
+        return delta_t
+
+
+class UlogParameters(BasicParameters):
+
+    def __init__(self, yaml_file):
+        super(UlogParameters, self).__init__(yaml_file, subdict='ulog')
+
+    def load_yaml(self, file):
+        return self._load_yaml(file, "Using YAML ulog config: ")
+
+    def save(self, dir=None):
+        self._save(dir, 'ulog.yaml')
+
+    def print(self):
+        self._print('Ulog parameters:')
