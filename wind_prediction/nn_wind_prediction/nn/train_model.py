@@ -8,6 +8,7 @@ from tensorboardX import SummaryWriter
 import time
 import torch
 from torch.nn.functional import mse_loss
+import nn_wind_prediction.utils as utils
 
 should_exit = False
 sig_dict = dict((k, v) for v, k in reversed(sorted(signal.__dict__.items())) if v.startswith('SIG') and not v.startswith('SIG_'))
@@ -110,9 +111,10 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             if should_exit:
                 break
 
-            # get the inputs
+            # get the inputs, labels and loss weights
             inputs = data[0]
             labels = data[1]
+            W = data[2]
             inputs, labels = inputs.to(device), labels.to(device)
 
             # zero the parameter gradients
@@ -126,7 +128,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 if uncertainty_train_mode == 1:
                     loss = mse_loss(mean, labels)
                 else:
-                    loss = loss_fn.compute_loss(mean, uncertainty, labels)
+                    loss = loss_fn.compute_loss(mean, uncertainty, labels, W)
 
                 # compute training statistics
                 train_avg_mean += mse_loss(mean, labels).item()
@@ -136,7 +138,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
             else:
                 outputs = net(inputs)
-                loss = loss_fn(outputs, labels, inputs)
+                loss = loss_fn(outputs, labels, inputs, W)
 
             loss.backward()
             optimizer.step()
@@ -209,7 +211,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
             train_loss /= len(loader_trainset)
-            for k,v in train_loss_components.items(): v/= len(loader_trainset)
+            for k,v in train_loss_components.items(): train_loss_components[k] /= len(loader_trainset)
             train_avg_mean /= len(loader_trainset)
             train_avg_uncertainty /= len(loader_trainset)
 
@@ -252,7 +254,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         for k, v in validation_loss_components.items(): validation_loss_components[k] += loss_fn.last_computed_loss_components[k]
 
                 validation_loss /= len(loader_validationset)
-                for k, v in validation_loss_components.items(): v /= len(loader_validationset)
+                for k, v in validation_loss_components.items(): validation_loss_components[k] /=len(loader_validationset)
 
             if use_writer and not should_exit:
                 writer.add_scalar('Train/Loss', train_loss, epoch + 1)
@@ -280,10 +282,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         for name, value in validation_loss_components.items():
                             writer.add_scalar('Val/LC_' + name, value, epoch + 1)
 
-                # record learnable loss factors
-                if loss_fn.learn_scaling and log_loss_components:
-                        for i, loss_component in enumerate(loss_fn.loss_component_names):
-                            writer.add_scalar('LossFactors/'+loss_component, loss_fn.loss_factors[i], epoch + 1)
+                    # record learnable loss factors
+                    for i, loss_component in enumerate(loss_fn.loss_component_names):
+                        writer.add_scalar('LossFactors/'+loss_component, loss_fn.loss_factors[i], epoch + 1)
 
                 if epoch % save_params_hist_every_n_epoch == (save_params_hist_every_n_epoch - 1):
                     for tag, value in net.named_parameters():

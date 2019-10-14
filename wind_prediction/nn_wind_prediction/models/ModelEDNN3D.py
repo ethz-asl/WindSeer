@@ -351,7 +351,7 @@ class ModelEDNN3D(nn.Module):
             x = self.__mapping_layer(x)
 
         if self.__potential_flow:
-            x = torch.cat([utils.curl(x, self.__grid_size), x[:, 3:, :]], 1)
+            x = torch.cat([utils.curl(x, self.__grid_size, x[:, 0, :]), x[:, 3:, :]], 1)
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x

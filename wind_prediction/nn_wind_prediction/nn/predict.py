@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import h5py
-from math import trunc
 import nn_wind_prediction.utils as utils
 import nn_wind_prediction.data as nn_data
 import numpy as np
@@ -9,6 +8,8 @@ import time
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from sklearn import metrics
+import pandas as pd
 
 def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
     #Compute the average loss
@@ -130,7 +131,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
 
             scale = 1.0
             if params.data['autoscale']:
-                scale = data[2].item()
+                scale = data[3].item()
 
             if len(labels.shape) == 4:
                 labels[0] *= scale * params.data['ux_scaling']
@@ -387,10 +388,10 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
 
                 scale = 1.0
                 if params.data['autoscale']:
-                    scale = data[2].item()
-                    ds = data[3]
+                    scale = data[3].item()
+                    ds = data[4]
                 else:
-                    ds = data[2]
+                    ds = data[3]
 
                 inputs, labels = inputs.to(device), labels.to(device)
 
@@ -439,7 +440,7 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 inputs[1] *= scale * params.data['ux_scaling']
                 inputs[2] *= scale * params.data['uy_scaling']
                 inputs[3] *= scale * params.data['uz_scaling']
-                if 'turb' in  params.data['label_channels']:
+                if 'turb' in model['params'].data['label_channels']:
                     labels[3] *= scale * scale * params.data['turbulence_scaling']
 
                 inputs, labels = inputs.cpu(), labels.cpu()
@@ -466,12 +467,79 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 grp.create_dataset('predictions/zerowind/turbulence', data = np.zeros_like(turbulence_label), dtype='f')
 
                 # save the grid information
-                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0].numpy(), 0)) * ds[0,2].numpy()
+                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0].numpy(), 0)) * ds[0][2].item()
                 dset_terr = grp.create_dataset('terrain', data = terrain, dtype='f')
 
                 grp.create_dataset('grid_info/nx', data = gridshape[2], dtype='i')
                 grp.create_dataset('grid_info/ny', data = gridshape[1], dtype='i')
                 grp.create_dataset('grid_info/nz', data = gridshape[0], dtype='i')
 
-                grp.create_dataset('grid_info/resolution_horizontal', data = ds[0,0].item(), dtype='f')
-                grp.create_dataset('grid_info/resolution_vertical', data = ds[0,2].item(), dtype='f')
+                grp.create_dataset('grid_info/resolution_horizontal', data = ds[0][0].item(), dtype='f')
+                grp.create_dataset('grid_info/resolution_vertical', data = ds[0][2].item(), dtype='f')
+
+def compute_prediction_metrics(net, device, params, loader_testset, save=True, show=True):
+    model_name = params.model['name_prefix']
+    mean_squared_error = []
+    mean_absolute_error = []
+    max_error = []
+    median_absolute_error = []
+    explained_variance_score = []
+    r2_score = []
+
+    for i, data in tqdm(enumerate(loader_testset), total=len(loader_testset)):
+        inputs = data[0]
+        labels = data[1]
+
+        if inputs.shape[0] != 1:
+            raise ValueError('A data loader with batch size 1 must be used!')
+
+        inputs, labels = inputs.to(device), labels.to(device)
+
+        outputs = net(inputs)
+
+        scale = 1.0
+        if params.data['autoscale']:
+            scale = data[3].item()
+
+        # rescale the labels and predictions
+        for i, channel in enumerate(params.data['label_channels']):
+            if channel == 'terrain':
+                outputs[:,i] *= params.data[channel + '_scaling']
+                labels[:,i] *= params.data[channel + '_scaling']
+            elif channel.startswith('u') or channel == 'nut':
+                outputs[:,i] *= scale * params.data[channel + '_scaling']
+                labels[:,i] *= scale * params.data[channel + '_scaling']
+            elif channel == 'p' or channel == 'turb':
+                outputs[:,i] *= scale * scale * params.data[channel + '_scaling']
+                labels[:,i] *= scale * scale * params.data[channel + '_scaling']
+            elif channel == 'epsilon':
+                outputs[:,i] *= scale * scale * scale * params.data[channel + '_scaling']
+                labels[:,i] *= scale * scale * scale * params.data[channel + '_scaling']
+
+        outputs = outputs.view(outputs.shape[0], -1).permute(1,0).cpu().detach()
+        labels = labels.view(labels.shape[0], -1).permute(1,0).cpu().detach()
+
+        mean_squared_error += [metrics.mean_squared_error(labels, outputs)]
+        mean_absolute_error += [metrics.mean_absolute_error(labels, outputs)]
+        max_error += [metrics.max_error(labels, outputs)]
+        median_absolute_error += [metrics.median_absolute_error(labels, outputs)]
+        explained_variance_score += [metrics.explained_variance_score(labels, outputs)]
+        r2_score += [metrics.r2_score(labels, outputs)]
+
+    prediction_metrics = pd.DataFrame({'mean_squared_error': mean_squared_error,
+                                       'mean_absolute_error': mean_absolute_error,
+                                       'max_error': max_error,
+                                       'median_absolute_error': median_absolute_error,
+                                       'explained_variance_score' : explained_variance_score,
+                                       'r2_score': r2_score})
+
+    # printing
+    if show:
+        print(' ')
+        print('Metrics for prediction quality computed over entire test dataset:\n')
+        for column in list(prediction_metrics):
+            print(column + ' :', prediction_metrics[column][0])
+    if save:
+        prediction_metrics.to_csv('./prediction_metrics_' + model_name + '.csv')
+
+    return prediction_metrics

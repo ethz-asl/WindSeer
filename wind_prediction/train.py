@@ -139,6 +139,7 @@ optimizer = torch.optim.Adam(param_list, lr=run_params.run['learning_rate_initia
                              amsgrad = run_params.run['amsgrad'])
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
+scheduler.last_epoch = warm_start_epoch
 
 
 # save the model parameter in the beginning
@@ -164,7 +165,7 @@ except KeyError as e:
 
 # if the loss components and their respective factors should be plotted in tensorboard
 try:
-    log_loss_components = run_params.loss['log_loss_components'] and len(loss_fn.loss_components)>1
+    log_loss_components = run_params.loss['log_loss_components']
 except:
     log_loss_components = False
     print('train.py: log_loss_components key not available, setting default value: ', log_loss_components)
