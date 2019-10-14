@@ -161,8 +161,15 @@ for stl_dir in "$@"; do
         sed "s/YSLICE/${current_y}/" $home_dir/sliceDict.in > $case_dir/sliceDict
 
         cd $snappyHex_dir
+        # Somehow without this remove everything breaks :(
+        rm -rf constant/polyMesh
         blockMesh > blockMesh.log 2> blockMesh.err
-        snappyHexMesh -overwrite > snappyHexMesh.log 
+        snappyHexMesh -overwrite > snappyHexMesh.log  2> snappyHexMesh.err
+
+	if [ "$?" -ne 0 ]; then
+            echo "snappyHexMesh failed!"
+    	    continue
+        fi
 
         cd $simpleFoam_dir
         extrudeMesh > extrudeMesh.log 

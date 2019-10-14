@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Script to test and benchmark the implementation of MyDataset
+Script to test and benchmark the implementation of HDF5Dataset
 '''
 
 import matplotlib.pyplot as plt
@@ -13,44 +13,66 @@ import torch
 from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
-compressed = False
-input_dataset = 'test.tar'
+compute_dataset_statistics = False
+plot_sample_num = 0
+input_dataset = '../wind_prediction/data/test.hdf5'
 nx = 64
 ny = 64
 nz = 64
 input_mode = 1
-subsample = False
-augmentation = False
-uhor_scaling = 1
-uz_scaling = 1
-turbulence_scaling = 1
-plot_sample_num = 0
-dataset_rounds = 0
-use_turbulence = True
+augmentation = True
+augmentation_mode = 0
+augmentation_kwargs = {
+    'subsampling': True,
+    'rotating': True,
+    }
+ux_scaling = 1.0
+uy_scaling = 1.0
+uz_scaling = 1.0
+turbulence_scaling = 1.0
+p_scaling = 1.0
+epsilon_scaling = 1.0
+nut_scaling = 1.0
+terrain_scaling = 1.0
 stride_hor = 1
 stride_vert = 1
-compute_dataset_statistics = False
+autoscale = False
+input_channels = ['terrain', 'ux', 'uy', 'uz']
+label_channels = ['ux', 'uy', 'uz', 'turb']
 plot_divergence = True
-use_grid_size = True
+dataset_rounds = 0
 #-----------------------------------------------------
 
 def main():
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    db = nn_data.MyDataset(torch.device("cpu"), input_dataset, nx, ny, nz, input_mode, subsample, augmentation,
-                        stride_hor = stride_hor, stride_vert = stride_vert,
-                        turbulence_label = use_turbulence, scaling_uhor = uhor_scaling,
-                        scaling_uz = uz_scaling, scaling_k = turbulence_scaling,
-                        compressed = compressed, use_grid_size = use_grid_size, return_grid_size = True)
+    db = nn_data.HDF5Dataset(input_dataset, input_channels=input_channels, label_channels=label_channels,
+                                      nx=nx, ny=ny, nz=nz, input_mode=input_mode, augmentation_mode=augmentation_mode,
+                                      augmentation=augmentation, autoscale=autoscale, augmentation_kwargs= augmentation_kwargs,
+                                      stride_hor=stride_hor, stride_vert=stride_vert,
+                                      scaling_ux=ux_scaling, scaling_uy=uy_scaling,
+                                      scaling_terrain=terrain_scaling,
+                                      scaling_uz=uz_scaling, scaling_turb=turbulence_scaling, scaling_p=p_scaling,
+                                      scaling_epsilon=epsilon_scaling, scaling_nut=nut_scaling,
+                                      return_grid_size=True, verbose=True)
 
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
-                                              shuffle=False, num_workers=0)
+                                              shuffle=False, num_workers=4)
+
+    use_turbulence = 'turb' in label_channels
 
     if compute_dataset_statistics:
         ux = []
         uy = []
         uz = []
         turb = []
+        ux_std = []
+        uy_std = []
+        uz_std = []
+        turb_std = []
+        ux_max = []
+        uy_max = []
+        uz_max = []
+        turb_max = []
         reflow_ratio = []
         global dataset_rounds
         dataset_rounds = 1
@@ -64,15 +86,28 @@ def main():
     start_time = time.time()
     for j in range(dataset_rounds):
         for i, data in enumerate(dbloader):
-            input, label, ds = data
+            if autoscale:
+                input, label, scale, ds = data
+            else:
+                input, label, ds = data
+
+            ds = ds.squeeze()
 
             if compute_dataset_statistics:
                 ux.append(label[:,0,:].abs().mean().item())
                 uy.append(label[:,1,:].abs().mean().item())
                 uz.append(label[:,2,:].abs().mean().item())
+                ux_max.append(label[:,0,:].abs().max().item())
+                uy_max.append(label[:,1,:].abs().max().item())
+                uz_max.append(label[:,2,:].abs().max().item())
+                ux_std.append(label[:,0,:].abs().std().item())
+                uy_std.append(label[:,1,:].abs().std().item())
+                uz_std.append(label[:,2,:].abs().std().item())
 
                 if use_turbulence:
                     turb.append(label[:,3,:].abs().mean().item())
+                    turb_max.append(label[:,3,:].abs().max().item())
+                    turb_std.append(label[:,3,:].abs().std().item())
 
                 # compute if a reflow is happening in the simulated flow
                 if label[:,0,:].mean().abs().item() > label[:,1,:].mean().abs().item():
@@ -96,7 +131,7 @@ def main():
                 dy.append(ds[1].item())
                 dz.append(ds[2].item())
 
-                divergence = utils.divergence(label.squeeze()[:3], ds, input.squeeze()[0,:])
+                divergence = utils.divergence(label[:3], ds.squeeze()).unsqueeze(1).unsqueeze(0)
                 mean_div.append(divergence.abs().mean())
                 max_div.append(divergence.abs().max().item())
 
@@ -111,8 +146,16 @@ def main():
         print('INFO: Mean ux:   {} m/s'.format(np.mean(ux)))
         print('INFO: Mean uy:   {} m/s'.format(np.mean(uy)))
         print('INFO: Mean uz:   {} m/s'.format(np.mean(uz)))
+        print('INFO: Max ux:    {} m/s'.format(np.mean(ux_max)))
+        print('INFO: Max uy:    {} m/s'.format(np.mean(uy_max)))
+        print('INFO: Max uz:    {} m/s'.format(np.mean(uz_max)))
+        print('INFO: Std ux:    {} m/s'.format(np.mean(ux_std)))
+        print('INFO: Std uy:    {} m/s'.format(np.mean(uy_std)))
+        print('INFO: Std uz:    {} m/s'.format(np.mean(uz_std)))
         if use_turbulence:
             print('INFO: Mean turb: {} J/kg'.format(np.mean(turb)))
+            print('INFO: Max turb:  {} J/kg'.format(np.mean(turb_max)))
+            print('INFO: Std turb:  {} J/kg'.format(np.mean(turb_std)))
         print('INFO: Number of cases with a reflow ratio of > 0.05: {}'.format(sum(i > 0.05 for i in reflow_ratio)))
         print('INFO: Number of cases with a reflow ratio of > 0.10: {}'.format(sum(i > 0.10 for i in reflow_ratio)))
         print('INFO: Number of cases with a reflow ratio of > 0.20: {}'.format(sum(i > 0.20 for i in reflow_ratio)))
@@ -222,7 +265,10 @@ def main():
     print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 
     try:
-        input, label, ds = db[plot_sample_num]
+        if autoscale:
+            input, label, scale, ds = db[plot_sample_num]
+        else:
+            input, label, ds = db[plot_sample_num]
     except:
         print('The plot_sample_num needs to be a value between 0 and', len(db)-1, '->' , plot_sample_num, ' is invalid.')
         sys.exit()
@@ -237,7 +283,10 @@ def main():
     print(' ')
 
     # plot the sample
-    utils.plot_sample(input, label, input[0,:], plot_divergence, use_turbulence, ds)
+    provided_channels = ['ux_in', 'uy_in', 'uz_in', 'terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd']
+    terrain = input[:1]
+    input = torch.cat((input[1:4], terrain, label), 0)
+    utils.plot_sample(provided_channels, 'all', input, None, terrain.squeeze(), plot_divergence, nn_data.get_grid_size(input_dataset))
 
 if __name__ == '__main__':
 #     try:

@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import os
-import string
 import yaml
 
 class EDNNParameters(object):
@@ -12,6 +11,7 @@ class EDNNParameters(object):
         self.model = run_parameters['model']
         self.data = run_parameters['data']
         self.run = run_parameters['run']
+        self.loss = run_parameters['loss']
         self.name = self._build_name()
 
 
@@ -21,8 +21,13 @@ class EDNNParameters(object):
         with open(file, 'rt') as fh:
             run_parameters = yaml.safe_load(fh)
 
-        run_parameters['model']['model_args']['use_turbulence'] = run_parameters['data']['use_turbulence']
-        run_parameters['model']['model_args']['use_grid_size'] = run_parameters['data']['use_grid_size']
+        label_channels = run_parameters['data']['label_channels']
+
+        run_parameters['model']['model_args']['use_turbulence'] = 'turb' in label_channels
+        run_parameters['model']['model_args']['use_pressure'] = 'p' in label_channels
+        run_parameters['model']['model_args']['use_epsilon'] = 'epsilon' in label_channels
+        run_parameters['model']['model_args']['use_nut'] = 'nut' in label_channels
+        run_parameters['model']['model_args']['n_epochs'] = run_parameters['run']['n_epochs']
 
         return run_parameters
 
@@ -58,27 +63,41 @@ class EDNNParameters(object):
 
         return name
 
-    def MyDataset_kwargs(self):
+    def Dataset_kwargs(self):
         return {'stride_hor': self.data['stride_hor'],
                 'stride_vert': self.data['stride_vert'],
-                'turbulence_label': self.data['use_turbulence'],
-                'scaling_uhor': self.data['uhor_scaling'],
+                'input_channels': self.data['input_channels'],
+                'label_channels': self.data['label_channels'],
+                'scaling_ux': self.data['ux_scaling'],
+                'scaling_uy': self.data['uy_scaling'],
                 'scaling_uz': self.data['uz_scaling'],
-                'scaling_k': self.data['turbulence_scaling'],
-                'use_grid_size': self.data['use_grid_size'],
+                'scaling_turb': self.data['turb_scaling'],
+                'scaling_p': self.data['p_scaling'],
+                'scaling_epsilon': self.data['epsilon_scaling'],
+                'scaling_nut': self.data['nut_scaling'],
+                'scaling_terrain': self.data['terrain_scaling'],
                 'input_mode': self.data['input_mode'],
                 'nx': self.model['model_args']['n_x'],
                 'ny': self.model['model_args']['n_y'],
-                'nz': self.model['model_args']['n_z']}
+                'nz': self.model['model_args']['n_z'],
+                'autoscale': self.data['autoscale']}
 
     def model_kwargs(self):
         return self.model['model_args']
+
+    def pass_grid_size_to_loss(self, grid_size):
+        '''
+        Small function to pass the grid size to the kwargs of the loss functions that need it.
+        '''
+        for i, loss_component in enumerate(self.loss['loss_components']):
+            if 'DivergenceFree' in loss_component or 'VelocityGradient' in loss_component:
+                self.loss[loss_component + '_kwargs']['grid_size'] = grid_size
 
     def save(self, dir=None):
         if dir is None:
             dir = self.name
         with open(os.path.join(dir, 'params.yaml'), 'wt') as fh:
-            yaml.safe_dump({'run': self.run, 'data': self.data, 'model': self.model}, fh)
+            yaml.safe_dump({'run': self.run, 'loss': self.loss, 'data': self.data, 'model': self.model}, fh)
 
     def print(self):
         print('Train Settings:')
@@ -90,6 +109,13 @@ class EDNNParameters(object):
         print('\tEpochs:\t\t\t', self.run['n_epochs'])
         print('\tMinibatch epoch loss:\t', self.run['minibatch_epoch_loss'])
         print(' ')
+        print('Loss Settings:')
+        print('\tLoss component(s):\t', self.loss['loss_components'])
+        if len(self.loss['loss_components']) > 1:
+            print('\tLearn loss scaling factors:\t', self.loss['learn_scaling'])
+        for i, loss_component in enumerate(self.loss['loss_components']):
+            print('\t'+loss_component, 'kwargs :',self.loss[loss_component + '_kwargs'])
+        print(' ')
         print('Model Settings:')
         print('\t Model prefix:\t\t', self.model['name_prefix'])
         print('\t Model type:\t\t', self.model['model_type'])
@@ -97,13 +123,21 @@ class EDNNParameters(object):
         print('\t\t', self.model['model_args'])
         print(' ')
         print('Dataset Settings:')
-        print('\tUhor scaling:\t\t', self.data['uhor_scaling'])
+        print('\tInput channels:\t',self.data['input_channels'])
+        print('\tLabel channels:\t', self.data['label_channels'])
+        print('\tUx scaling:\t\t', self.data['ux_scaling'])
+        print('\tUy scaling:\t\t', self.data['uy_scaling'])
         print('\tUz scaling:\t\t', self.data['uz_scaling'])
-        print('\tTurbulence scaling:\t', self.data['turbulence_scaling'])
+        print('\tTurbulence scaling:\t', self.data['turb_scaling'])
+        print('\tPressure scaling:\t', self.data['p_scaling'])
+        print('\tEpsilon scaling:\t', self.data['epsilon_scaling'])
+        print('\tNut scaling:\t\t', self.data['nut_scaling'])
         print('\tHorizontal stride:\t', self.data['stride_hor'])
         print('\tVertical stride:\t', self.data['stride_vert'])
+        print('\tAugmentation mode:\t', self.data['augmentation_mode'])
+        print('\tAugmentation params:\t', self.data['augmentation_kwargs'])
 
-
+        
 class BasicParameters(object):
     def __init__(self, yaml_config, subdict=None):
         self.subdict = subdict
@@ -136,7 +170,6 @@ class BasicParameters(object):
 
 
 class COSMOParameters(BasicParameters):
-
     def __init__(self, yaml_config):
         super(COSMOParameters, self).__init__(yaml_config, subdict='cosmo')
         if ('time' not in self.params) or (self.params['time'].lower() == 'auto'):

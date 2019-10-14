@@ -1,6 +1,7 @@
+# training parameters
 run:
     plot_every_n_batches: 5
-    n_epochs: 1000
+    n_epochs: 500
     batchsize: 45
     num_workers: 6
     learning_rate_initial: 1.0E-4
@@ -8,16 +9,13 @@ run:
     learning_rate_decay_step_size: 100
     compute_validation_loss: True
     custom_init: False
-    minibatch_epoch_loss: True
+    minibatch_epoch_loss: False
+    evaluate_testset: False
+    warm_start: False
 
     # options to store data
     save_model: True
     save_metadata: True
-    evaluate_testset: False
-    warm_start: False
-    loss_function: 0 # 0: MSE, 1: L1, 2: Gaussian-Log-Likelihood, 3: Custom, else: MSE
-    uncertainty_train_mode: 0 # 0: mean + uncertainty, 1: only mean, 2: only uncertainty
-    uncertainty_loss_eps: 1.0E-9
     save_model_every_n_epoch: 25
     save_params_hist_every_n_epoch: 100
 
@@ -28,23 +26,63 @@ run:
     weight_decay: 0
     amsgrad: False
 
+# loss parameters
+loss:
+    # Combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss'].
+    # Multiple instances of one loss type can be used. Just add numbering behind 'Loss', e.g. 'L1Loss1/2/3'.
+    # For 'LPLoss', P can be replaced with the desired order (int>0). If decimal order desired use LPLoss with p in kwargs.
+    # 'GaussianLogLikelihoodLoss' can only be used alone.
+    loss_components: ['L2Loss']
+
+    # If the homoscedastic uncertainty factors of the losses should be learnt during training. Auto disable if 1 loss comp.
+    learn_scaling: True
+
+    # Settings for all of the available loss functions. No need to keep unused ones.
+    # loss_factor_init sets the initial value of the learnable homoscedastic factors. If learning is disabled, they will
+    # remain at this initial value, otherwise they will be adjusted during learning. No need to set it, if only 1 comp.
+    # A loss factor of 0.0 == no scaling, due to the homoscedatic formulation: L += L_q*exp(-q) + q
+    L1Loss_kwargs: {exclude_terrain: True, loss_factor_init: -0.5}
+    L2Loss_kwargs: {exclude_terrain: True, loss_factor_init: -0.5}
+    L4Loss_kwargs: {exclude_terrain: True, loss_factor_init: 1.5}
+    LPLoss_kwargs: {exclude_terrain: True, 'p': 1.7, loss_factor_init: 0.0}
+    ScaledLoss_kwargs: {exclude_terrain: True, no_scaling: True, max_scale: 4, norm_threshold: 0.5, loss_factor_init: 0.0}
+    DivergenceFreeLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
+    VelocityGradientLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
+    GaussianLogLikelihoodLoss_kwargs: {exclude_terrain: True, uncertainty_loss_eps: 1e-8}
+
+    # If the individual loss components and their factors should be logged using tensorboard
+    log_loss_components: True
+
+# dataset parameters
 data:
-    # dataset parameter
-    compressed: False
-    trainset_name: 'data/train.tar'
-    validationset_name: 'data/validation.tar'
-    testset_name: 'data/test.tar'
-    trainset_augmentation: True
-    trainset_subsample: True
+    trainset_name: 'data/train.hdf5'
+    validationset_name: 'data/validation.hdf5'
+    testset_name: 'data/test.hdf5'
+
+    # channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+    input_channels : ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities must be loaded for EDNN3D
+    label_channels : ['ux', 'uy', 'uz']  # velocities are required for EDNN training
+
+    augmentation: True
+    augmentation_mode: 1 # 0: subsampling, rotating with no interpolation, 1: subsampling, rotation with interpolation
+    augmentation_kwargs: {
+        subsampling: True,
+        rotating: True
+    }
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    uhor_scaling: 6.5
-    uz_scaling: 0.7
-    turbulence_scaling: 1.1
-    use_grid_size: False
-    use_turbulence: True
+    ux_scaling: 1.0
+    uy_scaling: 1.0
+    uz_scaling: 0.1
+    turb_scaling: 0.01
+    p_scaling: 1.0
+    epsilon_scaling: 1.0
+    nut_scaling: 1.0
+    terrain_scaling: 1.0
+    autoscale: True
 
+# model parameters
 model:
     name_prefix: 'test_model'
     model_type: 'ModelEDNN3D'
@@ -64,7 +102,15 @@ model:
         potential_flow: False,
         activation_type: 'LeakyReLU',
         activation_args: {negative_slope: 0.1},
-        predict_uncertainty: False,
         verbose: True,
-        type: 'ModelEDNN3D'
+        submodel_type: 'ModelEDNN3D',
+
+        # uncertainty prediction params
+        predict_uncertainty: False,
+        uncertainty_train_mode: 'alternating',
+
+        # uncertainty prediction params
+        n_stacked: 3,
+        pass_full_output: False,
+        submodel_terrain_mask: False
     }

@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 
 '''
-Convert a dataset of csv files to serialized torch tensors.
-
-TODO: Investigate how to speed up the 3D case
+Change the compression of a dataset
 '''
 
 from __future__ import print_function
 
 import argparse
-from nn_wind_prediction.data import compress_dataset
+from nn_wind_prediction.data import change_dataset_compression
 import time
 
 def main():
@@ -21,8 +19,7 @@ def main():
     parser.add_argument('-o', dest='outfile', help='output tar file, if none provided the input file name is prepended with "compressed_"')
     parser.add_argument('-s_hor', default=1, type=int, help='stride in horizontal direction')
     parser.add_argument('-s_ver', default=1, type=int, help='stride in vertical direction')
-    parser.add_argument('-ic', dest='input_compressed', action='store_true', help='If true the input file is compressed')
-    parser.add_argument('-c', dest='compress', action='store_true', help='compress the individual tensors')
+    parser.add_argument('-c', dest='compress', action='store_true', help='If set the output dataset is compressed, else uncompressed')
     args = parser.parse_args()
 
     if (args.outfile == args.infile):
@@ -42,7 +39,7 @@ def main():
             args.outfile = 'compressed_' + args.infile
 
     start_time = time.time()
-    compress_dataset(args.infile, args.outfile, args.s_hor, args.s_ver, args.input_compressed, args.compress)
+    change_dataset_compression(args.infile, args.outfile, args.s_hor, args.s_ver, args.compress)
     print("INFO: Compressing the database took %s seconds" % (time.time() - start_time))
 
 if __name__ == "__main__":

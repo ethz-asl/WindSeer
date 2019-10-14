@@ -22,11 +22,11 @@ def signal_handler(sig, frame):
 
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
-                save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss,
-                model_directory, use_writer, predict_uncertainty, uncertainty_train_mode):
+                save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss, log_loss_components,
+                model_directory, use_writer, predict_uncertainty, uncertainty_train_mode, start_epoch=0):
     '''
     Train the model according to the specified loss function and params
-    
+
     Input params:
         net:
             The network which is trained
@@ -62,9 +62,10 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             Indicates if for each channel and pixel the uncertainty of the model is predicted
         uncertainty_train_mode:
             Specifies the mode in which the uncertainty is trained:
-                1: Train only the mean prediction of the model
-                2: Train only the uncertainty of the model
-                else: Train the uncertainty and the mean alternatively per epoch
+                mean: Train only the mean prediction of the model
+                uncertainty: Train only the uncertainty of the model
+                alternating: Train the uncertainty and the mean alternatively per epoch
+                both: Train both models at the same time
 
     Return:
         net: The trained network
@@ -83,27 +84,19 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
 
     # start the training for n_epochs
     start_time = time.time()
-    for epoch in range(n_epochs):  # loop over the dataset multiple times
+    for epoch in range(start_epoch, n_epochs):  # loop over the dataset multiple times
         if should_exit:
             break
         epoch_start = time.time()
 
-        if predict_uncertainty:
-            if uncertainty_train_mode == 1:
-                net.freeze_uncertainty()
-                net.unfreeze_mean()
-            elif uncertainty_train_mode == 2:
-                net.unfreeze_uncertainty()
-                net.freeze_mean()
-            else:
-                if epoch % 2 == 0:
-                    net.freeze_uncertainty()
-                    net.unfreeze_mean()
-                else:
-                    net.unfreeze_uncertainty()
-                    net.freeze_mean()
+        # access to new epoch callback depends on of the model has been parallelized
+        try:
+            net.module.new_epoch_callback(epoch)
+        except AttributeError:
+            net.new_epoch_callback(epoch)
 
         train_loss = 0
+        train_loss_components = dict.fromkeys(loss_fn.last_computed_loss_components, 0.0)
         running_loss = 0.0
         train_avg_mean = 0.0
         train_avg_uncertainty = 0.0
@@ -118,7 +111,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 break
 
             # get the inputs
-            inputs, labels = data
+            inputs = data[0]
+            labels = data[1]
             inputs, labels = inputs.to(device), labels.to(device)
 
             # zero the parameter gradients
@@ -142,7 +136,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
             else:
                 outputs = net(inputs)
-                loss = loss_fn(outputs, labels)
+                loss = loss_fn(outputs, labels, inputs)
 
             loss.backward()
             optimizer.step()
@@ -150,6 +144,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             # print statistics
             running_loss += loss.item()
             train_loss += loss.item()
+            for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
             # print every plot_every_n_batches mini-batches
             if i % plot_every_n_batches == (plot_every_n_batches - 1) and plot_every_n_batches > 0:
@@ -158,15 +153,25 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 running_loss = 0.0
 
         print(('[%d] Training time: %.1f s' %
-                          (epoch + 1, time.time() - epoch_start)))
+               (epoch + 1, time.time() - epoch_start)))
 
         # save model every save_model_every_n_epoch epochs
         if (epoch % save_model_every_n_epoch == (save_model_every_n_epoch - 1)) and save_model_every_n_epoch > 0:
-            torch.save(net.state_dict(), os.path.join(model_directory, 'e{}.model'.format(epoch+1)))
+            try:
+                state_dict = net.module.state_dict() #for when the model is trained on multi-gpu
+            except AttributeError:
+                state_dict = net.state_dict()
+
+            torch.save(state_dict, os.path.join(model_directory, 'e{}.model'.format(epoch + 1)))
+
+            # save the learnable scaling of the loss function
+            if loss_fn.learn_scaling:
+                torch.save(loss_fn.state_dict(), os.path.join(model_directory, 'e{}.loss'.format(epoch + 1)))
 
         with torch.no_grad():
             if not minibatch_loss:
                 train_loss = 0.0
+                train_loss_components = dict.fromkeys(loss_fn.last_computed_loss_components, 0.0)
                 train_avg_mean = 0.0
                 train_avg_uncertainty = 0.0
                 train_max_uncertainty = float('-inf')
@@ -175,7 +180,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                     if should_exit:
                         break
 
-                    inputs, labels = data
+                    inputs = data[0]
+                    labels = data[1]
                     inputs, labels = inputs.to(device), labels.to(device)
 
                     if predict_uncertainty:
@@ -186,24 +192,29 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                             loss = mse_loss(mean, labels)
                         else:
                             loss = loss_fn.compute_loss(mean, uncertainty, labels)
+                            for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
                         # compute training statistics
                         train_loss += loss.item()
                         train_avg_mean += mse_loss(mean, labels).item()
                         uncertainty_exp = uncertainty.exp()
                         train_avg_uncertainty += uncertainty_exp.mean().item()
-                        train_max_uncertainty = max(train_max_uncertainty, uncertainty_exp.max().item()) 
+                        train_max_uncertainty = max(train_max_uncertainty, uncertainty_exp.max().item())
                         train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
-                        loss = loss_fn(outputs, labels)
+                        # mean of loss_fn is taken in case the loss is parallelized over multiple-gpus
+                        loss = loss_fn(outputs, labels, inputs)
                         train_loss += loss.item()
+                        for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
             train_loss /= len(loader_trainset)
+            for k,v in train_loss_components.items(): v/= len(loader_trainset)
             train_avg_mean /= len(loader_trainset)
             train_avg_uncertainty /= len(loader_trainset)
 
             validation_loss = 0.0
+            validation_loss_components = dict.fromkeys(loss_fn.last_computed_loss_components, 0.0)
             validation_avg_mean = 0.0
             validation_avg_uncertainty = 0.0
             validation_max_uncertainty = float('-inf')
@@ -213,7 +224,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                     if should_exit:
                         break
 
-                    inputs, labels = data
+                    inputs = data[0]
+                    labels = data[1]
                     inputs, labels = inputs.to(device), labels.to(device)
 
                     if predict_uncertainty:
@@ -224,48 +236,65 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                             loss = mse_loss(mean, labels)
                         else:
                             loss = loss_fn.compute_loss(mean, uncertainty, labels)
+                            for k, v in validation_loss_components.items(): validation_loss_components[k] += loss_fn.last_computed_loss_components[k]
 
                         # compute training statistics
                         validation_loss += loss.item()
                         validation_avg_mean += mse_loss(mean, labels).item()
                         uncertainty_exp = uncertainty.exp()
                         validation_avg_uncertainty += uncertainty_exp.mean().item()
-                        validation_max_uncertainty = max(validation_max_uncertainty, uncertainty_exp.max().item()) 
+                        validation_max_uncertainty = max(validation_max_uncertainty, uncertainty_exp.max().item())
                         validation_min_uncertainty = min(validation_min_uncertainty, uncertainty_exp.min().item())
                     else:
                         outputs = net(inputs)
-                        loss = loss_fn(outputs, labels)
+                        loss = loss_fn(outputs, labels, inputs)
                         validation_loss += loss.item()
+                        for k, v in validation_loss_components.items(): validation_loss_components[k] += loss_fn.last_computed_loss_components[k]
+
                 validation_loss /= len(loader_validationset)
+                for k, v in validation_loss_components.items(): v /= len(loader_validationset)
 
             if use_writer and not should_exit:
-                writer.add_scalar('Train/Loss', train_loss, epoch+1)
+                writer.add_scalar('Train/Loss', train_loss, epoch + 1)
                 if predict_uncertainty:
-                    writer.add_scalar('Train/MeanMSELoss', train_avg_mean, epoch+1)
-                    writer.add_scalar('Train/AverageUncertainty', train_avg_uncertainty, epoch+1)
-                    writer.add_scalar('Train/MaxUncertainty', train_max_uncertainty, epoch+1)
-                    writer.add_scalar('Train/MinUncertainty', train_min_uncertainty, epoch+1)
+                    writer.add_scalar('Train/MeanMSELoss', train_avg_mean, epoch + 1)
+                    writer.add_scalar('Train/AverageUncertainty', train_avg_uncertainty, epoch + 1)
+                    writer.add_scalar('Train/MaxUncertainty', train_max_uncertainty, epoch + 1)
+                    writer.add_scalar('Train/MinUncertainty', train_min_uncertainty, epoch + 1)
 
                 if compute_validation_loss:
-                    writer.add_scalar('Val/Loss', validation_loss, epoch+1)
+                    writer.add_scalar('Val/Loss', validation_loss, epoch + 1)
                     if predict_uncertainty:
-                        writer.add_scalar('Val/MeanMSELoss', validation_avg_mean, epoch+1)
-                        writer.add_scalar('Val/AverageUncertainty', validation_avg_uncertainty, epoch+1)
-                        writer.add_scalar('Val/MaxUncertainty', validation_max_uncertainty, epoch+1)
-                        writer.add_scalar('Val/MinUncertainty', validation_min_uncertainty, epoch+1)
+                        writer.add_scalar('Val/MeanMSELoss', validation_avg_mean, epoch + 1)
+                        writer.add_scalar('Val/AverageUncertainty', validation_avg_uncertainty, epoch + 1)
+                        writer.add_scalar('Val/MaxUncertainty', validation_max_uncertainty, epoch + 1)
+                        writer.add_scalar('Val/MinUncertainty', validation_min_uncertainty, epoch + 1)
 
-                writer.add_scalar('Training/LearningRate', scheduler_lr.get_lr()[0], epoch+1)
+                writer.add_scalar('Training/LearningRate', scheduler_lr.get_lr()[0], epoch + 1)
+
+                # record components of the loss
+                if log_loss_components:
+                    for name, value in train_loss_components.items():
+                        writer.add_scalar('Train/LC_' + name, value, epoch + 1)
+                    if compute_validation_loss:
+                        for name, value in validation_loss_components.items():
+                            writer.add_scalar('Val/LC_' + name, value, epoch + 1)
+
+                # record learnable loss factors
+                if loss_fn.learn_scaling and log_loss_components:
+                        for i, loss_component in enumerate(loss_fn.loss_component_names):
+                            writer.add_scalar('LossFactors/'+loss_component, loss_fn.loss_factors[i], epoch + 1)
 
                 if epoch % save_params_hist_every_n_epoch == (save_params_hist_every_n_epoch - 1):
                     for tag, value in net.named_parameters():
                         tag = tag.replace('.', '/')
-                        writer.add_histogram(tag, value.data.cpu().numpy(), epoch+1)
+                        writer.add_histogram(tag, value.data.cpu().numpy(), epoch + 1)
                         if value.requires_grad:
-                            writer.add_histogram(tag+'/grad', value.grad.data.cpu().numpy(), epoch+1)
+                            writer.add_histogram(tag + '/grad', value.grad.data.cpu().numpy(), epoch + 1)
                     del tag, value
 
             print(('[%d] train loss: %.6f, validation loss: %.6f, epoch_time: %.2f s' %
-                          (epoch + 1, train_loss, validation_loss, time.time()-epoch_start)))
+                   (epoch + 1, train_loss, validation_loss, time.time() - epoch_start)))
 
     print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 

@@ -1,6 +1,8 @@
+import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import nn_wind_prediction.utils as utils
 
 '''
 Encoder/Decoder Neural Network
@@ -28,8 +30,11 @@ class ModelEDNN3D(nn.Module):
     __default_skipping = True
     __default_align_corners = None
     __default_pooling_method = 'striding'
-    __default_use_grid_size = False
     __default_use_turbulence = True
+    __default_use_pressure = False
+    __default_use_epsilon = False
+    __default_use_nut = False
+    __default_grid_size = [1, 1, 1]
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -42,119 +47,160 @@ class ModelEDNN3D(nn.Module):
         try:
             self.__use_terrain_mask = kwargs['use_terrain_mask']
         except KeyError:
-            self.__use_terrain_mask = __default_use_terrain_mask
+            self.__use_terrain_mask = self.__default_use_terrain_mask
             if verbose:
-                print('EDNN3D: use_terrain_mask not present in kwargs, using default value:', __default_use_terrain_mask)
+                print('EDNN3D: use_terrain_mask not present in kwargs, using default value:', self.__default_use_terrain_mask)
 
         try:
             self.__n_downsample_layers = kwargs['n_downsample_layers']
         except KeyError:
-            self.__n_downsample_layers = __default_n_downsample_layers
+            self.__n_downsample_layers = self.__default_n_downsample_layers
             if verbose:
-                print('EDNN3D: n_downsample_layers not present in kwargs, using default value:', __default_n_downsample_layers)
+                print('EDNN3D: n_downsample_layers not present in kwargs, using default value:', self.__default_n_downsample_layers)
 
         try:
             self.__use_mapping_layer = kwargs['use_mapping_layer']
         except KeyError:
-            self.__use_mapping_layer = __default_use_mapping_layer
+            self.__use_mapping_layer = self.__default_use_mapping_layer
             if verbose:
-                print('EDNN3D: use_mapping_layer not present in kwargs, using default value:', __default_use_mapping_layer)
+                print('EDNN3D: use_mapping_layer not present in kwargs, using default value:', self.__default_use_mapping_layer)
 
         try:
             self.__use_fc_layers = kwargs['use_fc_layers']
         except KeyError:
-            self.__use_fc_layers = __default_use_fc_layers
+            self.__use_fc_layers = self.__default_use_fc_layers
             if verbose:
-                print('EDNN3D: use_fc_layers not present in kwargs, using default value:', __default_use_fc_layers)
+                print('EDNN3D: use_fc_layers not present in kwargs, using default value:', self.__default_use_fc_layers)
 
         try:
             self.__fc_scaling = kwargs['fc_scaling']
         except KeyError:
-            self.__fc_scaling = __default_fc_scaling
+            self.__fc_scaling = self.__default_fc_scaling
             if verbose:
-                print('EDNN3D: fc_scaling not present in kwargs, using default value:', __default_fc_scaling)
+                print('EDNN3D: fc_scaling not present in kwargs, using default value:', self.__default_fc_scaling)
 
         try:
             self.__potential_flow = kwargs['potential_flow']
         except KeyError:
-            self.__potential_flow = __default_potential_flow
+            self.__potential_flow = self.__default_potential_flow
             if verbose:
-                print('EDNN3D: potential_flow not present in kwargs, using default value:', __default_potential_flow)
+                print('EDNN3D: potential_flow not present in kwargs, using default value:', self.__default_potential_flow)
 
         try:
             self.__n_x = kwargs['n_x']
         except KeyError:
-            self.__n_x = __default_n_x
+            self.__n_x = self.__default_n_x
             if verbose:
-                print('EDNN3D: n_x not present in kwargs, using default value:', __default_n_x)
+                print('EDNN3D: n_x not present in kwargs, using default value:', self.__default_n_x)
 
         try:
             self.__n_y = kwargs['n_y']
         except KeyError:
-            self.__n_y = __default_n_y
+            self.__n_y = self.__default_n_y
             if verbose:
-                print('EDNN3D: n_y not present in kwargs, using default value:', __default_n_y)
+                print('EDNN3D: n_y not present in kwargs, using default value:', self.__default_n_y)
 
         try:
             self.__n_z = kwargs['n_z']
         except KeyError:
-            self.__n_z = __default_n_z
+            self.__n_z = self.__default_n_z
             if verbose:
-                print('EDNN3D: n_z not present in kwargs, using default value:', __default_n_z)
+                print('EDNN3D: n_z not present in kwargs, using default value:', self.__default_n_z)
 
         try:
             self.__interpolation_mode = kwargs['interpolation_mode']
         except KeyError:
-            self.__interpolation_mode = __default_interpolation_mode
+            self.__interpolation_mode = self.__default_interpolation_mode
             if verbose:
-                print('EDNN3D: interpolation_mode not present in kwargs, using default value:', __default_interpolation_mode)
+                print('EDNN3D: interpolation_mode not present in kwargs, using default value:', self.__default_interpolation_mode)
 
         try:
             self.__skipping = kwargs['skipping']
         except KeyError:
-            self.__skipping = __default_skipping
+            self.__skipping = self.__default_skipping
             if verbose:
-                print('EDNN3D: skipping not present in kwargs, using default value:', __default_skipping)
+                print('EDNN3D: skipping not present in kwargs, using default value:', self.__default_skipping)
 
         try:
             self.__align_corners = kwargs['align_corners']
             if self.__align_corners == False:
                 self.__align_corners = None
         except KeyError:
-            self.__align_corners = __default_align_corners
+            self.__align_corners = self.__default_align_corners
             if verbose:
-                print('EDNN3D: align_corners not present in kwargs, using default value:', __default_align_corners)
+                print('EDNN3D: align_corners not present in kwargs, using default value:', self.__default_align_corners)
 
         try:
             self.__pooling_method = kwargs['pooling_method']
         except KeyError:
-            self.__pooling_method = __default_pooling_method
+            self.__pooling_method = self.__default_pooling_method
             if verbose:
-                print('EDNN3D: pooling_method not present in kwargs, using default value:', __default_pooling_method)
+                print('EDNN3D: pooling_method not present in kwargs, using default value:', self.__default_pooling_method)
 
         try:
-            self.__use_grid_size = kwargs['use_grid_size']
+            self.__grid_size = kwargs['grid_size']
         except KeyError:
-            self.__use_grid_size = __default_use_grid_size
+            self.__grid_size = self.__default_grid_size
             if verbose:
-                print('EDNN3D: use_grid_size not present in kwargs, using default value:', __default_use_grid_size)
+                print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
 
         try:
             self.__use_turbulence = kwargs['use_turbulence']
         except KeyError:
-            self.__use_turbulence = __default_use_turbulence
+            self.__use_turbulence = self.__default_use_turbulence
             if verbose:
-                print('EDNN3D: use_turbulence not present in kwargs, using default value:', __default_use_turbulence)
+                print('EDNN3D: use_turbulence not present in kwargs, using default value:', self.__default_use_turbulence)
+
+        try:
+            self.__use_pressure = kwargs['use_pressure']
+        except KeyError:
+            self.__use_pressure = self.__default_use_pressure
+            if verbose:
+                print('EDNN3D: use_pressure not present in kwargs, using default value:', self.__default_use_pressure)
+
+        try:
+            self.__use_epsilon = kwargs['use_epsilon']
+        except KeyError:
+            self.__use_epsilon = self.__default_use_epsilon
+            if verbose:
+                print('EDNN3D: use_epsilon not present in kwargs, using default value:', self.__default_use_epsilon)
+
+        try:
+            self.__use_nut = kwargs['use_nut']
+        except KeyError:
+            self.__use_nut = self.__default_use_nut
+            if verbose:
+                print('EDNN3D: use_nut not present in kwargs, using default value:', self.__default_use_nut)
+
+        if self.__n_downsample_layers <= 0:
+            print('EDNN3D: Error, n_downsample_layers must be larger than 0')
+            sys.exit()
 
         # construct the number of input and output channels based on the parameters
         self.__num_inputs = 4 # (terrain, u_x_in, u_y_in, u_z_in)
         self.__num_outputs = 3 # (u_x_out, u_y_out, u_z_out)
 
-        if self.__use_grid_size:
-            self.__num_inputs += 3 # x, y, z
-
         if self.__use_turbulence:
-            self.__num_outputs += 1 # turbulence
+            self.__num_outputs += 1 # turb. kin. en.
+
+        if self.__use_pressure:
+            self.__num_outputs += 1 # pressure
+
+        if self.__use_epsilon:
+            self.__num_outputs += 1 # dissipation
+
+        if self.__use_nut:
+            self.__num_outputs += 1 # viscosity
+
+        try:
+            self.__num_inputs = kwargs['force_num_inputs']
+        except KeyError:
+            pass
+
+        try:
+            self.__num_outputs = kwargs['force_num_outputs']
+        except KeyError:
+            pass
 
         # convolution layers
         self.__conv = nn.ModuleList()
@@ -218,9 +264,9 @@ class ModelEDNN3D(nn.Module):
             # mapping layer
             self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
 
-        if self.__potential_flow:
-            self.__pf_convolution = nn.Conv3d(3,1,1)
-            self.__pf_pad = nn.ReplicationPad3d((0, 1, 0, 1, 0, 1))
+    def new_epoch_callback(self, epoch):
+        # nothing to do here
+        return
 
     def freeze_model(self):
         def freeze_weights(m):
@@ -282,23 +328,30 @@ class ModelEDNN3D(nn.Module):
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv2[i](self.__pad_deconv(self.__deconv1[i](self.__pad_deconv(
-                    torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
-                               x_skip[i]], 1)))))
+                if (i == 0):
+                    # no nonlinearity in the output layer
+                    x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1))))))
+                else:
+                    x = self.__activation(self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1)))))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                x = self.__deconv1[i](self.__pad_deconv(
-                    F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                if (i == 0):
+                    # no nonlinearity in the output layer
+                    x = self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                else:
+                    x = self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners))))
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)
 
         if self.__potential_flow:
-            potential = self.__pf_convolution(self.__pf_pad(x[:,:3,:]))
-            x = torch.cat([(potential[:,:,:-1,:-1,1: ]-potential[:,:,:-1,:-1,:-1]), # U_x
-                           (potential[:,:,:-1,1: ,:-1]-potential[:,:,:-1,:-1,:-1]), # U_y
-                           (potential[:,:,1: ,:-1,:-1]-potential[:,:,:-1,:-1,:-1]), # U_z
-                            x[:,3:,:]], 1)
+            x = torch.cat([utils.curl(x, self.__grid_size), x[:, 3:, :]], 1)
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x

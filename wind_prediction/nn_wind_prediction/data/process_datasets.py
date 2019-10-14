@@ -3,7 +3,6 @@
 from __future__ import print_function
 
 import io
-import lz4.frame
 from math import trunc
 from scipy import ndimage
 import numpy as np
@@ -13,63 +12,59 @@ import shutil
 import tarfile
 import time
 import torch
+import h5py
+import sys
 
-def save_data(tensor, ds, name, compress):
+def change_dataset_compression(infile, outfile, s_hor, s_ver, compress):
+    # define compression
     if compress:
-        bytes = io.BytesIO()
-        torch.save((tensor, ds), bytes)
-        f = open(name, 'wb')
-        f.write(lz4.frame.compress(bytes.getvalue(), compression_level = -20))
-        f.close()
+        compression_type = "lzf"
     else:
-        torch.save((tensor, ds), name)
+        compression_type = None
 
-def compress_dataset(infile, outfile, s_hor, s_ver, input_compressed, compress):
-    # open the file
-    tar = tarfile.open(infile, 'r')
-    num_files = len(tar.getnames())
+    # open the existing dataset and get the members list
+    try:
+        h5_infile = h5py.File(infile, 'r')
+    except IOError as e:
+        print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, infile))
+        sys.exit()
 
-    # create temp directory to store all serialized arrays
-    if (os.path.isdir("/cluster/scratch/")):
-        tempfolder = '/scratch/tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-    else:
-        tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
+    memberslist = list(h5_infile.keys())
 
-    os.makedirs(tempfolder)
+    # create the new dataset
+    if os.path.exists(outfile):
+        print('Removing old file')
+        os.remove(outfile)
 
-    print('INFO: Looping through all the files')
-    for i, member in enumerate(tar.getmembers()):
-        file = tar.extractfile(member)
+    output_file = h5py.File(outfile)
 
-        if input_compressed:
-            data, ds = torch.load(io.BytesIO(lz4.frame.decompress(file.read())))
+    for name in memberslist:
+        output_file.create_group(name)
 
-        else:
-            data, ds = torch.load(file)
+        sample = h5_infile[name]
+        fields_list = list(sample.keys())
 
-        if (len(list(data.size())) > 3):
-            out = data[:,::s_ver,::s_hor, ::s_hor].clone()
-        else:
-            out = data[:,::s_ver, ::s_hor].clone()
+        for field in fields_list:
+            data = sample[field][...]
 
-        save_data(out, (ds[0]*s_hor, ds[1]*s_hor, ds[2]*s_ver), tempfolder + member.name, compress)
+            if len(data.shape) == 3:
+                data = data[::s_ver, ::s_hor, ::s_hor]
+            elif len(data.shape) == 2:
+                data = data[::s_ver, ::s_hor]
 
-        if ((i % np.ceil(num_files/10.0)) == 0.0):
-            print(trunc((i+1)/num_files*100), '%')
+            if field == 'ds':
+                data[0] *= s_hor
+                data[1] *= s_hor
+                data[2] *= s_ver
 
-    print('INFO: Finished compressing all the files')
+            output_file[name].create_dataset(field,
+                                            data=data,
+                                            compression=compression_type)
 
-    # collecting all files in the tmp folder to a tar
-    out_tar = tarfile.open(outfile, 'w')
-    for filename in os.listdir(tempfolder):
-        out_tar.add(tempfolder + filename, arcname = filename)
+    output_file.close()
+    h5_infile.close()
 
-    # cleaning up
-    out_tar.close()
-    tar.close()
-    shutil.rmtree(tempfolder)
-
-def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, compress = False):
+def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True, create_zero_samples = True, compress = False):
     '''
     Function which loops through the files of the input tar file.
     The velocity is checked and files are rejected if a single dimension
@@ -81,21 +76,20 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
         infile: Input archive name
         outfile: Output archive name
         vlim: Maximum allowed velocity [m/s]
-        klim: Maximum allowed turbulence viscosity
+        klim: Maximum allowed turbulence kinetik energy
         boolean_terrain: If true the terrain is represented by a boolean variable, if false by a distance field
         verbose: Show the stats of the deleted files
+        create_zero_samples: Indicates if all zero samples should be created and saved for each new terrain encountered
     '''
     # open the file
     tar = tarfile.open(infile, 'r')
     num_files = len(tar.getnames())
 
-    # create temp directory to store all serialized arrays
-    if (os.path.isdir("/cluster/scratch/")):
-        tempfolder = '/scratch/tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
+    # define compression
+    if compress:
+        compression_type = "lzf"
     else:
-        tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
-
-    os.makedirs(tempfolder)
+        compression_type = None
 
     # define types of csv files
     types = {"p": np.float32,
@@ -111,9 +105,32 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
              "Points:2": np.float32}
 
     print('INFO: Looping through all the files')
+    if create_zero_samples:
+        print('INFO: Zero sample creation enabled')
     rejection_counter = 0
+    zero_samples_created = 0
+
+    # check output file extension
+    if not outfile.endswith('.hdf5'):
+        outfile = outfile + '.hdf5'
+
+    # create h5 file where all the data wll be stored
+    if os.path.exists(outfile):
+        os.remove(outfile)
+    output_file = h5py.File(outfile)
+
+    # create list of channel names
+    channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+
+    # iterate over the csv files
     for i, member in enumerate(tar.getmembers()):
         f = tar.extractfile(member)
+
+        # detect if a new terrain (a new W01 sample) is encountered
+        if '_W01_' in member.name:
+            new_terrain = True
+        else:
+            new_terrain = False
 
         if f is not None:
             try:
@@ -180,6 +197,10 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         print('------------------------------------')
 
                 else:
+                    # create group in hdf5 file for the current sample
+                    sample = member.name.replace('.csv', '')
+                    output_file.create_group(sample)
+
                     channel_shape = [nz, nx]
                     slice_shape = (1, nx)
 
@@ -193,6 +214,9 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                     u_z = wind_data.get('U:2').values.reshape(channel_shape)
                     turb = wind_data.get('k').values.reshape(channel_shape)
                     terrain = np.less(wind_data.get('vtkValidPointMask').values.reshape(channel_shape), 0.5).astype(np.float32)
+                    p = wind_data.get('p').values.reshape(channel_shape)
+                    epsilon = wind_data.get('epsilon').values.reshape(channel_shape)
+                    nut = wind_data.get('nut').values.reshape(channel_shape)
 
                     # filter out bad terrain pixels, paraview sometimes fails to interpolate the flow although it seems to be correct
                     terrain = np.insert(terrain, 0, np.ones(slice_shape), axis = 0)
@@ -275,6 +299,9 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
                         u_y[iz, iy, ix] = (mul[0]*u_y[i1] + mul[1]*u_y[i2] + mul[2]*u_y[i3] + mul[3]*u_y[i4] + mul[4]*u_y[i5] + mul[5]*u_y[i6]) / denom
                         u_z[iz, iy, ix] = (mul[0]*u_z[i1] + mul[1]*u_z[i2] + mul[2]*u_z[i3] + mul[3]*u_z[i4] + mul[4]*u_z[i5] + mul[5]*u_z[i6]) / denom
                         turb[iz, iy, ix] = (mul[0]*turb[i1] + mul[1]*turb[i2] + mul[2]*turb[i3] + mul[3]*turb[i4] + mul[4]*turb[i5] + mul[5]*turb[i6]) / denom
+                        p[iz, iy, ix] = (mul[0]*p[i1] + mul[1]*p[i2] + mul[2]*p[i3] + mul[3]*p[i4] + mul[4]*p[i5] + mul[5]*p[i6]) / denom
+                        epsilon[iz, iy, ix] = (mul[0]*epsilon[i1] + mul[1]*epsilon[i2] + mul[2]*epsilon[i3] + mul[3]*epsilon[i4] + mul[4]*epsilon[i5] + mul[5]*epsilon[i6]) / denom
+                        nut[iz, iy, ix] = (mul[0]*nut[i1] + mul[1]*nut[i2] + mul[2]*nut[i3] + mul[3]*nut[i4] + mul[4]*nut[i5] + mul[5]*nut[i6]) / denom
 
                     if verbose:
                         print('------------------------------------')
@@ -282,53 +309,91 @@ def convert_dataset(infile, outfile, vlim, klim, boolean_terrain, verbose = True
 
                     is_wind = np.less(terrain, 0.5).astype(np.float32)
 
+                    # if the terrain channel should be a binary class or a distance field
                     if boolean_terrain:
                         distance_field_in = is_wind[1:,:]
                     else:
                         distance_field_in = ndimage.distance_transform_edt(is_wind).astype(np.float32)
                         distance_field_in = distance_field_in[1:, :]
 
-                    # store the stacked data
-                    out = np.stack([distance_field_in, u_x, u_y, u_z, turb])
-                    out_tensor = torch.from_numpy(out)
-                    save_data(out_tensor, (dx, dy, dz), tempfolder + member.name.replace('.csv','') + '.tp', compress)
+                    # stack the data for easy iteration
+                    out = np.stack([distance_field_in, u_x, u_y, u_z, turb, p, epsilon, nut])
+
+                    # add each channel to the hdf5 file for the current sample
+                    for k, channel in enumerate(channels):
+                        output_file[sample].create_dataset(channel, data=out[k,:,:,:], compression= compression_type)
+
+                    # add the grid size to the hdf5 file for the current sample
+                    output_file[sample].create_dataset('ds', data=(dx, dy, dz))
+
+                    # add the zero sample if new terrain and creating zero samples is enabled
+                    if create_zero_samples and new_terrain:
+                        zero_sample = sample.replace('_W01_', '_W00_')
+
+                        # add zero sample to hdf5 file
+                        output_file.create_group(zero_sample)
+
+                        # add all the channels to the zero sample
+                        for k, channel in enumerate(channels):
+                            if k==0:
+                                # add terrain to the hdf5 file for the zero sample
+                                output_file[zero_sample].create_dataset(channel, data=out[k,:,:,:], compression=compression_type)
+                            else:
+                                # add terrain to the hdf5 file for the zero sample
+                                output_file[zero_sample].create_dataset(channel, data= np.zeros_like(out[k,:,:,:]), compression=compression_type)
+
+                        # add the grid size to the hdf5 file for the zero sample
+                        output_file[zero_sample].create_dataset('ds', data=(dx, dy, dz))
+                        zero_samples_created += 1
 
         if ((i % np.ceil(num_files/10.0)) == 0.0):
             print(trunc((i+1)/num_files*100), '%')
 
     print('INFO: Finished parsing all the files, rejecting', rejection_counter, 'out of', num_files)
+    if create_zero_samples:
+        print('INFO: Created ', zero_samples_created, 'zero sample(s)')
 
-    # collecting all files in the tmp folder to a tar
-    out_tar = tarfile.open(outfile, 'w')
-    for filename in os.listdir(tempfolder):
-        out_tar.add(tempfolder + filename, arcname = filename)
+    # close hdf5 file
+    output_file.close()
 
-    # cleaning up
-    out_tar.close()
-    tar.close()
-    shutil.rmtree(tempfolder)
-
-
-def sample_dataset(dbloader, output_dataset, n_sampling_rounds, compressed):
-    # create temp directory to store all serialized arrays
-    if (os.path.isdir("/cluster/scratch/")):
-        tempfolder = '/scratch/tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
+def sample_dataset(dbloader, outfile, n_sampling_rounds, compress, input_channels, label_channels):
+    # define compression
+    if compress:
+        compression_type = "lzf"
     else:
-        tempfolder = 'tmp_' + time.strftime("%Y_%m_%d-%H_%M_%S") + '/'
+        compression_type = None
 
-    os.makedirs(tempfolder)
+    # check output file extension
+    if not outfile.endswith('.hdf5'):
+        outfile = outfile + '.hdf5'
+
+    # create h5 file where all the data wll be stored
+    if os.path.exists(outfile):
+        print('Removing old file')
+        os.remove(outfile)
+    output_file = h5py.File(outfile)
+
+    # get the channels list (terrain + label channels)
+    channels = [input_channels[0]] + label_channels
 
     for j in range(n_sampling_rounds):
         for i, data in enumerate(dbloader):
-            input, output, ds, name = data
-            data = torch.cat([input[0,:].unsqueeze(0), output[:4,:]])
-            save_data(data, ds, tempfolder + name + '_' + str(j), compressed)
+            input, label, ds, name = data
 
-    # collecting all files in the tmp folder to a tar
-    out_tar = tarfile.open(output_dataset, 'w')
-    for filename in os.listdir(tempfolder):
-        out_tar.add(tempfolder + filename, arcname = filename)
+            resampled_name = name + '_' + str(j)
 
-    # cleaning up
-    out_tar.close()
-    shutil.rmtree(tempfolder)
+            # create the dataset group
+            output_file.create_group(resampled_name)
+
+            # combine the data
+            out = torch.cat([input[0].unsqueeze(0), label], dim=0).numpy()
+
+            # add each channel to the hdf5 file for the current sample
+            for k, channel in enumerate(channels):
+                output_file[resampled_name].create_dataset(channel, data=out[k,:,:,:], compression=compression_type)
+
+            # add the grid size to the hdf5 file for the current sample
+            output_file[resampled_name].create_dataset('ds', data=ds.numpy())
+
+    # close hdf5 file
+    output_file.close()

@@ -7,6 +7,7 @@ wind_delta=1
 csv_dir="/intel_share/data/cfd_3d_csv"
 python_dir="/home/nick/src/intel_wind/openfoam_batch/python"
 csv_overwrite=0
+unconverged_cases=0
 verbose=0
 
 usage() {
@@ -17,18 +18,21 @@ usage() {
     echo -e "  -w delta_wind\n\tWind step size \(w=1:delta_wind:15\)"
     echo -e "  -o\n\tOverwrite existing (non-empty) csv files"
     echo -e "  -v\n\tVerbose output"
+    echo -e "  -u only UNCONVERGED cases"
     echo -e "  -h\n\tPrint this help and exit"
 }
 
 source shared_functions.sh
 
-while getopts "c:p:w:iovh" opt; do
+while getopts "c:p:w:iouvh" opt; do
     case "$opt" in
         c)  csv_dir=$OPTARG ;;
         p)  python_dir=$OPTARG ;;
         w)  wind_delta=$OPTARG ;;
         o)  csv_overwrite=1 ;;
         v)  verbose=1 ;;
+        u)  echo "ONLY creating unconverged cases"
+            unconverged_cases=1 ;;
         h|*)  usage
             exit 0
             ;;
@@ -55,15 +59,28 @@ for dir in $@; do
         wind_directory="$base_dir/W$w"
         # if no wind directory, go to next
         [ ! -d "$wind_directory" ] && continue
-        # simepleFoam2.err is present and NOT empty, go to next
-        if [ -s "${wind_directory}/simpleFoam2.err" ]; then
-            [ "$verbose" -ne 0 ] &&
-                echo "  ${casename}/W${w}/simpleFoam2.err not empty, skipping"
-            continue
+        
+        # IF simpleFoam2.err is present then we skip if: 
+        #   1 We're creating converged solutions, and 2.err not empty
+        #   2 We're creating unconverged solutions, and 2.err is empty
+        # THEN: go to next
+        sf2err="${wind_directory}/simpleFoam2.err"
+        
+        if [ -f $sf2err ]; then
+            if [ "$unconverged_cases" -eq 0 ] && [ -s $sf2err ]; then
+                [ "$verbose" -ne 0 ] &&
+                    echo "  ${casename}/W${w}/simpleFoam2.err not empty, skipping"
+                continue
+            fi
+            if [ "$unconverged_cases" -ne 0 ] && [ ! -s $sf2err ]; then
+                [ "$verbose" -ne 0 ] &&
+                    echo "  ${casename}/W${w}/simpleFoam2.err is empty, skipping"
+                continue
+            fi
         fi
 
-        # if 2.err isn't here, and .err is not there or not empty, go to next
-        if [ ! -f "$wind_directory/simpleFoam2.err" ]; then
+        # if simpleFoam2.err isn't here, and .err is not there or not empty, go to next
+        if [ ! -f $sf2err ]; then
             if [ ! -f "$wind_directory/simpleFoam.err" ] ||
                 [ -s "$wind_directory/simpleFoam.err" ]; then
                 [ "$verbose" -ne 0 ] &&
