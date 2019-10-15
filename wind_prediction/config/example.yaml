@@ -76,8 +76,8 @@ data:
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    ux_scaling: 1.0
-    uy_scaling: 1.0
+    ux_scaling: 0.5
+    uy_scaling: 0.5
     uz_scaling: 0.1
     turb_scaling: 0.01
     p_scaling: 1.0
@@ -95,7 +95,7 @@ model:
         n_y: 64,
         n_z: 64,
         n_downsample_layers: 4,
-        n_first_conv_channels: 8,
+        n_first_conv_channels: 16,
         channel_multiplier: 2,
         filter_kernel_size: 3,
         interpolation_mode: 'nearest',
@@ -103,7 +103,7 @@ model:
         skipping: True,
         use_terrain_mask: True,
         pooling_method: 'striding',
-        use_fc_layers: True,
+        use_fc_layers: False,
         fc_scaling: 8,
         use_mapping_layer: False,
         potential_flow: False,
