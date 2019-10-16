@@ -19,6 +19,7 @@ model_name = 'test_model'
 model_version = 'latest'
 print_loss = False
 compute_prediction_error = False
+compute_prediction_metrics = False
 use_terrain_mask = True # should not be changed to false normally
 plot_worst_prediction = False
 plot_prediction = False
@@ -34,6 +35,7 @@ parser.add_argument('-model_name', dest='model_name', default=model_name, help='
 parser.add_argument('-model_version', dest='model_version', default=model_version, help='The model version')
 parser.add_argument('-pl', dest='print_loss', action='store_true', help='If the loss used for training should be computed for the sample and then printed')
 parser.add_argument('-cpe', dest='compute_prediction_error', action='store_true', help='If set the velocity prediction errors over the full dataset is computed')
+parser.add_argument('-cpm', dest='compute_prediction_metrics', action='store_true', help='If set prediction quality will be evaluated over the full dataset with a variety of metrics')
 parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', help='If set the worst prediction of the input dataset is shown. Needs compute_prediction_error to be true.')
 parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
 parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
@@ -115,9 +117,14 @@ if args.print_loss:
                 print('\n------------------------------------------------------------')
             i+=1
 
+# compute prediction metrics on dataset if requested
+if args.compute_prediction_metrics:
+    print('\tComputing prediction metrics\n')
+    prediction_metrics = nn_custom.compute_prediction_metrics(net,device,params, testloader, save=True, show=True)
+    print('\n------------------------------------------------------------')
+
 # prediction criterion
 criterion = torch.nn.MSELoss()
-print('\tPrediction w/ criterion: ', criterion.__class__.__name__,'\n')
 
 # compute the errors on the dataset
 if args.compute_prediction_error and all(elem in params.data['label_channels'] for elem in ['ux', 'uy', 'uz']):
@@ -129,14 +136,14 @@ if args.compute_prediction_error and all(elem in params.data['label_channels'] f
 elif args.compute_prediction_error and not all(elem in params.data['label_channels'] for elem in ['ux', 'uy', 'uz']):
     print('Warning: cannot compute prediction error database, not all velocity components were provided in label channels')
 
+print('\tSample #{} prediction w/ criterion: '.format(args.index), criterion.__class__.__name__,'\n')
 # predict the wind, compute the loss and plot if requested
 data = testset[args.index]
 input = data[0]
 label = data[1]
 scale = 1.0
 if params.data['autoscale']:
-    scale = data[2].item()
-
+    scale = data[3].item()
 print('Test index name: {0}'.format(testset.get_name(args.index)))
 if args.save_prediction:
     savename = 'data/'+os.path.splitext(testset.get_name(args.index))[0]

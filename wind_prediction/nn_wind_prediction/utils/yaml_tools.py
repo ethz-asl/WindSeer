@@ -80,7 +80,8 @@ class EDNNParameters(object):
                 'nx': self.model['model_args']['n_x'],
                 'ny': self.model['model_args']['n_y'],
                 'nz': self.model['model_args']['n_z'],
-                'autoscale': self.data['autoscale']}
+                'autoscale': self.data['autoscale'],
+                'loss_weighting_fn': self.loss['loss_weighting_fn']}
 
     def model_kwargs(self):
         return self.model['model_args']
@@ -110,6 +111,7 @@ class EDNNParameters(object):
         print('\tMinibatch epoch loss:\t', self.run['minibatch_epoch_loss'])
         print(' ')
         print('Loss Settings:')
+        print('\tLoss weighting fn:\t', self.loss['loss_weighting_fn'])
         print('\tLoss component(s):\t', self.loss['loss_components'])
         if len(self.loss['loss_components']) > 1:
             print('\tLearn loss scaling factors:\t', self.loss['learn_scaling'])

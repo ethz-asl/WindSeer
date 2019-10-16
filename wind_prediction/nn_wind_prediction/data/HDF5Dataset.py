@@ -9,6 +9,7 @@ import sys
 import torch
 from torch.utils.data.dataset import Dataset
 import h5py
+import nn_wind_prediction.utils as utils
 
 class HDF5Dataset(Dataset):
     '''
@@ -46,6 +47,8 @@ class HDF5Dataset(Dataset):
     __default_return_grid_size = False
     __default_return_name = False
     __default_autoscale = False
+    __default_loss_weighting_fn = 0
+    __default_loss_weighting_clamp = True
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -100,56 +103,26 @@ class HDF5Dataset(Dataset):
             autoscale:
                 Automatically scale the input and return the scale, default False
         '''
-        self.__filename = filename
-        
-        if len(input_channels) == 0 or len(label_channels) == 0:
-            raise ValueError('HDF5Dataset: List of input or label channels cannot be empty')
 
-        # make sure that all requested channels are possible
-        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
-        for channel in input_channels:
-            if channel not in default_channels:
-                raise ValueError('HDF5Dataset: Incorrect input_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel,default_channels))
-
-        for channel in label_channels:
-            if channel not in default_channels:
-                raise ValueError('HDF5Dataset: Incorrect label_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel,default_channels))
-
-        self.__channels_to_load = []
-        self.__input_indices = []
-        self.__label_indices = []
-
-        # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
-        index = 0
-        for channel in default_channels:
-            if channel in input_channels or channel in label_channels:
-                self.__channels_to_load += [channel]
-                if channel in input_channels:
-                    self.__input_indices += [index]
-                if channel in label_channels:
-                    self.__label_indices += [index]
-                index += 1
-
-        self.__input_indices = torch.LongTensor(self.__input_indices)
-        self.__label_indices = torch.LongTensor(self.__label_indices)
-
-        try:
-            h5_file = h5py.File(filename, 'r')
-        except IOError as e:
-            print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, filename))
-            sys.exit()
-
-        # extract info from the h5 file
-        self.__num_files = len(h5_file.keys())
-        self.__memberslist = list(h5_file.keys())
-        h5_file.close()
-
+        #-------------------------------------------- kwarg fetching ---------------------------------------------------
         try:
             verbose = kwargs['verbose']
         except KeyError:
             verbose = False
+
+        try:
+            self.__loss_weighting_fn = kwargs['loss_weighting_fn']
+        except KeyError:
+            self.__loss_weighting_fn = self.__default_loss_weighting_fn
+            if verbose:
+                print('HDF5Dataset: loss_weighting_fn not present in kwargs, using default value:', self.__default_loss_weighting_fn)
+
+        try:
+            self.__loss_weighting_clamp = kwargs['loss_weighting_clamp']
+        except KeyError:
+            self.__loss_weighting_clamp = self.__default_loss_weighting_clamp
+            if verbose:
+                print('HDF5Dataset: loss_weighting_clamp not present in kwargs, using default value:', self.__default_loss_weighting_clamp)
 
         try:
             self.__device = kwargs['device']
@@ -234,6 +207,63 @@ class HDF5Dataset(Dataset):
             self.__autoscale = self.__default_autoscale
             if verbose:
                 print('HDF5Dataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
+
+
+        # --------------------------------------- initializing class params --------------------------------------------
+        if len(input_channels) == 0 or len(label_channels) == 0:
+            raise ValueError('HDF5Dataset: List of input or label channels cannot be empty')
+
+        if self.__loss_weighting_fn == 1:
+            weighting_channels = ['p']
+        elif self.__loss_weighting_fn == 2:
+            weighting_channels = ['terrain', 'p']
+        elif self.__loss_weighting_fn == 3:
+            weighting_channels = ['terrain', 'ux', 'uy', 'uz']
+        else:
+            weighting_channels = []
+
+        # make sure that all requested channels are possible
+        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        for channel in input_channels:
+            if channel not in default_channels:
+                raise ValueError('HDF5Dataset: Incorrect input_channel detected: \'{}\', '
+                                 'correct channels are {}'.format(channel, default_channels))
+
+        for channel in label_channels:
+            if channel not in default_channels:
+                raise ValueError('HDF5Dataset: Incorrect label_channel detected: \'{}\', '
+                                 'correct channels are {}'.format(channel, default_channels))
+
+        self.__channels_to_load = []
+        self.__input_indices = []
+        self.__label_indices = []
+
+        # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
+        index = 0
+        for channel in default_channels:
+            if channel in input_channels or channel in label_channels or channel in weighting_channels:
+                self.__channels_to_load += [channel]
+                if channel in input_channels:
+                    self.__input_indices += [index]
+                if channel in label_channels:
+                    self.__label_indices += [index]
+                index += 1
+
+        self.__input_indices = torch.LongTensor(self.__input_indices)
+        self.__label_indices = torch.LongTensor(self.__label_indices)
+
+        self.__filename = filename
+
+        try:
+            h5_file = h5py.File(filename, 'r')
+        except IOError as e:
+            print('I/O error({0}): {1}: {2}'.format(e.errno, e.strerror, filename))
+            sys.exit()
+
+        # extract info from the h5 file
+        self.__num_files = len(h5_file.keys())
+        self.__memberslist = list(h5_file.keys())
+        h5_file.close()
 
         # check that all the required channels are present for autoscale for augmentation
         # this is due to the get_scale method which needs the the velocities to compute the scale for autoscaling
@@ -414,9 +444,13 @@ class HDF5Dataset(Dataset):
                 print('HDF5Dataset Error: Input mode ', self.__input_mode, ' is not supported')
                 sys.exit()
 
+            # generate the input channels
             label = torch.index_select(data, 0, self.__label_indices)
 
-            out = [input, label]
+            # generate the loss weighting matrix
+            loss_weighting_matrix = self.__compute_loss_weighting(data, ds, self.__loss_weighting_fn)
+
+            out = [input, label, loss_weighting_matrix]
 
             if self.__autoscale:
                 out.append(scale)
@@ -425,7 +459,7 @@ class HDF5Dataset(Dataset):
                 out.append(ds)
 
             if self.__return_name:
-                out.append(self.__memberslist[index])
+                out.append(self.get_name(index))
 
             return out
 
@@ -613,3 +647,90 @@ class HDF5Dataset(Dataset):
             return scale
         else:
             return torch.tensor(1.0)
+
+    def __compute_loss_weighting(self, data, ds, weighting_fn=0):
+        '''
+        This function computes the matrix to be used for loss weighting. Different weighting functions can be used, but all
+        are normalized, so that the mean of W for an individual sample is 1.
+
+        Input params:
+            data: 4D tensor [channels, Z, Y, X]
+            grid_size: array of size 3 containing the sizes of the grid in X, Y and Z.
+            weighting_fn: switches between the weighting functions:
+                            0: no weighting function, weights are ones
+                            1: squared pressure fluctuations
+                            2: l2 norm of the pressure gradient
+                            3: l2 norm of the velocity gradient
+
+        Output:
+            W: 4D tensor [weighting, Z, Y, X] containing the pixel-wise weights.
+        '''
+        # no weighting, return empty tensor
+        if weighting_fn == 0:
+            return torch.Tensor([])
+
+        # squared pressure fluctuations weighting function
+        if weighting_fn == 1:
+
+            # get pressure and mean pressure per sample
+            p_index = self.__channels_to_load.index('p')
+            p = data[p_index].unsqueeze(0)
+            p_mean = p.mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(p)
+
+            # remove mean, square and remove outliers
+            W = (p - p_mean) ** 2
+
+            if self.__loss_weighting_clamp:
+                # TODO: make the clamping value a parameter that can be set from the YAML config file
+                W = W.clamp(0.0435)
+
+            # normalize by its volume integral per sample
+            W =  W/ (W.mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(p))
+
+        # l2-norm pressure gradient weighting function
+        elif weighting_fn == 2:
+            # get pressure
+            p = data[self.__channels_to_load.index('p')].unsqueeze(0)
+
+            # get terrain
+            terrain = data[self.__channels_to_load.index('terrain')].unsqueeze(0)
+
+            # compute the spatial pressure gradient components and take the l2-norm of the gradient and remove outliers
+            W = (utils.derive(p, 3, ds[0], terrain) ** 2
+                 + utils.derive(p, 2, ds[1], terrain) ** 2 +
+                 utils.derive(p, 1, ds[2], terrain) ** 2) ** 0.5
+
+            if self.__loss_weighting_clamp:
+                # TODO: make the clamping value a parameter that can be set from the YAML config file
+                W = W.clamp(0.000814)
+
+            # normalize by its volume integral per sample
+            W = (W / ((W).mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(W)))
+
+        # l2-norm velocity gradient weighting function
+        elif weighting_fn == 3:
+
+            vel_indices = torch.LongTensor([self.__channels_to_load.index(channel) for channel in ['ux', 'uy', 'uz']])
+
+            # get the velocities
+            U = data.index_select(0, vel_indices).unsqueeze(0)
+
+            # get terrain
+            terrain = data[self.__channels_to_load.index('terrain')].unsqueeze(0)
+
+            # compute the spatial gradient tensor of the velocity gradient and take the l2-norm of the gradient per sample and remove outliers
+            W = (utils.gradient(U, ds, terrain) ** 2).sum(1) ** 0.5
+
+            if self.__loss_weighting_clamp:
+                # TODO: make the clamping value a parameter that can be set from the YAML config file
+                W = W.clamp(0.00175)
+
+            # normalize by its volume integral per sample
+            W = (W / ((W).mean(-1).mean(-1).mean(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(W)))
+
+        else:
+            raise ValueError('Unrecognized weighting function.')
+
+        # handling for zero samples which create NaNs
+        W[torch.isnan(W)] = 1.0
+        return W

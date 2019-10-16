@@ -65,13 +65,19 @@ class CombinedLoss(Module):
                 self.loss_factors += [torch.Tensor([0.0])]
                 self.learn_scaling = False
 
-    def forward(self, predicted, target, input):
+    def forward(self, predicted, target, input, W=None):
         if (len(predicted.shape) != 5):
             raise ValueError('CombinedLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input)
+        # make sure weighting matrix is not empty or None
+        if W is None or W.shape[-1] ==0:
+            W = torch.tensor(1.0)
+        # send weighting matrix to same device as target
+        W = W.to(target.device)
 
-    def compute_loss(self, predicted, target, input):
+        return self.compute_loss(predicted, target, input, W)
+
+    def compute_loss(self, predicted, target, input, W):
         loss = 0
 
         # compute all of the loss components of the combined loss, store them in the last computed dict for retrieval
@@ -80,7 +86,7 @@ class CombinedLoss(Module):
             factor = self.loss_factors[k].to(predicted.device)
 
             # compute the value individual component
-            loss_component = self.loss_components[k](predicted, target, input)
+            loss_component = self.loss_components[k](predicted, target, input, W)
 
             # store this value in the buffer dict
             self.last_computed_loss_components[self.loss_component_names[k]] = loss_component.item()
@@ -123,7 +129,7 @@ class LPLoss(Module):
             print('LPLoss: exclude_terrain not present in kwargs, using default value:',
                   self.__default_exclude_terrain)
 
-    def forward(self, predicted, target, input):
+    def forward(self, predicted, target, input, W=1.0):
         if (predicted.shape != target.shape):
             raise ValueError('LPLoss: predicted and target do not have the same shape, pred:{}, target:{}'
                              .format(predicted.shape, target.shape))
@@ -131,11 +137,14 @@ class LPLoss(Module):
         if (len(predicted.shape) != 5) or (len(input.shape) != 5):
             raise ValueError('LPLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input)
+        return self.compute_loss(predicted, target, input, W)
 
-    def compute_loss(self, predicted, target, input):
+    def compute_loss(self, predicted, target, input, W):
         # first compute the p-loss for each sample in the batch
-        loss = ((abs(predicted - target)) ** self.__p).mean(-1).mean(-1).mean(-1).mean(-1)
+        loss = (abs(predicted - target)) ** self.__p
+
+        # weight the loss with the pixel-wise weighting matrix and take the mean over the volume
+        loss = (loss*W).mean(-1).mean(-1).mean(-1).mean(-1)
 
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
@@ -204,9 +213,9 @@ class ScaledLoss(Module):
         if (self.__norm_threshold <= 0.0):
             raise ValueError('max_scale must be larger than 0.0')
 
-    def forward(self, prediction, label, input):
-        # compute the loss per pixel
-        loss = self.__loss(prediction, label).mean(dim=1)
+    def forward(self, prediction, label, input, W=1.0):
+        # compute the loss per pixel, apply weighting and take the mean over the channels
+        loss = (self.__loss(prediction, label)*W).mean(dim=1)
 
         if self.__no_scaling:
             scale = torch.ones_like(loss)
@@ -277,7 +286,7 @@ class DivergenceFreeLoss(Module):
             raise ValueError('DivergenceFreeLoss: unknown loss type ', self.__loss_type)
 
 
-    def forward(self, predicted, target, input):
+    def forward(self, predicted, target, input, W=1):
         if (predicted.shape != target.shape):
             raise ValueError('DivergenceFreeLoss: predicted and target do not have the same shape, pred:{}, target:{}'
                     .format(predicted.shape, target.shape))
@@ -285,20 +294,20 @@ class DivergenceFreeLoss(Module):
         if (len(predicted.shape) != 5):
             raise ValueError('DivergenceFreeLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input)
+        return self.compute_loss(predicted, target, input, W)
 
-    def compute_loss(self, predicted, target, input):
+    def compute_loss(self, predicted, target, input, W):
         target = torch.zeros_like(target).to(predicted.device)
+        terrain = input[:, 0:1]
 
         # compute divergence of the prediction
-        predicted_divergence = utils.divergence(predicted, self.__grid_size).unsqueeze(1)
+        predicted_divergence = utils.divergence(predicted, self.__grid_size, terrain.squeeze(1)).unsqueeze(1)
 
-        # compute physics loss for all elements and average losses over each sample in batch
-        loss =self.__loss(predicted_divergence,target).mean(tuple(range(1, len(predicted.shape))))
+        # compute physics loss for all elements, weight it by pixel, and average losses over each sample in batch
+        loss =(self.__loss(predicted_divergence,target)*W).mean(tuple(range(1, len(predicted.shape))))
 
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            terrain = input[:, 0:1]
             terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
 
             # apply terrain correction factor to loss of each sample in batch
@@ -349,7 +358,7 @@ class VelocityGradientLoss(Module):
         else:
             raise ValueError('VelocityGradientLoss: unknown loss type ', self.__loss_type)
 
-    def forward(self, predicted, target, input):
+    def forward(self, predicted, target, input, W=1.0):
         if (predicted.shape != target.shape):
             raise ValueError('VelocityGradientLoss: predicted and target do not have the same shape, pred:{}, target:{}'
                              .format(predicted.shape, target.shape))
@@ -357,19 +366,20 @@ class VelocityGradientLoss(Module):
         if (len(predicted.shape) != 5):
             raise ValueError('VelocityGradientLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input)
+        return self.compute_loss(predicted, target, input, W)
 
-    def compute_loss(self, predicted, target, input):
+    def compute_loss(self, predicted, target, input, W):
+        terrain = input[:, 0:1]
+
         # compute gradients of prediction and target
-        target_grad = utils.gradient(target,self.__grid_size)
-        predicted_grad = utils.gradient(predicted,self.__grid_size)
+        target_grad = utils.gradient(target,self.__grid_size,terrain.squeeze(1))
+        predicted_grad = utils.gradient(predicted,self.__grid_size,terrain.squeeze(1))
 
-        # compute physics loss for all elements and average losses over each sample in batch
-        loss = self.__loss(predicted_grad, target_grad).mean(tuple(range(1, len(predicted.shape))))
+        # compute physics loss for all elements, weight it by pixel, and average losses over each sample in batch
+        loss = (self.__loss(predicted_grad, target_grad)*W).mean(tuple(range(1, len(predicted.shape))))
 
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            terrain = input[:, 0:1]
             terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
 
             # apply terrain correction factor to loss of each sample in batch
@@ -403,15 +413,15 @@ class GaussianLogLikelihoodLoss(Module):
             print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
                   self.__default_exclude_terrain)
 
-    def forward(self, output, label, input):
+    def forward(self, output, label, input, W=1.0):
         num_channels = output.shape[1]
 
         if (output.shape[1] != 2 * label.shape[1]) and (num_channels % 2 != 0):
             raise ValueError('The output has to have twice the number of channels of the labels')
 
-        return self.compute_loss(output[:,:int(num_channels/2),:], output[:,int(num_channels/2):,:], label, input)
+        return self.compute_loss(output[:,:int(num_channels/2),:], output[:,int(num_channels/2):,:], label, input, W)
 
-    def compute_loss(self, mean, log_variance, label, input):
+    def compute_loss(self, mean, log_variance, label, input, W):
         if (mean.shape[1] != log_variance.shape[1]):
             raise ValueError('The variance and the mean need to have the same number of channels')
 
@@ -420,8 +430,8 @@ class GaussianLogLikelihoodLoss(Module):
         # compute loss for all elements
         loss = log_variance + (mean_error * mean_error) / log_variance.exp().clamp(self.__eps)
 
-        # average loss over each sample in batch
-        loss = loss.mean(tuple(range(1, len(mean_error.shape))))
+        # average weighted loss over each sample in batch
+        loss = (loss*W).mean(tuple(range(1, len(mean_error.shape))))
 
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:

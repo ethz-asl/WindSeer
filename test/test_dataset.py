@@ -39,6 +39,7 @@ stride_vert = 1
 autoscale = False
 input_channels = ['terrain', 'ux', 'uy', 'uz']
 label_channels = ['ux', 'uy', 'uz', 'turb']
+loss_weighting_fn = 1
 plot_divergence = True
 dataset_rounds = 0
 #-----------------------------------------------------
@@ -53,7 +54,7 @@ def main():
                                       scaling_terrain=terrain_scaling,
                                       scaling_uz=uz_scaling, scaling_turb=turbulence_scaling, scaling_p=p_scaling,
                                       scaling_epsilon=epsilon_scaling, scaling_nut=nut_scaling,
-                                      return_grid_size=True, verbose=True)
+                                      return_grid_size=True, verbose=True, loss_weighting_fn=loss_weighting_fn)
 
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
                                               shuffle=False, num_workers=4)
@@ -87,9 +88,9 @@ def main():
     for j in range(dataset_rounds):
         for i, data in enumerate(dbloader):
             if autoscale:
-                input, label, scale, ds = data
+                input, label, W, scale, ds = data
             else:
-                input, label, ds = data
+                input, label, W, ds = data
 
             ds = ds.squeeze()
 
@@ -266,9 +267,9 @@ def main():
 
     try:
         if autoscale:
-            input, label, scale, ds = db[plot_sample_num]
+            input, label, W, scale, ds = db[plot_sample_num]
         else:
-            input, label, ds = db[plot_sample_num]
+            input, label, W, ds = db[plot_sample_num]
     except:
         print('The plot_sample_num needs to be a value between 0 and', len(db)-1, '->' , plot_sample_num, ' is invalid.')
         sys.exit()
@@ -283,10 +284,12 @@ def main():
     print(' ')
 
     # plot the sample
-    provided_channels = ['ux_in', 'uy_in', 'uz_in', 'terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd']
+    provided_channels = ['ux_in', 'uy_in', 'uz_in', 'terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd', 'W']
     terrain = input[:1]
-    input = torch.cat((input[1:4], terrain, label), 0)
-    utils.plot_sample(provided_channels, 'all', input, None, terrain.squeeze(), plot_divergence, nn_data.get_grid_size(input_dataset))
+    input = torch.cat((input[1:4], terrain, label, W), 0)
+    title_dict = {'W': 'Loss weighting fn [-]'}
+    utils.plot_sample(provided_channels, 'all', input, None, terrain.squeeze(), plot_divergence, nn_data.get_grid_size(input_dataset),
+                      title_dict=title_dict)
 
 if __name__ == '__main__':
 #     try:

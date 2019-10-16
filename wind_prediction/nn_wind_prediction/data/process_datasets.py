@@ -378,7 +378,7 @@ def sample_dataset(dbloader, outfile, n_sampling_rounds, compress, input_channel
 
     for j in range(n_sampling_rounds):
         for i, data in enumerate(dbloader):
-            input, label, ds, name = data
+            input, label, W, ds, name = data
 
             resampled_name = name + '_' + str(j)
 
