@@ -1,7 +1,8 @@
 import numpy as np
 import nn_wind_prediction.utils as utils
-import nn_wind_prediction.cosmo as cosmo
 import nn_wind_prediction.models as models
+from analysis_utils import extract_cosmo_data as cosmo
+from analysis_utils import ulog_utils, get_mapgeo_terrain
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 from datetime import datetime
 from scipy import ndimage
@@ -105,7 +106,7 @@ class WindOptimiser(object):
         print('Loading ulog data...', end='', flush=True)
         t_start = time.time()
         self._ulog_args.print()
-        ulog_data = utils.get_log_data(self._ulog_args.params['file'])
+        ulog_data = ulog_utils.get_log_data(self._ulog_args.params['file'])
 
         if (self._ulog_args.params['use_ekf_wind']):
             ulog_data['we'] = ulog_data['we_east']
@@ -146,7 +147,7 @@ class WindOptimiser(object):
         boolean_terrain = self._model_args.params['boolean_terrain']
 
         terrain = TerrainBlock(
-            *utils.get_terrain(self._cosmo_args.params['terrain_tiff'], self._cosmo_wind['x'][[0, 1], [0, 1]],
+            *get_mapgeo_terrain.get_terrain(self._cosmo_args.params['terrain_tiff'], self._cosmo_wind['x'][[0, 1], [0, 1]],
                                self._cosmo_wind['y'][[0, 1], [0, 1]],
                                block_height, (self._resolution, self._resolution, self._resolution)),
             device=self._device, boolean_terrain=boolean_terrain)

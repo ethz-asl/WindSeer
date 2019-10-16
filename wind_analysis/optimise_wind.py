@@ -1,15 +1,14 @@
-from wind_optimiser import WindOptimiser, OptTest, SimpleStepOptimiser
+import numpy as np
 import torch
 import matplotlib.pyplot as plt
-import numpy as np
-import nn_wind_prediction.utils as utils
 import argparse
 from scipy.interpolate import RegularGridInterpolator
+from wind_optimiser import WindOptimiser, OptTest, SimpleStepOptimiser
+from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates
 
 def angle_wrap(angles):
     # Wrap angles to [-pi, pi)
     return (angles + np.pi) % (2 * np.pi) - np.pi
-
 
 parser = argparse.ArgumentParser(description='Optimise wind speed and direction from COSMO data using observations')
 parser.add_argument('input_yaml', help='Input yaml config')
@@ -75,14 +74,14 @@ wind_opt.reset_rotation_scale(rot=best_rs[-1,0], scale=best_rs[-1,1])
 print('Plotting for optimal method {0}, rotation = {1:0.3f} deg, scale = {2:0.3f}'.format(names[best_method_index],
       best_rs[-1, 0]*180.0/np.pi, best_rs[-1, 1]))
 wind_prediction = wind_opt.get_prediction().detach()
-utils.plot_prediction_observations(wind_prediction, wind_opt._wind_blocks, wind_opt.terrain.network_terrain.squeeze(0))
+plot_prediction_observations(wind_prediction, wind_opt._wind_blocks, wind_opt.terrain.network_terrain.squeeze(0))
 
 # Plot wind over time
 w_vanes = np.array([wind_opt._ulog_data['we'], wind_opt._ulog_data['wn'], wind_opt._ulog_data['wd']])
 w_ekfest = np.array([wind_opt._ulog_data['we_east'], wind_opt._ulog_data['we_north'], wind_opt._ulog_data['we_down']])
 all_winds = [w_vanes, w_ekfest]
 plot_time = (wind_opt._ulog_data['gp_time'] - wind_opt._ulog_data['gp_time'][0]) * 1e-6
-fig3, ax3 = utils.plot_wind_estimates(plot_time, all_winds, ['Raw vane estimates', 'On-board EKF estimate'], polar=False)
+fig3, ax3 = plot_wind_estimates(plot_time, all_winds, ['Raw vane estimates', 'On-board EKF estimate'], polar=False)
 
 x_terr2 = np.linspace(wind_opt.terrain.x_terr[0], wind_opt.terrain.x_terr[-1], wind_prediction.shape[-1])
 y_terr2 = np.linspace(wind_opt.terrain.y_terr[0], wind_opt.terrain.y_terr[-1], wind_prediction.shape[-2])

@@ -2,7 +2,8 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import nn_wind_prediction.utils as utils
-import nn_wind_prediction.cosmo as cosmo
+from analysis_utils import extract_cosmo_data as cosmo
+from analysis_utils import ulog_utils, get_mapgeo_terrain, bin_log_data
 import time
 import torch
 
@@ -19,7 +20,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # load the measured wind data from the log files
-    wind_data = utils.extract_wind_data(args.input_file, args.estimation)
+    wind_data = ulog_utils.extract_wind_data(args.input_file, args.estimation)
 
     # determine the grid dimension
     if (args.cosmo_file):
@@ -58,7 +59,7 @@ if __name__ == "__main__":
     # bin the data into the regular grid
     print('Binning wind data...', end='', flush=True)
     t_start = time.time()
-    wind, variance = utils.bin_log_data(wind_data, grid_dimensions)
+    wind, variance = bin_log_data.bin_log_data(wind_data, grid_dimensions)
     print(' done [{:.2f} s]'.format(time.time() - t_start))
 
     # get the terrain data
@@ -66,7 +67,7 @@ if __name__ == "__main__":
         print('Extracting terrain from geotiff...', end='', flush=True)
         t_start = time.time()
         x_terr, y_terr, z_terr, h_terr, full_block = \
-            utils.get_terrain(args.geotiff_file, [grid_dimensions['x_min'], grid_dimensions['x_max']], [grid_dimensions['y_min'], grid_dimensions['y_max']],
+            get_mapgeo_terrain.get_terrain(args.geotiff_file, [grid_dimensions['x_min'], grid_dimensions['x_max']], [grid_dimensions['y_min'], grid_dimensions['y_max']],
                     [grid_dimensions['z_min'], grid_dimensions['z_max']], (args.n_cells, args.n_cells, args.n_cells))
 
         # convert to torch tensor since the plottools expect the terrain to be a tensor
