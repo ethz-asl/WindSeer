@@ -17,6 +17,9 @@ The first input layer is assumed to be terrain information. It should be zero in
 class ModelEDNN3D(nn.Module):
     __default_activation = nn.LeakyReLU
     __default_activation_kwargs = {'negative_slope': 0.1}
+    __default_filter_kernel_size = 3
+    __default_n_first_conv_channels = 8
+    __default_channel_multiplier = 2
     __default_n_downsample_layers = 4
     __default_use_terrain_mask = True
     __default_use_mapping_layer = False
@@ -57,6 +60,27 @@ class ModelEDNN3D(nn.Module):
             self.__n_downsample_layers = self.__default_n_downsample_layers
             if verbose:
                 print('EDNN3D: n_downsample_layers not present in kwargs, using default value:', self.__default_n_downsample_layers)
+
+        try:
+            self.__filter_kernel_size = int(kwargs['filter_kernel_size']) # needs to be an integer
+        except KeyError:
+            self.__filter_kernel_size = self.__default_filter_kernel_size
+            if verbose:
+                print('EDNN3D: filter_kernel_size not present in kwargs, using default value:', self.__default_filter_kernel_size)
+
+        try:
+            self.__n_first_conv_channels = int(kwargs['n_first_conv_channels']) # needs to be an integer
+        except KeyError:
+            self.__n_first_conv_channels = self.__default_n_first_conv_channels
+            if verbose:
+                print('EDNN3D: n_first_conv_channels not present in kwargs, using default value:', self.__default_n_first_conv_channels)
+
+        try:
+            self.__channel_multiplier = kwargs['channel_multiplier']
+        except KeyError:
+            self.__channel_multiplier = self.__default_channel_multiplier
+            if verbose:
+                print('EDNN3D: channel_multiplier not present in kwargs, using default value:', self.__default_channel_multiplier)
 
         try:
             self.__use_mapping_layer = kwargs['use_mapping_layer']
@@ -176,6 +200,10 @@ class ModelEDNN3D(nn.Module):
             print('EDNN3D: Error, n_downsample_layers must be larger than 0')
             sys.exit()
 
+        # input variable check
+        if (self.__filter_kernel_size % 2 == 0) or (self.__filter_kernel_size < 1):
+            raise ValueError('The filter kernel size needs to be odd and larger than 0.')
+
         # construct the number of input and output channels based on the parameters
         self.__num_inputs = 4 # (terrain, u_x_in, u_y_in, u_z_in)
         self.__num_outputs = 3 # (u_x_out, u_y_out, u_z_out)
@@ -202,26 +230,69 @@ class ModelEDNN3D(nn.Module):
         except KeyError:
             pass
 
-        # convolution layers
+        # down-convolution layers
         self.__conv = nn.ModuleList()
         for i in range(self.__n_downsample_layers):
             if i == 0:
-                self.__conv += [nn.Conv3d(self.__num_inputs, 8, 3)]
+                self.__conv += [nn.Conv3d(self.__num_inputs,
+                                          self.__n_first_conv_channels,
+                                          self.__filter_kernel_size)]
             else:
-                self.__conv += [nn.Conv3d(4*2**i, 8*2**i, 3)]
+                self.__conv += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
+                                          int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
+                                          self.__filter_kernel_size)]
 
+        # fully connected layers
         if self.__use_fc_layers:
-            # fully connected layers
             if self.__n_downsample_layers == 0:
                 n_features = int(self.__num_inputs * self.__n_x * self.__n_y * self.__n_z)
             else:
-                n_features = int(8*2**(self.__n_downsample_layers-1) * self.__n_x * self.__n_y * self.__n_z / ((2**self.__n_downsample_layers)**3))
+                n_features = int(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))) *  # number of channels
+                                 self.__n_x * self.__n_y * self.__n_z / ((2**self.__n_downsample_layers)**3)) # number of pixels
             self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
             self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
+        else:
+            self.__c1 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
+                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
+                                  self.__filter_kernel_size)
+            self.__c2 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
+                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
+                                  self.__filter_kernel_size)
 
-        # modules
-        self.__pad_conv = nn.ReplicationPad3d(1)
-        self.__pad_deconv = nn.ReplicationPad3d((1, 2, 1, 2, 1, 2))
+        # up-convolution layers
+        self.__deconv1 = nn.ModuleList()
+        self.__deconv2 = nn.ModuleList()
+
+        if (self.__skipping):
+            for i in range(self.__n_downsample_layers):
+                if i == 0:
+                    self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1)]
+                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1)]
+                else:
+                    self.__deconv1 += [nn.Conv3d(2*int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
+                                                 int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
+                                                 self.__filter_kernel_size+1)]
+                    self.__deconv2 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
+                                                 int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
+                                                 self.__filter_kernel_size+1)]
+
+        else:
+            for i in range(self.__n_downsample_layers):
+                if i == 0:
+                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1)]
+                else:
+                    self.__deconv1 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
+                                                 int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
+                                                 self.__filter_kernel_size+1)]
+
+        # mapping layer
+        if self.__use_mapping_layer:
+            self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
+
+        # padding modules
+        padding_required = int((self.__filter_kernel_size - 1) / 2)
+        self.__pad_conv = nn.ReplicationPad3d(padding_required)
+        self.__pad_deconv = nn.ReplicationPad3d((padding_required, padding_required+1, padding_required, padding_required+1, padding_required, padding_required+1))
 
         # Check if we have defined a specific activation layer
         try:
@@ -231,6 +302,7 @@ class ModelEDNN3D(nn.Module):
             print('Activation function not specified or not found, using default: {0}'.format(self.__default_activation))
             self.__activation = self.__default_activation(**self.__default_activation_kwargs)
 
+        # pooling module
         if (self.__pooling_method == 'averagepool'):
             self.__pooling = nn.AvgPool3d(2)
         elif (self.__pooling_method == 'maxpool'):
@@ -239,30 +311,6 @@ class ModelEDNN3D(nn.Module):
             self.__pooling = nn.MaxPool3d(1, stride=2)
         else:
             raise ValueError('The pooling method value is invalid: ' + self.__pooling_method)
-
-        # upconvolution layers
-        self.__deconv1 = nn.ModuleList()
-        self.__deconv2 = nn.ModuleList()
-
-        if (self.__skipping):
-            for i in range(self.__n_downsample_layers):
-                if i == 0:
-                    self.__deconv1 += [nn.Conv3d(16, 8, 4)]
-                    self.__deconv2 += [nn.Conv3d(8, self.__num_outputs, 4)]
-                else:
-                    self.__deconv1 += [nn.Conv3d(16*2**i, 8*2**i, 4)]
-                    self.__deconv2 += [nn.Conv3d(8*2**i, 4*2**i, 4)]
-
-        else:
-            for i in range(self.__n_downsample_layers):
-                if i == 0:
-                    self.__deconv1 += [nn.Conv3d(8, self.__num_outputs, 4)]
-                else:
-                    self.__deconv1 += [nn.Conv3d(8*2**i, 4*2**i, 4)]
-
-        if self.__use_mapping_layer:
-            # mapping layer
-            self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
 
     def new_epoch_callback(self, epoch):
         # nothing to do here
@@ -325,6 +373,9 @@ class ModelEDNN3D(nn.Module):
             x = self.__activation(self.__fc1(x))
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
+        else:
+            x = self.__activation(self.__c1(self.__pad_conv(x)))
+            x = self.__activation(self.__c2(self.__pad_conv(x)))
 
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):

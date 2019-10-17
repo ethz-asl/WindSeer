@@ -411,13 +411,14 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                         outputs[1] *= scale * params.data['uy_scaling']
                         outputs[2] *= scale * params.data['uz_scaling']
 
-                        if 'turb' in  model['params'].data['label_channels']:
+                        if 'turb' in model['params'].data['label_channels']:
                             outputs[3] *= scale * scale * params.data['turbulence_scaling']
 
                         outputs = outputs.cpu()
 
                         wind = outputs[:3].numpy()
-                        if 'turb' in  model['params'].data['label_channels']:
+
+                        if 'turb' in model['params'].data['label_channels']:
                             turbulence = outputs[3].numpy()
                         else:
                             turbulence = np.zeros_like(outputs[0].numpy())
@@ -446,7 +447,8 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 inputs, labels = inputs.cpu(), labels.cpu()
 
                 wind_label = labels[:3].numpy()
-                if 'turb' in  model['params'].data['label_channels']:
+
+                if 'turb' in model['params'].data['label_channels']:
                     turbulence_label = labels[3].numpy()
                 else:
                     turbulence_label = np.zeros_like(labels[0].numpy())
