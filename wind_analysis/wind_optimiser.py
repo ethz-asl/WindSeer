@@ -3,6 +3,7 @@ import nn_wind_prediction.utils as utils
 import nn_wind_prediction.models as models
 from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
+from analysis_utils.bin_log_data import bin_log_data
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 from datetime import datetime
 from scipy import ndimage
@@ -185,7 +186,7 @@ class WindOptimiser(object):
                    'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
 
         # bin the data into the regular grid
-        wind, variance = utils.bin_log_data(self._ulog_data, corners)
+        wind, variance = bin_log_data(self._ulog_data, corners)
         wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0

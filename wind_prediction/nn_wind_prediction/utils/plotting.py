@@ -369,7 +369,7 @@ class PlotUtils():
         else:
             raise NotImplementedError('Sorry, 2D sample plotting needs to be reimplemented.')
 
-    def plot_prediction(self):
+    def plot_prediction(self, label_name='CFD', input_name='Prediction'):
         # get the number of already open figures, used in slider and button callbacks
         self.__n_already_open_figures = len(list(map(plt.figure, plt.get_fignums())))
 
@@ -395,9 +395,21 @@ class PlotUtils():
 
                 for i in range(n_columns):
                     data_index = i+j*4
-                    self.__out_images.append(ah_in[0][i].imshow(self.__label[data_index,:,slice,:], origin='lower', vmin=self.__label[data_index,:,:,:].min(), vmax=self.__label[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                    self.__in_images.append(ah_in[1][i].imshow(self.__input[data_index,:,slice,:], origin='lower', vmin=self.__label[data_index,:,:,:].min(), vmax=self.__label[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                    self.__error_images.append(ah_in[2][i].imshow(self.__error[data_index,:,slice,:], origin='lower', vmin=self.__error[data_index,:,:,:].min(), vmax=self.__error[data_index,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
+                    self.__out_images.append(ah_in[0][i].imshow(
+                        self.__label[data_index,:,slice,:], origin='lower',
+                        vmin=np.nanmin(self.__label[data_index,:,:,:]),
+                        vmax=np.nanmax(self.__label[data_index,:,:,:]),
+                        aspect = 'auto', cmap=self.__cmap))
+                    self.__in_images.append(ah_in[1][i].imshow(
+                        self.__input[data_index,:,slice,:], origin='lower',
+                        vmin=np.nanmin(self.__label[data_index,:,:,:]),
+                        vmax=np.nanmax(self.__label[data_index,:,:,:]),
+                        aspect = 'auto', cmap=self.__cmap))
+                    self.__error_images.append(ah_in[2][i].imshow(
+                        self.__error[data_index,:,slice,:], origin='lower',
+                        vmin=np.nanmin(self.__error[data_index,:,:,:]),
+                        vmax=np.nanmax(self.__error[data_index,:,:,:]),
+                        aspect='auto', cmap=self.__cmap))
 
                     ah_in[0][i].set_title(self.__title_dict[self.__channels_to_plot[data_index]], fontsize = self.__title_fontsize)
 
@@ -426,8 +438,10 @@ class PlotUtils():
                         ah_in[3][i].set_yticks([])
 
                     if (i == 0):
-                        ah_in[0][i].set_ylabel('CFD', fontsize=self.__label_fontsize)
-                        ah_in[1][i].set_ylabel('Prediction', fontsize=self.__label_fontsize)
+                        ah_in[0][i].set_ylabel(label_name,
+                                               fontsize=self.__label_fontsize)
+                        ah_in[1][i].set_ylabel(input_name,
+                                               fontsize=self.__label_fontsize)
                         ah_in[2][i].set_ylabel('Error', fontsize=self.__label_fontsize)
                         if self.__uncertainty_predicted:
                             ah_in[3][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)

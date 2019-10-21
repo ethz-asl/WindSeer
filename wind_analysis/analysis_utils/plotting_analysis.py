@@ -3,6 +3,9 @@ from mpl_toolkits.mplot3d import axes3d
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import cm
+import torch
+from nn_wind_prediction.utils import PlotUtils
+
 plt.rc('font',**{'family':'serif','sans-serif':['Computer Modern Roman']})
 plt.rc('text', usetex=True)
 
@@ -163,3 +166,10 @@ def plot_wind_estimates(time, wind_array, wind_names=None, polar=False):
         a2[2].plot(time, wind[2])
     a2[2].set_ylabel('$V_D$')
     return f2, a2
+
+
+def plot_prediction_observations(input, label, terrain):
+    i2 = input
+    instance = PlotUtils('prediction', ['ux', 'uy', 'uz'],
+                         ['ux', 'uy', 'uz'], i2.cpu(),label,terrain, design=1)
+    instance.plot_prediction(label_name='Observed wind')

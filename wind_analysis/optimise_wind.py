@@ -67,14 +67,11 @@ ax2.legend(ax2.lines, names)
 ax2.set_xlabel('Rotation (deg)')
 ax2.set_ylabel('Scale')
 
-# Plot best wind estimate
+# Extract best wind estimate
 best_method_index = np.argmin([l[-1] for l in losses])
 best_rs = all_rs[best_method_index]
 wind_opt.reset_rotation_scale(rot=best_rs[-1,0], scale=best_rs[-1,1])
-print('Plotting for optimal method {0}, rotation = {1:0.3f} deg, scale = {2:0.3f}'.format(names[best_method_index],
-      best_rs[-1, 0]*180.0/np.pi, best_rs[-1, 1]))
 wind_prediction = wind_opt.get_prediction().detach()
-plot_prediction_observations(wind_prediction, wind_opt._wind_blocks, wind_opt.terrain.network_terrain.squeeze(0))
 
 # Plot wind over time
 w_vanes = np.array([wind_opt._ulog_data['we'], wind_opt._ulog_data['wn'], wind_opt._ulog_data['wd']])
@@ -113,7 +110,11 @@ ax3[2].plot(pred_t, orig_pred_wind[2], 'g.', ms=3)
 ax3[0].plot(pred_t, pred_wind[0], 'r.', ms=3)
 ax3[1].plot(pred_t, pred_wind[1], 'r.', ms=3)
 ax3[2].plot(pred_t, pred_wind[2], 'r.', ms=3)
-
 ax3[0].legend(['Raw vane estimates', 'On-board EKF estimate', 'Pre-optimisation network estimate', 'Post-optimisation network estimate'])
 
-plt.show(block=False)
+# Plot best wind estimate
+print('Plotting for optimal method {0}, rotation = {1:0.3f} deg, scale = {2:0.3f}'.format(names[best_method_index],
+      best_rs[-1, 0]*180.0/np.pi, best_rs[-1, 1]))
+plot_prediction_observations(wind_prediction, wind_opt._wind_blocks, wind_opt.terrain.network_terrain.squeeze(0))
+
+plt.show()
