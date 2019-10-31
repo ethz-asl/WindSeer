@@ -25,7 +25,7 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
 
 3. Install the following required python packages:
    `pip3 install tensorboardX lz4 numpy tqdm matplotlib scipy pandas h5py interpolation termcolor pyyaml`
-
+   
 4. Install python tkinter
    `sudo apt-get install python3-tk`
 
