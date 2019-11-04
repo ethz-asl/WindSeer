@@ -75,6 +75,7 @@ class WindOptimiser(object):
         self._config_yaml = config_yaml
         self._cosmo_args = utils.COSMOParameters(self._config_yaml)
         self._ulog_args = utils.UlogParameters(self._config_yaml)
+        # self._traj_args = utils.TrajParameters(self._config_yaml)
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._rotation0 = rotation
         self._scale0 = scale
@@ -83,6 +84,7 @@ class WindOptimiser(object):
         self._ulog_data = self.load_ulog_data()
         self._cosmo_wind = self.load_wind()
         self.terrain = self.load_terrain()
+        # self._x_traj, self._y_traj, self._z_traj = self.get_traj_parameters()
         temp_cosmo = cosmo.cosmo_corner_wind(self._cosmo_wind, self.terrain.z_terr, rotate=0.0, scale=1.0,
                                              terrain_height=self.terrain.terrain_corners)
         self._base_cosmo_corners = torch.from_numpy(temp_cosmo.astype(np.float32)).to(self._device)
@@ -154,6 +156,12 @@ class WindOptimiser(object):
             device=self._device, boolean_terrain=boolean_terrain)
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return terrain
+
+    def get_traj_parameters(self):
+        x = self._traj_args.params['x']
+        y = self._traj_args.params['y']
+        z = self._traj_args.params['z']
+        return x, y, z
 
     def load_network_model(self):
         print('Loading network model...', end='', flush=True)
