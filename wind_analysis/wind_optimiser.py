@@ -5,6 +5,7 @@ from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
 from analysis_utils.bin_log_data import bin_log_data
 from nn_wind_prediction.utils.interpolation import DataInterpolation
+from scipy.interpolate import RectBivariateSpline
 from datetime import datetime
 from scipy import ndimage
 import torch
@@ -75,7 +76,7 @@ class WindOptimiser(object):
         self._config_yaml = config_yaml
         self._cosmo_args = utils.COSMOParameters(self._config_yaml)
         self._ulog_args = utils.UlogParameters(self._config_yaml)
-        # self._traj_args = utils.TrajParameters(self._config_yaml)
+        self._traj_args = utils.TrajParameters(self._config_yaml)
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._rotation0 = rotation
         self._scale0 = scale
@@ -84,7 +85,7 @@ class WindOptimiser(object):
         self._ulog_data = self.load_ulog_data()
         self._cosmo_wind = self.load_wind()
         self.terrain = self.load_terrain()
-        # self._x_traj, self._y_traj, self._z_traj = self.get_traj_parameters()
+        self._trajectory = self.generate_trajectory()
         temp_cosmo = cosmo.cosmo_corner_wind(self._cosmo_wind, self.terrain.z_terr, rotate=0.0, scale=1.0,
                                              terrain_height=self.terrain.terrain_corners)
         self._base_cosmo_corners = torch.from_numpy(temp_cosmo.astype(np.float32)).to(self._device)
@@ -157,10 +158,34 @@ class WindOptimiser(object):
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return terrain
 
-    def get_traj_parameters(self):
+    def generate_trajectory(self):
         x = self._traj_args.params['x']
         y = self._traj_args.params['y']
         z = self._traj_args.params['z']
+        h_above_terrain = 100
+        x0 = np.zeros(len(x))
+        y0 = np.zeros(len(y))
+        z0 = np.zeros(len(z))
+        for i in range(0, len(x)):
+            x0[i] = x[i] + self.terrain.x_terr[0]
+            y0[i] = y[i] + self.terrain.y_terr[0]
+            interp_spline = RectBivariateSpline(self.terrain.x_terr, self.terrain.y_terr, self.terrain.h_terr)
+            z0[i] = z[i] + interp_spline(x0[i], y0[i])
+
+        # Generate points along the trajectory
+        points_along_traj = self._traj_args.params['points_along_traj']
+        x_pts = np.zeros((len(x)-1, points_along_traj))
+        y_pts = np.zeros((len(y)-1, points_along_traj))
+        z_pts = np.zeros((len(z)-1, points_along_traj))
+        for i in range(0, len(x)-1):
+            dist = np.sqrt((x0[i+1]-x0[i])**2 + (y0[i+1]-y0[i])**2 + (z0[i+1]-z0[i])**2)
+            n = 1
+            for j in range(0, points_along_traj):
+                t = n/(points_along_traj+1)
+                x_pts[i][j] = x0[i] + t*(x0[i+1]-x0[i])
+                y_pts[i][j] = y0[i] + t*(y0[i+1]-y0[i])
+                z_pts[i][j] = z0[i] + t*(z0[i+1]-z0[i])
+                n += 1
         return x, y, z
 
     def load_network_model(self):

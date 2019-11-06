@@ -20,6 +20,7 @@ model:
   loss: 'MSE'
 
 generate_trajectory:
-  x: [0,40]
-  y: [0,50]
-  z: [20,60]
+  x: [50,200,450]
+  y: [50,350,700]
+  z: [70,60,55]
+  points_along_traj: 50
