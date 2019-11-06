@@ -6,6 +6,7 @@ from analysis_utils import ulog_utils, get_mapgeo_terrain
 from analysis_utils.bin_log_data import bin_log_data
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 from scipy.interpolate import RectBivariateSpline
+from pykrige.ok3d import OrdinaryKriging3D
 from datetime import datetime
 from scipy import ndimage
 import torch
@@ -94,6 +95,8 @@ class WindOptimiser(object):
         self.net = self.load_network_model()
         self.net.freeze_model()
         self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask = self.get_wind_blocks()
+        #self.wind_krigged_blocks, self._var_krigged_blocks, self._wind_krigged_zeros, self._wind_krigged_mask = \
+        #    self.get_krigged_wind_blocks()
 
         try:
             if self._model_args.params['loss'].lower() == 'l1':
@@ -225,6 +228,65 @@ class WindOptimiser(object):
         wind_zeros[wind_mask] = 0
 
         print(' done [{:.2f} s]'.format(time.time() - t_start))
+        return wind, variance, wind_zeros.to(self._device), wind_mask.to(self._device)
+
+    def get_krigged_wind_blocks(self):
+        # Create the ordinary kriging object
+        OK3d_north = OrdinaryKriging3D(self._ulog_data['x'], self._ulog_data['y'], self._ulog_data['alt'],
+                                      self._ulog_data['wn'], variogram_model='linear')
+        OK3d_east = OrdinaryKriging3D(self._ulog_data['x'], self._ulog_data['y'], self._ulog_data['alt'],
+                                      self._ulog_data['we'], variogram_model='linear')
+        OK3d_down = OrdinaryKriging3D(self._ulog_data['x'], self._ulog_data['y'], self._ulog_data['alt'],
+                                      self._ulog_data['wd'], variogram_model='linear')
+
+        # Get bin coordinates where wind data is interpolated at
+        # TODO: merge this with get_wind_blocks to not have duplicate code
+        dx = self.terrain.x_terr[[0,-1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
+        dy = self.terrain.y_terr[[0,-1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
+        dz = self.terrain.z_terr[[0,-1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
+        # Determine the grid dimension
+        corners = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
+                   'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
+
+        # TODO: merge this function with bin_log_data to not have duplicate code
+        x_res = (corners['x_max'] - corners['x_min']) / corners['n_cells']
+        y_res = (corners['y_max'] - corners['y_min']) / corners['n_cells']
+        z_res = (corners['z_max'] - corners['z_min']) / corners['n_cells']
+
+        # Initialize empty wind and variance
+        wind = torch.zeros(
+            (3, corners['n_cells'], corners['n_cells'], corners['n_cells'])) * float('nan')
+        variance = torch.zeros(
+            (3, corners['n_cells'], corners['n_cells'], corners['n_cells'])) * float('nan')
+        wind_l = np.zeros((64, 64, 64))
+        variancce_l = np.zeros((64, 64, 64))
+        # loop over the and create the kriged grid and the variance grid
+        for i in range(len(self._ulog_data['x'])):
+            if ((self._ulog_data['x'][i] > corners['x_min']) and
+                    (self._ulog_data['x'][i] < corners['x_max']) and
+                    (self._ulog_data['y'][i] > corners['y_min']) and
+                    (self._ulog_data['y'][i] < corners['y_max']) and
+                    (self._ulog_data['alt'][i] > corners['z_min']) and
+                    (self._ulog_data['alt'][i] < corners['z_max'])):
+
+                idx_x = int((self._ulog_data['x'][i] - corners['x_min']) / x_res)
+                idx_y = int((self._ulog_data['y'][i] - corners['y_min']) / y_res)
+                idx_z = int((self._ulog_data['alt'][i] - corners['z_min']) / z_res)
+                gridx = self.terrain.x_terr[idx_x]
+                gridy = self.terrain.y_terr[idx_y]
+                gridz = self.terrain.z_terr[idx_z]
+                k3d, ss3d = OK3d_north.execute('grid', gridx, gridy, gridz)
+                wind[0, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[0, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+                wind_l[idx_x, idx_y, idx_z] = k3d[0][0][0]; variancce_l[idx_x, idx_y, idx_z] = ss3d[0][0][0]
+                k3d, ss3d = OK3d_east.execute('grid', gridx, gridy, gridz)
+                wind[1, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[1, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+                k3d, ss3d = OK3d_down.execute('grid', gridx, gridy, gridz)
+                wind[2, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[2, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+
+
+        wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
+        wind_zeros = wind.clone()
+        wind_zeros[wind_mask] = 0
         return wind, variance, wind_zeros.to(self._device), wind_mask.to(self._device)
 
     def get_rotated_wind(self):
