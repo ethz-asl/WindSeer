@@ -17,12 +17,15 @@
     ~~~
 
 3. Install pygdal library
-    `pip install pygdal==2.3.2.4`
+    `pip3 install pygdal==2.3.2.4`
+    
+4. Install pyproj library
+    `pip3 install pyproj==1.9.6`  
 
-4. Other dependencies
-    `pip install numpy scipy pyproj`
+5. Other dependencies
+    `pip3 install numpy scipy pyulog`
 
-5. Need to manually add the CH1903 definitions to pyproj. You can try to use this simple script.
+6. Need to manually add the CH1903 definitions to pyproj. You can try to use this simple script.
     ~~~
     cd intel_wind/wind_analysis/proj_definitions
     python install_ch_defs.py
