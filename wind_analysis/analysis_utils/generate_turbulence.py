@@ -153,9 +153,9 @@ def generate_turbulence():
         V_c = np.roll(np.roll(np.roll(V_c, int(-(nk_x-1)/2), axis=0), int(-(nk_y-1)/2), axis=1), int(-(nk_z-1)/2), axis=2)
         W_c = np.roll(np.roll(np.roll(W_c, int(-(nk_x-1)/2), axis=0), int(-(nk_y-1)/2), axis=1), int(-(nk_z-1)/2), axis=2)
 
-        U2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(U_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x * nk_y * nk_z
-        V2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(V_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x * nk_y * nk_z
-        W2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(W_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x * nk_y * nk_z
+        U2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(U_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x*nk_y*nk_z
+        V2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(V_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x*nk_y*nk_z
+        W2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(W_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x*nk_y*nk_z
 
         x2 = np.linspace(0, (nk_x-1)*lambda_min, nk_x)
         y2 = np.linspace(0, (nk_y-1)*lambda_min, nk_y)

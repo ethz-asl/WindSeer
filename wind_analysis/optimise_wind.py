@@ -85,6 +85,8 @@ y_terr2 = np.linspace(wind_opt.terrain.y_terr[0], wind_opt.terrain.y_terr[-1], w
 z_terr2 = np.linspace(wind_opt.terrain.z_terr[0], wind_opt.terrain.z_terr[-1], wind_prediction.shape[-3])
 prediction_interp = []
 for pred_dim in wind_prediction:
+    # Convert torch tensor to numpy array to work with RegularGridInterpolator
+    pred_dim = pred_dim.cpu().detach().numpy()
     prediction_interp.append(RegularGridInterpolator((z_terr2, y_terr2, x_terr2), pred_dim))
 
 # Get all the in bounds points
@@ -101,6 +103,8 @@ wind_opt.reset_rotation_scale(rot=0.0, scale=1.0)
 orig_wind_prediction = wind_opt.get_prediction().detach()
 orig_prediction_interp = []
 for pred_dim in orig_wind_prediction:
+    # Convert torch tensor to numpy array to work with RegularGridInterpolator
+    pred_dim = pred_dim.cpu().detach().numpy()
     orig_prediction_interp.append(RegularGridInterpolator((z_terr2, y_terr2, x_terr2), pred_dim))
 orig_pred_wind = [orig_prediction_interp[0](points), orig_prediction_interp[1](points), orig_prediction_interp[2](points)]
 
