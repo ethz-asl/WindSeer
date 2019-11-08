@@ -283,7 +283,6 @@ class WindOptimiser(object):
                 k3d, ss3d = OK3d_down.execute('grid', gridx, gridy, gridz)
                 wind[2, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[2, idx_x, idx_y, idx_z] = ss3d[0][0][0]
 
-
         wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
