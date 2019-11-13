@@ -40,7 +40,7 @@ def bin_log_data(wind_data, grid_dimensions):
             wy[idx_z][idx_y][idx_x].append(wind_data['we'][i])
             wz[idx_z][idx_y][idx_x].append(-wind_data['wd'][i])
 
-    wind = torch.zeros((3, grid_dimensions['n_cells'],grid_dimensions['n_cells'],grid_dimensions['n_cells'])) * float('nan')
+    wind = torch.zeros((3, grid_dimensions['n_cells'],grid_dimensions['n_cells'],grid_dimensions['n_cells']))
     variance = torch.zeros((3, grid_dimensions['n_cells'],grid_dimensions['n_cells'],grid_dimensions['n_cells'])) * float('nan')
 
     counter = 0

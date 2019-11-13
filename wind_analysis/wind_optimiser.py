@@ -8,6 +8,7 @@ from analysis_utils.interpolate_log_data import krig_log_data, interpolate_log_d
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 from scipy.interpolate import RectBivariateSpline
 from pykrige.ok3d import OrdinaryKriging3D
+from sklearn import metrics
 from datetime import datetime
 from scipy import ndimage
 import torch
@@ -236,7 +237,7 @@ class WindOptimiser(object):
                    'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
 
         # bin the data into the regular grid
-        wind, variance = bin_log_data(self._ulog_data, corners)
+        wind, variance = bin_log_data(self._train_ulog_data, corners)
         wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
@@ -262,7 +263,7 @@ class WindOptimiser(object):
         corners = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
                    'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
 
-        wind, variance = krig_log_data(self._ulog_data, corners, self.terrain, OK3d_north, OK3d_east, OK3d_down)
+        wind, variance = krig_log_data(self._train_ulog_data, corners, self.terrain, OK3d_north, OK3d_east, OK3d_down)
         wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
@@ -278,7 +279,7 @@ class WindOptimiser(object):
                    'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
 
         # bin the data into the regular grid
-        wind = interpolate_log_data(self._ulog_data, corners, self.terrain)
+        wind = interpolate_log_data(self._train_ulog_data, corners, self.terrain)
         return wind
 
     def get_rotated_wind(self):
@@ -308,14 +309,25 @@ class WindOptimiser(object):
         input = torch.cat([self.terrain.network_terrain, wind])
         return input
 
-    def get_predicted_interpolated_ulog_data(self, output_wind, method=None):
-        if method == 1:
-            interpolated_ulog_data = interpolate_log_data_from_grid(self.terrain, output_wind, self._ulog_data)
-        elif method == 2:
-            interpolated_ulog_data = interpolate_log_data_from_grid(self.terrain, output_wind, self._ulog_data)
-        elif method == 3:
-            interpolated_ulog_data = interpolate_log_data_from_grid(self.terrain, output_wind, self._ulog_data)
+    def get_predicted_interpolated_ulog_data(self, output_wind):
+        interpolated_ulog_data = interpolate_log_data_from_grid(self.terrain, output_wind, self._test_ulog_data)
         return interpolated_ulog_data
+
+    def get_metrics(self, predicted_wind):
+        test_wind_inside_terrain = np.zeros((len(predicted_wind), 1))
+        j=0
+        for i in range(len(self._test_ulog_data['x'])):
+            if ((self._test_ulog_data['x'][i] > self.terrain.x_terr[0]) and
+                    (self._test_ulog_data['x'][i] < self.terrain.x_terr[-1]) and
+                    (self._test_ulog_data['y'][i] > self.terrain.y_terr[0]) and
+                    (self._test_ulog_data['y'][i] < self.terrain.y_terr[-1]) and
+                    (self._test_ulog_data['alt'][i] > self.terrain.z_terr[0]) and
+                    (self._test_ulog_data['alt'][i] < self.terrain.z_terr[-1])):
+                test_wind_inside_terrain[j] = self._test_ulog_data['wn'][i]
+                j=j+1
+
+        mean_squared_error = metrics.mean_squared_error(test_wind_inside_terrain, predicted_wind)
+        return mean_squared_error
 
     def build_csv(self):
         try:

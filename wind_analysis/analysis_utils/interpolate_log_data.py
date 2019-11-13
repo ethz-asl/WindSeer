@@ -5,10 +5,10 @@ from scipy.interpolate import RegularGridInterpolator
 
 
 def interpolate_log_data_from_grid(terrain, predicted_wind_data, wind_data):
-    my_interpolating_function = RegularGridInterpolator((terrain.x_terr, terrain.y_terr, terrain.z_terr),
+    my_interpolating_function_x = RegularGridInterpolator((terrain.x_terr, terrain.y_terr, terrain.z_terr),
                                                         predicted_wind_data[0, :, :, :].detach().cpu().numpy())
     # Initialize empty list of points to interpolate at
-    pts = [[] for i in range(len(wind_data['x']))]
+    pts_x = [[] for i in range(len(wind_data['x']))]
     for i in range(len(wind_data['x'])):
         if ((wind_data['x'][i] > terrain.x_terr[0]) and
                 (wind_data['x'][i] < terrain.x_terr[-1]) and
@@ -16,13 +16,13 @@ def interpolate_log_data_from_grid(terrain, predicted_wind_data, wind_data):
                 (wind_data['y'][i] < terrain.y_terr[-1]) and
                 (wind_data['alt'][i] > terrain.z_terr[0]) and
                 (wind_data['alt'][i] < terrain.z_terr[-1])):
-            pts[i].append([wind_data['x'][i], wind_data['y'][i], wind_data['alt'][i]])
+            pts_x[i].append([wind_data['x'][i], wind_data['y'][i], wind_data['alt'][i]])
 
     # Remove empty lists from pts
-    pts = [x for x in pts if x != []]
+    pts_x = [x for x in pts_x if x != []]
 
-    interpolated_log_data = my_interpolating_function(pts)
-    return interpolated_log_data
+    interpolated_log_data_x = my_interpolating_function_x(pts_x)
+    return interpolated_log_data_x
 
 
 def interpolate_log_data(wind_data, grid, terrain):
@@ -98,13 +98,10 @@ def krig_log_data(wind_data, grid, terrain, OK3d_north, OK3d_east, OK3d_down):
             gridy = terrain.y_terr[idx_y]
             gridz = terrain.z_terr[idx_z]
             k3d, ss3d = OK3d_north.execute('grid', gridx, gridy, gridz)
-            wind[0, idx_x, idx_y, idx_z] = k3d[0][0][0];
-            variance[0, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+            wind[0, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[0, idx_x, idx_y, idx_z] = ss3d[0][0][0]
             k3d, ss3d = OK3d_east.execute('grid', gridx, gridy, gridz)
-            wind[1, idx_x, idx_y, idx_z] = k3d[0][0][0];
-            variance[1, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+            wind[1, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[1, idx_x, idx_y, idx_z] = ss3d[0][0][0]
             k3d, ss3d = OK3d_down.execute('grid', gridx, gridy, gridz)
-            wind[2, idx_x, idx_y, idx_z] = k3d[0][0][0];
-            variance[2, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+            wind[2, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[2, idx_x, idx_y, idx_z] = ss3d[0][0][0]
 
     return wind, variance

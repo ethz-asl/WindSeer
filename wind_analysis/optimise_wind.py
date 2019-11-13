@@ -144,7 +144,16 @@ method = 3
 output_wind_idw = wind_opt.get_wind_prediction(method)
 
 # Interpolate prediction to scattered ulog data locations
-predicted_ulog_data_bin = wind_opt.get_predicted_interpolated_ulog_data(output_wind_bin, method=1)
-#predicted_ulog_data_bin = wind_opt.get_predicted_interpolated_ulog_data(method=1)
-predicted_ulog_data_idw = wind_opt.get_predicted_interpolated_ulog_data(output_wind_idw, method=3)
-print('It works for now!')
+predicted_ulog_data_bin = wind_opt.get_predicted_interpolated_ulog_data(output_wind_bin)
+#predicted_ulog_data_krigged = wind_opt.get_predicted_interpolated_ulog_data(output_wind_krigged)
+predicted_ulog_data_idw = wind_opt.get_predicted_interpolated_ulog_data(output_wind_idw)
+
+#Metrics
+predicted_mean_squared_error_bin = wind_opt.get_metrics(predicted_ulog_data_bin)
+#predicted_mean_squared_error__krigged = wind_opt.get_metrics(predicted_ulog_data_krigged)
+predicted_mean_squared_error_idw = wind_opt.get_metrics(predicted_ulog_data_idw)
+print("Predicted absolute mean error for bin interpolation: ", predicted_mean_squared_error_bin)
+#print("Predicted absolute mean error for krigging interpolation: ", predicted_mean_squared_error_krigged)
+print("Predicted absolute mean error for idw interpolation: ", predicted_mean_squared_error_idw)
+
+a = 1
