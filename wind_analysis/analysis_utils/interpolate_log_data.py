@@ -6,10 +6,24 @@ from scipy.interpolate import RegularGridInterpolator
 
 def interpolate_log_data_from_grid(terrain, predicted_wind_data, wind_data):
     my_interpolating_function = RegularGridInterpolator((terrain.x_terr, terrain.y_terr, terrain.z_terr),
-                                                        predicted_wind_data[0, :, :, :])
-    pts = np.array([wind_data['x'], [wind_data['y'], wind_data['z']]])
+                                                        predicted_wind_data[0, :, :, :].detach().cpu().numpy())
+    # Initialize empty list of points to interpolate at
+    pts = [[] for i in range(len(wind_data['x']))]
+    for i in range(len(wind_data['x'])):
+        if ((wind_data['x'][i] > terrain.x_terr[0]) and
+                (wind_data['x'][i] < terrain.x_terr[-1]) and
+                (wind_data['y'][i] > terrain.y_terr[0]) and
+                (wind_data['y'][i] < terrain.y_terr[-1]) and
+                (wind_data['alt'][i] > terrain.z_terr[0]) and
+                (wind_data['alt'][i] < terrain.z_terr[-1])):
+            pts[i].append([wind_data['x'][i], wind_data['y'][i], wind_data['alt'][i]])
+
+    # Remove empty lists from pts
+    pts = [x for x in pts if x != []]
+
     interpolated_log_data = my_interpolating_function(pts)
     return interpolated_log_data
+
 
 def interpolate_log_data(wind_data, grid, terrain):
     # initialize wind lists for the wind data
@@ -20,7 +34,6 @@ def interpolate_log_data(wind_data, grid, terrain):
     # Initialize distance lists for the wind_data
     id_xyz = [[[[] for k in range(grid['n_cells'])] for j in range(grid['n_cells'])] for i in range(grid['n_cells'])]
 
-
     # determine the resolution of the grid
     x_res = (grid['x_max'] - grid['x_min']) / grid['n_cells']
     y_res = (grid['y_max'] - grid['y_min']) / grid['n_cells']
@@ -29,12 +42,11 @@ def interpolate_log_data(wind_data, grid, terrain):
     # loop over the data and bin it
     for i in range(len(wind_data['x'])):
         if ((wind_data['x'][i] > grid['x_min']) and
-            (wind_data['x'][i] < grid['x_max']) and
-            (wind_data['y'][i] > grid['y_min']) and
-            (wind_data['y'][i] < grid['y_max']) and
-            (wind_data['alt'][i] > grid['z_min']) and
-            (wind_data['alt'][i] < grid['z_max'])):
-
+                (wind_data['x'][i] < grid['x_max']) and
+                (wind_data['y'][i] > grid['y_min']) and
+                (wind_data['y'][i] < grid['y_max']) and
+                (wind_data['alt'][i] > grid['z_min']) and
+                (wind_data['alt'][i] < grid['z_max'])):
             idx_x = int((wind_data['x'][i] - grid['x_min']) / x_res)
             idx_y = int((wind_data['y'][i] - grid['y_min']) / y_res)
             idx_z = int((wind_data['alt'][i] - grid['z_min']) / z_res)
@@ -46,7 +58,7 @@ def interpolate_log_data(wind_data, grid, terrain):
             wx[idx_z][idx_y][idx_x].append(wind_data['wn'][i])
             wy[idx_z][idx_y][idx_x].append(wind_data['we'][i])
             wz[idx_z][idx_y][idx_x].append(-wind_data['wd'][i])
-            id_xyz[idx_z][idx_y][idx_x].append(1/distance)
+            id_xyz[idx_z][idx_y][idx_x].append(1 / distance)
 
     wind = torch.zeros((3, grid['n_cells'], grid['n_cells'], grid['n_cells']))
     for i in range(grid['n_cells']):
@@ -86,12 +98,13 @@ def krig_log_data(wind_data, grid, terrain, OK3d_north, OK3d_east, OK3d_down):
             gridy = terrain.y_terr[idx_y]
             gridz = terrain.z_terr[idx_z]
             k3d, ss3d = OK3d_north.execute('grid', gridx, gridy, gridz)
-            wind[0, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[0, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+            wind[0, idx_x, idx_y, idx_z] = k3d[0][0][0];
+            variance[0, idx_x, idx_y, idx_z] = ss3d[0][0][0]
             k3d, ss3d = OK3d_east.execute('grid', gridx, gridy, gridz)
-            wind[1, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[1, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+            wind[1, idx_x, idx_y, idx_z] = k3d[0][0][0];
+            variance[1, idx_x, idx_y, idx_z] = ss3d[0][0][0]
             k3d, ss3d = OK3d_down.execute('grid', gridx, gridy, gridz)
-            wind[2, idx_x, idx_y, idx_z] = k3d[0][0][0]; variance[2, idx_x, idx_y, idx_z] = ss3d[0][0][0]
+            wind[2, idx_x, idx_y, idx_z] = k3d[0][0][0];
+            variance[2, idx_x, idx_y, idx_z] = ss3d[0][0][0]
 
     return wind, variance
-
-

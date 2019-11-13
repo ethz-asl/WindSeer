@@ -85,6 +85,7 @@ class WindOptimiser(object):
         self.reset_rotation_scale()
         self._resolution = resolution
         self._ulog_data = self.load_ulog_data()
+        self._train_ulog_data, self._test_ulog_data = self.train_test_split()
         self._cosmo_wind = self.load_wind()
         self.terrain = self.load_terrain()
         self._trajectory = self.generate_trajectory()
@@ -211,6 +212,17 @@ class WindOptimiser(object):
         if rot is None: rot = self._rotation0
         if scale is None: scale = self._scale0
         self._rotation_scale = torch.Tensor([rot, scale]).to(self._device).requires_grad_()
+
+    def train_test_split(self, train_size=0.8):
+        train_ulog = {}
+        test_ulog = {}
+        for keys, values in self._ulog_data.items():
+            train_batch = values[:int(len(values) * train_size)]
+            test_batch = values[int(len(values)*train_size):]
+            train_ulog.update({keys: train_batch})
+            test_ulog.update({keys: test_batch})
+
+        return train_ulog, test_ulog
 
     def get_wind_blocks(self):
         print('Getting binned wind blocks...', end='', flush=True)

@@ -126,6 +126,13 @@ if optimise_wind:
     plt.show()
 
 # Metrics for wind prediction
+
+# Separate ulog data in chunks for training and testing
+train_size = 0.2
+
+
+
+# Get NN output using the sparse ulog data as input
 # Binned data
 method = 1
 output_wind_bin = wind_opt.get_wind_prediction(method)
