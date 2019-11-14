@@ -88,7 +88,7 @@ if optimise_wind:
     prediction_interp = []
     for pred_dim in wind_prediction:
         # Convert torch tensor to numpy array to work with RegularGridInterpolator
-        pred_dim = pred_dim.cpu().detach().numpy()
+        pred_dim = pred_dim.detach().cpu().numpy()
         prediction_interp.append(RegularGridInterpolator((z_terr2, y_terr2, x_terr2), pred_dim))
 
     # Get all the in bounds points
@@ -106,7 +106,7 @@ if optimise_wind:
     orig_prediction_interp = []
     for pred_dim in orig_wind_prediction:
         # Convert torch tensor to numpy array to work with RegularGridInterpolator
-        pred_dim = pred_dim.cpu().detach().numpy()
+        pred_dim = pred_dim.detach().cpu().numpy()
         orig_prediction_interp.append(RegularGridInterpolator((z_terr2, y_terr2, x_terr2), pred_dim))
     orig_pred_wind = [orig_prediction_interp[0](points), orig_prediction_interp[1](points), orig_prediction_interp[2](points)]
 

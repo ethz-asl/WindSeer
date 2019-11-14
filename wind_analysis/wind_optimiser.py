@@ -4,7 +4,8 @@ import nn_wind_prediction.models as models
 from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
 from analysis_utils.bin_log_data import bin_log_data
-from analysis_utils.interpolate_log_data import krig_log_data, interpolate_log_data, interpolate_log_data_from_grid
+# from analysis_utils.interpolate_log_data import krig_log_data, interpolate_log_data, interpolate_log_data_from_grid
+from analysis_utils.interpolate_log_data import UlogInterpolation
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 from scipy.interpolate import RectBivariateSpline
 from pykrige.ok3d import OrdinaryKriging3D
@@ -101,17 +102,8 @@ class WindOptimiser(object):
         #self._wind_blocks_krigged, self._var_krigged_blocks, self._wind_krigged_zeros, self._wind_krigged_mask = \
             #self.get_krigged_wind_blocks()
         self._wind_blocks_idw = self.get_interpolated_wind_blocks()
+        self._loss_fn = self.get_loss_function()
 
-        try:
-            if self._model_args.params['loss'].lower() == 'l1':
-                self._loss_fn = torch.nn.L1Loss()
-            elif self._model_args.params['loss'].lower() == 'mse':
-                self._loss_fn = torch.nn.MSELoss()
-            else:
-                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
-                raise ValueError
-        except KeyError:
-            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
 
     def load_ulog_data(self):
         print('Loading ulog data...', end='', flush=True)
@@ -271,9 +263,9 @@ class WindOptimiser(object):
 
     def get_interpolated_wind_blocks(self):
         # TODO: merge this with get_wind_blocks to not have duplicate code
-        dx = self.terrain.x_terr[[0,-1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
-        dy = self.terrain.y_terr[[0,-1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
-        dz = self.terrain.z_terr[[0,-1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
+        dx = self.terrain.x_terr[[0, -1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
+        dy = self.terrain.y_terr[[0, -1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
+        dz = self.terrain.z_terr[[0, -1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
         # determine the grid dimension
         corners = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
                    'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
@@ -340,6 +332,19 @@ class WindOptimiser(object):
 
     def run_prediction(self, input):
         return self.net(input.unsqueeze(0)).squeeze(0)
+
+    def get_loss_function(self):
+        try:
+            if self._model_args.params['loss'].lower() == 'l1':
+                loss_fn = torch.nn.L1Loss()
+            elif self._model_args.params['loss'].lower() == 'mse':
+                loss_fn = torch.nn.MSELoss()
+            else:
+                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
+                raise ValueError
+        except KeyError:
+            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
+        return loss_fn
 
     def evaluate_loss(self, output):
         # input = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
