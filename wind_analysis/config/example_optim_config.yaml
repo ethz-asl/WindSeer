@@ -6,11 +6,15 @@ cosmo:
   rotate: 0.0 #-110.0
   scale: 1.0  # 0.8
   prediction_prefix: ''  # rotated_
+  optimise_wind: True
 
 ulog:
   file: 'data/13_33_46.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
   filtered_dir: 'data/'
   use_ekf_wind: False
+  interpolation_method: 'bin'
+  predict_ulog: False
+  train_size: 0.8
 
 model:
   location: 'data/20191015_TODO/'

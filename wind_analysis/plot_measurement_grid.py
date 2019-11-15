@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import nn_wind_prediction.utils as utils
 from analysis_utils import extract_cosmo_data as cosmo
-from analysis_utils import ulog_utils, get_mapgeo_terrain, bin_log_data
+from analysis_utils import ulog_utils, get_mapgeo_terrain
+from analysis_utils.interpolate_log_data import UlogInterpolation
 import time
 import torch
 
@@ -59,7 +60,8 @@ if __name__ == "__main__":
     # bin the data into the regular grid
     print('Binning wind data...', end='', flush=True)
     t_start = time.time()
-    wind, variance = bin_log_data.bin_log_data(wind_data, grid_dimensions)
+    UlogInterpolator = UlogInterpolation(wind_data, grid_dimensions)
+    wind, variance = UlogInterpolator.bin_log_data()
     print(' done [{:.2f} s]'.format(time.time() - t_start))
 
     # get the terrain data

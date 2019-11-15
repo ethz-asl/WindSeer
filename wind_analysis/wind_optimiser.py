@@ -3,12 +3,9 @@ import nn_wind_prediction.utils as utils
 import nn_wind_prediction.models as models
 from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
-from analysis_utils.bin_log_data import bin_log_data
-# from analysis_utils.interpolate_log_data import krig_log_data, interpolate_log_data, interpolate_log_data_from_grid
 from analysis_utils.interpolate_log_data import UlogInterpolation
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 from scipy.interpolate import RectBivariateSpline
-from pykrige.ok3d import OrdinaryKriging3D
 from sklearn import metrics
 from datetime import datetime
 from scipy import ndimage
@@ -39,7 +36,7 @@ class TerrainBlock(object):
         return len(self.x_terr), len(self.y_terr), len(self.z_terr)
 
 
-class SimpleStepOptimiser():
+class SimpleStepOptimiser:
     def __init__(self, variables, lr=1e-4, lr_decay=0.0):
         self.var = variables
         self.learning_rate = lr
@@ -91,17 +88,11 @@ class WindOptimiser(object):
         self._cosmo_wind = self.load_wind()
         self.terrain = self.load_terrain()
         self._trajectory = self.generate_trajectory()
-        temp_cosmo = cosmo.cosmo_corner_wind(self._cosmo_wind, self.terrain.z_terr, rotate=0.0, scale=1.0,
-                                             terrain_height=self.terrain.terrain_corners)
-        self._base_cosmo_corners = torch.from_numpy(temp_cosmo.astype(np.float32)).to(self._device)
-        # self.cosmo_corners = self._base_cosmo_corners.clone()
+        self._base_cosmo_corners = self.get_cosmo_corners()
         self._interpolator = DataInterpolation(self._device, 3, *self.terrain.get_dimensions())
         self.net = self.load_network_model()
         self.net.freeze_model()
         self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask = self.get_wind_blocks()
-        #self._wind_blocks_krigged, self._var_krigged_blocks, self._wind_krigged_zeros, self._wind_krigged_mask = \
-            #self.get_krigged_wind_blocks()
-        self._wind_blocks_idw = self.get_interpolated_wind_blocks()
         self._loss_fn = self.get_loss_function()
 
 
@@ -187,6 +178,12 @@ class WindOptimiser(object):
                 n += 1
         return x_pts, y_pts, z_pts
 
+    def get_cosmo_corners(self):
+        temp_cosmo = cosmo.cosmo_corner_wind(self._cosmo_wind, self.terrain.z_terr, rotate=0.0, scale=1.0,
+                                             terrain_height=self.terrain.terrain_corners)
+        cosmo_corners = torch.from_numpy(temp_cosmo.astype(np.float32)).to(self._device)
+        return cosmo_corners
+
     def load_network_model(self):
         print('Loading network model...', end='', flush=True)
         t_start = time.time()
@@ -206,14 +203,15 @@ class WindOptimiser(object):
         if scale is None: scale = self._scale0
         self._rotation_scale = torch.Tensor([rot, scale]).to(self._device).requires_grad_()
 
-    def train_test_split(self, train_size=0.8):
-        train_ulog = {}
-        test_ulog = {}
-        for keys, values in self._ulog_data.items():
-            train_batch = values[:int(len(values) * train_size)]
-            test_batch = values[int(len(values)*train_size):]
-            train_ulog.update({keys: train_batch})
-            test_ulog.update({keys: test_batch})
+    def train_test_split(self):
+        train_ulog = {}; test_ulog = {}
+        if self._ulog_args.params['predict_ulog']:
+            train_size = self._ulog_args.params['train_size']
+            for keys, values in self._ulog_data.items():
+                train_batch = values[:int(len(values) * train_size)]
+                test_batch = values[int(len(values)*train_size):]
+                train_ulog.update({keys: train_batch})
+                test_ulog.update({keys: test_batch})
 
         return train_ulog, test_ulog
 
@@ -221,15 +219,32 @@ class WindOptimiser(object):
         print('Getting binned wind blocks...', end='', flush=True)
         t_start = time.time()
 
-        dx = self.terrain.x_terr[[0,-1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
-        dy = self.terrain.y_terr[[0,-1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
-        dz = self.terrain.z_terr[[0,-1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
-        # determine the grid dimension
-        corners = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
-                   'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
+        # Determine the grid dimensions
+        dx = self.terrain.x_terr[[0, -1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
+        dy = self.terrain.y_terr[[0, -1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
+        dz = self.terrain.z_terr[[0, -1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
+        grid_dimensions = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
+                           'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
+        if self._ulog_args.params['predict_ulog']:
+            UlogInterpolator = UlogInterpolation(self._train_ulog_data, grid_dimensions, self.terrain)
+        else:
+            UlogInterpolator = UlogInterpolation(self._ulog_data, grid_dimensions, self.terrain)
 
         # bin the data into the regular grid
-        wind, variance = bin_log_data(self._train_ulog_data, corners)
+        try:
+            if self._ulog_args.params['interpolation_method'].lower() == 'bin':
+                wind, variance = UlogInterpolator.bin_log_data()
+            elif self._ulog_args.params['interpolation_method'].lower() == 'krigging':
+                wind, variance = UlogInterpolator.interpolate_log_data_krigging()
+            elif self._ulog_args.params['interpolation_method'].lower() == 'idw':
+                wind, variance = UlogInterpolator.interpolate_log_data_idw()
+            else:
+                print('Specified interpolation method: {0} unknown!'
+                      .format(self._ulog_args.params['interpolation_method']))
+                raise ValueError
+        except KeyError:
+            print('Interpolation method not specified in file: {0}'
+                  .format(self._config_yaml))
         wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
@@ -237,42 +252,18 @@ class WindOptimiser(object):
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return wind, variance, wind_zeros.to(self._device), wind_mask.to(self._device)
 
-    def get_krigged_wind_blocks(self):
-        # Create the ordinary kriging object
-        OK3d_north = OrdinaryKriging3D(self._ulog_data['x'], self._ulog_data['y'], self._ulog_data['alt'],
-                                      self._ulog_data['wn'], variogram_model='linear')
-        OK3d_east = OrdinaryKriging3D(self._ulog_data['x'], self._ulog_data['y'], self._ulog_data['alt'],
-                                      self._ulog_data['we'], variogram_model='linear')
-        OK3d_down = OrdinaryKriging3D(self._ulog_data['x'], self._ulog_data['y'], self._ulog_data['alt'],
-                                      self._ulog_data['wd'], variogram_model='linear')
-
-        # Get bin coordinates where wind data is interpolated at
-        # TODO: merge this with get_wind_blocks to not have duplicate code
-        dx = self.terrain.x_terr[[0,-1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
-        dy = self.terrain.y_terr[[0,-1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
-        dz = self.terrain.z_terr[[0,-1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
-        # Determine the grid dimension
-        corners = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
-                   'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
-
-        wind, variance = krig_log_data(self._train_ulog_data, corners, self.terrain, OK3d_north, OK3d_east, OK3d_down)
-        wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
-        wind_zeros = wind.clone()
-        wind_zeros[wind_mask] = 0
-        return wind, variance, wind_zeros.to(self._device), wind_mask.to(self._device)
-
-    def get_interpolated_wind_blocks(self):
-        # TODO: merge this with get_wind_blocks to not have duplicate code
-        dx = self.terrain.x_terr[[0, -1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
-        dy = self.terrain.y_terr[[0, -1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
-        dz = self.terrain.z_terr[[0, -1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
-        # determine the grid dimension
-        corners = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
-                   'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
-
-        # bin the data into the regular grid
-        wind = interpolate_log_data(self._train_ulog_data, corners, self.terrain)
-        return wind
+    def get_loss_function(self):
+        try:
+            if self._model_args.params['loss'].lower() == 'l1':
+                loss_fn = torch.nn.L1Loss()
+            elif self._model_args.params['loss'].lower() == 'mse':
+                loss_fn = torch.nn.MSELoss()
+            else:
+                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
+                raise ValueError
+        except KeyError:
+            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
+        return loss_fn
 
     def get_rotated_wind(self):
         sr, cr = torch.sin(self._rotation_scale[0]), torch.cos(self._rotation_scale[0])
@@ -290,24 +281,20 @@ class WindOptimiser(object):
             [self.terrain.network_terrain, self._interpolator.edge_interpolation(cosmo_corners)])
         return input
 
-    def generate_interpolated_wind_input(self, method=None):
-        if method == 1:
-            wind = self._wind_blocks
-        elif method == 2:
-            wind = self._wind_blocks_krigged
-        elif method == 3:
-            wind = self._wind_blocks_idw
-        wind = wind.to(self._device)
+    def generate_ulog_input(self):
+        wind = self._wind_blocks.to(self._device)
         input = torch.cat([self.terrain.network_terrain, wind])
         return input
 
     def get_predicted_interpolated_ulog_data(self, output_wind):
-        interpolated_ulog_data = interpolate_log_data_from_grid(self.terrain, output_wind, self._test_ulog_data)
+        grid_dimensions = None
+        UlogInterpolator = UlogInterpolation(self._train_ulog_data, grid_dimensions, self.terrain)
+        interpolated_ulog_data = UlogInterpolator.interpolate_log_data_from_grid(output_wind, self._test_ulog_data)
         return interpolated_ulog_data
 
-    def get_metrics(self, predicted_wind):
-        test_wind_inside_terrain = np.zeros((len(predicted_wind), 1))
-        j=0
+    def calculate_metrics(self, predicted_wind):
+        test_wind_inside_terrain = np.zeros((3, len(predicted_wind[0])))
+        j = 0
         for i in range(len(self._test_ulog_data['x'])):
             if ((self._test_ulog_data['x'][i] > self.terrain.x_terr[0]) and
                     (self._test_ulog_data['x'][i] < self.terrain.x_terr[-1]) and
@@ -315,11 +302,22 @@ class WindOptimiser(object):
                     (self._test_ulog_data['y'][i] < self.terrain.y_terr[-1]) and
                     (self._test_ulog_data['alt'][i] > self.terrain.z_terr[0]) and
                     (self._test_ulog_data['alt'][i] < self.terrain.z_terr[-1])):
-                test_wind_inside_terrain[j] = self._test_ulog_data['wn'][i]
-                j=j+1
+                test_wind_inside_terrain[0][j] = self._test_ulog_data['wn'][i]
+                test_wind_inside_terrain[1][j] = self._test_ulog_data['we'][i]
+                test_wind_inside_terrain[2][j] = self._test_ulog_data['wd'][i]
+                j += 1
 
-        mean_squared_error = metrics.mean_squared_error(test_wind_inside_terrain, predicted_wind)
-        return mean_squared_error
+        test_wind_inside_terrain = list(test_wind_inside_terrain)
+        mean_absolute_error_x = metrics.mean_absolute_error(test_wind_inside_terrain[0], predicted_wind[0])
+        mean_absolute_error_y = metrics.mean_absolute_error(test_wind_inside_terrain[1], predicted_wind[1])
+        mean_absolute_error_z = metrics.mean_absolute_error(test_wind_inside_terrain[2], predicted_wind[2])
+        mean_squared_error_x = metrics.mean_squared_error(test_wind_inside_terrain[0], predicted_wind[0])
+        mean_squared_error_y = metrics.mean_squared_error(test_wind_inside_terrain[1], predicted_wind[1])
+        mean_squared_error_z = metrics.mean_squared_error(test_wind_inside_terrain[2], predicted_wind[2])
+        mean_absolute_error = mean_absolute_error_x + mean_absolute_error_y + mean_absolute_error_z
+        mean_squared_error = mean_squared_error_x + mean_squared_error_y + mean_squared_error_z
+        print('Mean absolute error is: ', mean_absolute_error)
+        print('Mean square error is: ', mean_squared_error)
 
     def build_csv(self):
         try:
@@ -333,19 +331,6 @@ class WindOptimiser(object):
     def run_prediction(self, input):
         return self.net(input.unsqueeze(0)).squeeze(0)
 
-    def get_loss_function(self):
-        try:
-            if self._model_args.params['loss'].lower() == 'l1':
-                loss_fn = torch.nn.L1Loss()
-            elif self._model_args.params['loss'].lower() == 'mse':
-                loss_fn = torch.nn.MSELoss()
-            else:
-                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
-                raise ValueError
-        except KeyError:
-            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
-        return loss_fn
-
     def evaluate_loss(self, output):
         # input = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
         masked_out = output[0:3,:,:,:]
@@ -357,8 +342,8 @@ class WindOptimiser(object):
         output = self.run_prediction(input)      # Run network prediction with input csv
         return output
 
-    def get_wind_prediction(self, method=None):
-        input = self.generate_interpolated_wind_input(method)
+    def get_ulog_prediction(self):
+        input = self.generate_ulog_input()
         output = self.run_prediction(input)
         return output
 

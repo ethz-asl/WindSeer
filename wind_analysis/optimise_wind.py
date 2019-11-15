@@ -20,7 +20,7 @@ args = parser.parse_args()
 # Create WindOptimiser object using yaml config
 wind_opt = WindOptimiser(args.input_yaml)
 
-optimise_wind = False
+optimise_wind = wind_opt._cosmo_args.params['optimise_wind']
 if optimise_wind:
     # Testing a range of different optimisers from torch.optim, and a basic gradient step (SimpleStepOptimiser)
     optimisers = [OptTest(SimpleStepOptimiser, {'lr': 5.0, 'lr_decay': 0.01}),
@@ -125,35 +125,14 @@ if optimise_wind:
 
     plt.show()
 
-# Metrics for wind prediction
 
-# Separate ulog data in chunks for training and testing
-train_size = 0.2
+predict_ulog = wind_opt._ulog_args.params['predict_ulog']
+if predict_ulog:
+    # Get NN output using the sparse ulog data as input
+    output_wind = wind_opt.get_ulog_prediction()
 
+    # Interpolate prediction to scattered ulog data locations used for testing
+    predicted_ulog_data = wind_opt.get_predicted_interpolated_ulog_data(output_wind)
 
-
-# Get NN output using the sparse ulog data as input
-# Binned data
-method = 1
-output_wind_bin = wind_opt.get_wind_prediction(method)
-# Krigged data
-#method = 2
-#output_wind_krigged = wind_opt.get_wind_prediction(method)
-# Interpolated data
-method = 3
-output_wind_idw = wind_opt.get_wind_prediction(method)
-
-# Interpolate prediction to scattered ulog data locations
-predicted_ulog_data_bin = wind_opt.get_predicted_interpolated_ulog_data(output_wind_bin)
-#predicted_ulog_data_krigged = wind_opt.get_predicted_interpolated_ulog_data(output_wind_krigged)
-predicted_ulog_data_idw = wind_opt.get_predicted_interpolated_ulog_data(output_wind_idw)
-
-#Metrics
-predicted_mean_squared_error_bin = wind_opt.get_metrics(predicted_ulog_data_bin)
-#predicted_mean_squared_error__krigged = wind_opt.get_metrics(predicted_ulog_data_krigged)
-predicted_mean_squared_error_idw = wind_opt.get_metrics(predicted_ulog_data_idw)
-print("Predicted absolute mean error for bin interpolation: ", predicted_mean_squared_error_bin)
-#print("Predicted absolute mean error for krigging interpolation: ", predicted_mean_squared_error_krigged)
-print("Predicted absolute mean error for idw interpolation: ", predicted_mean_squared_error_idw)
-
-a = 1
+    # Print metrics
+    wind_opt.calculate_metrics(predicted_ulog_data)
