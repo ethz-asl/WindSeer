@@ -72,15 +72,15 @@ class WindOptimiser(object):
     _loss_fn = torch.nn.MSELoss()
     _rotation_scale = None
 
-    def __init__(self, config_yaml, resolution=64, rotation=0.0, scale = 1.0):
+    def __init__(self, config_yaml, resolution=64, rotation=None, scale=None):
         self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self._config_yaml = config_yaml
         self._cosmo_args = utils.COSMOParameters(self._config_yaml)
         self._ulog_args = utils.UlogParameters(self._config_yaml)
         self._traj_args = utils.TrajParameters(self._config_yaml)
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
-        self._rotation0 = rotation
-        self._scale0 = scale
+        self._rotation0 = [0.0, 0.0, 0.0, 0.0]
+        self._scale0 = [1.0, 1.0, 1.0, 1.0]
         self.reset_rotation_scale()
         self._resolution = resolution
         self._ulog_data = self.load_ulog_data()
@@ -266,11 +266,19 @@ class WindOptimiser(object):
         return loss_fn
 
     def get_rotated_wind(self):
-        sr, cr = torch.sin(self._rotation_scale[0]), torch.cos(self._rotation_scale[0])
+        sr = []; cr = []
+        for i in range(len(self._rotation_scale[0, :])):
+            sr.append(torch.sin(self._rotation_scale[0][i]))
+            cr.append(torch.cos(self._rotation_scale[0][i]))
         # Get corner winds for model inference, offset to actual terrain heights
         cosmo_corners = self._base_cosmo_corners.clone()
-        cosmo_corners[0] = self._rotation_scale[1]*(self._base_cosmo_corners[0]*cr - self._base_cosmo_corners[1]*sr)
-        cosmo_corners[1] = self._rotation_scale[1]*(self._base_cosmo_corners[0]*sr + self._base_cosmo_corners[1]*cr)
+        for i in range(len(self._rotation_scale[0, :])):
+            cosmo_corners[0, :, i//2, (i+2)%2] = self._rotation_scale[1,i]*(
+                    self._base_cosmo_corners[0, :, i//2, (i+2)%2]*cr[i]
+                    - self._base_cosmo_corners[1, :, i//2, (i+2)%2]*sr[i])
+            cosmo_corners[1, :, i//2, (i+2)%2] = self._rotation_scale[1,i]*(
+                    self._base_cosmo_corners[0, :, i//2, (i+2)%2]*sr[i]
+                    + self._base_cosmo_corners[1, :, i//2, (i+2)%2]*cr[i])
         return cosmo_corners
 
     def generate_wind_input(self):
@@ -355,8 +363,9 @@ class WindOptimiser(object):
         max_grad = min_gradient+1.0
         losses, grads, rotation_scales = [], [], []
         while t < n and max_grad > min_gradient:
-            print('{0:4} r: {1:5.2f} deg, s: {2:5.2f}, '.format(t, self._rotation_scale[0] * 180.0 / np.pi,
-                                                                self._rotation_scale[1]), end='')
+            #print('{0:4} r: {} deg, s: {}, '.format(t, *self._rotation_scale[0] * 180.0 / np.pi,
+            #                                                   *self._rotation_scale[1]), end='')
+            print(t, ' r: ', *self._rotation_scale[0].detach().cpu().numpy(), ' s: ', *self._rotation_scale[1].detach().cpu().numpy(), '')
             rotation_scales.append(self._rotation_scale.clone().detach().cpu().numpy())
             optimizer.zero_grad()
             t1 = time.time()

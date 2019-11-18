@@ -6,8 +6,8 @@ from analysis_utils.wind_optimiser_output import WindOptimiserOutput
 parser = argparse.ArgumentParser(description='Optimise wind speed and direction from COSMO data using observations')
 parser.add_argument('input_yaml', help='Input yaml config')
 parser.add_argument('-n', '--n_steps', type=int, default=200, help='Number of optimisation steps')
-parser.add_argument('-r', '--rotation', type=float, default=0.0, help='Initial rotation (rad)')
-parser.add_argument('-s', '--scale', type=float, default=1.0, help='Initial scale')
+parser.add_argument('-r', '--rotation', type=float, default=[0.0, 0.0, 0.0, 0.0], help='Initial rotation (rad)')
+parser.add_argument('-s', '--scale', type=float, default=[1.0, 1.0, 1.0, 1.0], help='Initial scale')
 args = parser.parse_args()
 
 # Create WindOptimiser object using yaml config
@@ -16,7 +16,7 @@ wind_opt = WindOptimiser(args.input_yaml)
 optimise_wind = wind_opt._cosmo_args.params['optimise_wind']
 if optimise_wind:
     # Testing a range of different optimisers from torch.optim, and a basic gradient step (SimpleStepOptimiser)
-    optimisers = [OptTest(SimpleStepOptimiser, {'lr': 5.0, 'lr_decay': 0.01}),
+    optimisers = [
                   OptTest(torch.optim.Adadelta, {'lr': 1.0}),
                   OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1}),
                   OptTest(torch.optim.Adam, {'lr': 1.0, 'betas': (.9, .999)}),

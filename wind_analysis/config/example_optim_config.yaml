@@ -3,8 +3,8 @@ cosmo:
   time: 'auto'
   terrain_file: 'data/cosmo-1_ethz_ana_const.nc'
   terrain_tiff: 'data/riemenstalden_full.tif'         # fluelen_full, riemenstalden_full
-  rotate: 0.0 #-110.0
-  scale: 1.0  # 0.8
+  rotate: [0.0, 0.0, 0.0, 0.0] #-110.0
+  scale: [1.0, 1.0, 1.0, 1.0]  # 0.8
   prediction_prefix: ''  # rotated_
   optimise_wind: True
 
