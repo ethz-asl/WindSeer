@@ -282,7 +282,7 @@ class WindOptimiser(object):
         return input
 
     def generate_ulog_input(self):
-        wind = self._wind_blocks.to(self._device)
+        wind = self._wind_zeros.to(self._device)
         input = torch.cat([self.terrain.network_terrain, wind])
         return input
 

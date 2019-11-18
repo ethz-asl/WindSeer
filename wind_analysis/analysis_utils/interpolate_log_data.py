@@ -89,11 +89,11 @@ class UlogInterpolation:
         wind = torch.zeros((3,
                             self._grid_dimensions['n_cells'],
                             self._grid_dimensions['n_cells'],
-                            self._grid_dimensions['n_cells']))
+                            self._grid_dimensions['n_cells'])) * float('nan')
         variance = torch.zeros((3,
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'],
-                                self._grid_dimensions['n_cells']))
+                                self._grid_dimensions['n_cells'])) * float('nan')
         counter = 0
         vals_per_cell = []
         for i in range(self._grid_dimensions['n_cells']):
@@ -140,10 +140,14 @@ class UlogInterpolation:
                                       self._wind_data['wd'], variogram_model='linear')
 
         # Initialize empty wind and variance
-        wind = torch.zeros(
-            (3, self._grid_dimensions['n_cells'], self._grid_dimensions['n_cells'], self._grid_dimensions['n_cells']))
-        variance = torch.zeros(
-            (3, self._grid_dimensions['n_cells'], self._grid_dimensions['n_cells'], self._grid_dimensions['n_cells']))
+        wind = torch.zeros((3,
+                            self._grid_dimensions['n_cells'],
+                            self._grid_dimensions['n_cells'],
+                            self._grid_dimensions['n_cells'])) * float('nan')
+        variance = torch.zeros((3,
+                                self._grid_dimensions['n_cells'],
+                                self._grid_dimensions['n_cells'],
+                                self._grid_dimensions['n_cells'])) * float('nan')
 
         # Loop over the data and create the krigged grid and the variance grid
         for i in range(len(self._x_coord)):
@@ -196,11 +200,11 @@ class UlogInterpolation:
         wind = torch.zeros((3,
                             self._grid_dimensions['n_cells'],
                             self._grid_dimensions['n_cells'],
-                            self._grid_dimensions['n_cells']))
+                            self._grid_dimensions['n_cells'])) * float('nan')
         variance = torch.zeros((3,
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'],
-                                self._grid_dimensions['n_cells']))
+                                self._grid_dimensions['n_cells'])) * float('nan')
         for i in range(self._grid_dimensions['n_cells']):
             for j in range(self._grid_dimensions['n_cells']):
                 for k in range(self._grid_dimensions['n_cells']):
