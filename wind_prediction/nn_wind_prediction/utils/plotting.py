@@ -369,7 +369,7 @@ class PlotUtils():
         else:
             raise NotImplementedError('Sorry, 2D sample plotting needs to be reimplemented.')
 
-    def plot_prediction(self, label_name='CFD', input_name='Prediction'):
+    def plot_prediction(self, save, label_name='CFD', input_name='Prediction'):
         # get the number of already open figures, used in slider and button callbacks
         self.__n_already_open_figures = len(list(map(plt.figure, plt.get_fignums())))
 
@@ -462,11 +462,14 @@ class PlotUtils():
                     circle.set_radius(0.1)
                 self.__buttons[j].on_clicked(self.radio_callback)
 
-            plt.show()
+            if not save:
+                plt.show()
 
         # 2D case
         else:
             raise NotImplementedError('Sorry, 2D prediction plotting needs to be reimplemented.')
+
+        return fig_in, ah_in
 
     def plotting_nut(self):
 

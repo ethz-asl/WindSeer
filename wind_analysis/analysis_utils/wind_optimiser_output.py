@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.interpolate import RegularGridInterpolator
 from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates
+import datetime
 
 
 def angle_wrap(angles):
@@ -19,6 +20,9 @@ class WindOptimiserOutput:
         self._grads = grads
         self._names = self.get_names()
         self._wind_prediction, self._best_method_index, self._best_rs = self.get_best_wind_estimate()
+        self._save_output = False
+        self._base_path = "analysis_output/"
+        self._current_time = str(datetime.datetime.now().time())
 
     def get_names(self):
         # Optimisers names
@@ -48,8 +52,10 @@ class WindOptimiserOutput:
         ax[1].set_xlabel('Optimisation steps')
         ax[1].set_ylabel('Max. loss gradient')
 
-        plt.show()
-        #self.pp.savefig(fig)
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
 
     def plot_final_values(self):
         # Plot final values and associated losses
@@ -66,8 +72,10 @@ class WindOptimiserOutput:
         ax.set_xlabel('Rotation (deg)')
         ax.set_ylabel('Scale')
 
-        plt.show()
-        #self.pp.savefig(fig)
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
 
     def plot_wind_over_time(self):
         # Plot wind over time
@@ -121,41 +129,60 @@ class WindOptimiserOutput:
         ax[0].legend(['Raw vane estimates', 'On-board EKF estimate', 'Pre-optimisation network estimate',
                        'Post-optimisation network estimate'])
 
-        plt.show()
-        #self.pp.savefig(fig)
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
 
     def plot_best_wind_estimate(self):
         # Plot best wind estimate
-        fig = plt.figure()
-        print('Plotting for optimal method {0}, rotation = {1:0.3f} deg, scale = {2:0.3f}'.format(
-            self._names[self._best_method_index],
-            self._best_rs[-1, 0] * 180.0 / np.pi, self._best_rs[-1, 1]))
-        plot_prediction_observations(self._wind_prediction, self.wind_opt._wind_blocks,
-                                     self.wind_opt.terrain.network_terrain.squeeze(0))
+        if self._save_output:
+            print('Plotting for optimal method {0}, rotation = {1:0.3f} deg, scale = {2:0.3f}'.format(
+                self._names[self._best_method_index],
+                self._best_rs[-1, 0] * 180.0 / np.pi, self._best_rs[-1, 1]))
+        fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt._wind_blocks,
+                                               self.wind_opt.terrain.network_terrain.squeeze(0), self._save_output)
 
-        plt.show()
-        #self.pp.savefig(fig)
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
 
     def print_losses(self):
         # Get minimum losses
         min_losses = []
-        for loss in self._losses:
-            min_losses.append(loss.min())
-        min_losses_indices = np.argsort(min_losses)
-        min_loss = min(min_losses)
-
-        print("Minimum losses for each optimizer are: ", min_losses)
-        print("Indices of the minimum losses are: ", min_losses_indices)
-        print("Mimimum loss is: ", min_loss)
+        for o, loss, rs in zip(self._optimisers, self._losses, self._all_rs):
+            min_loss = loss.min()
+            idx = np.argmin(loss)
+            rot_scale = rs[idx, :]
+            name = o.opt.__name__
+            if self._save_output:
+                file = open(self._base_path + self._current_time + ".txt", "a")
+                file.write("{0}: minimum loss = {1}, rotation = {2} deg, scale = {3}".format(
+                    name, min_loss, rot_scale[0] * 180.0 / np.pi, rot_scale[1]) + "\n\n")
+                if o == self._optimisers[-1]:
+                    file.write("Best optimization method: {0}".format(
+                        self._names[self._best_method_index]))
+                file.close()
+            else:
+                print("{0}: minimum loss = {1}, rotation = {2} deg, scale = {3}".format(
+                    name, min_loss, rot_scale[0] * 180.0 / np.pi, rot_scale[1]))
+                if o == self._optimisers[-1]:
+                    print("Best optimization method: {0}".format(
+                        self._names[self._best_method_index]))
 
     def close(self):
             self.pp.close()
 
     def plot(self):
-        #self.pp = PdfPages(self.basePath + str(self.c * self.th) + "_" + str(self.mTh) + "_" + str(self.r) + '.pdf')
+        if self._save_output:
+            self.pp = PdfPages(self._base_path + self._current_time + '.pdf')
+
         self.plot_opt_convergence()
         self.plot_final_values()
         self.plot_wind_over_time()
         self.plot_best_wind_estimate()
-        #self.close()
+
+        if self._save_output:
+            self.close()
 
