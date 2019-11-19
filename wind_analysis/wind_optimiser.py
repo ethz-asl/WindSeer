@@ -72,16 +72,16 @@ class WindOptimiser(object):
     _loss_fn = torch.nn.MSELoss()
     _rotation_scale = None
 
-    def __init__(self, config_yaml, resolution=64, rotation=None, scale=None):
+    def __init__(self, config_yaml, resolution=64):
         self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self._config_yaml = config_yaml
         self._cosmo_args = utils.COSMOParameters(self._config_yaml)
         self._ulog_args = utils.UlogParameters(self._config_yaml)
         self._traj_args = utils.TrajParameters(self._config_yaml)
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
-        self._rotation0 = [0.0, 0.0, 0.0, 0.0]
-        self._scale0 = [1.0, 1.0, 1.0, 1.0]
-        self.reset_rotation_scale()
+        self._rotation0, self._scale0, self._directional_shear0, self._power_law_exponent0 \
+            = self.get_optimization_variables()
+        self.reset_optimization_variables()
         self._resolution = resolution
         self._ulog_data = self.load_ulog_data()
         self._train_ulog_data, self._test_ulog_data = self.train_test_split()
@@ -198,10 +198,27 @@ class WindOptimiser(object):
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return net
 
-    def reset_rotation_scale(self, rot=None, scale=None):
+    def get_optimization_variables(self):
+        if self._cosmo_args.params['optimized_corners'] > 0:
+            ones_ = np.ones((self._cosmo_args.params['optimized_corners'], 1))
+            rotation = self._cosmo_args.params['rotation'] * ones_
+            scale = self._cosmo_args.params['scale'] * ones_
+            directional_wind_shear = self._cosmo_args.params['directional_shear'] * ones_
+            vertical_wind_shear = self._cosmo_args.params['vertical_wind_shear'] * ones_
+        else:
+            rotation = self._cosmo_args.params['rotation']
+            scale = self._cosmo_args.params['scale']
+            directional_wind_shear = self._cosmo_args.params['directional_shear']
+            vertical_wind_shear = self._cosmo_args.params['vertical_wind_shear']
+
+        return rotation, scale, directional_wind_shear, vertical_wind_shear
+
+    def reset_optimization_variables(self, rot=None, scale=None, shear=None, exponent=None):
         if rot is None: rot = self._rotation0
         if scale is None: scale = self._scale0
-        self._rotation_scale = torch.Tensor([rot, scale]).to(self._device).requires_grad_()
+        if shear is None: shear = self._directional_shear0
+        if exponent is None: exponent = self._power_law_exponent0
+        self._rotation_scale = torch.Tensor([rot, scale, shear, exponent]).to(self._device).requires_grad_()
 
     def train_test_split(self):
         train_ulog = {}; test_ulog = {}
@@ -267,12 +284,12 @@ class WindOptimiser(object):
 
     def get_rotated_wind(self):
         sr = []; cr = []
-        for i in range(len(self._rotation_scale[0, :])):
+        for i in range(self._cosmo_args.params['optimized_corners']):
             sr.append(torch.sin(self._rotation_scale[0][i]))
             cr.append(torch.cos(self._rotation_scale[0][i]))
         # Get corner winds for model inference, offset to actual terrain heights
         cosmo_corners = self._base_cosmo_corners.clone()
-        for i in range(len(self._rotation_scale[0, :])):
+        for i in range(self._cosmo_args.params['optimized_corners']):
             cosmo_corners[0, :, i//2, (i+2)%2] = self._rotation_scale[1,i]*(
                     self._base_cosmo_corners[0, :, i//2, (i+2)%2]*cr[i]
                     - self._base_cosmo_corners[1, :, i//2, (i+2)%2]*sr[i])
