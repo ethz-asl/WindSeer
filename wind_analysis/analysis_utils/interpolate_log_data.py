@@ -12,7 +12,7 @@ class UlogInterpolation:
         self._grid_dimensions = grid_dimensions
         self._x_res, self._y_res, self._z_res = self.get_grid_resolution()
         self._idx_x, self._idx_y, self._idx_z, \
-        self._wx, self._wy, self._wz = self.get_bin_indices_and_winds()
+            self._wx, self._wy, self._wz = self.get_bin_indices_and_winds()
         self._x_coord, self._y_coord, self._z_coord = self.get_bin_coordinates()
 
     def get_grid_resolution(self):

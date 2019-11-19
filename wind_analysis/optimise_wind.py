@@ -32,7 +32,7 @@ if optimise_wind:
     for i, o in enumerate(optimisers):
         wind_opt.reset_optimization_variables(args.rotation, args.scale,
                                               args.directional_shear, args.power_law_exponent)
-        rs, loss, grad = wind_opt.optimise_rotation_scale(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
+        rs, loss, grad = wind_opt.optimise_wind_variables(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
         all_rs.append(rs)
         losses.append(loss)
         grads.append(grad)

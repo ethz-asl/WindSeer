@@ -5,10 +5,10 @@ cosmo:
   terrain_tiff: 'data/riemenstalden_full.tif'         # fluelen_full, riemenstalden_full
   optimise_wind: True
   optimized_corners: 4
-  rotatation: 0.0 #-110.0
+  rotation: 0.0 #-110.0
   scale: 1.0  # 0.8
   directional_shear: 0.0 # directional wind shear in [deg/m]
-  power_law_exponent: 0.0 # vertical wind shear (using a power law) exponent
+  power_law_exponent: 0.0 # vertical wind shear using a power law
   prediction_prefix: ''  # rotated_
 
 ulog:
