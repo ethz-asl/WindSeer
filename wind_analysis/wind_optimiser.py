@@ -299,8 +299,8 @@ class WindOptimiser(object):
         return loss_fn
 
     def get_rotated_wind(self):
-        sr = torch.zeros((len(self.terrain.z_terr), self._cosmo_args.params['optimized_corners']))
-        cr = torch.zeros((len(self.terrain.z_terr), self._cosmo_args.params['optimized_corners']))
+        sr = np.zeros((len(self.terrain.z_terr), self._cosmo_args.params['optimized_corners']))
+        cr = np.zeros((len(self.terrain.z_terr), self._cosmo_args.params['optimized_corners']))
         for z in range(len(self.terrain.z_terr)):
             for i in range(self._cosmo_args.params['optimized_corners']):
                 angle = self._optimisation_variables[0, i] \

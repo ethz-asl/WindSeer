@@ -4,7 +4,7 @@ cosmo:
   terrain_file: 'data/cosmo-1_ethz_ana_const.nc'
   terrain_tiff: 'data/riemenstalden_full.tif'         # fluelen_full, riemenstalden_full
   optimise_wind: True
-  optimized_corners: 2
+  optimized_corners: 4
   rotation: 0.0 #-110.0
   scale: 1.0  # 0.8
   directional_shear: 0.0 # directional wind shear in [deg/m]
