@@ -70,7 +70,7 @@ class OptTest(object):
 
 class WindOptimiser(object):
     _loss_fn = torch.nn.MSELoss()
-    _optimization_variables = None
+    _optimisation_variables = None
 
     def __init__(self, config_yaml, resolution=64):
         self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -80,7 +80,7 @@ class WindOptimiser(object):
         self._traj_args = utils.TrajParameters(self._config_yaml)
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._rotation0, self._scale0, self._directional_shear0, self._power_law_exponent0 \
-            = self.get_optimization_variables()
+            = self.get_optimisation_variables()
         self._resolution = resolution
         self._ulog_data = self.load_ulog_data()
         self._train_ulog_data, self._test_ulog_data = self.train_test_split()
@@ -197,21 +197,21 @@ class WindOptimiser(object):
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return net
 
-    def get_optimization_variables(self):
+    def get_optimisation_variables(self):
+        rotation = self._cosmo_args.params['rotation']
+        scale = self._cosmo_args.params['scale']
+        directional_wind_shear = self._cosmo_args.params['directional_shear']
+        power_law_exponent = self._cosmo_args.params['power_law_exponent']
         if self._cosmo_args.params['optimized_corners'] > 0:
             ones_ = np.ones(self._cosmo_args.params['optimized_corners'])
-            rotation = self._cosmo_args.params['rotation'] * ones_
-            scale = self._cosmo_args.params['scale'] * ones_
-            directional_wind_shear = self._cosmo_args.params['directional_shear'] * ones_
-            power_law_exponent = self._cosmo_args.params['power_law_exponent'] * ones_
-        else:
-            rotation = self._cosmo_args.params['rotation']
-            scale = self._cosmo_args.params['scale']
-            directional_wind_shear = self._cosmo_args.params['directional_shear']
-            power_law_exponent = self._cosmo_args.params['power_law_exponent']
+            rotation *= ones_
+            scale *= ones_
+            directional_wind_shear *= ones_
+            power_law_exponent *= ones_
+
         return rotation, scale, directional_wind_shear, power_law_exponent
 
-    def reset_optimization_variables(self, rot=None, scale=None, shear=None, exponent=None):
+    def reset_optimisation_variables(self, rot=None, scale=None, shear=None, exponent=None):
         ones_ = np.ones(self._cosmo_args.params['optimized_corners'])
         if rot is None:
             rot = self._rotation0
@@ -234,7 +234,7 @@ class WindOptimiser(object):
             if self._cosmo_args.params['optimized_corners'] > 0:
                 exponent *= ones_
 
-        self._optimization_variables = torch.Tensor([rot, scale, shear, exponent]).to(self._device).requires_grad_()
+        self._optimisation_variables = torch.Tensor([rot, scale, shear, exponent]).to(self._device).requires_grad_()
 
     def train_test_split(self):
         train_ulog = {}; test_ulog = {}
@@ -299,19 +299,28 @@ class WindOptimiser(object):
         return loss_fn
 
     def get_rotated_wind(self):
-        sr = []; cr = []
-        for i in range(self._cosmo_args.params['optimized_corners']):
-            sr.append(torch.sin(self._optimization_variables[0][i]))
-            cr.append(torch.cos(self._optimization_variables[0][i]))
+        sr = torch.zeros((len(self.terrain.z_terr), self._cosmo_args.params['optimized_corners']))
+        cr = torch.zeros((len(self.terrain.z_terr), self._cosmo_args.params['optimized_corners']))
+        for z in range(len(self.terrain.z_terr)):
+            for i in range(self._cosmo_args.params['optimized_corners']):
+                angle = self._optimisation_variables[0, i] \
+                        + self._optimisation_variables[3, i]*(self.terrain.z_terr[z]/self.terrain.z_terr[0])/10000
+                sr[z, i] = torch.sin(angle)
+                cr[z, i] = torch.cos(angle)
         # Get corner winds for model inference, offset to actual terrain heights
         cosmo_corners = self._base_cosmo_corners.clone()
-        for i in range(self._cosmo_args.params['optimized_corners']):
-            cosmo_corners[0, :, i//2, (i+2)%2] = self._optimization_variables[1, i]*(
-                    self._base_cosmo_corners[0, :, i//2, (i+2)%2]*cr[i]
-                    - self._base_cosmo_corners[1, :, i//2, (i+2)%2]*sr[i])
-            cosmo_corners[1, :, i//2, (i+2)%2] = self._optimization_variables[1, i]*(
-                    self._base_cosmo_corners[0, :, i//2, (i+2)%2]*sr[i]
-                    + self._base_cosmo_corners[1, :, i//2, (i+2)%2]*cr[i])
+        for z in range(len(self.terrain.z_terr)):
+            for i in range(self._cosmo_args.params['optimized_corners']):
+                cosmo_corners[0, :, i//2, (i+2)%2] = \
+                    self._optimisation_variables[1, i]\
+                    * (self.terrain.z_terr[z]/self.terrain.z_terr[0])**self._optimisation_variables[2, i]/10*(
+                        self._base_cosmo_corners[0, :, i//2, (i+2)%2]*cr[z, i]
+                        - self._base_cosmo_corners[1, :, i//2, (i+2)%2]*sr[z, i])
+                cosmo_corners[1, :, i//2, (i+2)%2] = \
+                    self._optimisation_variables[1, i] \
+                    * (self.terrain.z_terr[z]/self.terrain.z_terr[0])**self._optimisation_variables[2, i]/10*(
+                        self._base_cosmo_corners[0, :, i//2, (i+2)%2]*sr[z, i]
+                        + self._base_cosmo_corners[1, :, i//2, (i+2)%2]*cr[z, i])
         return cosmo_corners
 
     def generate_wind_input(self):
@@ -389,20 +398,34 @@ class WindOptimiser(object):
         return output
 
     def optimise_wind_variables(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5}, verbose=False):
-        optimizer = opt([self._optimization_variables], **opt_kwargs)
+        # Check which optimisation variables are passed to the optimiser
+        # optimise_variables = self._cosmo_args.params['optimise_variables']
+        # reduced_optimisation_variables = self._optimisation_variables.clone().detach().cpu().numpy()
+        # reduced_optimisation_variables = reduced_optimisation_variables[optimise_variables]
+        # reduced_optimisation_variables = \
+        #     torch.Tensor([reduced_optimisation_variables]).to(self._device).requires_grad_()
+        optimizer = opt([self._optimisation_variables], **opt_kwargs)
         print(optimizer)
         t0 = time.time()
         t = 0
         max_grad = min_gradient+1.0
-        losses, grads, optimization_variables = [], [], []
+        losses, grads, optimisation_variables_ = [], [], []
         while t < n and max_grad > min_gradient:
-            print(t,
-                  ' r: ', *self._optimization_variables[0].detach().cpu().numpy(),
-                  ' s: ', *self._optimization_variables[1].detach().cpu().numpy(),
-                  ' ds: ', *self._optimization_variables[2].detach().cpu().numpy(),
-                  ' e: ', *self._optimization_variables[3].detach().cpu().numpy(),
-                  '')
-            optimization_variables.append(self._optimization_variables.clone().detach().cpu().numpy())
+            if self._cosmo_args.params['optimized_corners'] > 0:
+                print(t,
+                      ' r: ', *self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
+                      ' s: ', *self._optimisation_variables[1].detach().cpu().numpy(),
+                      ' ds: ', *self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
+                      ' e: ', *self._optimisation_variables[3].detach().cpu().numpy()/10,
+                      '')
+            else:
+                print(t,
+                      ' r: ', self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
+                      ' s: ', self._optimisation_variables[1].detach().cpu().numpy(),
+                      ' ds: ', self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
+                      ' e: ', self._optimisation_variables[3].detach().cpu().numpy()/10,
+                      '')
+            optimisation_variables_.append(self._optimisation_variables.clone().detach().cpu().numpy())
             optimizer.zero_grad()
             t1 = time.time()
             output = self.get_prediction()
@@ -414,11 +437,11 @@ class WindOptimiser(object):
             losses.append(loss.item())
             print('loss={0:0.3e}, '.format(loss.item()), end='')
 
-            # Calculate derivative of loss with respect to optimization variables
+            # Calculate derivative of loss with respect to optimisation variables
             loss.backward(retain_graph=True)
             tb = time.time()
 
-            max_grad = self._optimization_variables.grad.abs().max()
+            max_grad = self._optimisation_variables.grad.abs().max()
             print('Max grad: {0:0.3e}'.format(max_grad))
             grads.append(max_grad)
 
@@ -435,4 +458,4 @@ class WindOptimiser(object):
         tt = time.time()-t0
         if verbose:
             print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
-        return np.array(optimization_variables), np.array(losses), np.array(grads)
+        return np.array(optimisation_variables_), np.array(losses), np.array(grads)

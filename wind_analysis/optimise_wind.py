@@ -8,7 +8,7 @@ parser.add_argument('input_yaml', help='Input yaml config')
 parser.add_argument('-n', '--n_steps', type=int, default=200, help='Number of optimisation steps')
 parser.add_argument('-r', '--rotation', type=float, default=0.0, help='Initial rotation (rad)')
 parser.add_argument('-s', '--scale', type=float, default=1.0, help='Initial scale')
-parser.add_argument('-d', '--directional_shear', type=float, default=0.0, help='Initial directional wind shear')
+parser.add_argument('-d', '--directional_shear', type=float, default=0.0, help='Initial directional wind shear (rad/m)')
 parser.add_argument('-e', '--power_law_exponent', type=float, default=0.0, help='Initial power law exponent')
 args = parser.parse_args()
 
@@ -30,10 +30,9 @@ if optimise_wind:
     # Try each optimisation method
     all_rs, losses, grads = [], [], []
     for i, o in enumerate(optimisers):
-        wind_opt.reset_optimization_variables(args.rotation, args.scale,
-                                              args.directional_shear, args.power_law_exponent)
-        rs, loss, grad = wind_opt.optimise_wind_variables(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
-        all_rs.append(rs)
+        wind_opt.reset_optimisation_variables()
+        ov, loss, grad = wind_opt.optimise_wind_variables(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
+        all_rs.append(ov)
         losses.append(loss)
         grads.append(grad)
 
