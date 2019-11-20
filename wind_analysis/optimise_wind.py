@@ -28,16 +28,16 @@ if optimise_wind:
                   ]
 
     # Try each optimisation method
-    all_rs, losses, grads = [], [], []
+    all_ov, losses, grads = [], [], []
     for i, o in enumerate(optimisers):
         wind_opt.reset_optimisation_variables()
         ov, loss, grad = wind_opt.optimise_wind_variables(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
-        all_rs.append(ov)
+        all_ov.append(ov)
         losses.append(loss)
         grads.append(grad)
 
     # Analyse optimised wind
-    wind_opt_output = WindOptimiserOutput(wind_opt, optimisers, all_rs, losses, grads)
+    wind_opt_output = WindOptimiserOutput(wind_opt, optimisers, all_ov, losses, grads)
     # Plot graphs
     wind_opt_output.plot()
     # Print losses

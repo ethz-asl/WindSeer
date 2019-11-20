@@ -12,15 +12,15 @@ def angle_wrap(angles):
 
 
 class WindOptimiserOutput:
-    def __init__(self, wind_opt, opt, all_rs, losses, grads):
+    def __init__(self, wind_opt, opt, all_ov, losses, grads):
         self.wind_opt = wind_opt
         self._optimisers = opt
-        self._all_rs = all_rs
+        self._all_ov = all_ov
         self._losses = losses
         self._grads = grads
         self._names = self.get_names()
-        self._wind_prediction, self._best_method_index, self._best_rs = self.get_best_wind_estimate()
-        self._save_output = False
+        self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
+        self._save_output = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
 
@@ -32,10 +32,11 @@ class WindOptimiserOutput:
     def get_best_wind_estimate(self):
         # Extract best wind estimate
         best_method_index = np.argmin([l[-1] for l in self._losses])
-        best_rs = self._all_rs[best_method_index]
-        self.wind_opt.reset_rotation_scale(rot=best_rs[-1, 0], scale=best_rs[-1, 1])
+        best_ov = self._all_ov[best_method_index]
+        self.wind_opt.reset_optimisation_variables(
+            rot=best_ov[-1, 0], scale=best_ov[-1, 1], shear=best_ov[-1, 2], exponent=best_ov[-1, 3])
         wind_prediction = self.wind_opt.get_prediction().detach()
-        return wind_prediction, best_method_index, best_rs
+        return wind_prediction, best_method_index, best_ov
 
     def plot_opt_convergence(self):
         # Plot results for all optimisers
@@ -60,14 +61,14 @@ class WindOptimiserOutput:
     def plot_final_values(self):
         # Plot final values and associated losses
         fig, ax = plt.subplots()
-        for rs, loss in zip(self._all_rs, self._losses):
-            neg_scale = rs[:, 1] < 0
-            rs[neg_scale, 0] += np.pi
-            rs[neg_scale, 1] *= -1
-            rs[:, 0] = angle_wrap(rs[:, 0])
-            ax.plot(rs[:, 0] * 180.0 / np.pi, rs[:, 1])
-            ax.scatter(rs[-1, 0] * 180.0 / np.pi, rs[-1, 1])
-            ax.text(rs[-1, 0] * 180.0 / np.pi, rs[-1, 1], "{0:0.3e}".format(loss[-1]))
+        for ov, loss in zip(self._all_ov, self._losses):
+            neg_scale = ov[:, 1] < 0
+            ov[neg_scale, 0] += np.pi
+            ov[neg_scale, 1] *= -1
+            ov[:, 0] = angle_wrap(ov[:, 0])
+            ax.plot(ov[:, 0] * 180.0 / np.pi, ov[:, 1])
+            ax.scatter(ov[-1, 0] * 180.0 / np.pi, ov[-1, 1])
+            ax.text(ov[-1, 0] * 180.0 / np.pi, ov[-1, 1], "{0:0.3e}".format(loss[-1]))
         ax.legend(ax.lines, self._names)
         ax.set_xlabel('Rotation (deg)')
         ax.set_ylabel('Scale')
@@ -110,7 +111,7 @@ class WindOptimiserOutput:
                            self.wind_opt._ulog_data['x'][inbounds]]).T
         pred_wind = [prediction_interp[0](points), prediction_interp[1](points), prediction_interp[2](points)]
 
-        self.wind_opt.reset_rotation_scale(rot=0.0, scale=1.0)
+        self.wind_opt.reset_optimisation_variables(rot=0.0, scale=1.0, shear=0.0, exponent=0.0)
         orig_wind_prediction = self.wind_opt.get_prediction().detach()
         orig_prediction_interp = []
         for pred_dim in orig_wind_prediction:
@@ -136,10 +137,6 @@ class WindOptimiserOutput:
 
     def plot_best_wind_estimate(self):
         # Plot best wind estimate
-        if self._save_output:
-            print('Plotting for optimal method {0}, rotation = {1:0.3f} deg, scale = {2:0.3f}'.format(
-                self._names[self._best_method_index],
-                self._best_rs[-1, 0] * 180.0 / np.pi, self._best_rs[-1, 1]))
         fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt._wind_blocks,
                                                self.wind_opt.terrain.network_terrain.squeeze(0), self._save_output)
 
@@ -151,22 +148,30 @@ class WindOptimiserOutput:
     def print_losses(self):
         # Get minimum losses
         min_losses = []
-        for o, loss, rs in zip(self._optimisers, self._losses, self._all_rs):
+        for o, loss, ov in zip(self._optimisers, self._losses, self._all_ov):
             min_loss = loss.min()
             idx = np.argmin(loss)
-            rot_scale = rs[idx, :]
+            opt_var = ov[idx, :]
             name = o.opt.__name__
             if self._save_output:
                 file = open(self._base_path + self._current_time + ".txt", "a")
-                file.write("{0}: minimum loss = {1}, rotation = {2} deg, scale = {3}".format(
-                    name, min_loss, rot_scale[0] * 180.0 / np.pi, rot_scale[1]) + "\n\n")
+                file.write("{0}: minimum loss = {1}, rotation = {2} deg, scale = {3}, shear = {4}, exp = {5}".format(
+                    name, min_loss,
+                    opt_var[0] * 180.0 / np.pi,
+                    opt_var[1], opt_var[2]* 180.0 / (np.pi*10000),
+                    opt_var[3]/10 )
+                           + "\n\n")
                 if o == self._optimisers[-1]:
                     file.write("Best optimization method: {0}".format(
                         self._names[self._best_method_index]))
                 file.close()
             else:
-                print("{0}: minimum loss = {1}, rotation = {2} deg, scale = {3}".format(
-                    name, min_loss, rot_scale[0] * 180.0 / np.pi, rot_scale[1]))
+                print("{0}: minimum loss = {1}, rotation = {2} deg, scale = {3}, shear = {4}, exp = {5}".format(
+                    name, min_loss,
+                    opt_var[0] * 180.0 / np.pi,
+                    opt_var[1], opt_var[2]* 180.0 / (np.pi*10000),
+                    opt_var[3]/10 )
+                           + "\n\n")
                 if o == self._optimisers[-1]:
                     print("Best optimization method: {0}".format(
                         self._names[self._best_method_index]))
@@ -179,7 +184,7 @@ class WindOptimiserOutput:
             self.pp = PdfPages(self._base_path + self._current_time + '.pdf')
 
         self.plot_opt_convergence()
-        self.plot_final_values()
+        # self.plot_final_values()
         self.plot_wind_over_time()
         self.plot_best_wind_estimate()
 
