@@ -79,8 +79,8 @@ class WindOptimiser(object):
         self._ulog_args = utils.UlogParameters(self._config_yaml)
         self._traj_args = utils.TrajParameters(self._config_yaml)
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
-        self._rotation0, self._scale0, self._directional_shear0, self._power_law_exponent0 \
-            = self.get_optimisation_variables()
+        self._optimisation_variables, self._optimisation_variables_names = self.get_optimisation_variables()
+        self.reset_optimisation_variables()
         self._resolution = resolution
         self._ulog_data = self.load_ulog_data()
         self._train_ulog_data, self._test_ulog_data = self.train_test_split()
@@ -198,43 +198,22 @@ class WindOptimiser(object):
         return net
 
     def get_optimisation_variables(self):
-        rotation = self._cosmo_args.params['rotation']
-        scale = self._cosmo_args.params['scale']
-        directional_wind_shear = self._cosmo_args.params['directional_shear']
-        power_law_exponent = self._cosmo_args.params['power_law_exponent']
-        if self._cosmo_args.params['optimized_corners'] > 0:
-            ones_ = np.ones(self._cosmo_args.params['optimized_corners'])
-            rotation *= ones_
-            scale *= ones_
-            directional_wind_shear *= ones_
-            power_law_exponent *= ones_
-
-        return rotation, scale, directional_wind_shear, power_law_exponent
-
-    def reset_optimisation_variables(self, rot=None, scale=None, shear=None, exponent=None):
         ones_ = np.ones(self._cosmo_args.params['optimized_corners'])
-        if rot is None:
-            rot = self._rotation0
-        else:
+        optimisation_variables_names = self._cosmo_args.params['optimise_variables']
+        optimisation_variables = []
+        for var in self._cosmo_args.params['optimise_variables']:
+            opt_var = self._cosmo_args.params[var]
             if self._cosmo_args.params['optimized_corners'] > 0:
-                rot *= ones_
-        if scale is None:
-            scale = self._scale0
-        else:
-            if self._cosmo_args.params['optimized_corners'] > 0:
-                scale *= ones_
-        if shear is None:
-            shear = self._directional_shear0
-        else:
-            if self._cosmo_args.params['optimized_corners'] > 0:
-                shear *= ones_
-        if exponent is None:
-            exponent = self._power_law_exponent0
-        else:
-            if self._cosmo_args.params['optimized_corners'] > 0:
-                exponent *= ones_
+                opt_var = opt_var * ones_
+                optimisation_variables.append(opt_var)
 
-        self._optimisation_variables = torch.Tensor([rot, scale, shear, exponent]).to(self._device).requires_grad_()
+        return optimisation_variables, optimisation_variables_names
+
+    def reset_optimisation_variables(self, optimisation_variables_=None):
+        if optimisation_variables_ is None:
+            optimisation_variables_ = self._optimisation_variables
+
+        self._optimisation_variables = torch.Tensor(optimisation_variables_).to(self._device).requires_grad_()
 
     def train_test_split(self):
         train_ulog = {}; test_ulog = {}
@@ -416,14 +395,12 @@ class WindOptimiser(object):
                       ' r: ', *self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
                       ' s: ', *self._optimisation_variables[1].detach().cpu().numpy(),
                       ' ds: ', *self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
-                      ' e: ', *self._optimisation_variables[3].detach().cpu().numpy()/10,
                       '')
             else:
                 print(t,
                       ' r: ', self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
                       ' s: ', self._optimisation_variables[1].detach().cpu().numpy(),
                       ' ds: ', self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
-                      ' e: ', self._optimisation_variables[3].detach().cpu().numpy()/10,
                       '')
             optimisation_variables_.append(self._optimisation_variables.clone().detach().cpu().numpy())
             optimizer.zero_grad()

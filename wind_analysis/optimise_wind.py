@@ -6,10 +6,6 @@ from analysis_utils.wind_optimiser_output import WindOptimiserOutput
 parser = argparse.ArgumentParser(description='Optimise wind speed and direction from COSMO data using observations')
 parser.add_argument('input_yaml', help='Input yaml config')
 parser.add_argument('-n', '--n_steps', type=int, default=200, help='Number of optimisation steps')
-parser.add_argument('-r', '--rotation', type=float, default=0.0, help='Initial rotation (rad)')
-parser.add_argument('-s', '--scale', type=float, default=1.0, help='Initial scale')
-parser.add_argument('-d', '--directional_shear', type=float, default=0.0, help='Initial directional wind shear (rad/m)')
-parser.add_argument('-e', '--power_law_exponent', type=float, default=0.0, help='Initial power law exponent')
 args = parser.parse_args()
 
 # Create WindOptimiser object using yaml config
@@ -30,7 +26,6 @@ if optimise_wind:
     # Try each optimisation method
     all_ov, losses, grads = [], [], []
     for i, o in enumerate(optimisers):
-        wind_opt.reset_optimisation_variables()
         ov, loss, grad = wind_opt.optimise_wind_variables(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
         all_ov.append(ov)
         losses.append(loss)

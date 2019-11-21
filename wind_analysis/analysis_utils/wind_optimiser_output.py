@@ -20,7 +20,7 @@ class WindOptimiserOutput:
         self._grads = grads
         self._names = self.get_names()
         self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
-        self._save_output = True
+        self._save_output = False
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
 
@@ -33,8 +33,8 @@ class WindOptimiserOutput:
         # Extract best wind estimate
         best_method_index = np.argmin([l[-1] for l in self._losses])
         best_ov = self._all_ov[best_method_index]
-        self.wind_opt.reset_optimisation_variables(
-            rot=best_ov[-1, 0], scale=best_ov[-1, 1], shear=best_ov[-1, 2], exponent=best_ov[-1, 3])
+        best_opt_var = [best_ov[-1, 0], best_ov[-1, 1], best_ov[-1, 2], best_ov[-1, 3]]
+        self.wind_opt.reset_optimisation_variables(best_opt_var)
         wind_prediction = self.wind_opt.get_prediction().detach()
         return wind_prediction, best_method_index, best_ov
 
@@ -111,7 +111,8 @@ class WindOptimiserOutput:
                            self.wind_opt._ulog_data['x'][inbounds]]).T
         pred_wind = [prediction_interp[0](points), prediction_interp[1](points), prediction_interp[2](points)]
 
-        self.wind_opt.reset_optimisation_variables(rot=0.0, scale=1.0, shear=0.0, exponent=0.0)
+        opt_var, opt_var_names = self.wind_opt.get_optimisation_variables()
+        self.wind_opt.reset_optimisation_variables(opt_var)
         orig_wind_prediction = self.wind_opt.get_prediction().detach()
         orig_prediction_interp = []
         for pred_dim in orig_wind_prediction:
@@ -139,6 +140,14 @@ class WindOptimiserOutput:
         # Plot best wind estimate
         fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt._wind_blocks,
                                                self.wind_opt.terrain.network_terrain.squeeze(0), self._save_output)
+
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
+
+    def plot_wind_profile(self):
+        fig, ax = plt.subplot(1,4)
 
         if self._save_output:
             self.pp.savefig(fig)

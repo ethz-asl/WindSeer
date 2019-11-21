@@ -9,7 +9,7 @@ cosmo:
   scale: 1.0  # 0.8
   directional_shear: 0.0 # directional wind shear in [deg/m]
   power_law_exponent: 0.0 # vertical wind shear using a power law
-  optimise_variables: [True, True, True, True] # specify which optimisation variables will be passed to the optimiser
+  optimise_variables: ['rotation', 'scale', 'directional_shear', 'power_law_exponent'] # specify which optimisation variables will be passed to the optimiser
   prediction_prefix: ''  # rotated_
 
 ulog:
