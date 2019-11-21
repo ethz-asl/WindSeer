@@ -1,3 +1,3 @@
-*.yaml
-!wind_config.yaml
-!example_test_config.yaml.yaml
+#*.yaml
+#!wind_config.yaml
+#!example_test_config.yaml.yaml

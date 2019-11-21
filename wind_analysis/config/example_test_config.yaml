@@ -1,0 +1,8 @@
+csv:
+  file: 'data/rotated_13_33_46.csv'
+
+optimization:
+  time: 'auto'
+  rotate: 0.0 #-110.0
+  polynomial_law_points: 8
+  scale: 1.0  # 0.8
