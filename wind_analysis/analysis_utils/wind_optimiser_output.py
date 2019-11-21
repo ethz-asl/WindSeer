@@ -38,6 +38,21 @@ class WindOptimiserOutput:
         wind_prediction = self.wind_opt.get_prediction().detach()
         return wind_prediction, best_method_index, best_ov
 
+    def plot_wind_profile(self):
+        fig, ax = plt.subplots(4, 4)
+        optimized_corners = self.wind_opt._cosmo_args.params['optimized_corners']
+        input_ = self.wind_opt.generate_wind_input()
+        output_ = self.wind_opt.get_prediction()
+        for i in range(optimized_corners):
+            terrain_corners = input_[0, i//2, (i+2) % 2, :]
+            wind_corners = input_[1:-1, i//2, (i + 2) % 2, :]
+        hor_wind_speed = []
+        heights = []
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
+
     def plot_opt_convergence(self):
         # Plot results for all optimisers
         fig, ax = plt.subplots(1, 2)
@@ -146,14 +161,6 @@ class WindOptimiserOutput:
         else:
             plt.show()
 
-    def plot_wind_profile(self):
-        fig, ax = plt.subplot(1,4)
-
-        if self._save_output:
-            self.pp.savefig(fig)
-        else:
-            plt.show()
-
     def print_losses(self):
         # Get minimum losses
         min_losses = []
@@ -192,6 +199,7 @@ class WindOptimiserOutput:
         if self._save_output:
             self.pp = PdfPages(self._base_path + self._current_time + '.pdf')
 
+        self.plot_wind_profile()
         self.plot_opt_convergence()
         # self.plot_final_values()
         self.plot_wind_over_time()

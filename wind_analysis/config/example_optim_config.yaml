@@ -26,9 +26,3 @@ model:
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'
-
-generate_trajectory:
-  x: [50,200,450]
-  y: [50,350,700]
-  z: [70,60,55]
-  points_along_traj: 50
