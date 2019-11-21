@@ -403,3 +403,9 @@ class WindOptimiser(object):
         if verbose:
             print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
         return np.array(optimisation_variables_), np.array(losses), np.array(grads)
+
+
+class WindTest(object):
+    def __init__(self, config_yaml):
+        self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self._config_yaml = config_yaml
