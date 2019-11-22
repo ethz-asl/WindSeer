@@ -16,8 +16,8 @@ ulog:
   file: 'data/13_33_46.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
   filtered_dir: 'data/'
   use_ekf_wind: False
-  interpolation_method: 'bin'
   predict_ulog: False
+  interpolation_method: 'bin'
   train_size: 0.8
 
 model:

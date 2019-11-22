@@ -5,10 +5,13 @@ from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
 from analysis_utils.interpolate_log_data import UlogInterpolation
 from nn_wind_prediction.utils.interpolation import DataInterpolation
+from nn_wind_prediction.data import convert_dataset
+import nn_wind_prediction.data as nn_data
 from sklearn import metrics
 from datetime import datetime
 from scipy import ndimage
 import torch
+from torch.utils.data import DataLoader
 import os
 import time
 
@@ -409,3 +412,122 @@ class WindTest(object):
     def __init__(self, config_yaml):
         self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self._config_yaml = config_yaml
+        self.optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
+        self._data_args = utils.BasicParameters(self._config_yaml,'data')
+        self._model_args = utils.BasicParameters(self._config_yaml, 'model')
+        self.data_set, self.data_set_name = self.load_data_set()
+        self._loss_fn = self.get_loss_function()
+        self.net = self.load_network_model()
+        self.net.freeze_model()
+        self.run_wind_prediction(self.data_set)
+
+    def load_data_set(self):
+        # Load data set
+        test_set = nn_data.HDF5Dataset(self._data_args.params['testset_name'],
+                                       self._data_args.params['input_channels'],
+                                       self._data_args.params['label_channels'])
+
+        # Get data set from test set
+        data_set = []
+        name = []
+        if self._data_args.params['batch_test']:
+            for i in range(len(test_set)):
+                data_set.append(test_set[i])
+                name.append(test_set.get_name(i))
+        else:
+            data_set = test_set[self._data_args.params['index']]
+            name = test_set.get_name(self._data_args.params['index'])
+        return data_set, name
+
+    def get_loss_function(self):
+        try:
+            if self._model_args.params['loss'].lower() == 'l1':
+                loss_fn = torch.nn.L1Loss()
+            elif self._model_args.params['loss'].lower() == 'mse':
+                loss_fn = torch.nn.MSELoss()
+            else:
+                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
+                raise ValueError
+        except KeyError:
+            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
+        return loss_fn
+
+    def get_prediction(self, input_):
+        output = self.net(input_.unsqueeze(0)).squeeze(0)      # Run network prediction
+        return output
+
+    def load_network_model(self):
+        print('Loading network model...', end='', flush=True)
+        t_start = time.time()
+        yaml_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'], 'params.yaml')
+        params = utils.EDNNParameters(yaml_loc)                                         # load the model config
+        NetworkType = getattr(models, params.model['model_type'])                       # load the model
+        net = NetworkType(**params.model_kwargs())                                 # load learnt parameters
+        model_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'],
+                                 self._model_args.params['version'] + '.model')
+        net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
+        net = net.to(self._device)
+        print(' done [{:.2f} s]'.format(time.time() - t_start))
+        return net
+
+    def run_wind_prediction(self, data_set):
+        input_ = data_set[0]
+        labels = data_set[1]
+        output = self.get_prediction(input_)
+        loss = self._loss_fn(output, labels)
+        print("Loss is: ", loss)
+
+    # def optimise_wind(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5}, verbose=False):
+    #     optimizer = opt([self._optimisation_variables], **opt_kwargs)
+    #     print(optimizer)
+    #     t0 = time.time()
+    #     t = 0
+    #     max_grad = min_gradient+1.0
+    #     losses, grads, optimisation_variables_ = [], [], []
+    #     while t < n and max_grad > min_gradient:
+    #         if self._cosmo_args.params['optimized_corners'] > 0:
+    #             print(t,
+    #                   ' r: ', *self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
+    #                   ' s: ', *self._optimisation_variables[1].detach().cpu().numpy(),
+    #                   ' ds: ', *self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
+    #                   '')
+    #         else:
+    #             print(t,
+    #                   ' r: ', self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
+    #                   ' s: ', self._optimisation_variables[1].detach().cpu().numpy(),
+    #                   ' ds: ', self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
+    #                   '')
+    #         optimisation_variables_.append(self._optimisation_variables.clone().detach().cpu().numpy())
+    #         optimizer.zero_grad()
+    #         t1 = time.time()
+    #         output = self.get_prediction()
+    #         tp = time.time()
+    #
+    #         loss = self.evaluate_loss(output)
+    #         tl = time.time()
+    #
+    #         losses.append(loss.item())
+    #         print('loss={0:0.3e}, '.format(loss.item()), end='')
+    #
+    #         # Calculate derivative of loss with respect to optimisation variables
+    #         loss.backward(retain_graph=True)
+    #         tb = time.time()
+    #
+    #         max_grad = self._optimisation_variables.grad.abs().max()
+    #         print('Max grad: {0:0.3e}'.format(max_grad))
+    #         grads.append(max_grad)
+    #
+    #         # Step with gradient
+    #         optimizer.step()
+    #         to = time.time()
+    #
+    #         if verbose:
+    #             print('Times: prediction: {0:6.3f}s'.format(tp - t1), end='')
+    #             print(', loss: {0:6.3f}s'.format(tl - tp), end='')
+    #             print(', backward: {0:6.3f}s'.format(tb - tl), end='')
+    #             print(', opt step: {0:6.3f}s'.format(to - tb))
+    #         t += 1
+    #     tt = time.time()-t0
+    #     if verbose:
+    #         print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
+    #     return np.array(optimisation_variables_), np.array(losses), np.array(grads)

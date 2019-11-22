@@ -212,18 +212,3 @@ class UlogParameters(BasicParameters):
 
     def print(self):
         self._print('Ulog parameters:')
-
-
-class TrajParameters(BasicParameters):
-
-    def __init__(self, yaml_file):
-        super(TrajParameters, self).__init__(yaml_file, subdict='generate_trajectory')
-
-    def load_yaml(self, file):
-        return self._load_yaml(file, "Using YAML trajectory config: ")
-
-    def save(self, dir=None):
-        self._save(dir, 'generate_trajectory.yaml')
-
-    def print(self):
-        self._print('Trajectory parameters:')

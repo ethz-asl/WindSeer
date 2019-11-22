@@ -1,8 +1,37 @@
-csv:
-  file: 'data/rotated_13_33_46.csv'
+# Dataset parameters
+data:
+    testset_name: 'data/wind_test/test.hdf5'
 
-optimization:
-  time: 'auto'
+    # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+    input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
+    label_channels: ['ux', 'uy', 'uz']  # velocities
+
+    # Get all samples in test set
+    batch_test: False
+    # if batch is False get the following sample in the set
+    index: 0
+
+# Optimisation parameters
+optimisation:
+  # Wind profile optimisation
+  optimized_corners: 4
   rotate: 0.0 #-110.0
-  polynomial_law_points: 8
+  polynomial_law_points: 8 #approximate wind profile using a power law
   scale: 1.0  # 0.8
+
+  # Scattered points optimisation
+  initial_percentage: 10
+  step: 2 #step percentage
+
+  # Trajectory optimisation
+  x: 10
+  y: 10
+  z: 10
+  num_points: 200
+
+# NN model parameters
+model:
+  location: 'data/20191015_TODO/'
+  name: 'ednn3d_best'
+  version: 'latest'
+  loss: 'MSE'
