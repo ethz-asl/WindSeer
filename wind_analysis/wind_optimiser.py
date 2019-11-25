@@ -5,13 +5,11 @@ from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
 from analysis_utils.interpolate_log_data import UlogInterpolation
 from nn_wind_prediction.utils.interpolation import DataInterpolation
-from nn_wind_prediction.data import convert_dataset
 import nn_wind_prediction.data as nn_data
 from sklearn import metrics
 from datetime import datetime
 from scipy import ndimage
 import torch
-from torch.utils.data import DataLoader
 import os
 import time
 
@@ -415,11 +413,14 @@ class WindTest(object):
         self.optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
         self._data_args = utils.BasicParameters(self._config_yaml,'data')
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
-        self.data_set, self.data_set_name = self.load_data_set()
-        self._loss_fn = self.get_loss_function()
+        self.original_input, self.labels, self.data_set_name = self.load_data_set()
+        self._interpolator = DataInterpolation(self._device, 3,
+                                               *(self.labels[0].detach().cpu().numpy()).shape)
+        self._optimisation_options = self.get_optimization_options()
         self.net = self.load_network_model()
         self.net.freeze_model()
-        self.run_wind_prediction(self.data_set)
+        self._loss_fn = self.get_loss_function()
+        # self.run_wind_prediction(self.data_set)
 
     def load_data_set(self):
         # Load data set
@@ -437,24 +438,20 @@ class WindTest(object):
         else:
             data_set = test_set[self._data_args.params['index']]
             name = test_set.get_name(self._data_args.params['index'])
-        return data_set, name
+        return data_set[0], data_set[1], name
 
-    def get_loss_function(self):
-        try:
-            if self._model_args.params['loss'].lower() == 'l1':
-                loss_fn = torch.nn.L1Loss()
-            elif self._model_args.params['loss'].lower() == 'mse':
-                loss_fn = torch.nn.MSELoss()
-            else:
-                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
-                raise ValueError
-        except KeyError:
-            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
-        return loss_fn
+    def get_optimization_options(self):
+        if self.optimisation_args.params['optimisation_method'] == 0:    # wind profile power law
+            optimisation_options = self.optimisation_args.params['wind_profile']
+        elif self.optimisation_args.params['optimisation_method'] == 1:  # scattered points
+            optimisation_options = self.optimisation_args.params['scattered_points']
+        elif self.optimisation_args.params['optimisation_method'] == 2:  # trajectory
+            optimisation_options = self.optimisation_args.params['trajectory']
+        else:
+            print('Invalid optimisation method selected in the config file'.format(self._config_yaml))
+            raise ValueError
 
-    def get_prediction(self, input_):
-        output = self.net(input_.unsqueeze(0)).squeeze(0)      # Run network prediction
-        return output
+        return optimisation_options
 
     def load_network_model(self):
         print('Loading network model...', end='', flush=True)
@@ -470,12 +467,109 @@ class WindTest(object):
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return net
 
+    def get_loss_function(self):
+        try:
+            if self._model_args.params['loss'].lower() == 'l1':
+                loss_fn = torch.nn.L1Loss()
+            elif self._model_args.params['loss'].lower() == 'mse':
+                loss_fn = torch.nn.MSELoss()
+            else:
+                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
+                raise ValueError
+        except KeyError:
+            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
+        return loss_fn
+
+    def evaluate_loss(self, output):
+        loss = self._loss_fn(output, self.labels)
+        return loss
+
+    def run_optimisation(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5}, verbose=False):
+        # Terrain
+        terrain = self.original_input[0]
+        # Run selected optimisation
+        if self.optimisation_args.params['optimisation_method'] == 0:    # wind profile power law
+            optimized_corners = 0
+            input_ = torch.cat(
+                [terrain, self._interpolator.edge_interpolation(optimized_corners)])
+
+            optimizer = opt([self._optimisation_variables], **opt_kwargs)
+            print(optimizer)
+            t0 = time.time()
+            t = 0
+            max_grad = min_gradient+1.0
+            losses, grads, optimisation_variables_ = [], [], []
+            while t < n and max_grad > min_gradient:
+                optimisation_variables_.append(self._optimisation_variables.clone().detach().cpu().numpy())
+                optimizer.zero_grad()
+                t1 = time.time()
+                output = self.get_prediction()
+                tp = time.time()
+
+                loss = self.evaluate_loss(output)
+                tl = time.time()
+
+                losses.append(loss.item())
+                print('loss={0:0.3e}, '.format(loss.item()), end='')
+
+                # Calculate derivative of loss with respect to optimisation variables
+                loss.backward(retain_graph=True)
+                tb = time.time()
+
+                max_grad = self._optimisation_variables.grad.abs().max()
+                print('Max grad: {0:0.3e}'.format(max_grad))
+                grads.append(max_grad)
+
+                # Step with gradient
+                optimizer.step()
+                to = time.time()
+
+                if verbose:
+                    print('Times: prediction: {0:6.3f}s'.format(tp - t1), end='')
+                    print(', loss: {0:6.3f}s'.format(tl - tp), end='')
+                    print(', backward: {0:6.3f}s'.format(tb - tl), end='')
+                    print(', opt step: {0:6.3f}s'.format(to - tb))
+                t += 1
+            tt = time.time()-t0
+            if verbose:
+                print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
+            return np.array(optimisation_variables_), np.array(losses), np.array(grads)
+
+        elif self.optimisation_args.params['optimisation_method'] == 1:  # scattered points
+            num_steps = self.optimisation_args.params['scattered_points']['num_steps']
+            t = 0
+            while t <= num_steps:
+                # Copy of the true wind labels
+                new_wind_input = self.labels.clone().detach().cpu().numpy()
+                p = ((100 - self.optimisation_args.params['scattered_points']['initial_percentage'])/num_steps)
+                percentage = (self.optimisation_args.params['scattered_points']['initial_percentage'] + p*t) / 100
+                # Boolean mask with False values given by percentage
+                mask = np.random.choice([0, 1], size=new_wind_input.shape,
+                                        p=(percentage, (1 - percentage))).astype(np.bool)
+                new_wind_input[mask] = 0
+                input_ = self.original_input.clone()
+                input_[1:4, :, :, :] = torch.Tensor(new_wind_input)
+                output = self.get_wind_prediction(input_.to(self._device).requires_grad_())
+                loss = self._loss_fn(output, self.labels.to(self._device).requires_grad_())
+                print("Percentage:, {0}, Loss is: {1}".format(percentage, loss.item()))
+                t += 1
+
+        elif self.optimisation_args.params['optimisation_method'] == 2:  # trajectory
+            input_ = 2
+
+        ret = 0
+        return ret
+
+    def get_wind_prediction(self, input_):
+        output = self.net(input_.unsqueeze(0)).squeeze(0)  # Run network prediction
+        return output
+
     def run_wind_prediction(self, data_set):
-        input_ = data_set[0]
-        labels = data_set[1]
-        output = self.get_prediction(input_)
+        input_ = data_set[0].to(self._device).requires_grad_()
+        labels = data_set[1].to(self._device).requires_grad_()
+        output = self.get_wind_prediction(input_)
         loss = self._loss_fn(output, labels)
-        print("Loss is: ", loss)
+        print("Loss is: ", loss.item())
 
     # def optimise_wind(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5}, verbose=False):
     #     optimizer = opt([self._optimisation_variables], **opt_kwargs)

@@ -22,6 +22,13 @@ test_wind = True
 if test_wind:
     # Create WindTest object using yaml configuration
     wind_test = WindTest(args.input_yaml)
+    # Try each optimisation method
+    all_ov, losses, grads = [], [], []
+    for i, o in enumerate(optimisers):
+        ov, loss, grad = wind_test.run_optimisation(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
+        all_ov.append(ov)
+        losses.append(loss)
+        grads.append(grad)
 
 optimise_wind = False
 if optimise_wind:

@@ -9,25 +9,33 @@ data:
     # Get all samples in test set
     batch_test: False
     # if batch is False get the following sample in the set
-    index: 0
+    index: 11
 
 # Optimisation parameters
 optimisation:
+  # 0 - wind profile optimisation, 1 - scattered points optimisation, 2 - trajectory optimisation
+  optimisation_method: 1
+
   # Wind profile optimisation
-  optimized_corners: 4
-  rotate: 0.0 #-110.0
-  polynomial_law_points: 8 #approximate wind profile using a power law
-  scale: 1.0  # 0.8
+  wind_profile: {
+      optimized_corners: 4,
+      rotate: 0.0, #-110.0
+      polynomial_law_points: 8 #approximate wind profile using a power law
+  }
 
   # Scattered points optimisation
-  initial_percentage: 10
-  step: 2 #step percentage
+  scattered_points: {
+      initial_percentage: 10,
+      num_steps: 45 #step percentage
+  }
 
   # Trajectory optimisation
-  x: 10
-  y: 10
-  z: 10
-  num_points: 200
+  trajectory: {
+      x: 10,
+      y: 10,
+      z: 10,
+      num_points: 200
+  }
 
 # NN model parameters
 model:
