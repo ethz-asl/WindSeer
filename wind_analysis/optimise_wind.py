@@ -23,12 +23,24 @@ if test_wind:
     # Create WindTest object using yaml configuration
     wind_test = WindTest(args.input_yaml)
     # Try each optimisation method
-    all_ov, losses, grads = [], [], []
-    for i, o in enumerate(optimisers):
-        ov, loss, grad = wind_test.run_optimisation(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
-        all_ov.append(ov)
-        losses.append(loss)
-        grads.append(grad)
+    if wind_test.optimisation_args.params['optimisation_method'] == 0:
+        all_ov, losses, grads = [], [], []
+        for i, o in enumerate(optimisers):
+            ov, loss, grad = wind_test.run_wind_profile_optimisation(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
+            all_ov.append(ov)
+            losses.append(loss)
+            grads.append(grad)
+
+        # Plots
+
+    elif wind_test.optimisation_args.params['optimisation_method'] == 1:
+        a = wind_test.run_scattered_optimisation()
+        # Plots
+
+    elif wind_test.optimisation_args.params['optimisation_method'] == 2:
+        b = wind_test.run_trajectory_optimisation()
+        # Plots
+
 
 optimise_wind = False
 if optimise_wind:

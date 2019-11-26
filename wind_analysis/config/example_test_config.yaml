@@ -14,27 +14,28 @@ data:
 # Optimisation parameters
 optimisation:
   # 0 - wind profile optimisation, 1 - scattered points optimisation, 2 - trajectory optimisation
-  optimisation_method: 1
+  optimisation_method: 0
 
   # Wind profile optimisation
   wind_profile: {
       optimized_corners: 4,
-      rotate: 0.0, #-110.0
-      polynomial_law_points: 8 #approximate wind profile using a power law
+      polynomial_law_num_points: 8, #approximate wind profile using a power law
+      init_wind_speed: 1.0,
+      rotation: 0.0 #-110.0
   }
 
   # Scattered points optimisation
   scattered_points: {
       initial_percentage: 10,
-      num_steps: 45 #step percentage
+      num_steps: 100 #step percentage
   }
 
   # Trajectory optimisation
   trajectory: {
-      x: 10,
-      y: 10,
-      z: 10,
-      num_points: 200
+    x: [50,200,450],
+    y: [50,350,700],
+    z: [70,60,55],
+    num_points: 50
   }
 
 # NN model parameters
