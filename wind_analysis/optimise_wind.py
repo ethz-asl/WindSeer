@@ -2,6 +2,8 @@ import torch
 import argparse
 from wind_optimiser import WindOptimiser, OptTest, SimpleStepOptimiser, WindTest
 from analysis_utils.wind_optimiser_output import WindOptimiserOutput
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 parser = argparse.ArgumentParser(description='Optimise wind speed and direction from COSMO data using observations')
 parser.add_argument('input_yaml', help='Input yaml config')
@@ -34,9 +36,18 @@ if test_wind:
         # Plots
 
     elif wind_test.optimisation_args.params['optimisation_method'] == 1:
-        a = wind_test.run_scattered_optimisation()
+        losses, percentages = wind_test.run_scattered_optimisation()
         # Plots
-
+        plt.plot(percentages, losses, c='blue')
+        plt.title('Scattered points optimisation')
+        plt.xlabel('Percentage')
+        plt.ylabel('Loss')
+        # Save figure
+        data_set_name = str(wind_test.data_set_name)
+        # pp = PdfPages('analysis_output/' + data_set_name + '_scatt_opt' + '.pdf')
+        # pp.savefig(fig)
+        plt.savefig('analysis_output/' + data_set_name + '_scatt_opt' + '.pdf')
+        plt.show()
     elif wind_test.optimisation_args.params['optimisation_method'] == 2:
         b = wind_test.run_trajectory_optimisation()
         # Plots

@@ -594,6 +594,7 @@ class WindTest(object):
     def run_scattered_optimisation(self):
         num_steps = self.optimisation_args.params['scattered_points']['num_steps']
         t = 0
+        losses, percentages = [], []
         while t <= num_steps:
             # Copy of the true wind labels
             new_wind_input = self.labels.clone().detach().cpu().numpy()
@@ -607,9 +608,11 @@ class WindTest(object):
             input_[1:4, :, :, :] = torch.Tensor(new_wind_input)
             output = self.get_wind_prediction(input_.to(self._device))
             loss = self._loss_fn(output, self.labels.to(self._device))
+            losses.append(loss.item())
+            percentages.append(percentage)
             print("Percentage:, {0}, Loss is: {1}".format(percentage, loss.item()))
             t += 1
-        return t
+        return losses, percentages
 
     def run_trajectory_optimisation(self):
         x = self.optimisation_args.params['trajectory']['x']
