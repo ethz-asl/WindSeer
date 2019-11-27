@@ -437,15 +437,16 @@ class WindTest(object):
         data_set = test_set[self._data_args.params['index']]
         name = test_set.get_name(self._data_args.params['index'])
         grid_size = data.get_grid_size(self._data_args.params['testset_name'])
+        # Convert distance transformed matrix back to binary matrix
         binary_terrain = data_set[0][0, :, :, :] <= 0
         return data_set[0], data_set[1], name, grid_size, binary_terrain
 
     def get_terrain(self):
         nx, ny, nz = self.binary_terrain.shape
-        x_terr = torch.tensor([self.grid_size[0]*i for i in range(nx)]).to(self._device)
-        y_terr = torch.tensor([self.grid_size[1]*i for i in range(ny)]).to(self._device)
-        z_terr = torch.tensor([self.grid_size[2]*i for i in range(nz)]).to(self._device)
-        h_terr = torch.tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2])).to(self._device)
+        x_terr = torch.tensor([self.grid_size[0]*i for i in range(nx)])
+        y_terr = torch.tensor([self.grid_size[1]*i for i in range(ny)])
+        z_terr = torch.tensor([self.grid_size[2]*i for i in range(nz)])
+        h_terr = torch.tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2]))
         # Get terrain object
         terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain)
         return terrain
@@ -616,7 +617,25 @@ class WindTest(object):
         z = self.optimisation_args.params['trajectory']['z']
         num_points = self.optimisation_args.params['trajectory']['num_points']
         x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
-        return x
+        # Get the grid points and winds along the trajectory
+        wind_input = torch.zeros((3, 64, 64, 64))
+        num_segments, segment_length = x_traj.shape
+        counter = 0
+        for i in range(num_segments):
+            for j in range(segment_length):
+                id_x = (int((x_traj[i][j] - self.terrain.x_terr[0]) / self.grid_size[0]))
+                id_y = (int((y_traj[i][j] - self.terrain.y_terr[0]) / self.grid_size[1]))
+                id_z = (int((z_traj[i][j] - self.terrain.z_terr[0]) / self.grid_size[2]))
+                if all(v == 0 for v in wind_input[:, id_x, id_y, id_z]):
+                    counter += 1
+                wind_input[:, id_x, id_y, id_z] = self.labels[:, id_x, id_y, id_z]
+        terrain = self.original_input[0].to(self._device)  # distanced transformed boolean terrain
+        input_ = torch.cat(
+            [terrain.unsqueeze(0), wind_input.to(self._device)])
+        output = self.get_wind_prediction(input_)
+        loss = self._loss_fn(output, self.labels.to(self._device))
+        print("Loss is: ", loss.item())
+        #print("Number of grid points along trajectory: ", counter)
 
     def run_wind_prediction(self, data_set):
         input_ = data_set[0].to(self._device)

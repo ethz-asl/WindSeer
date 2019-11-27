@@ -9,12 +9,12 @@ data:
     # Get all samples in test set
     batch_test: False
     # if batch is False get the following sample in the set
-    index: 0
+    index: 1
 
 # Optimisation parameters
 optimisation:
   # 0 - wind profile optimisation, 1 - scattered points optimisation, 2 - trajectory optimisation
-  optimisation_method: 0
+  optimisation_method: 2
 
   # Wind profile optimisation
   wind_profile: {
@@ -32,9 +32,9 @@ optimisation:
 
   # Trajectory optimisation
   trajectory: {
-    x: [50,200,450],
-    y: [50,350,700],
-    z: [70,60,55],
+    x: [50, 200, 450], # [50, 200, 450, 850],
+    y: [50, 350, 700], # [50, 350, 700, 920],
+    z: [70, 60, 55],   # [70, 60, 55, 200],
     num_points: 50
   }
 
