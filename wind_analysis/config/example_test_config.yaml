@@ -9,7 +9,7 @@ data:
     # Get all samples in test set
     batch_test: False
     # if batch is False get the following sample in the set
-    index: 11
+    index: 0
 
 # Optimisation parameters
 optimisation:

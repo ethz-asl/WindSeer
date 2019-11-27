@@ -416,7 +416,9 @@ class WindTest(object):
         self.optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
         self._data_args = utils.BasicParameters(self._config_yaml, 'data')
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
-        self.original_input, self.labels, self.data_set_name = self.load_data_set()
+        self.original_input, self.labels, self.data_set_name, self.grid_size, self.binary_terrain \
+            = self.load_data_set()
+        self.terrain = self.get_terrain()
         self._interpolator = DataInterpolation(self._device, 3,
                                                *(self.labels[0].detach().cpu().numpy()).shape)
         self._optimisation_variables = self.get_optimization_variables()
@@ -432,16 +434,21 @@ class WindTest(object):
                                        self._data_args.params['label_channels'])
 
         # Get data set from test set
-        data_set = []
-        name = []
-        if self._data_args.params['batch_test']:
-            for i in range(len(test_set)):
-                data_set.append(test_set[i])
-                name.append(test_set.get_name(i))
-        else:
-            data_set = test_set[self._data_args.params['index']]
-            name = test_set.get_name(self._data_args.params['index'])
-        return data_set[0], data_set[1], name
+        data_set = test_set[self._data_args.params['index']]
+        name = test_set.get_name(self._data_args.params['index'])
+        grid_size = data.get_grid_size(self._data_args.params['testset_name'])
+        binary_terrain = data_set[0][0, :, :, :] <= 0
+        return data_set[0], data_set[1], name, grid_size, binary_terrain
+
+    def get_terrain(self):
+        nx, ny, nz = self.binary_terrain.shape
+        x_terr = torch.tensor([self.grid_size[0]*i for i in range(nx)]).to(self._device)
+        y_terr = torch.tensor([self.grid_size[1]*i for i in range(ny)]).to(self._device)
+        z_terr = torch.tensor([self.grid_size[2]*i for i in range(nz)]).to(self._device)
+        h_terr = torch.tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2])).to(self._device)
+        # Get terrain object
+        terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain)
+        return terrain
 
     def get_optimization_variables(self):
         # Wind speed
@@ -454,7 +461,7 @@ class WindTest(object):
             optimisation_variables = [optimisation_variables[:] for i in
                                       range(self.optimisation_args.params['wind_profile']['optimized_corners'])]
 
-        return torch.Tensor(optimisation_variables).to(self._device).requires_grad_()
+        return torch.tensor(optimisation_variables).to(self._device).requires_grad_()
 
     def load_network_model(self):
         print('Loading network model...', end='', flush=True)
@@ -489,47 +496,38 @@ class WindTest(object):
 
     def get_optimized_corners(self):
         corner_winds = np.zeros((3, 64, 2, 2), dtype='float')
-        # Artificial variables
-        terrain_height = 500
-        terrain_z = np.linspace(0, 1100, 64)
-        # --------------------------------
-        # Rotation
-        rotation = []
-        # Cubic spline interpolation
-        corner_spline = []
-        if self.optimisation_args.params['wind_profile']['optimized_corners'] > 0:
-            for i in range(self.optimisation_args.params['wind_profile']['optimized_corners']):
-                num_points = self.optimisation_args.params['wind_profile']['polynomial_law_num_points']
-                wind_speed = self._optimisation_variables[i][0:num_points]
-                rotation.append(self._optimisation_variables[i][-1].clone().detach().cpu().numpy())
-                wind_height_increment = (terrain_z[-1] - terrain_height) / num_points
-                wind_z = [terrain_height + i * wind_height_increment for i in range(num_points)]
-                corner_spline.append(CubicSpline(wind_z, wind_speed.clone().detach().cpu().numpy()))
+        wind_z = []
+        num_points = self.optimisation_args.params['wind_profile']['polynomial_law_num_points']
+        for yi in range(2):
+            for xi in range(2):
+                # wind_speed = self._optimisation_variables[i][0:num_points]
+                wind_height_increment = ((self.terrain.z_terr[-1] + self.grid_size[2])
+                                         - self.terrain.terrain_corners[xi, yi]) / num_points
+                wind_z.append([self.terrain.terrain_corners[xi, yi] + j * wind_height_increment for j in range(num_points)])
 
+        if self.optimisation_args.params['wind_profile']['optimized_corners'] > 0:
             for yi in range(2):
                 for xi in range(2):
-                    valid_z = (terrain_z > terrain_height)
+                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.h_terr[xi+yi])
                     corner_winds[0, valid_z, yi, xi] = \
-                        corner_spline[xi+yi](terrain_z[valid_z])\
-                        * 1/(np.sqrt(1+np.tan(rotation[xi+yi]**2)))
+                        CubicSpline(wind_z[xi+yi], self._optimisation_variables[xi+yi][0:num_points])(self.terrain.z_terr[valid_z])\
+                        * 1/(torch.sqrt(1+torch.tan(self._optimisation_variables[xi+yi][-1]**2)))
                     corner_winds[1, valid_z, yi, xi] = \
-                        corner_spline[xi+yi](terrain_z[valid_z]) \
-                        * np.tan(rotation[xi+yi])/(np.sqrt(1+np.tan(rotation[xi+yi]**2)))
+                        CubicSpline(wind_z[xi+yi], self._optimisation_variables[xi+yi][0:num_points])(self.terrain.z_terr[valid_z])\
+                        * torch.tan(self._optimisation_variables[xi+yi][-1])/(torch.sqrt(1+torch.tan(self._optimisation_variables[xi+yi][-1]**2)))
 
         else:
-            num_points = self.optimisation_args.params['wind_profile']['polynomial_law_num_points']
-            wind_speed = self._optimisation_variables[0:num_points]
-            rotation.append(self._optimisation_variables[-1].clone().detach().cpu().numpy())
-            wind_height_increment = (terrain_z[-1] - terrain_height) / num_points
-            wind_z = [terrain_height + i * wind_height_increment for i in range(num_points)]
-            corner_spline.append(CubicSpline(wind_z, wind_speed.clone().detach().cpu().numpy()))
+            for yi in range(2):
+                for xi in range(2):
+                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.h_terr[xi+yi])
+                    corner_winds[0, valid_z, yi, xi] = \
+                        CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
+                        * 1/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
+                    corner_winds[1, valid_z, yi, xi] = \
+                        CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
+                        * np.tan(self._optimisation_variables[-1])/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
 
-            valid_z = (terrain_z > terrain_height)
-            corner_winds[0, valid_z] = corner_spline[0](terrain_z[valid_z]) \
-                                       * 1/(np.sqrt(1+np.tan(rotation[0]**2)))
-            corner_winds[1, valid_z] = corner_spline[0](terrain_z[valid_z]) \
-                                       * np.tan(rotation[0])/(np.sqrt(1+np.tan(rotation[0])**2))
-        return torch.Tensor(corner_winds).to(self._device).requires_grad_()
+        return corner_winds
 
     def generate_input(self):
         # Terrain
@@ -611,15 +609,11 @@ class WindTest(object):
         return t
 
     def run_trajectory_optimisation(self):
-        # Artificial variables
-        terrain_height = 500
-        terrain_z = np.arange(0, 1100, 64)
-        # --------------------------------
         x = self.optimisation_args.params['trajectory']['x']
         y = self.optimisation_args.params['trajectory']['y']
         z = self.optimisation_args.params['trajectory']['z']
         num_points = self.optimisation_args.params['trajectory']['num_points']
-        x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, terrain)
+        x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
         return x
 
     def run_wind_prediction(self, data_set):
