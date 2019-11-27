@@ -502,32 +502,34 @@ class WindTest(object):
             for xi in range(2):
                 # wind_speed = self._optimisation_variables[i][0:num_points]
                 wind_height_increment = ((self.terrain.z_terr[-1] + self.grid_size[2])
-                                         - self.terrain.terrain_corners[xi, yi]) / num_points
-                wind_z.append([self.terrain.terrain_corners[xi, yi] + j * wind_height_increment for j in range(num_points)])
+                                         - self.terrain.terrain_corners[yi, xi]) / num_points
+                wind_z.append([self.terrain.terrain_corners[yi, xi] + j * wind_height_increment for j in range(num_points)])
 
         if self.optimisation_args.params['wind_profile']['optimized_corners'] > 0:
             for yi in range(2):
                 for xi in range(2):
-                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.h_terr[xi+yi])
-                    corner_winds[0, valid_z, yi, xi] = \
-                        CubicSpline(wind_z[xi+yi], self._optimisation_variables[xi+yi][0:num_points])(self.terrain.z_terr[valid_z])\
-                        * 1/(torch.sqrt(1+torch.tan(self._optimisation_variables[xi+yi][-1]**2)))
-                    corner_winds[1, valid_z, yi, xi] = \
-                        CubicSpline(wind_z[xi+yi], self._optimisation_variables[xi+yi][0:num_points])(self.terrain.z_terr[valid_z])\
-                        * torch.tan(self._optimisation_variables[xi+yi][-1])/(torch.sqrt(1+torch.tan(self._optimisation_variables[xi+yi][-1]**2)))
+                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.terrain_corners[yi, xi])
+                    if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
+                        corner_winds[0, valid_z, yi, xi] = \
+                            CubicSpline(wind_z[xi*2+yi], self._optimisation_variables[xi*2+yi][0:num_points])(self.terrain.z_terr[valid_z])\
+                            * 1/(np.sqrt(1+torch.tan(self._optimisation_variables[xi*2+yi][-1]**2)))
+                        corner_winds[1, valid_z, yi, xi] = \
+                            CubicSpline(wind_z[xi*2+yi], self._optimisation_variables[xi*2+yi][0:num_points])(self.terrain.z_terr[valid_z])\
+                            * torch.tan(self._optimisation_variables[xi*2+yi][-1])/(np.sqrt(1+torch.tan(self._optimisation_variables[xi*2+yi][-1]**2)))
 
         else:
             for yi in range(2):
                 for xi in range(2):
                     valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.h_terr[xi+yi])
-                    corner_winds[0, valid_z, yi, xi] = \
-                        CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
-                        * 1/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
-                    corner_winds[1, valid_z, yi, xi] = \
-                        CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
-                        * np.tan(self._optimisation_variables[-1])/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
+                    if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
+                        corner_winds[0, valid_z, yi, xi] = \
+                            CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
+                            * 1/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
+                        corner_winds[1, valid_z, yi, xi] = \
+                            CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
+                            * np.tan(self._optimisation_variables[-1])/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
 
-        return corner_winds
+        return torch.Tensor(corner_winds).to(self._device).requires_grad_()
 
     def generate_input(self):
         # Terrain
