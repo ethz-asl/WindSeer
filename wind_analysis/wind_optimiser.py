@@ -76,26 +76,41 @@ class WindOptimiser(object):
     _optimisation_variables = None
 
     def __init__(self, config_yaml, resolution=64):
+        # Configuration variables
         self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self._config_yaml = config_yaml
-        self._cosmo_args = utils.COSMOParameters(self._config_yaml)
-        self._ulog_args = utils.UlogParameters(self._config_yaml)
-        self._model_args = utils.BasicParameters(self._config_yaml, 'model')
-        self._optimisation_variables, self._optimisation_variables_names = self.get_optimisation_variables()
-        self.reset_optimisation_variables()
+        self._data_args = utils.BasicParameters(self._config_yaml, 'data')
+        self._wind_args = utils.BasicParameters(self._config_yaml, 'wind')
+        self._noise_args = utils.BasicParameters(self._config_yaml, 'noise')
+        self._optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
+        self._model_args = utils.BasicParameters(self._config_yaml,'model')
         self._resolution = resolution
+        # Load data
         self._ulog_data = self.load_ulog_data()
-        self._train_ulog_data, self._test_ulog_data = self.train_test_split()
         self._cosmo_wind = self.load_wind()
         self.terrain = self.load_terrain()
+        self.original_input, self.labels, self.data_set_name, self.grid_size, self.binary_terrain \
+            = self.load_data_set()
+        self.cfd_terrain = self.get_cfd_terrain()
+        # wind generation variables
+        self.run_scattered_optimisation()
+        self.run_trajectory_optimisation()
+        self.run_original_wind_prediction()
+        # Optimisation variables
+        self._optimisation_variables, self._optimisation_variables_names = self.get_optimisation_variables()
+        self.reset_optimisation_variables()
+        self._optimized_corners = self.get_optimized_corners()
+        self._train_ulog_data, self._test_ulog_data = self.train_test_split()
         self._base_cosmo_corners = self.get_cosmo_corners()
         self._interpolator = DataInterpolation(self._device, 3, *self.terrain.get_dimensions())
+        self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask = self.get_wind_blocks()
+        #
+        # Network model and loss function
         self.net = self.load_network_model()
         self.net.freeze_model()
-        self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask = self.get_wind_blocks()
         self._loss_fn = self.get_loss_function()
 
-
+    # --- Load data ---
     def load_ulog_data(self):
         print('Loading ulog data...', end='', flush=True)
         t_start = time.time()
@@ -147,6 +162,127 @@ class WindOptimiser(object):
             device=self._device, boolean_terrain=boolean_terrain)
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return terrain
+
+    def load_data_set(self):
+        # Load data set
+        test_set = nn_data.HDF5Dataset(self._data_args.params['testset_name'],
+                                       self._data_args.params['input_channels'],
+                                       self._data_args.params['label_channels'])
+
+        # Get data set from test set
+        data_set = test_set[self._data_args.params['index']]
+        name = test_set.get_name(self._data_args.params['index'])
+        grid_size = data.get_grid_size(self._data_args.params['testset_name'])
+        # Convert distance transformed matrix back to binary matrix
+        binary_terrain = data_set[0][0, :, :, :] <= 0
+        return data_set[0], data_set[1], name, grid_size, binary_terrain
+
+    def get_cfd_terrain(self):
+        nx, ny, nz = self.binary_terrain.shape
+        x_terr = torch.tensor([self.grid_size[0]*i for i in range(nx)])
+        y_terr = torch.tensor([self.grid_size[1]*i for i in range(ny)])
+        z_terr = torch.tensor([self.grid_size[2]*i for i in range(nz)])
+        h_terr = torch.tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2]))
+        # Get terrain object
+        terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain)
+        return terrain
+
+    # --- Wind generation ---
+
+    def run_scattered_optimisation(self):
+        num_steps = self.optimisation_args.params['scattered_points']['num_steps']
+        t = 0
+        losses, percentages = [], []
+        while t <= num_steps:
+            # Copy of the true wind labels
+            new_wind_input = self.labels.clone().detach().cpu().numpy()
+            p = ((100 - self.optimisation_args.params['scattered_points']['initial_percentage'])/num_steps)
+            percentage = (self.optimisation_args.params['scattered_points']['initial_percentage'] + p*t) / 100
+            # Boolean mask with False values given by percentage
+            mask = np.random.choice([0, 1], size=new_wind_input.shape,
+                                    p=(percentage, (1 - percentage))).astype(np.bool)
+            new_wind_input[mask] = 0
+            input_ = self.original_input.clone()
+            input_[1:4, :, :, :] = torch.Tensor(new_wind_input)
+            output = self.get_wind_prediction(input_.to(self._device))
+            loss = self._loss_fn(output, self.labels.to(self._device))
+            losses.append(loss.item())
+            percentages.append(percentage)
+            print("Percentage:, {0}, Loss is: {1}".format(percentage, loss.item()))
+            t += 1
+        return losses, percentages
+
+    def run_trajectory_optimisation(self):
+        x = self.optimisation_args.params['trajectory']['x']
+        y = self.optimisation_args.params['trajectory']['y']
+        z = self.optimisation_args.params['trajectory']['z']
+        num_points = self.optimisation_args.params['trajectory']['num_points']
+        x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
+        # Get the grid points and winds along the trajectory
+        wind_input = torch.zeros((3, 64, 64, 64))
+        num_segments, segment_length = x_traj.shape
+        counter = 0
+        for i in range(num_segments):
+            for j in range(segment_length):
+                id_x = (int((x_traj[i][j] - self.terrain.x_terr[0]) / self.grid_size[0]))
+                id_y = (int((y_traj[i][j] - self.terrain.y_terr[0]) / self.grid_size[1]))
+                id_z = (int((z_traj[i][j] - self.terrain.z_terr[0]) / self.grid_size[2]))
+                if all(v == 0 for v in wind_input[:, id_x, id_y, id_z]):
+                    counter += 1
+                wind_input[:, id_x, id_y, id_z] = self.labels[:, id_x, id_y, id_z]
+        terrain = self.original_input[0].to(self._device)  # distanced transformed boolean terrain
+        input_ = torch.cat(
+            [terrain.unsqueeze(0), wind_input.to(self._device)])
+        output = self.get_wind_prediction(input_)
+        loss = self._loss_fn(output, self.labels.to(self._device))
+        print("Loss is: ", loss.item())
+        #print("Number of grid points along trajectory: ", counter)
+
+    def run_original_wind_prediction(self, data_set):
+        input_ = data_set[0].to(self._device)
+        labels = data_set[1].to(self._device)
+        output = self.get_wind_prediction(input_)
+        loss = self._loss_fn(output, labels)
+        print("Loss is: ", loss.item())
+
+    # --- Wind optimisation ---
+
+    def get_optimized_corners(self):
+        corner_winds = np.zeros((3, 64, 2, 2), dtype='float')
+        wind_z = []
+        num_points = self.optimisation_args.params['wind_profile']['polynomial_law_num_points']
+        for yi in range(2):
+            for xi in range(2):
+                # wind_speed = self._optimisation_variables[i][0:num_points]
+                wind_height_increment = ((self.terrain.z_terr[-1] + self.grid_size[2])
+                                         - self.terrain.terrain_corners[yi, xi]) / num_points
+                wind_z.append([self.terrain.terrain_corners[yi, xi] + j * wind_height_increment for j in range(num_points)])
+
+        if self.optimisation_args.params['wind_profile']['optimized_corners'] > 0:
+            for yi in range(2):
+                for xi in range(2):
+                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.terrain_corners[yi, xi])
+                    if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
+                        corner_winds[0, valid_z, yi, xi] = \
+                            CubicSpline(wind_z[xi*2+yi], self._optimisation_variables[xi*2+yi][0:num_points])(self.terrain.z_terr[valid_z])\
+                            * 1/(np.sqrt(1+torch.tan(self._optimisation_variables[xi*2+yi][-1]**2)))
+                        corner_winds[1, valid_z, yi, xi] = \
+                            CubicSpline(wind_z[xi*2+yi], self._optimisation_variables[xi*2+yi][0:num_points])(self.terrain.z_terr[valid_z])\
+                            * torch.tan(self._optimisation_variables[xi*2+yi][-1])/(np.sqrt(1+torch.tan(self._optimisation_variables[xi*2+yi][-1]**2)))
+
+        else:
+            for yi in range(2):
+                for xi in range(2):
+                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.h_terr[xi+yi])
+                    if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
+                        corner_winds[0, valid_z, yi, xi] = \
+                            CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
+                            * 1/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
+                        corner_winds[1, valid_z, yi, xi] = \
+                            CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
+                            * np.tan(self._optimisation_variables[-1])/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
+
+        return torch.Tensor(corner_winds).to(self._device).requires_grad_()
 
     def get_cosmo_corners(self):
         temp_cosmo = cosmo.cosmo_corner_wind(self._cosmo_wind, self.terrain.z_terr, rotate=0.0, scale=1.0,
@@ -407,242 +543,3 @@ class WindOptimiser(object):
         if verbose:
             print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
         return np.array(optimisation_variables_), np.array(losses), np.array(grads)
-
-
-class WindTest(object):
-    def __init__(self, config_yaml):
-        self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self._config_yaml = config_yaml
-        self.optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
-        self._data_args = utils.BasicParameters(self._config_yaml, 'data')
-        self._model_args = utils.BasicParameters(self._config_yaml, 'model')
-        self.original_input, self.labels, self.data_set_name, self.grid_size, self.binary_terrain \
-            = self.load_data_set()
-        self.terrain = self.get_terrain()
-        self._interpolator = DataInterpolation(self._device, 3,
-                                               *(self.labels[0].detach().cpu().numpy()).shape)
-        self._optimisation_variables = self.get_optimization_variables()
-        self.net = self.load_network_model()
-        self.net.freeze_model()
-        self._loss_fn = self.get_loss_function()
-        # self.run_wind_prediction(self.data_set)
-
-    def load_data_set(self):
-        # Load data set
-        test_set = nn_data.HDF5Dataset(self._data_args.params['testset_name'],
-                                       self._data_args.params['input_channels'],
-                                       self._data_args.params['label_channels'])
-
-        # Get data set from test set
-        data_set = test_set[self._data_args.params['index']]
-        name = test_set.get_name(self._data_args.params['index'])
-        grid_size = data.get_grid_size(self._data_args.params['testset_name'])
-        # Convert distance transformed matrix back to binary matrix
-        binary_terrain = data_set[0][0, :, :, :] <= 0
-        return data_set[0], data_set[1], name, grid_size, binary_terrain
-
-    def get_terrain(self):
-        nx, ny, nz = self.binary_terrain.shape
-        x_terr = torch.tensor([self.grid_size[0]*i for i in range(nx)])
-        y_terr = torch.tensor([self.grid_size[1]*i for i in range(ny)])
-        z_terr = torch.tensor([self.grid_size[2]*i for i in range(nz)])
-        h_terr = torch.tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2]))
-        # Get terrain object
-        terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain)
-        return terrain
-
-    def get_optimization_variables(self):
-        # Wind speed
-        optimisation_variables = [self.optimisation_args.params['wind_profile']['init_wind_speed']
-                                  for i in
-                                  range(self.optimisation_args.params['wind_profile']['polynomial_law_num_points'])]
-        # Rotation
-        optimisation_variables.append(self.optimisation_args.params['wind_profile']['rotation'])
-        if self.optimisation_args.params['wind_profile']['optimized_corners'] > 0:
-            optimisation_variables = [optimisation_variables[:] for i in
-                                      range(self.optimisation_args.params['wind_profile']['optimized_corners'])]
-
-        return torch.tensor(optimisation_variables).to(self._device).requires_grad_()
-
-    def load_network_model(self):
-        print('Loading network model...', end='', flush=True)
-        t_start = time.time()
-        yaml_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'], 'params.yaml')
-        params = utils.EDNNParameters(yaml_loc)                                         # load the model config
-        NetworkType = getattr(models, params.model['model_type'])                       # load the model
-        net = NetworkType(**params.model_kwargs())                                 # load learnt parameters
-        model_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'],
-                                 self._model_args.params['version'] + '.model')
-        net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
-        net = net.to(self._device)
-        print(' done [{:.2f} s]'.format(time.time() - t_start))
-        return net
-
-    def get_loss_function(self):
-        try:
-            if self._model_args.params['loss'].lower() == 'l1':
-                loss_fn = torch.nn.L1Loss()
-            elif self._model_args.params['loss'].lower() == 'mse':
-                loss_fn = torch.nn.MSELoss()
-            else:
-                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
-                raise ValueError
-        except KeyError:
-            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
-        return loss_fn
-
-    def evaluate_loss(self, output):
-        loss = self._loss_fn(output, self.original_input[1:4, :, :, :].to(self._device))
-        return loss
-
-    def get_optimized_corners(self):
-        corner_winds = np.zeros((3, 64, 2, 2), dtype='float')
-        wind_z = []
-        num_points = self.optimisation_args.params['wind_profile']['polynomial_law_num_points']
-        for yi in range(2):
-            for xi in range(2):
-                # wind_speed = self._optimisation_variables[i][0:num_points]
-                wind_height_increment = ((self.terrain.z_terr[-1] + self.grid_size[2])
-                                         - self.terrain.terrain_corners[yi, xi]) / num_points
-                wind_z.append([self.terrain.terrain_corners[yi, xi] + j * wind_height_increment for j in range(num_points)])
-
-        if self.optimisation_args.params['wind_profile']['optimized_corners'] > 0:
-            for yi in range(2):
-                for xi in range(2):
-                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.terrain_corners[yi, xi])
-                    if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
-                        corner_winds[0, valid_z, yi, xi] = \
-                            CubicSpline(wind_z[xi*2+yi], self._optimisation_variables[xi*2+yi][0:num_points])(self.terrain.z_terr[valid_z])\
-                            * 1/(np.sqrt(1+torch.tan(self._optimisation_variables[xi*2+yi][-1]**2)))
-                        corner_winds[1, valid_z, yi, xi] = \
-                            CubicSpline(wind_z[xi*2+yi], self._optimisation_variables[xi*2+yi][0:num_points])(self.terrain.z_terr[valid_z])\
-                            * torch.tan(self._optimisation_variables[xi*2+yi][-1])/(np.sqrt(1+torch.tan(self._optimisation_variables[xi*2+yi][-1]**2)))
-
-        else:
-            for yi in range(2):
-                for xi in range(2):
-                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.h_terr[xi+yi])
-                    if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
-                        corner_winds[0, valid_z, yi, xi] = \
-                            CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
-                            * 1/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
-                        corner_winds[1, valid_z, yi, xi] = \
-                            CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
-                            * np.tan(self._optimisation_variables[-1])/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
-
-        return torch.Tensor(corner_winds).to(self._device).requires_grad_()
-
-    def generate_input(self):
-        # Terrain
-        terrain = self.original_input[0].to(self._device).requires_grad_()  # distanced transformed boolean terrain
-        corner_winds = self.get_optimized_corners()
-        input_ = torch.cat(
-            [terrain.unsqueeze(0), self._interpolator.edge_interpolation(corner_winds)])
-        return input_
-
-    def get_wind_prediction(self, input_ = None):
-        if input_ is None:
-            input_ = self.generate_input()
-        output = self.net(input_.unsqueeze(0)).squeeze(0)  # Run network prediction
-        return output
-
-
-    def run_wind_profile_optimisation(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5}, verbose=False):
-        optimizer = opt([self._optimisation_variables], **opt_kwargs)
-        print(optimizer)
-        t0 = time.time()
-        t = 0
-        max_grad = min_gradient+1.0
-        losses, grads, optimisation_variables_ = [], [], []
-        while t < n and max_grad > min_gradient:
-            print('optimisation variables: ', ', '.join(str(p.clone().detach().cpu().numpy()) for p in self._optimisation_variables))
-            optimisation_variables_.append(self._optimisation_variables.clone().detach().cpu().numpy())
-            optimizer.zero_grad()
-            t1 = time.time()
-            output = self.get_wind_prediction()
-            tp = time.time()
-
-            loss = self.evaluate_loss(output)
-            tl = time.time()
-
-            losses.append(loss.item())
-            print('loss={0:0.3e}, '.format(loss.item()))
-
-            # Calculate derivative of loss with respect to optimisation variables
-            loss.backward(retain_graph=True)
-            tb = time.time()
-
-            max_grad = self._optimisation_variables.grad.abs().max()
-            print('Max grad: {0:0.3e}'.format(max_grad))
-            grads.append(max_grad)
-
-            # Step with gradient
-            optimizer.step()
-            to = time.time()
-
-            if verbose:
-                print('Times: prediction: {0:6.3f}s'.format(tp - t1), end='')
-                print(', loss: {0:6.3f}s'.format(tl - tp), end='')
-                print(', backward: {0:6.3f}s'.format(tb - tl), end='')
-                print(', opt step: {0:6.3f}s'.format(to - tb))
-            t += 1
-        tt = time.time()-t0
-        if verbose:
-            print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
-        return np.array(optimisation_variables_), np.array(losses), np.array(grads)
-
-    def run_scattered_optimisation(self):
-        num_steps = self.optimisation_args.params['scattered_points']['num_steps']
-        t = 0
-        losses, percentages = [], []
-        while t <= num_steps:
-            # Copy of the true wind labels
-            new_wind_input = self.labels.clone().detach().cpu().numpy()
-            p = ((100 - self.optimisation_args.params['scattered_points']['initial_percentage'])/num_steps)
-            percentage = (self.optimisation_args.params['scattered_points']['initial_percentage'] + p*t) / 100
-            # Boolean mask with False values given by percentage
-            mask = np.random.choice([0, 1], size=new_wind_input.shape,
-                                    p=(percentage, (1 - percentage))).astype(np.bool)
-            new_wind_input[mask] = 0
-            input_ = self.original_input.clone()
-            input_[1:4, :, :, :] = torch.Tensor(new_wind_input)
-            output = self.get_wind_prediction(input_.to(self._device))
-            loss = self._loss_fn(output, self.labels.to(self._device))
-            losses.append(loss.item())
-            percentages.append(percentage)
-            print("Percentage:, {0}, Loss is: {1}".format(percentage, loss.item()))
-            t += 1
-        return losses, percentages
-
-    def run_trajectory_optimisation(self):
-        x = self.optimisation_args.params['trajectory']['x']
-        y = self.optimisation_args.params['trajectory']['y']
-        z = self.optimisation_args.params['trajectory']['z']
-        num_points = self.optimisation_args.params['trajectory']['num_points']
-        x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
-        # Get the grid points and winds along the trajectory
-        wind_input = torch.zeros((3, 64, 64, 64))
-        num_segments, segment_length = x_traj.shape
-        counter = 0
-        for i in range(num_segments):
-            for j in range(segment_length):
-                id_x = (int((x_traj[i][j] - self.terrain.x_terr[0]) / self.grid_size[0]))
-                id_y = (int((y_traj[i][j] - self.terrain.y_terr[0]) / self.grid_size[1]))
-                id_z = (int((z_traj[i][j] - self.terrain.z_terr[0]) / self.grid_size[2]))
-                if all(v == 0 for v in wind_input[:, id_x, id_y, id_z]):
-                    counter += 1
-                wind_input[:, id_x, id_y, id_z] = self.labels[:, id_x, id_y, id_z]
-        terrain = self.original_input[0].to(self._device)  # distanced transformed boolean terrain
-        input_ = torch.cat(
-            [terrain.unsqueeze(0), wind_input.to(self._device)])
-        output = self.get_wind_prediction(input_)
-        loss = self._loss_fn(output, self.labels.to(self._device))
-        print("Loss is: ", loss.item())
-        #print("Number of grid points along trajectory: ", counter)
-
-    def run_wind_prediction(self, data_set):
-        input_ = data_set[0].to(self._device)
-        labels = data_set[1].to(self._device)
-        output = self.get_wind_prediction(input_)
-        loss = self._loss_fn(output, labels)
-        print("Loss is: ", loss.item())

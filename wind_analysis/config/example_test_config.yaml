@@ -1,42 +1,74 @@
 # Dataset parameters
 data:
-    testset_name: 'data/wind_test/test.hdf5'
+    # CFD data
+    CFD: {
+        load_CFD_data: True
+        testset_name: 'data/wind_test/test.hdf5'
+        # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
+        label_channels: ['ux', 'uy', 'uz']  # velocities
+        # Get all samples in test set
+        batch_test: False
+        # if batch is False get the following sample in the set
+        index: 1
+    }
+    # COSMO data
+    cosmo: {
+        load_cosmo_data: False
+        file: 'data/cosmo-1_ethz_fcst_2018112312.nc'        #09, 12
+        time: 'auto'
+        terrain_file: 'data/cosmo-1_ethz_ana_const.nc'
+        terrain_tiff: 'data/riemenstalden_full.tif'         # fluelen_full, riemenstalden_full
+        prediction_prefix: ''  # rotated_
+    }
+    # ULOG data
+    ulog: {
+        load_ULOG_data: False
+        file: 'data/13_33_46.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
+        filtered_dir: 'data/'
+        use_ekf_wind: False
+    }
 
-    # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
-    input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
-    label_channels: ['ux', 'uy', 'uz']  # velocities
+# Wind generation parameters
+wind:
+    # Scattered points: generate random wind data by sampling from the CFD labels
+    scattered_points: {
+        use_scattered_points: True
+        initial_percentage: 10
+        num_steps:
+    }
+    # Trajectory generation
+    trajectory: {
+        use_trajectory_generation: False
+        x: [50, 200], # [50, 200, 450, 850],
+        y: [50, 350], # [50, 350, 700, 920],
+        z: [70, 60],  # [70, 60, 55, 200],
+        num_points: 200
+    }
+    # ULOG flight
+    ulog_flight: {
+        use_ulog_flight: False
+        interpolation_method: 'bin'
+        train_size: 0.8
+    }
 
-    # Get all samples in test set
-    batch_test: False
-    # if batch is False get the following sample in the set
-    index: 1
+# Noise parameters
+noise:
+  generate_turbulence: False
+  white_noise: False
 
-# Optimisation parameters
+# Corner optimisation parameters
 optimisation:
-  # 0 - wind profile optimisation, 1 - scattered points optimisation, 2 - trajectory optimisation
-  optimisation_method: 1
-
-  # Wind profile optimisation
-  wind_profile: {
-      optimized_corners: 4,
-      polynomial_law_num_points: 8, #approximate wind profile using a power law
-      init_wind_speed: 1.0,
-      rotation: 0.0 #-110.0
-  }
-
-  # Scattered points optimisation
-  scattered_points: {
-      initial_percentage: 10,
-      num_steps: 45 #step percentage
-  }
-
-  # Trajectory optimisation
-  trajectory: {
-    x: [50, 200], # [50, 200, 450, 850],
-    y: [50, 350], # [50, 350, 700, 920],
-    z: [70, 60],   # [70, 60, 55, 200],
-    num_points: 200
-  }
+    optimise_corners_individually: True
+    # Rotation
+    rotation: 0.0
+    # Scale
+    use_scale_optimisation: True
+    scale: 1.0
+    # Spline
+    use_spline_optimisation: False
+    polynomial_law_num_points: 8, #approximate wind profile using a power law
+    init_wind_speed: 1.0,
 
 # NN model parameters
 model:
