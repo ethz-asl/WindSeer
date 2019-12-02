@@ -40,7 +40,7 @@ class WindOptimiserOutput:
 
     def plot_wind_profile(self):
         fig, ax = plt.subplots(4, 4)
-        optimized_corners = self.wind_opt._cosmo_args.params['optimized_corners']
+        optimized_corners = 4
         input_ = self.wind_opt.generate_wind_input()
         output_ = self.wind_opt.get_prediction()
         for i in range(optimized_corners):

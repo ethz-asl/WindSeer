@@ -72,15 +72,14 @@ class OptTest(object):
 
 
 class SelectionFlags(object):
-    def __init__(self, data_, wind, noise, optimisation):
-        self.load_cfd_data = data_.params['CFD']['load_CFD_data']
-        self.load_cosmo_data = data_.params['cosmo']['load_cosmo_data']
-        self.load_load_terrain = data_.params['cosmo']['load_terrain']
-        self.load_ulog_data = data_.params['ulog']['load_ulog_data']
-        self.use_ekf_wind = data_.params['ulog']['use_ekf_wind']
+    def __init__(self, test, cfd, ulog, wind, noise, optimisation):
+        self.test_simulated_data = test.params['test_simulated_data']
+        self.test_flight_data = test.params['test_flight_data']
+        self.batch_test = cfd.params['batch_test']
+        self.use_ekf_wind = ulog.params['use_ekf_wind']
         self.use_scattered_points = wind.params['scattered_points']['use_scattered_points']
         self.use_trajectory = wind.params['trajectory']['use_trajectory_generation']
-        self.use_ulog_flight = wind.params['ulog_flight']['use_ulog_flight']
+        self.predict_ulog = wind.params['ulog_flight']['predict_ulog']
         self.generate_turbulence = noise.params['generate_turbulence']
         self.white_noise = noise.params['white_noise']
         self.optimize_corners_individually = optimisation.params['optimise_corners_individually']
@@ -96,40 +95,45 @@ class WindOptimiser(object):
         # Configuration variables
         self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self._config_yaml = config_yaml
-        self._data_args = utils.BasicParameters(self._config_yaml, 'data')
+        self._test_args = utils.BasicParameters(self._config_yaml, 'test')
+        self._cfd_args = utils.BasicParameters(self._config_yaml, 'cfd')
+        self._cosmo_args = utils.COSMOParameters(self._config_yaml)
+        self._ulog_args = utils.UlogParameters(self._config_yaml)
         self._wind_args = utils.BasicParameters(self._config_yaml, 'wind')
         self._noise_args = utils.BasicParameters(self._config_yaml, 'noise')
         self._optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
-        self._model_args = utils.BasicParameters(self._config_yaml,'model')
+        self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._resolution = resolution
         # Selection flags
-        self._flag = SelectionFlags(self._data_args, self._wind_args, self._noise_args, self._optimisation_args)
+        self.flag = SelectionFlags(self._test_args, self._cfd_args, self._ulog_args,
+                                   self._wind_args, self._noise_args, self._optimisation_args)
         # Load data
-        if self._flag.load_ulog_data:
-            self._ulog_data = self.load_ulog_data()
-        if self._flag.load_cosmo_data:
-            self._cosmo_wind = self.load_wind()
-        if self._flag.load_load_terrain:
-            self.terrain = self.load_terrain()
-        if self._flag.load_cfd_data:
+        if self.flag.test_simulated_data:
             self.original_input, self.labels, self.data_set_name, self.grid_size, self.binary_terrain \
                 = self.load_data_set()
-            self.cfd_terrain = self.get_cfd_terrain()
+            self.terrain = self.get_cfd_terrain()
+        if self.flag.test_flight_data:
+            self._ulog_data = self.load_ulog_data()
+            self._cosmo_wind = self.load_wind()
+            self.terrain = self.load_cosmo_terrain()
         # Wind generation variables
-        if self._flag.use_scattered_points:
+        if self.flag.use_scattered_points:
             self.run_scattered_optimisation()
-        if self._flag.use_trajectory:
+        if self.flag.use_trajectory:
             self.run_trajectory_optimisation()
             self.run_original_wind_prediction()
         # Optimisation variables
-        self._optimisation_variables, self._optimisation_variables_names = self.get_optimisation_variables()
+        self._optimisation_variables = self.get_optimisation_variables()
         self.reset_optimisation_variables()
-        self._optimized_corners = self.get_optimized_corners()
-        self._train_ulog_data, self._test_ulog_data = self.train_test_split()
-        self._base_cosmo_corners = self.get_cosmo_corners()
+        if self.flag.test_simulated_data:
+            self._base_cfd_corners = self.get_cfd_corners()
+            self._optimized_corners = self.get_optimized_corners()
+        if self.flag.test_flight_data:
+            self._base_cosmo_corners = self.get_cosmo_corners()
+            self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask = self.get_wind_blocks()
+            if self.flag.predict_ulog:
+                self._train_ulog_data, self._test_ulog_data = self.train_test_split()
         self._interpolator = DataInterpolation(self._device, 3, *self.terrain.get_dimensions())
-        self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask = self.get_wind_blocks()
-        #
         # Network model and loss function
         self.net = self.load_network_model()
         self.net.freeze_model()
@@ -143,11 +147,10 @@ class WindOptimiser(object):
         self._ulog_args.print()
         ulog_data = ulog_utils.get_log_data(self._ulog_args.params['file'])
 
-        if (self._ulog_args.params['use_ekf_wind']):
+        if self.flag.use_ekf_wind:
             ulog_data['we'] = ulog_data['we_east']
             ulog_data['wn'] = ulog_data['we_north']
             ulog_data['wd'] = ulog_data['we_down']
-
         else:
             ulog_data['we'] = ulog_data['we']
             ulog_data['wn'] = ulog_data['wn']
@@ -171,7 +174,7 @@ class WindOptimiser(object):
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return cosmo_wind
 
-    def load_terrain(self):
+    def load_cosmo_terrain(self):
         print('Loading terrain...', end='', flush=True)
         t_start = time.time()
         # Get corresponding terrain
@@ -182,7 +185,7 @@ class WindOptimiser(object):
         boolean_terrain = self._model_args.params['boolean_terrain']
 
         terrain = TerrainBlock(
-            *get_mapgeo_terrain.get_terrain(self._data_args.params['cosmo']['terrain_tiff'], self._cosmo_wind['x'][[0, 1], [0, 1]],
+            *get_mapgeo_terrain.get_terrain(self._cosmo_args.params['terrain_tiff'], self._cosmo_wind['x'][[0, 1], [0, 1]],
                                self._cosmo_wind['y'][[0, 1], [0, 1]],
                                block_height, (self._resolution, self._resolution, self._resolution)),
             device=self._device, boolean_terrain=boolean_terrain)
@@ -191,14 +194,14 @@ class WindOptimiser(object):
 
     def load_data_set(self):
         # Load data set
-        test_set = nn_data.HDF5Dataset(self._data_args.params['CFD']['testset_name'],
-                                       self._data_args.params['CFD']['input_channels'],
-                                       self._data_args.params['CFD']['label_channels'])
+        test_set = nn_data.HDF5Dataset(self._cfd_args.params['CFD']['testset_name'],
+                                       self._cfd_args.params['CFD']['input_channels'],
+                                       self._cfd_args.params['CFD']['label_channels'])
 
         # Get data set from test set
-        data_set = test_set[self._data_args.params['CFD']['index']]
-        name = test_set.get_name(self._data_args.params['CFD']['index'])
-        grid_size = data.get_grid_size(self._data_args.params['CFD']['testset_name'])
+        data_set = test_set[self._cfd_args.params['CFD']['index']]
+        name = test_set.get_name(self._cfd_args.params['CFD']['index'])
+        grid_size = data.get_grid_size(self._cfd_args.params['CFD']['testset_name'])
         # Convert distance transformed matrix back to binary matrix
         binary_terrain = data_set[0][0, :, :, :] <= 0
         return data_set[0], data_set[1], name, grid_size, binary_terrain
@@ -216,14 +219,14 @@ class WindOptimiser(object):
 # --- Wind generation ---
 
     def run_scattered_optimisation(self):
-        num_steps = self.optimisation_args.params['scattered_points']['num_steps']
+        num_steps = self._wind_args.params['scattered_points']['num_steps']
         t = 0
         losses, percentages = [], []
         while t <= num_steps:
             # Copy of the true wind labels
             new_wind_input = self.labels.clone().detach().cpu().numpy()
-            p = ((100 - self.optimisation_args.params['scattered_points']['initial_percentage'])/num_steps)
-            percentage = (self.optimisation_args.params['scattered_points']['initial_percentage'] + p*t) / 100
+            p = ((100 - self._wind_args.params['scattered_points']['initial_percentage'])/num_steps)
+            percentage = (self._wind_args.params['scattered_points']['initial_percentage'] + p*t) / 100
             # Boolean mask with False values given by percentage
             mask = np.random.choice([0, 1], size=new_wind_input.shape,
                                     p=(percentage, (1 - percentage))).astype(np.bool)
@@ -239,10 +242,10 @@ class WindOptimiser(object):
         return losses, percentages
 
     def run_trajectory_optimisation(self):
-        x = self.optimisation_args.params['trajectory']['x']
-        y = self.optimisation_args.params['trajectory']['y']
-        z = self.optimisation_args.params['trajectory']['z']
-        num_points = self.optimisation_args.params['trajectory']['num_points']
+        x = self._wind_args.params['trajectory']['x']
+        y = self._wind_args.params['trajectory']['y']
+        z = self._wind_args.params['trajectory']['z']
+        num_points = self._wind_args.params['trajectory']['num_points']
         x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
         # Get the grid points and winds along the trajectory
         wind_input = torch.zeros((3, 64, 64, 64))
@@ -331,29 +334,28 @@ class WindOptimiser(object):
         return net
 
     def get_optimisation_variables(self):
-        rotation = self._optimisation_args.parms['rotation']
-        if self._flag.use_scale_optimisation:
-            scale = self._optimisation_args.parms['scale']
+        rotation = self._optimisation_args.params['rotation']
+        if self.flag.use_scale_optimisation:
+            scale = self._optimisation_args.params['scale']
         else:
             scale = []
-        if self._flag.use_spline_optimisation:
+        if self.flag.use_spline_optimisation:
             spline = 1
         else:
             spline = []
         opt_var = [rotation, scale, spline]
         optimisation_variables = [var for var in opt_var if var != []]
         # Replicate optimisation variables for each corner
-        if self._flag.optimize_corners_individually:
-            ones_ = np.ones(4)
-            optimisation_variables *= ones_
+        if self.flag.optimize_corners_individually:
+            optimisation_variables = [optimisation_variables[:] for i in range(4)]
 
         return optimisation_variables
 
     def reset_optimisation_variables(self, optimisation_variables=None):
         if optimisation_variables is None:
-            optimisation_variables_ = self._optimisation_variables
+            optimisation_variables = self._optimisation_variables
 
-        self._optimisation_variables = torch.Tensor(optimisation_variables_).to(self._device).requires_grad_()
+        self._optimisation_variables = torch.Tensor(optimisation_variables).to(self._device).requires_grad_()
 
     def train_test_split(self):
         train_ulog = {}; test_ulog = {}
@@ -377,18 +379,18 @@ class WindOptimiser(object):
         dz = self.terrain.z_terr[[0, -1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
         grid_dimensions = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
                            'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
-        if self._ulog_args.params['predict_ulog']:
+        if self._wind_args.params['ulog_flight']['predict_ulog']:
             UlogInterpolator = UlogInterpolation(self._train_ulog_data, grid_dimensions, self.terrain)
         else:
             UlogInterpolator = UlogInterpolation(self._ulog_data, grid_dimensions, self.terrain)
 
         # bin the data into the regular grid
         try:
-            if self._ulog_args.params['interpolation_method'].lower() == 'bin':
+            if self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'bin':
                 wind, variance = UlogInterpolator.bin_log_data()
-            elif self._ulog_args.params['interpolation_method'].lower() == 'krigging':
+            elif self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'krigging':
                 wind, variance = UlogInterpolator.interpolate_log_data_krigging()
-            elif self._ulog_args.params['interpolation_method'].lower() == 'idw':
+            elif self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'idw':
                 wind, variance = UlogInterpolator.interpolate_log_data_idw()
             else:
                 print('Specified interpolation method: {0} unknown!'
@@ -424,15 +426,15 @@ class WindOptimiser(object):
             cr.append(torch.cos(self._optimisation_variables[0][i]))
         # Get corner winds for model inference, offset to actual terrain heights
         cosmo_corners = self._base_cosmo_corners.clone()
-        if self._flag.use_scale_optimisation:
+        if self.flag.use_scale_optimisation:
             for i in range(len(self._optimisation_variables[0, :])):
-                cosmo_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[1,i]*(
+                cosmo_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[1, i]*(
                         self._base_cosmo_corners[0, :, i//2, (i+2)%2]*cr[i]
                         - self._base_cosmo_corners[1, :, i//2, (i+2)%2]*sr[i])
-                cosmo_corners[1, :, i//2, (i+2)%2] = self._optimisation_variables[1,i]*(
+                cosmo_corners[1, :, i//2, (i+2)%2] = self._optimisation_variables[1, i]*(
                         self._base_cosmo_corners[0, :, i//2, (i+2)%2]*sr[i]
                         + self._base_cosmo_corners[1, :, i//2, (i+2)%2]*cr[i])
-        if self._flag.use_spline_optimisation:
+        if self.flag.use_spline_optimisation:
             cosmo_corners = []
         return cosmo_corners
 
@@ -524,18 +526,19 @@ class WindOptimiser(object):
         max_grad = min_gradient+1.0
         losses, grads, optimisation_variables_ = [], [], []
         while t < n and max_grad > min_gradient:
-            if self._cosmo_args.params['optimized_corners'] > 0:
-                print(t,
-                      ' r: ', *self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
-                      ' s: ', *self._optimisation_variables[1].detach().cpu().numpy(),
-                      ' ds: ', *self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
-                      '')
-            else:
-                print(t,
-                      ' r: ', self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
-                      ' s: ', self._optimisation_variables[1].detach().cpu().numpy(),
-                      ' ds: ', self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
-                      '')
+            # if self.flag.optimize_corners_individually:
+            #     print(t,
+            #               ' r: ', *self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
+            #               ' s: ', *self._optimisation_variables[1].detach().cpu().numpy(),
+            #               ' ds: ', *self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
+            #               '')
+            # else:
+            #     print(t,
+            #           ' r: ', self._optimisation_variables[0].detach().cpu().numpy() * 180.0 / np.pi,
+            #           ' s: ', self._optimisation_variables[1].detach().cpu().numpy(),
+            #           ' ds: ', self._optimisation_variables[2].detach().cpu().numpy() * 180.0 / (np.pi*10000),
+            #           '')
+            print(t, *self._optimisation_variables.detach().cpu().numpy())
             optimisation_variables_.append(self._optimisation_variables.clone().detach().cpu().numpy())
             optimizer.zero_grad()
             t1 = time.time()
