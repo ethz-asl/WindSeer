@@ -421,17 +421,17 @@ class WindOptimiser(object):
 
     def get_rotated_wind(self):
         sr = []; cr = []
-        for i in range(len(self._optimisation_variables[0, :])):
-            sr.append(torch.sin(self._optimisation_variables[0][i]))
-            cr.append(torch.cos(self._optimisation_variables[0][i]))
+        for i in range(self._optimisation_variables.shape[0]):
+            sr.append(torch.sin(self._optimisation_variables[i][0]))
+            cr.append(torch.cos(self._optimisation_variables[i][0]))
         # Get corner winds for model inference, offset to actual terrain heights
         cosmo_corners = self._base_cosmo_corners.clone()
         if self.flag.use_scale_optimisation:
-            for i in range(len(self._optimisation_variables[0, :])):
-                cosmo_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[1, i]*(
+            for i in range(self._optimisation_variables.shape[0]):
+                cosmo_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
                         self._base_cosmo_corners[0, :, i//2, (i+2)%2]*cr[i]
                         - self._base_cosmo_corners[1, :, i//2, (i+2)%2]*sr[i])
-                cosmo_corners[1, :, i//2, (i+2)%2] = self._optimisation_variables[1, i]*(
+                cosmo_corners[1, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
                         self._base_cosmo_corners[0, :, i//2, (i+2)%2]*sr[i]
                         + self._base_cosmo_corners[1, :, i//2, (i+2)%2]*cr[i])
         if self.flag.use_spline_optimisation:

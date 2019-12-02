@@ -58,7 +58,7 @@ noise:
 
 # Corner optimisation parameters
 optimisation:
-    optimise_corners_individually: True
+    optimise_corners_individually: False
     # Rotation
     rotation: 0.0
     # Scale
