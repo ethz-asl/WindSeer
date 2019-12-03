@@ -24,13 +24,15 @@ if optimise_wind:
     # Create WindOptimiser object using yaml config
     wind_opt = WindOptimiser(args.input_yaml)
 
-    # Try each optimisation method
+    # Optimise wind variables using each optimisation method
     all_ov, losses, grads = [], [], []
     for i, o in enumerate(optimisers):
         ov, loss, grad = wind_opt.optimise_wind_variables(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
         all_ov.append(ov)
         losses.append(loss)
         grads.append(grad)
+
+
 
     # Analyse optimised wind
     wind_opt_output = WindOptimiserOutput(wind_opt, optimisers, all_ov, losses, grads)

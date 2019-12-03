@@ -12,6 +12,7 @@ from sklearn import metrics
 from datetime import datetime
 from scipy import ndimage
 from scipy.interpolate import CubicSpline
+import random
 import torch
 import os
 import time
@@ -240,9 +241,10 @@ class WindOptimiser(object):
         # p = ((100 - self._wind_args.params['scattered_points']['initial_percentage'])/num_steps)
         # percentage = (self._wind_args.params['scattered_points']['initial_percentage'] + p) / 100
         percentage = self._wind_args.params['scattered_points']['initial_percentage'] / 100
-        # Boolean mask with False values given by percentage
-        wind_mask = np.random.choice([0, 1], size=wind.shape,
-                                     p=(percentage, (1 - percentage))).astype(np.bool)
+        mask = self.binary_terrain.detach().cpu().numpy()
+        # Change (percentage) of False values in binary terrain to True
+        wind_mask = [not elem if (not elem and random.random() < percentage) else elem for elem in np.nditer(mask)]
+
         wind[wind_mask] = float('nan')
         wind_blocks = torch.Tensor(wind).to(self._device)
         wind[wind_mask] = 0
@@ -448,7 +450,7 @@ class WindOptimiser(object):
             print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
         return loss_fn
 
-    # --- Auxiliary functions ---
+    # --- Helper functions ---
 
     def get_rotated_wind(self):
         sr = []; cr = []
@@ -553,6 +555,8 @@ class WindOptimiser(object):
         output = self.run_prediction(input)
         return output
 
+    # --- Optimisation functions ---
+
     def optimise_wind_variables(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5}, verbose=False):
         optimizer = opt([self._optimisation_variables], **opt_kwargs)
         print(optimizer)
@@ -608,3 +612,8 @@ class WindOptimiser(object):
         if verbose:
             print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
         return np.array(optimisation_variables_), np.array(losses), np.array(grads)
+
+    def run_original_input_prediction(self):
+        input_ = self.original_input
+
+        return output, loss

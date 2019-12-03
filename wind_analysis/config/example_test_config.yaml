@@ -33,13 +33,13 @@ wind:
     add_wind_measurement: True
     # Scattered points: generate random wind data by sampling from the CFD labels
     scattered_points: {
-        use_scattered_points: False,
+        use_scattered_points: True,
         initial_percentage: 10,
         num_steps: 100
     }
     # Trajectory generation
     trajectory: {
-        use_trajectory_generation: True,
+        use_trajectory_generation: False,
         x: [50, 200], # [50, 200, 450, 850],
         y: [50, 350], # [50, 350, 700, 920],
         z: [70, 60],  # [70, 60, 55, 200],
