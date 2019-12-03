@@ -77,11 +77,12 @@ class SelectionFlags(object):
         self.test_flight_data = test.params['test_flight_data']
         self.batch_test = cfd.params['batch_test']
         self.use_ekf_wind = ulog.params['use_ekf_wind']
+        self.add_wind_measurements = wind.params['add_wind_measurement']
         self.use_scattered_points = wind.params['scattered_points']['use_scattered_points']
         self.use_trajectory = wind.params['trajectory']['use_trajectory_generation']
         self.predict_ulog = wind.params['ulog_flight']['predict_ulog']
         self.generate_turbulence = noise.params['generate_turbulence']
-        self.white_noise = noise.params['white_noise']
+        self.add_gaussian_noise = noise.params['add_gaussian_noise']
         self.optimize_corners_individually = optimisation.params['optimise_corners_individually']
         self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
         self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
@@ -116,21 +117,30 @@ class WindOptimiser(object):
             self._ulog_data = self.load_ulog_data()
             self._cosmo_wind = self.load_wind()
             self.terrain = self.load_cosmo_terrain()
-        # Wind generation variables
-        if self.flag.use_scattered_points:
-            self.run_scattered_optimisation()
-        if self.flag.use_trajectory:
-            self.run_trajectory_optimisation()
-            self.run_original_wind_prediction()
+        # Wind measurements variables
+        if self.flag.test_simulated_data:
+            if self.flag.use_scattered_points:
+                self._wind_blocks, self._wind_zeros, self._wind_mask \
+                    = self.get_scattered_wind_blocks()
+            if self.flag.use_trajectory:
+                self._wind_blocks, self._wind_zeros, self._wind_mask\
+                    = self.get_trajectory_wind_blocks()
+        if self.flag.test_flight_data:
+            self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask \
+                = self.get_ulog_wind_blocks()
+        # Noise
+        if self.flag.add_gaussian_noise:
+            self._wind_blocks, self._wind_zeros = self.add_gaussian_noise()
+        if self.flag.generate_turbulence:
+            self._wind_blocks, self._wind_zeros = self.generate_turbulence()
         # Optimisation variables
         self._optimisation_variables = self.get_optimisation_variables()
         self.reset_optimisation_variables()
         if self.flag.test_simulated_data:
             self._base_cfd_corners = self.get_cfd_corners()
-            self._optimized_corners = self.get_optimized_corners()
+            # self._optimized_corners = self.get_optimized_corners()
         if self.flag.test_flight_data:
             self._base_cosmo_corners = self.get_cosmo_corners()
-            self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask = self.get_wind_blocks()
             if self.flag.predict_ulog:
                 self._train_ulog_data, self._test_ulog_data = self.train_test_split()
         self._interpolator = DataInterpolation(self._device, 3, *self.terrain.get_dimensions())
@@ -139,7 +149,7 @@ class WindOptimiser(object):
         self.net.freeze_model()
         self._loss_fn = self.get_loss_function()
 
-# --- Load data ---
+    # --- Load data ---
 
     def load_ulog_data(self):
         print('Loading ulog data...', end='', flush=True)
@@ -194,61 +204,59 @@ class WindOptimiser(object):
 
     def load_data_set(self):
         # Load data set
-        test_set = nn_data.HDF5Dataset(self._cfd_args.params['CFD']['testset_name'],
-                                       self._cfd_args.params['CFD']['input_channels'],
-                                       self._cfd_args.params['CFD']['label_channels'])
+        test_set = nn_data.HDF5Dataset(self._cfd_args.params['testset_name'],
+                                       self._cfd_args.params['input_channels'],
+                                       self._cfd_args.params['label_channels'])
 
         # Get data set from test set
-        data_set = test_set[self._cfd_args.params['CFD']['index']]
-        name = test_set.get_name(self._cfd_args.params['CFD']['index'])
-        grid_size = data.get_grid_size(self._cfd_args.params['CFD']['testset_name'])
+        data_set = test_set[self._cfd_args.params['index']]
+        name = test_set.get_name(self._cfd_args.params['index'])
+        print("Loading test set with name: ", str(name))
+        grid_size = data.get_grid_size(self._cfd_args.params['testset_name'])
         # Convert distance transformed matrix back to binary matrix
         binary_terrain = data_set[0][0, :, :, :] <= 0
         return data_set[0], data_set[1], name, grid_size, binary_terrain
 
     def get_cfd_terrain(self):
         nx, ny, nz = self.binary_terrain.shape
-        x_terr = torch.tensor([self.grid_size[0]*i for i in range(nx)])
-        y_terr = torch.tensor([self.grid_size[1]*i for i in range(ny)])
-        z_terr = torch.tensor([self.grid_size[2]*i for i in range(nz)])
-        h_terr = torch.tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2]))
+        x_terr = torch.Tensor([self.grid_size[0]*i for i in range(nx)])
+        y_terr = torch.Tensor([self.grid_size[1]*i for i in range(ny)])
+        z_terr = torch.Tensor([self.grid_size[2]*i for i in range(nz)])
+        h_terr = torch.Tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2]))
         # Get terrain object
-        terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain)
+        boolean_terrain = self._model_args.params['boolean_terrain']
+        terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain,
+                               device=self._device, boolean_terrain=boolean_terrain)
         return terrain
 
-# --- Wind generation ---
+    # --- Wind generation ---
 
-    def run_scattered_optimisation(self):
-        num_steps = self._wind_args.params['scattered_points']['num_steps']
+    def get_scattered_wind_blocks(self):
+        # num_steps = self._wind_args.params['scattered_points']['num_steps']
         t = 0
         losses, percentages = [], []
-        while t <= num_steps:
-            # Copy of the true wind labels
-            new_wind_input = self.labels.clone().detach().cpu().numpy()
-            p = ((100 - self._wind_args.params['scattered_points']['initial_percentage'])/num_steps)
-            percentage = (self._wind_args.params['scattered_points']['initial_percentage'] + p*t) / 100
-            # Boolean mask with False values given by percentage
-            mask = np.random.choice([0, 1], size=new_wind_input.shape,
-                                    p=(percentage, (1 - percentage))).astype(np.bool)
-            new_wind_input[mask] = 0
-            input_ = self.original_input.clone()
-            input_[1:4, :, :, :] = torch.Tensor(new_wind_input)
-            output = self.get_wind_prediction(input_.to(self._device))
-            loss = self._loss_fn(output, self.labels.to(self._device))
-            losses.append(loss.item())
-            percentages.append(percentage)
-            print("Percentage:, {0}, Loss is: {1}".format(percentage, loss.item()))
-            t += 1
-        return losses, percentages
+        # Copy of the true wind labels
+        wind = self.labels.clone().detach().cpu().numpy()
+        # p = ((100 - self._wind_args.params['scattered_points']['initial_percentage'])/num_steps)
+        # percentage = (self._wind_args.params['scattered_points']['initial_percentage'] + p) / 100
+        percentage = self._wind_args.params['scattered_points']['initial_percentage'] / 100
+        # Boolean mask with False values given by percentage
+        wind_mask = np.random.choice([0, 1], size=wind.shape,
+                                     p=(percentage, (1 - percentage))).astype(np.bool)
+        wind[wind_mask] = float('nan')
+        wind_blocks = torch.Tensor(wind).to(self._device)
+        wind[wind_mask] = 0
+        wind_zeros = torch.Tensor(wind).to(self._device)
+        return wind_blocks, wind_zeros, torch.Tensor(wind_mask).to(self._device)
 
-    def run_trajectory_optimisation(self):
+    def get_trajectory_wind_blocks(self):
         x = self._wind_args.params['trajectory']['x']
         y = self._wind_args.params['trajectory']['y']
         z = self._wind_args.params['trajectory']['z']
         num_points = self._wind_args.params['trajectory']['num_points']
         x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
         # Get the grid points and winds along the trajectory
-        wind_input = torch.zeros((3, 64, 64, 64))
+        wind = torch.zeros(self.labels.shape) * float('nan')
         num_segments, segment_length = x_traj.shape
         counter = 0
         for i in range(num_segments):
@@ -256,16 +264,51 @@ class WindOptimiser(object):
                 id_x = (int((x_traj[i][j] - self.terrain.x_terr[0]) / self.grid_size[0]))
                 id_y = (int((y_traj[i][j] - self.terrain.y_terr[0]) / self.grid_size[1]))
                 id_z = (int((z_traj[i][j] - self.terrain.z_terr[0]) / self.grid_size[2]))
-                if all(v == 0 for v in wind_input[:, id_x, id_y, id_z]):
+                if all(v == 0 for v in wind[:, id_x, id_y, id_z]):
                     counter += 1
-                wind_input[:, id_x, id_y, id_z] = self.labels[:, id_x, id_y, id_z]
-        terrain = self.original_input[0].to(self._device)  # distanced transformed boolean terrain
-        input_ = torch.cat(
-            [terrain.unsqueeze(0), wind_input.to(self._device)])
-        output = self.get_wind_prediction(input_)
-        loss = self._loss_fn(output, self.labels.to(self._device))
-        print("Loss is: ", loss.item())
-        #print("Number of grid points along trajectory: ", counter)
+                wind[:, id_x, id_y, id_z] = self.labels[:, id_x, id_y, id_z]
+
+        wind_mask = torch.isnan(wind)
+        wind_zeros = wind.clone()
+        wind_zeros[wind_mask] = 0
+        return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device)
+
+    def get_ulog_wind_blocks(self):
+        print('Getting binned wind blocks...', end='', flush=True)
+        t_start = time.time()
+
+        # Determine the grid dimensions
+        dx = self.terrain.x_terr[[0, -1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
+        dy = self.terrain.y_terr[[0, -1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
+        dz = self.terrain.z_terr[[0, -1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
+        grid_dimensions = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
+                           'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
+        if self._wind_args.params['ulog_flight']['predict_ulog']:
+            UlogInterpolator = UlogInterpolation(self._train_ulog_data, grid_dimensions, self.terrain)
+        else:
+            UlogInterpolator = UlogInterpolation(self._ulog_data, grid_dimensions, self.terrain)
+
+        # bin the data into the regular grid
+        try:
+            if self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'bin':
+                wind, variance = UlogInterpolator.bin_log_data()
+            elif self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'krigging':
+                wind, variance = UlogInterpolator.interpolate_log_data_krigging()
+            elif self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'idw':
+                wind, variance = UlogInterpolator.interpolate_log_data_idw()
+            else:
+                print('Specified interpolation method: {0} unknown!'
+                      .format(self._ulog_args.params['interpolation_method']))
+                raise ValueError
+        except KeyError:
+            print('Interpolation method not specified in file: {0}'
+                  .format(self._config_yaml))
+        wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
+        wind_zeros = wind.clone()
+        wind_zeros[wind_mask] = 0
+
+        print(' done [{:.2f} s]'.format(time.time() - t_start))
+        return wind, variance, wind_zeros.to(self._device), wind_mask.to(self._device)
 
     def run_original_wind_prediction(self, data_set):
         input_ = data_set[0].to(self._device)
@@ -274,7 +317,46 @@ class WindOptimiser(object):
         loss = self._loss_fn(output, labels)
         print("Loss is: ", loss.item())
 
-# --- Wind optimisation ---
+    # --- Add noise to data ---
+
+    def add_gaussian_noise(self):
+        # wind_noise = np.random.normal(0, 1, self._wind_zeros.shape)
+        wind_noise = torch.randn(self._wind_zeros.shape).to(self._device)
+        wind_zeros = self._wind_zeros.clone() + wind_noise
+        wind_zeros[self._wind_mask] = 0
+        wind_blocks = self._wind_blocks.clone() + wind_noise
+        wind_blocks[self._wind_mask] = float('nan')
+        return wind_blocks, wind_zeros
+
+    def generate_turbulence(self):
+        wind_blocks, wind_zeros = 0, 0
+        return wind_blocks, wind_zeros
+
+    # --- Wind optimisation ---
+
+    def get_optimisation_variables(self):
+        rotation = self._optimisation_args.params['rotation']
+        if self.flag.use_scale_optimisation:
+            scale = self._optimisation_args.params['scale']
+        else:
+            scale = []
+        if self.flag.use_spline_optimisation:
+            spline = 1
+        else:
+            spline = []
+        opt_var = [rotation, scale, spline]
+        optimisation_variables = [var for var in opt_var if var != []]
+        # Replicate optimisation variables for each corner
+        if self.flag.optimize_corners_individually:
+            optimisation_variables = [optimisation_variables[:] for i in range(4)]
+
+        return optimisation_variables
+
+    def reset_optimisation_variables(self, optimisation_variables=None):
+        if optimisation_variables is None:
+            optimisation_variables = self._optimisation_variables
+
+        self._optimisation_variables = torch.Tensor(optimisation_variables).to(self._device).requires_grad_()
 
     def get_optimized_corners(self):
         corner_winds = np.zeros((3, 64, 2, 2), dtype='float')
@@ -313,49 +395,17 @@ class WindOptimiser(object):
 
         return torch.Tensor(corner_winds).to(self._device).requires_grad_()
 
+    def get_cfd_corners(self):
+        channels, nx, ny, nz = self.labels.shape
+        corners = self.labels[:, ::nx-1, ::ny-1, :]
+        cfd_corners = np.transpose(corners, (0, 3, 1, 2))
+        return cfd_corners.to(self._device)
+
     def get_cosmo_corners(self):
         temp_cosmo = cosmo.cosmo_corner_wind(self._cosmo_wind, self.terrain.z_terr, rotate=0.0, scale=1.0,
                                              terrain_height=self.terrain.terrain_corners)
         cosmo_corners = torch.from_numpy(temp_cosmo.astype(np.float32)).to(self._device)
         return cosmo_corners
-
-    def load_network_model(self):
-        print('Loading network model...', end='', flush=True)
-        t_start = time.time()
-        yaml_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'], 'params.yaml')
-        params = utils.EDNNParameters(yaml_loc)                                         # load the model config
-        NetworkType = getattr(models, params.model['model_type'])                       # load the model
-        net = NetworkType(**params.model_kwargs())                                 # load learnt parameters
-        model_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'],
-                                 self._model_args.params['version'] + '.model')
-        net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
-        net = net.to(self._device)
-        print(' done [{:.2f} s]'.format(time.time() - t_start))
-        return net
-
-    def get_optimisation_variables(self):
-        rotation = self._optimisation_args.params['rotation']
-        if self.flag.use_scale_optimisation:
-            scale = self._optimisation_args.params['scale']
-        else:
-            scale = []
-        if self.flag.use_spline_optimisation:
-            spline = 1
-        else:
-            spline = []
-        opt_var = [rotation, scale, spline]
-        optimisation_variables = [var for var in opt_var if var != []]
-        # Replicate optimisation variables for each corner
-        if self.flag.optimize_corners_individually:
-            optimisation_variables = [optimisation_variables[:] for i in range(4)]
-
-        return optimisation_variables
-
-    def reset_optimisation_variables(self, optimisation_variables=None):
-        if optimisation_variables is None:
-            optimisation_variables = self._optimisation_variables
-
-        self._optimisation_variables = torch.Tensor(optimisation_variables).to(self._device).requires_grad_()
 
     def train_test_split(self):
         train_ulog = {}; test_ulog = {}
@@ -369,42 +419,21 @@ class WindOptimiser(object):
 
         return train_ulog, test_ulog
 
-    def get_wind_blocks(self):
-        print('Getting binned wind blocks...', end='', flush=True)
+    # --- Network and loss function ---
+
+    def load_network_model(self):
+        print('Loading network model...', end='', flush=True)
         t_start = time.time()
-
-        # Determine the grid dimensions
-        dx = self.terrain.x_terr[[0, -1]]; ddx = (self.terrain.x_terr[1]-self.terrain.x_terr[0])/2.0
-        dy = self.terrain.y_terr[[0, -1]]; ddy = (self.terrain.y_terr[1]-self.terrain.y_terr[0])/2.0
-        dz = self.terrain.z_terr[[0, -1]]; ddz = (self.terrain.z_terr[1]-self.terrain.z_terr[0])/2.0
-        grid_dimensions = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
-                           'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
-        if self._wind_args.params['ulog_flight']['predict_ulog']:
-            UlogInterpolator = UlogInterpolation(self._train_ulog_data, grid_dimensions, self.terrain)
-        else:
-            UlogInterpolator = UlogInterpolation(self._ulog_data, grid_dimensions, self.terrain)
-
-        # bin the data into the regular grid
-        try:
-            if self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'bin':
-                wind, variance = UlogInterpolator.bin_log_data()
-            elif self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'krigging':
-                wind, variance = UlogInterpolator.interpolate_log_data_krigging()
-            elif self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'idw':
-                wind, variance = UlogInterpolator.interpolate_log_data_idw()
-            else:
-                print('Specified interpolation method: {0} unknown!'
-                      .format(self._ulog_args.params['interpolation_method']))
-                raise ValueError
-        except KeyError:
-            print('Interpolation method not specified in file: {0}'
-                  .format(self._config_yaml))
-        wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
-        wind_zeros = wind.clone()
-        wind_zeros[wind_mask] = 0
-
+        yaml_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'], 'params.yaml')
+        params = utils.EDNNParameters(yaml_loc)  # load the model config
+        NetworkType = getattr(models, params.model['model_type'])  # load the model
+        net = NetworkType(**params.model_kwargs())  # load learnt parameters
+        model_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'],
+                                 self._model_args.params['version'] + '.model')
+        net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
+        net = net.to(self._device)
         print(' done [{:.2f} s]'.format(time.time() - t_start))
-        return wind, variance, wind_zeros.to(self._device), wind_mask.to(self._device)
+        return net
 
     def get_loss_function(self):
         try:
@@ -419,32 +448,39 @@ class WindOptimiser(object):
             print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
         return loss_fn
 
+    # --- Auxiliary functions ---
+
     def get_rotated_wind(self):
         sr = []; cr = []
         for i in range(self._optimisation_variables.shape[0]):
             sr.append(torch.sin(self._optimisation_variables[i][0]))
             cr.append(torch.cos(self._optimisation_variables[i][0]))
         # Get corner winds for model inference, offset to actual terrain heights
-        cosmo_corners = self._base_cosmo_corners.clone()
+        if self.flag.test_simulated_data:
+            wind_corners = self._base_cfd_corners.clone()
+            corners = self._base_cfd_corners
+        if self.flag.test_flight_data:
+            wind_corners = self._base_cosmo_corners.clone()
+            corners = self._base_cosmo_corners
         if self.flag.use_scale_optimisation:
             for i in range(self._optimisation_variables.shape[0]):
-                cosmo_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
-                        self._base_cosmo_corners[0, :, i//2, (i+2)%2]*cr[i]
-                        - self._base_cosmo_corners[1, :, i//2, (i+2)%2]*sr[i])
-                cosmo_corners[1, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
-                        self._base_cosmo_corners[0, :, i//2, (i+2)%2]*sr[i]
-                        + self._base_cosmo_corners[1, :, i//2, (i+2)%2]*cr[i])
+                wind_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
+                        corners[0, :, i//2, (i+2)%2]*cr[i]
+                        - corners[1, :, i//2, (i+2)%2]*sr[i])
+                wind_corners[1, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
+                        corners[0, :, i//2, (i+2)%2]*sr[i]
+                        + corners[1, :, i//2, (i+2)%2]*cr[i])
         if self.flag.use_spline_optimisation:
-            cosmo_corners = []
-        return cosmo_corners
+            wind_corners = []
+        return wind_corners
 
     def generate_wind_input(self):
-        cosmo_corners = self.get_rotated_wind()
-        # Currently can only use interpolated wind, since we only have the cosmo corners
-        # interpolating the vertical edges
-        input = torch.cat(
-            [self.terrain.network_terrain, self._interpolator.edge_interpolation(cosmo_corners)])
-        return input
+        wind_corners = self.get_rotated_wind()
+        interpolated_wind = self._interpolator.edge_interpolation(wind_corners)
+        if self.flag.add_wind_measurements:
+            interpolated_wind += self._wind_zeros
+        input_ = torch.cat([self.terrain.network_terrain, interpolated_wind])
+        return input_
 
     def generate_ulog_input(self):
         wind = self._wind_zeros.to(self._device)
@@ -498,9 +534,14 @@ class WindOptimiser(object):
 
     def evaluate_loss(self, output):
         # input = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
-        masked_out = output[0:3,:,:,:]
-        masked_out[self._wind_mask] = 0.0
-        return self._loss_fn(masked_out, self._wind_zeros)
+        if self.flag.test_simulated_data:
+            nn_output = output[0:3, :, :, :]
+            labels = self.labels.to(self._device)
+        if self.flag.test_flight_data:
+            nn_output = output[0:3, :, :, :]
+            nn_output[self._wind_mask] = 0.0
+            labels = self._wind_zeros
+        return self._loss_fn(nn_output, labels)
 
     def get_prediction(self):
         input = self.generate_wind_input()       # Set new rotation
@@ -513,12 +554,6 @@ class WindOptimiser(object):
         return output
 
     def optimise_wind_variables(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5}, verbose=False):
-        # Check which optimisation variables are passed to the optimiser
-        # optimise_variables = self._cosmo_args.params['optimise_variables']
-        # reduced_optimisation_variables = self._optimisation_variables.clone().detach().cpu().numpy()
-        # reduced_optimisation_variables = reduced_optimisation_variables[optimise_variables]
-        # reduced_optimisation_variables = \
-        #     torch.Tensor([reduced_optimisation_variables]).to(self._device).requires_grad_()
         optimizer = opt([self._optimisation_variables], **opt_kwargs)
         print(optimizer)
         t0 = time.time()
