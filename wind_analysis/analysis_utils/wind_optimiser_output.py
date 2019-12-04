@@ -4,6 +4,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from scipy.interpolate import RegularGridInterpolator
 from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates
 import datetime
+import torch
 
 
 def angle_wrap(angles):
@@ -12,15 +13,17 @@ def angle_wrap(angles):
 
 
 class WindOptimiserOutput:
-    def __init__(self, wind_opt, opt, all_ov, losses, grads):
+    def __init__(self, wind_opt, all_ov, losses):
+        self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.wind_opt = wind_opt
-        self._optimisers = opt
+        # self._optimisers = opt
         self._all_ov = all_ov
         self._losses = losses
-        self._grads = grads
-        self._names = self.get_names()
-        self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
-        self._save_output = False
+        # self._grads = grads
+        # self._names = self.get_names()
+        # self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
+        self._wind_prediction = self.get_best_wind_estimate()
+        self._save_output = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
 
@@ -30,13 +33,15 @@ class WindOptimiserOutput:
         return names
 
     def get_best_wind_estimate(self):
-        # Extract best wind estimate
-        best_method_index = np.argmin([l[-1] for l in self._losses])
-        best_ov = self._all_ov[best_method_index]
-        best_opt_var = [best_ov[-1, 0], best_ov[-1, 1], best_ov[-1, 2], best_ov[-1, 3]]
-        self.wind_opt.reset_optimisation_variables(best_opt_var)
-        wind_prediction = self.wind_opt.get_prediction().detach()
-        return wind_prediction, best_method_index, best_ov
+        # # Extract best wind estimate
+        # best_method_index = np.argmin([l[-1] for l in self._losses])
+        # best_ov = self._all_ov[best_method_index]
+        # best_opt_var = [best_ov[-1, 0], best_ov[-1, 1], best_ov[-1, 2], best_ov[-1, 3]]
+        # self.wind_opt.reset_optimisation_variables(best_opt_var)
+        # wind_prediction = self.wind_opt.get_prediction().detach()
+        # return wind_prediction, best_method_index, best_ov
+        wind_prediction = self._all_ov[-1]
+        return wind_prediction
 
     def plot_wind_profile(self):
         fig, ax = plt.subplots(4, 4)
@@ -153,7 +158,7 @@ class WindOptimiserOutput:
 
     def plot_best_wind_estimate(self):
         # Plot best wind estimate
-        fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt._wind_blocks,
+        fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt.labels.to(self._device),
                                                self.wind_opt.terrain.network_terrain.squeeze(0), self._save_output)
 
         if self._save_output:
@@ -199,10 +204,10 @@ class WindOptimiserOutput:
         if self._save_output:
             self.pp = PdfPages(self._base_path + self._current_time + '.pdf')
 
-        self.plot_wind_profile()
-        self.plot_opt_convergence()
+        # self.plot_wind_profile()
+        # self.plot_opt_convergence()
         # self.plot_final_values()
-        self.plot_wind_over_time()
+        # self.plot_wind_over_time()
         self.plot_best_wind_estimate()
 
         if self._save_output:

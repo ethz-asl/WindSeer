@@ -19,12 +19,16 @@ optimisers = [OptTest(SimpleStepOptimiser, {'lr': 5.0, 'lr_decay': 0.01}),
               OptTest(torch.optim.SGD, {'lr': 2.0, 'momentum': 0.5, 'nesterov': True}),
               ]
 
-optimise_wind = True
-if optimise_wind:
-    # Create WindOptimiser object using yaml config
-    wind_opt = WindOptimiser(args.input_yaml)
+# Create WindOptimiser object using yaml config
+wind_opt = WindOptimiser(args.input_yaml)
 
-    # Optimise wind variables using each optimisation method
+# TODO: hardcoded flags to be put in config file
+original_input = True
+optimise_corners = False
+
+
+# Optimise wind variables using each optimisation method
+if optimise_corners:
     all_ov, losses, grads = [], [], []
     for i, o in enumerate(optimisers):
         ov, loss, grad = wind_opt.optimise_wind_variables(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
@@ -32,26 +36,20 @@ if optimise_wind:
         losses.append(loss)
         grads.append(grad)
 
+if wind_opt.flag.test_simulated_data:
+    if original_input:
+        wind_predictions, loss = wind_opt.get_original_input_prediction()
+    if wind_opt.flag.use_scattered_points:
+        wind_predictions, loss = wind_opt.scattered_points_optimisation()
+    if wind_opt.flag.use_trajectory:
+        wind_predictions, loss = wind_opt.cfd_trajectory_optimisation()
+if wind_opt.flag.test_flight_data:
+    if wind_opt.flag.predict_ulog:
+        wind_predictions, loss = wind_opt.flight_ulog_optimisation()
 
-
-    # Analyse optimised wind
-    wind_opt_output = WindOptimiserOutput(wind_opt, optimisers, all_ov, losses, grads)
-    # Plot graphs
-    wind_opt_output.plot()
-    # Print losses
-    wind_opt_output.print_losses()
-
-
-predict_ulog = False
-if predict_ulog:
-    # Create WindOptimiser object using yaml config
-    wind_opt = WindOptimiser(args.input_yaml)
-
-    # Get NN output using the sparse ulog data as input
-    output_wind = wind_opt.get_ulog_prediction()
-
-    # Interpolate prediction to scattered ulog data locations used for testing
-    predicted_ulog_data = wind_opt.get_predicted_interpolated_ulog_data(output_wind)
-
-    # Print metrics
-    wind_opt.calculate_metrics(predicted_ulog_data)
+# Analyse optimised wind
+wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, loss)
+# Plot graphs
+wind_opt_output.plot()
+# # Print losses
+# wind_opt_output.print_losses()

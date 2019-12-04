@@ -12,7 +12,7 @@ cfd:
     # Get all samples in test set
     batch_test: False
     # if batch is False get the following sample in the set
-    index: 1
+    index: 10
 
 # COSMO data
 cosmo:
@@ -30,12 +30,13 @@ ulog:
 
 # Wind generation parameters
 wind:
-    add_wind_measurement: True
+    add_wind_measurements: True
+    add_corners: False
     # Scattered points: generate random wind data by sampling from the CFD labels
     scattered_points: {
         use_scattered_points: True,
         initial_percentage: 10,
-        num_steps: 100
+        num_steps: 90
     }
     # Trajectory generation
     trajectory: {
@@ -49,7 +50,6 @@ wind:
     ulog_flight: {
         predict_ulog: False,
         interpolation_method: 'bin',
-        train_size: 0.8
     }
 
 # Noise parameters

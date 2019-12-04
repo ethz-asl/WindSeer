@@ -171,6 +171,6 @@ def plot_wind_estimates(time, wind_array, wind_names=None, polar=False):
 def plot_prediction_observations(input, label, terrain, save):
     i2 = input
     instance = PlotUtils('prediction', ['ux', 'uy', 'uz'],
-                         ['ux', 'uy', 'uz'], i2.cpu(),label,terrain, design=1)
+                         ['ux', 'uy', 'uz'], i2,label,terrain, design=1)
     fig, ax = instance.plot_prediction(save, label_name='Observed wind')
     return fig, ax
