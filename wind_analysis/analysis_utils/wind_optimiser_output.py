@@ -40,7 +40,10 @@ class WindOptimiserOutput:
         # self.wind_opt.reset_optimisation_variables(best_opt_var)
         # wind_prediction = self.wind_opt.get_prediction().detach()
         # return wind_prediction, best_method_index, best_ov
-        wind_prediction = self._all_ov[-1]
+        if len(self._all_ov) > 3:
+            wind_prediction = self._all_ov[-1]
+        else:
+            wind_prediction = self._all_ov
         return wind_prediction
 
     def plot_wind_profile(self):

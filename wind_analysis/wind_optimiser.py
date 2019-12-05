@@ -16,7 +16,7 @@ import random
 import torch
 import os
 import time
-
+import copy
 
 class TerrainBlock(object):
     def __init__(self, x_terr, y_terr, z_terr, h_terr, full_block, device=None, boolean_terrain=False):
@@ -110,9 +110,13 @@ class WindOptimiser(object):
         # Selection flags
         self.flag = SelectionFlags(self._test_args, self._cfd_args, self._ulog_args,
                                    self._wind_args, self._noise_args, self._optimisation_args)
+        # Network model and loss function
+        self.net, self.params = self.load_network_model()
+        self.net.freeze_model()
+        self._loss_fn = self.get_loss_function()
         # Load data
         if self.flag.test_simulated_data:
-            self.original_input, self.labels, self.data_set_name, self.grid_size, self.binary_terrain \
+            self.original_input, self.labels, self.scale, self.data_set_name, self.grid_size, self.binary_terrain \
                 = self.load_data_set()
             self.terrain = self.get_cfd_terrain()
         if self.flag.test_flight_data:
@@ -144,10 +148,35 @@ class WindOptimiser(object):
         if self.flag.test_flight_data:
             self._base_cosmo_corners = self.get_cosmo_corners()
         self._interpolator = DataInterpolation(self._device, 3, *self.terrain.get_dimensions())
-        # Network model and loss function
-        self.net = self.load_network_model()
-        self.net.freeze_model()
-        self._loss_fn = self.get_loss_function()
+
+    # --- Network and loss function ---
+
+    def load_network_model(self):
+        print('Loading network model...', end='', flush=True)
+        t_start = time.time()
+        yaml_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'], 'params.yaml')
+        params = utils.EDNNParameters(yaml_loc)  # load the model config
+        NetworkType = getattr(models, params.model['model_type'])  # load the model
+        net = NetworkType(**params.model_kwargs())  # load learnt parameters
+        model_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'],
+                                 self._model_args.params['version'] + '.model')
+        net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
+        net = net.to(self._device)
+        print(' done [{:.2f} s]'.format(time.time() - t_start))
+        return net, params
+
+    def get_loss_function(self):
+        try:
+            if self._model_args.params['loss'].lower() == 'l1':
+                loss_fn = torch.nn.L1Loss()
+            elif self._model_args.params['loss'].lower() == 'mse':
+                loss_fn = torch.nn.MSELoss()
+            else:
+                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
+                raise ValueError
+        except KeyError:
+            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
+        return loss_fn
 
     # --- Load data ---
 
@@ -205,17 +234,21 @@ class WindOptimiser(object):
     def load_data_set(self):
         # Load data set
         test_set = nn_data.HDF5Dataset(self._cfd_args.params['testset_name'],
-                                       self._cfd_args.params['input_channels'],
-                                       self._cfd_args.params['label_channels'])
-
+                                       augmentation=False, return_grid_size=True,
+                                       **self.params.Dataset_kwargs())
         # Get data set from test set
         data_set = test_set[self._cfd_args.params['index']]
+        input_ = data_set[0]
+        label = data_set[1]
         name = test_set.get_name(self._cfd_args.params['index'])
-        print("Loading test set with name: ", str(name))
+        scale = 1.0
+        if self.params.data['autoscale']:
+            scale = data_set[3].item()
+        print("Loading test set (index) with name: ", str(name))
         grid_size = data.get_grid_size(self._cfd_args.params['testset_name'])
         # Convert distance transformed matrix back to binary matrix
         binary_terrain = data_set[0][0, :, :, :] <= 0
-        return data_set[0], data_set[1], name, grid_size, binary_terrain
+        return input_, label, scale, name, grid_size, binary_terrain
 
     def get_cfd_terrain(self):
         nx, ny, nz = self.binary_terrain.shape
@@ -392,8 +425,9 @@ class WindOptimiser(object):
 
     def get_cfd_corners(self):
         channels, nx, ny, nz = self.labels.shape
-        # corners = self.labels[:, ::nx-1, ::ny-1, :]
-        corners = self.original_input[1:4, ::nx-1, ::ny-1, :]
+        input_ = copy.deepcopy(self.original_input)
+        # input_ = copy.deepcopy(self.labels)
+        corners = input_[1:4, ::nx-1, ::ny-1, :]
         cfd_corners = np.transpose(corners, (0, 3, 1, 2))
         return cfd_corners.to(self._device)
 
@@ -402,46 +436,6 @@ class WindOptimiser(object):
                                              terrain_height=self.terrain.terrain_corners)
         cosmo_corners = torch.from_numpy(temp_cosmo.astype(np.float32)).to(self._device)
         return cosmo_corners
-
-    def sliding_window_split(self, window_size=1, response_size=1, step_size=1):
-        input_ulog = {}; output_ulog = {}
-        if self.flag.predict_ulog:
-            for keys, values in self._ulog_data.items():
-                input_batch = values[step_size : step_size+window_size]
-                output_batch = values[step_size+window_size : step_size+window_size+response_size]
-                input_ulog.update({keys: input_batch})
-                output_ulog.update({keys: output_batch})
-
-        return input_ulog, output_ulog
-
-    # --- Network and loss function ---
-
-    def load_network_model(self):
-        print('Loading network model...', end='', flush=True)
-        t_start = time.time()
-        yaml_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'], 'params.yaml')
-        params = utils.EDNNParameters(yaml_loc)  # load the model config
-        NetworkType = getattr(models, params.model['model_type'])  # load the model
-        net = NetworkType(**params.model_kwargs())  # load learnt parameters
-        model_loc = os.path.join(self._model_args.params['location'], self._model_args.params['name'],
-                                 self._model_args.params['version'] + '.model')
-        net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
-        net = net.to(self._device)
-        print(' done [{:.2f} s]'.format(time.time() - t_start))
-        return net
-
-    def get_loss_function(self):
-        try:
-            if self._model_args.params['loss'].lower() == 'l1':
-                loss_fn = torch.nn.L1Loss()
-            elif self._model_args.params['loss'].lower() == 'mse':
-                loss_fn = torch.nn.MSELoss()
-            else:
-                print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
-                raise ValueError
-        except KeyError:
-            print('Loss function not specified, using default: {0}'.format(str(self._loss_fn)))
-        return loss_fn
 
     # --- Helper functions ---
 
@@ -532,6 +526,43 @@ class WindOptimiser(object):
         output = self.run_prediction(input)      # Run network prediction with input csv
         return output
 
+    def sliding_window_split(self, window_size=1, response_size=1, step_size=1):
+        input_ulog = {}; output_ulog = {}
+        if self.flag.predict_ulog:
+            for keys, values in self._ulog_data.items():
+                input_batch = values[step_size : step_size+window_size]
+                output_batch = values[step_size+window_size : step_size+window_size+response_size]
+                input_ulog.update({keys: input_batch})
+                output_ulog.update({keys: output_batch})
+
+        return input_ulog, output_ulog
+
+    def rescale_prediction(self, output, label):
+        output = output.squeeze()
+        channels_to_predict = self.params.data['label_channels']
+        # make sure the channels to predict exist and are properly ordered
+        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        for channel in channels_to_predict:
+            if channel not in default_channels:
+                raise ValueError('Incorrect label_channel detected: \'{}\', '
+                                 'correct channels are {}'.format(channel, default_channels))
+        channels_to_predict = [x for x in default_channels if x in channels_to_predict]
+
+        # rescale the labels and predictions
+        for i, channel in enumerate(channels_to_predict):
+            if channel == 'terrain':
+                output[i] *= self.params.data[channel + '_scaling']
+                label[i] *= self.params.data[channel + '_scaling']
+            elif channel.startswith('u') or channel == 'nut':
+                output[i] *= self.scale * self.params.data[channel +'_scaling']
+                label[i] *= self.scale * self.params.data[channel + '_scaling']
+            elif channel == 'p' or channel == 'turb':
+                output[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']
+                label[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']
+            elif channel == 'epsilon':
+                output[i] *= self.scale * self.scale * self.scale * self.params.data[channel + '_scaling']
+                label[i] *= self.scale * self.scale * self.scale * self.params.data[channel + '_scaling']
+
     # --- Optimisation functions ---
 
     def optimise_wind_variables(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5}, verbose=False):
@@ -594,6 +625,7 @@ class WindOptimiser(object):
         original_input = self.original_input.to(self._device)
         labels = self.labels.to(self._device)
         output = self.run_prediction(original_input)
+        self.rescale_prediction(output, labels)
         loss = self._loss_fn(output, labels)
         print('Loss value for original input is: ', loss.item())
         return output, loss
