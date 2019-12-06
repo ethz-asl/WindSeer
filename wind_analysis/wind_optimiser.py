@@ -268,7 +268,7 @@ class WindOptimiser(object):
         # Copy of the true wind labels
         wind = self.labels.clone().detach().cpu().numpy()
         percentage = (self._wind_args.params['scattered_points']['initial_percentage'] + p) / 100
-        binary_terrain = self.binary_terrain.detach().cpu().numpy()
+        binary_terrain = self.binary_terrain.clone().detach().cpu().numpy()
         # Change (percentage) of False values in binary terrain to True
         mask = [not elem if (not elem and random.random() > percentage) else elem for elem in binary_terrain.flat]
         terrain_mask = np.resize(mask, (self._resolution, self._resolution, self._resolution))
@@ -644,7 +644,7 @@ class WindOptimiser(object):
             wind_input = interpolated_wind + self._wind_zeros
 
         num_steps = self._wind_args.params['scattered_points']['num_steps']
-        p = (100 - self._wind_args.params['scattered_points']['initial_percentage']) / num_steps
+        p = (70 - self._wind_args.params['scattered_points']['initial_percentage']) / num_steps
         if num_steps > 1:
             t = 0
             while t <= num_steps:
