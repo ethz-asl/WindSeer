@@ -38,6 +38,7 @@ class ModelEDNN3D(nn.Module):
     __default_use_epsilon = False
     __default_use_nut = False
     __default_grid_size = [1, 1, 1]
+    __default_use_sparse_mask = True
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -169,6 +170,13 @@ class ModelEDNN3D(nn.Module):
                 print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
 
         try:
+            self.__use_sparse_mask = kwargs['use_sparse_mask']
+        except KeyError:
+            self.__use_sparse_mask = self.__default_use_sparse_mask
+            if verbose:
+                print('EDNN3D: use_sparse_mask not present in kwargs, using default value:', self.__default_use_sparse_mask)
+
+        try:
             self.__use_turbulence = kwargs['use_turbulence']
         except KeyError:
             self.__use_turbulence = self.__default_use_turbulence
@@ -206,6 +214,8 @@ class ModelEDNN3D(nn.Module):
 
         # construct the number of input and output channels based on the parameters
         self.__num_inputs = 4 # (terrain, u_x_in, u_y_in, u_z_in)
+        if self.__use_sparse_mask:
+            self.__num_inputs = 5
         self.__num_outputs = 3 # (u_x_out, u_y_out, u_z_out)
 
         if self.__use_turbulence:
@@ -353,8 +363,14 @@ class ModelEDNN3D(nn.Module):
     def forward(self, x):
         if self.__use_terrain_mask:
             # store the terrain data
-            is_wind = x[:,0, :].unsqueeze(1).clone()
+            is_wind = x[:, 0, :].unsqueeze(1).clone()
             is_wind.sign_()
+
+        if self.__use_sparse_mask:
+            # apply sparse mask
+            sparse_mask = x[:, 4, :].unsqueeze(1).clone()
+            x = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x
+
 
         x_skip = []
         if (self.__skipping):

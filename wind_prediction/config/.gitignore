@@ -4,3 +4,4 @@
 # But gitignore and the example file
 !.gitignore
 !example.yaml
+!example_sparse.yaml

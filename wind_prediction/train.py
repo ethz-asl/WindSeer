@@ -171,12 +171,14 @@ except:
     print('train.py: log_loss_components key not available, setting default value: ', log_loss_components)
 
 # start the actual training
-net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer,
-                       loss_fn, device, run_params.run['n_epochs'],
-                       run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
-                       run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
-                       run_params.run['compute_validation_loss'], log_loss_components,
-                       model_dir, args.use_writer, predict_uncertainty, uncertainty_train_mode, warm_start_epoch)
+net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer, loss_fn, device,
+                       run_params.run['n_epochs'], run_params.run['plot_every_n_batches'],
+                       run_params.run['save_model_every_n_epoch'], run_params.run['save_params_hist_every_n_epoch'],
+                       run_params.run['minibatch_epoch_loss'],run_params.run['compute_validation_loss'],
+                       run_params.model['model_args']['use_sparse_mask'],
+                       run_params.model['model_args']['percentage_of_sparse_data'],
+                       log_loss_components, model_dir, args.use_writer, predict_uncertainty,
+                       uncertainty_train_mode, warm_start_epoch)
 
 # save the model if requested
 if (run_params.run['save_model']):
