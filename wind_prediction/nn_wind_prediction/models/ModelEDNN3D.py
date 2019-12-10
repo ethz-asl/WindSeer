@@ -369,7 +369,7 @@ class ModelEDNN3D(nn.Module):
         if self.__use_sparse_mask:
             # apply sparse mask
             sparse_mask = x[:, 4, :].unsqueeze(1).clone()
-            x = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x
+            x[:, 1:4, :, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:4, :, :]
 
 
         x_skip = []
