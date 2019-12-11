@@ -24,11 +24,11 @@ def signal_handler(sig, frame):
     should_exit = True
 
 
-def add_sparse_mask(inputs, perc_of_sparse_data):
-    percentage = perc_of_sparse_data
+def add_sparse_mask(inputs, percentage_of_sparse_data):
+    percentage = percentage_of_sparse_data
     batches, channels, nx, ny, nz = inputs.shape
     boolean_terrains = inputs[:, 0, :].clone().detach().cpu().numpy() <= 0
-    # Change (percentage) of False values in binary terrain to True
+    # Change (percentage) of False values in boolean terrain to True
     mask = [not elem if (not elem and random.random() < percentage) else elem for elem in boolean_terrains.flat]
     sparse_mask = np.resize(mask, (batches, 1, nx, ny, nz)) * 1
     sparse_wind_mask = torch.from_numpy(sparse_mask.astype(np.float32))

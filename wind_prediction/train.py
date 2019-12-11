@@ -50,7 +50,7 @@ if (os.path.isdir("/cluster/scratch/")):
         print("INFO: Finished copying testset in %s seconds" % (time.time() - t_intermediate))
 
 else:
-    print('Script is running on the a local machine')
+    print('Script is running on the local machine')
     trainset_name = run_params.data['trainset_name']
     validationset_name = run_params.data['validationset_name']
     testset_name = run_params.data['testset_name']
