@@ -36,7 +36,7 @@ wind:
     scattered_points: {
         use_scattered_points: True,
         initial_percentage: 10,
-        num_steps: 90
+        num_steps: 4
     }
     # Trajectory generation
     trajectory: {
@@ -55,7 +55,7 @@ wind:
 # Noise parameters
 noise:
   generate_turbulence: False
-  add_gaussian_noise: True
+  add_gaussian_noise: False
 
 # Corner optimisation parameters
 optimisation:

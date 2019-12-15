@@ -23,7 +23,7 @@ optimisers = [OptTest(SimpleStepOptimiser, {'lr': 5.0, 'lr_decay': 0.01}),
 wind_opt = WindOptimiser(args.input_yaml)
 
 # TODO: hardcoded flags to be put in config file
-original_input = True
+original_input = False
 optimise_corners = False
 
 
@@ -39,9 +39,9 @@ if optimise_corners:
 if wind_opt.flag.test_simulated_data:
     if original_input:
         wind_predictions, loss = wind_opt.get_original_input_prediction()
-    if wind_opt.flag.use_scattered_points:
+    elif wind_opt.flag.use_scattered_points:
         wind_predictions, loss = wind_opt.scattered_points_optimisation()
-    if wind_opt.flag.use_trajectory:
+    elif wind_opt.flag.use_trajectory:
         wind_predictions, loss = wind_opt.cfd_trajectory_optimisation()
 if wind_opt.flag.test_flight_data:
     if wind_opt.flag.predict_ulog:
