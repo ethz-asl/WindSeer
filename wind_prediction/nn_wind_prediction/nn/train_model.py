@@ -24,13 +24,16 @@ def signal_handler(sig, frame):
     should_exit = True
 
 
-def add_sparse_mask(inputs, percentage_of_sparse_data):
-    percentage = percentage_of_sparse_data
+def add_sparse_mask(inputs, labels, percentage_of_sparse_data):
+    p = percentage_of_sparse_data
     batches, channels, nx, ny, nz = inputs.shape
-    boolean_terrains = inputs[:, 0, :].clone().detach().cpu().numpy() <= 0
+    inputs[:, 1:4, :] = labels
+    # boolean_terrains = inputs[:, 0, :].clone().detach().cpu().numpy() <= 0
     # Change (percentage) of False values in boolean terrain to True
-    mask = [not elem if (not elem and random.random() < percentage) else elem for elem in boolean_terrains.flat]
-    sparse_mask = np.resize(mask, (batches, 1, nx, ny, nz)) * 1
+    # mask1 = np.logical_and(boolean_terrains, random.random() < percentage)
+    # mask = [not elem if (not elem and random.random() < percentage) else elem for elem in boolean_terrains.flat]
+    # sparse_mask = np.resize(mask, (batches, 1, nx, ny, nz)) * 1
+    sparse_mask = np.random.choice([0, 1], size=(batches, 1, nx, ny, nz), p=[1-p, p])
     sparse_wind_mask = torch.from_numpy(sparse_mask.astype(np.float32))
     return torch.cat(([inputs, sparse_wind_mask]), dim=1)
 
@@ -129,9 +132,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
 
             # get the inputs, labels and loss weights
             inputs = data[0]
-            if use_sparse_mask:
-                inputs = add_sparse_mask(inputs, perc_of_sparse_data)
             labels = data[1]
+            if use_sparse_mask:
+                inputs = add_sparse_mask(inputs, labels, perc_of_sparse_data)
             W = data[2]
             inputs, labels = inputs.to(device), labels.to(device)
 
@@ -201,9 +204,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         break
 
                     inputs = data[0]
-                    if use_sparse_mask:
-                        inputs = add_sparse_mask(inputs, perc_of_sparse_data)
                     labels = data[1]
+                    if use_sparse_mask:
+                        inputs = add_sparse_mask(inputs, labels, perc_of_sparse_data)
                     inputs, labels = inputs.to(device), labels.to(device)
 
                     if predict_uncertainty:
@@ -247,9 +250,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         break
 
                     inputs = data[0]
-                    if use_sparse_mask:
-                        inputs = add_sparse_mask(inputs, perc_of_sparse_data)
                     labels = data[1]
+                    if use_sparse_mask:
+                        inputs = add_sparse_mask(inputs, labels, perc_of_sparse_data)
                     inputs, labels = inputs.to(device), labels.to(device)
 
                     if predict_uncertainty:
