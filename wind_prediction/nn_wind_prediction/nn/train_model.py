@@ -38,7 +38,6 @@ def add_sparse_mask(inputs, labels, percentage_of_sparse_data):
     return torch.cat(([inputs, sparse_wind_mask]), dim=1)
 
 
-
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
                 save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss, use_sparse_mask,

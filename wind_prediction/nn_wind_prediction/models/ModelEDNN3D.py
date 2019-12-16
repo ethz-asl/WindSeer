@@ -361,16 +361,14 @@ class ModelEDNN3D(nn.Module):
         self.apply(init_weights)
 
     def forward(self, x):
+        if self.__use_sparse_mask:
+            # get sparse mask
+            sparse_mask = x[:, 4, :].unsqueeze(1).clone()
+
         if self.__use_terrain_mask:
             # store the terrain data
             is_wind = x[:, 0, :].unsqueeze(1).clone()
             is_wind.sign_()
-
-        if self.__use_sparse_mask:
-            # apply sparse mask
-            sparse_mask = x[:, 4, :].unsqueeze(1).clone()
-            x[:, 1:4, :, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:4, :, :]
-
 
         x_skip = []
         if (self.__skipping):
@@ -419,6 +417,9 @@ class ModelEDNN3D(nn.Module):
 
         if self.__potential_flow:
             x = torch.cat([utils.curl(x, self.__grid_size, x[:, 0, :]), x[:, 3:, :]], 1)
+
+        if self.__use_sparse_mask:
+            x = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
