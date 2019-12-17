@@ -35,8 +35,9 @@ wind:
     # Scattered points: generate random wind data by sampling from the CFD labels
     scattered_points: {
         use_scattered_points: True,
-        initial_percentage: 10,
-        num_steps: 4
+        initial_percentage: 0,
+        final_percentage: 10,
+        num_steps: 1
     }
     # Trajectory generation
     trajectory: {
@@ -73,7 +74,7 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/20191015_TODO/'
-  name: 'ednn3d_best'
+  name: 'test_model_1'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'

@@ -126,7 +126,7 @@ class WindOptimiser(object):
         # Wind measurements variables
         if self.flag.test_simulated_data:
             if self.flag.use_scattered_points:
-                self._wind_zeros= self.get_scattered_wind_blocks()
+                self._wind_zeros = self.get_scattered_wind_blocks()
             if self.flag.use_trajectory:
                 self._wind_blocks, self._wind_zeros, self._wind_mask\
                     = self.get_trajectory_wind_blocks()
@@ -265,14 +265,14 @@ class WindOptimiser(object):
 
     def get_scattered_wind_blocks(self, p=0):
         # Copy of the true wind labels
-        wind = self.original_input[1:4, :].clone()
-        percentage = (self._wind_args.params['scattered_points']['initial_percentage'] + p) / 100
-        boolean_terrain = self.binary_terrain.clone().detach().cpu().numpy()
+        wind = self.labels.clone()
+        channels, nx, ny, nz = wind.shape
+        # percentage = (self._wind_args.params['scattered_points']['initial_percentage'] + p) / 100
+        # boolean_terrain = self.binary_terrain.clone().detach().cpu().numpy()
         # Change (percentage) of False values in binary terrain to True
-        mask = [not elem if (not elem and random.random() > percentage) else elem for elem in boolean_terrain.flat]
-        sparse_mask = np.resize(mask, (self._resolution, self._resolution, self._resolution))
+        sparse_mask = np.random.choice([0, 1], size=(1, nx, ny, nz), p=[1-p, p])
         sparse_wind_mask = torch.from_numpy(sparse_mask.astype(np.float32))
-        augmented_wind = torch.cat(([wind, sparse_wind_mask.unsqueeze(0)]))
+        augmented_wind = torch.cat(([wind, sparse_wind_mask]))
         return augmented_wind.to(self._device)
 
     def get_trajectory_wind_blocks(self):
@@ -630,16 +630,18 @@ class WindOptimiser(object):
 
         wind_corners = self.get_rotated_wind()
         interpolated_wind = self._interpolator.edge_interpolation(wind_corners)
+        wind_zeros = self.get_scattered_wind_blocks(self._wind_args.params['scattered_points']['final_percentage']/100)
         # interpolated_wind[self._wind_mask] = 0
         if self.flag.add_corners and not self.flag.add_wind_measurements:
             wind_input = interpolated_wind
         elif self.flag.add_wind_measurements and not self.flag.add_corners:
-            wind_input = self._wind_zeros
+            wind_input = wind_zeros
         else:
-            wind_input = interpolated_wind + self._wind_zeros
+            wind_input = interpolated_wind + wind_zeros
 
         num_steps = self._wind_args.params['scattered_points']['num_steps']
-        p = (10 - self._wind_args.params['scattered_points']['initial_percentage']) / num_steps
+        p = (self._wind_args.params['scattered_points']['final_percentage']
+             - self._wind_args.params['scattered_points']['initial_percentage']) / num_steps
         if num_steps > 1:
             t = 0
             while t <= num_steps:
@@ -672,7 +674,8 @@ class WindOptimiser(object):
             loss = self.evaluate_loss(output)
             outputs.append(output)
             losses.append(loss)
-            print('Loss is: ', loss.item())
+            print(' percentage: ', self._wind_args.params['scattered_points']['final_percentage'],
+                  ' loss: ', loss.item())
 
         return outputs, losses
 
