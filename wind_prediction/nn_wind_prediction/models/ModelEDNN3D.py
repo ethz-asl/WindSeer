@@ -38,7 +38,7 @@ class ModelEDNN3D(nn.Module):
     __default_use_epsilon = False
     __default_use_nut = False
     __default_grid_size = [1, 1, 1]
-    __default_use_sparse_mask = True
+    __default_use_sparse_mask = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -213,22 +213,22 @@ class ModelEDNN3D(nn.Module):
             raise ValueError('The filter kernel size needs to be odd and larger than 0.')
 
         # construct the number of input and output channels based on the parameters
-        self.__num_inputs = 4 # (terrain, u_x_in, u_y_in, u_z_in)
+        self.__num_inputs = 4  # (terrain, u_x_in, u_y_in, u_z_in)
         if self.__use_sparse_mask:
-            self.__num_inputs = 5
-        self.__num_outputs = 3 # (u_x_out, u_y_out, u_z_out)
+            self.__num_inputs = 5  # (terrain, u_x_in, u_y_in, u_z_in, sparse_mask)
+        self.__num_outputs = 3  # (u_x_out, u_y_out, u_z_out)
 
         if self.__use_turbulence:
-            self.__num_outputs += 1 # turb. kin. en.
+            self.__num_outputs += 1  # turb. kin. en.
 
         if self.__use_pressure:
-            self.__num_outputs += 1 # pressure
+            self.__num_outputs += 1  # pressure
 
         if self.__use_epsilon:
-            self.__num_outputs += 1 # dissipation
+            self.__num_outputs += 1  # dissipation
 
         if self.__use_nut:
-            self.__num_outputs += 1 # viscosity
+            self.__num_outputs += 1  # viscosity
 
         try:
             self.__num_inputs = kwargs['force_num_inputs']
@@ -362,8 +362,9 @@ class ModelEDNN3D(nn.Module):
 
     def forward(self, x):
         if self.__use_sparse_mask:
-            # get sparse mask
+            # apply sparse mask
             sparse_mask = x[:, 4, :].unsqueeze(1).clone()
+            x[:, 1:4, :, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:4, :, :]
 
         if self.__use_terrain_mask:
             # store the terrain data
@@ -417,9 +418,6 @@ class ModelEDNN3D(nn.Module):
 
         if self.__potential_flow:
             x = torch.cat([utils.curl(x, self.__grid_size, x[:, 0, :]), x[:, 3:, :]], 1)
-
-        if self.__use_sparse_mask:
-            x = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x
 
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x

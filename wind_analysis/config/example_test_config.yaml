@@ -5,14 +5,14 @@ test:
 
 # CFD data
 cfd:
-    testset_name: 'data/wind_test/test.hdf5'
+    testset_name: 'data/wind_test/test_planning.hdf5'
     # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
     label_channels: ['ux', 'uy', 'uz']  # velocities
     # Get all samples in test set
     batch_test: False
     # if batch is False get the following sample in the set
-    index: 10
+    index: 63
 
 # COSMO data
 cosmo:
@@ -74,7 +74,7 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/20191015_TODO/'
-  name: 'test_model_1'
+  name: 'test_model_2'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'
