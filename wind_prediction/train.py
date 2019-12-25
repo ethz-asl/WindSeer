@@ -15,9 +15,24 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
+import numpy as np
+import random
+
+
+def add_sparse_mask(dataloader_inputs, dataloader_labels, percentage_of_sparse_data):
+    percentage = percentage_of_sparse_data
+    channels, nx, ny, nz = dataloader_inputs.shape
+    dataloader_inputs[1:4, :] = dataloader_labels
+    boolean_terrains = dataloader_inputs[0, :].clone().detach().cpu().numpy() <= 0
+    # Change (percentage) of False values in boolean terrain to True
+    # mask1 = np.logical_and(boolean_terrains, random.random() < percentage)
+    mask = [not elem if (not elem and random.random() < percentage) else elem for elem in boolean_terrains.flat]
+    sparse_wind_mask = np.resize(mask, (1, nx, ny, nz)) * 1
+    # sparse_mask = np.random.choice([0, 1], size=(batches, 1, nx, ny, nz), p=[1-percentage, percentage])
+    return np.concatenate(([dataloader_inputs, sparse_wind_mask]), axis=0)
+
 
 now_time = time.strftime("%Y_%m_%d-%H_%M")
-
 parser = argparse.ArgumentParser(description='Training an EDNN for predicting wind data from terrain')
 parser.add_argument('-np', '--no-plots', dest='make_plots', action='store_false', help='Turn off plots (default False)')
 parser.add_argument('-y', '--yaml-config', required=True, help='YAML config file')
@@ -56,8 +71,7 @@ else:
     testset_name = run_params.data['testset_name']
 
 
-
-#check if gpu is available
+# check if gpu is available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define dataset and dataloader
@@ -67,11 +81,29 @@ trainset = data.HDF5Dataset(trainset_name,
                       augmentation_kwargs = run_params.data['augmentation_kwargs'],
                       **run_params.Dataset_kwargs())
 
+# add sparse mask to the train inputs
+# if run_params.model['model_args']['use_sparse_mask']:
+#     for i, train_data in enumerate(trainset, 0):
+#         train_inputs = train_data[0]
+#         train_labels = train_data[1]
+#         # overwrite the inputs to include the sparse mask
+#         train_data[0] = add_sparse_mask(train_inputs, train_labels,
+#                                         run_params.model['model_args']['percentage_of_sparse_data'])
+
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
                 shuffle=True, num_workers=run_params.run['num_workers'])
 
 validationset = data.HDF5Dataset(validationset_name,
                 subsample = False, augmentation = False, **run_params.Dataset_kwargs())
+
+# add sparse mask to the validation inputs
+# if run_params.model['model_args']['use_sparse_mask']:
+#     for i, validation_data in enumerate(validationset, 0):
+#         validation_inputs = validation_data[0]
+#         validation_labels = validation_data[1]
+#         # overwrite the inputs to include the sparse mask
+#         validation_data[0] = add_sparse_mask(validation_inputs, validation_labels,
+#                                   run_params.model['model_args']['percentage_of_sparse_data'])
 
 validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
                 num_workers=run_params.run['num_workers'])
@@ -175,8 +207,6 @@ net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optim
                        run_params.run['n_epochs'], run_params.run['plot_every_n_batches'],
                        run_params.run['save_model_every_n_epoch'], run_params.run['save_params_hist_every_n_epoch'],
                        run_params.run['minibatch_epoch_loss'],run_params.run['compute_validation_loss'],
-                       run_params.model['model_args']['use_sparse_mask'],
-                       run_params.model['model_args']['percentage_of_sparse_data'],
                        log_loss_components, model_dir, args.use_writer, predict_uncertainty,
                        uncertainty_train_mode, warm_start_epoch)
 

@@ -11,6 +11,7 @@ from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
 
+
 class HDF5Dataset(Dataset):
     '''
     Class to handle the dataset with the containing velocities, pressure, turbulent kinetic energy, turbulent dissipation
@@ -268,7 +269,7 @@ class HDF5Dataset(Dataset):
         # check that all the required channels are present for autoscale for augmentation
         # this is due to the get_scale method which needs the the velocities to compute the scale for autoscaling
         # augmentation mode 1 and 0 use indexing, the first 4 channels are required
-        if not all(elem in self.__channels_to_load for elem in ['terrain','ux', 'uy', 'uz']):
+        if not all(elem in self.__channels_to_load for elem in ['terrain', 'ux', 'uy', 'uz']):
             print('HDF5Dataset: augmentation and autoscale will not be applied, not all of the required channels (terrain,ux, uy, uz) were requested')
             self.__autoscale = False
             self.__augmentation = False
@@ -329,14 +330,14 @@ class HDF5Dataset(Dataset):
         for i, channel in enumerate(self.__channels_to_load):
             # extract channel data and apply scaling
             data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
-        data = torch.cat(data_from_channels , 0)
+        data = torch.cat(data_from_channels, 0)
 
         # send full data to device
         data = data.to(self.__device)
 
         ds = torch.from_numpy(sample['ds'][...])
 
-        data_shape = data[0,:].shape
+        data_shape = data[0, :].shape
 
         # 3D data transforms
         if (len(data_shape) == 3):
@@ -533,7 +534,6 @@ class HDF5Dataset(Dataset):
             raise RuntimeError("The rotated and shifted grid does not satisfy the data grid bounds")
 
         return X, Y, Z, angle
-
 
     def __augmentation_mode2_torch(self, data, out_size, vx_channel = 1, vy_channel = 2):
         '''

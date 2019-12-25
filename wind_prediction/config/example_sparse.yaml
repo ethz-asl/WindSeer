@@ -59,9 +59,9 @@ loss:
 
 # dataset parameters
 data:
-    trainset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
-    validationset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
-    testset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
+    trainset_name: '../wind_analysis/data/wind_test/test_planning.hdf5'
+    validationset_name: '../wind_analysis/data/wind_test/test_planning.hdf5'
+    testset_name: '../wind_analysis/data/wind_test/test_planning.hdf5'
 
     # channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels : ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities must be loaded for EDNN3D
