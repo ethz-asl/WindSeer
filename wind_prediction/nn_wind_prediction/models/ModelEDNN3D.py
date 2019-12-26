@@ -363,8 +363,8 @@ class ModelEDNN3D(nn.Module):
     def forward(self, x):
         if self.__use_sparse_mask:
             # apply sparse mask
-            sparse_mask = x[:, 4, :].unsqueeze(1).clone()
-            x[:, 1:4, :, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:4, :, :]
+            sparse_mask = x[:, -1, :].unsqueeze(1).clone()
+            x[:, 1:-1, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:-1, :]
 
         if self.__use_terrain_mask:
             # store the terrain data

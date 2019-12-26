@@ -81,7 +81,9 @@ class EDNNParameters(object):
                 'ny': self.model['model_args']['n_y'],
                 'nz': self.model['model_args']['n_z'],
                 'autoscale': self.data['autoscale'],
-                'loss_weighting_fn': self.loss['loss_weighting_fn']}
+                'loss_weighting_fn': self.loss['loss_weighting_fn'],
+                'create_sparse_mask': self.data['create_sparse_mask'],
+                'percentage_of_sparse_data': self.data['percentage_of_sparse_data']}
 
     def model_kwargs(self):
         return self.model['model_args']

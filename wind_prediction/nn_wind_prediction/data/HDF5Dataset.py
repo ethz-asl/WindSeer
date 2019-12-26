@@ -50,6 +50,8 @@ class HDF5Dataset(Dataset):
     __default_autoscale = False
     __default_loss_weighting_fn = 0
     __default_loss_weighting_clamp = True
+    __default_create_sparse_mask = False
+    __default_percentage_of_sparse_data = 1
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -209,6 +211,20 @@ class HDF5Dataset(Dataset):
             if verbose:
                 print('HDF5Dataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
 
+        try:
+            self.__create_sparse_mask = kwargs['create_sparse_mask']
+        except KeyError:
+            self.__create_sparse_mask = self.__default_create_sparse_mask
+            if verbose:
+                print('HDF5Dataset: create_sparse_mask not present in kwargs, using default value:', self.__default_create_sparse_mask)
+
+        try:
+            self.__percentage_of_sparse_data = kwargs['percentage_of_sparse_data']
+        except KeyError:
+            self.__percentage_of_sparse_data = self.__default_percentage_of_sparse_data
+            if verbose:
+                print('HDF5Dataset: percentage_of_sparse_data not present in kwargs, using default value:', self.__default_percentage_of_sparse_data)
+
 
         # --------------------------------------- initializing class params --------------------------------------------
         if len(input_channels) == 0 or len(label_channels) == 0:
@@ -249,6 +265,9 @@ class HDF5Dataset(Dataset):
                 if channel in label_channels:
                     self.__label_indices += [index]
                 index += 1
+        # add sparse mask as extra channel for the input
+        if self.__create_sparse_mask:
+            self.__input_indices += [index]
 
         self.__input_indices = torch.LongTensor(self.__input_indices)
         self.__label_indices = torch.LongTensor(self.__label_indices)
@@ -310,6 +329,25 @@ class HDF5Dataset(Dataset):
                     print('HDF5Dataset: ', 'scaling_' + channel, 'not present in kwargs, using default value:',
                           self.__default_scaling_dict[channel])
 
+        # Create sparse masks for all terrains
+        if self.__create_sparse_mask:
+            sparse_wind_masks = []
+            for i in range(self.__num_files):
+                h5_file = h5py.File(self.__filename, 'r', swmr=True)
+                sample = h5_file[self.__memberslist[i]]
+                # load the terrain
+                terrain_data = [torch.from_numpy(sample['terrain'][...]).float().unsqueeze(0) / self.__scaling_dict['terrain']]
+                percentage = self.__percentage_of_sparse_data
+                boolean_terrain = terrain_data[0].clone().detach().cpu().numpy() <= 0
+                # Change (percentage) of False values in boolean terrain to True
+                # mask1 = np.logical_and(boolean_terrains, random.random() < percentage)
+                mask = [not elem if (not elem and random.random() < percentage) else elem for elem in
+                        boolean_terrain.flat]
+                sparse_mask = np.resize(mask, (1, self.__nx, self.__ny, self.__nz)) * 1
+                sparse_wind_masks += [torch.from_numpy(sparse_mask.astype(np.float32))]
+                # sparse_mask = np.random.choice([0, 1], size=(batches, 1, nx, ny, nz), p=[1-percentage, percentage])
+            self.__sparse_masks = torch.cat(sparse_wind_masks, 0)
+
         # initialize random number generator used for the subsampling
         self.__rand = random.SystemRandom()
 
@@ -331,6 +369,9 @@ class HDF5Dataset(Dataset):
             # extract channel data and apply scaling
             data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
         data = torch.cat(data_from_channels, 0)
+        # add sparse mask to data
+        if self.__create_sparse_mask:
+            data = torch.cat(([data, self.__sparse_masks[index, :].unsqueeze(0)]))
 
         # send full data to device
         data = data.to(self.__device)
@@ -431,7 +472,12 @@ class HDF5Dataset(Dataset):
             input_data = torch.index_select(data, 0, self.__input_indices)
             if (self.__input_mode == 0):
                 # copy the inflow condition across the full domain
-                input = torch.cat((input_data[0,:,:,:].unsqueeze(0), input_data[1:,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)))
+                if self.__create_sparse_mask:
+                    # take labels with terrain and sparse mask as input data
+                    input = data
+                else:
+                    input = torch.cat((input_data[0,:,:,:].unsqueeze(0),
+                                       input_data[1:,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)))
 
             elif (self.__input_mode == 1):
                 # This interpolation is slower (at least on a cpu)
@@ -439,7 +485,12 @@ class HDF5Dataset(Dataset):
                 # self.__interpolator.edge_interpolation_batch(data[1:4,:,:,:].unsqueeze(0)).squeeze()])
 
                 # interpolating the vertical edges
-                input = torch.cat((input_data[0,:,:,:].unsqueeze(0), self.__interpolator.edge_interpolation(input_data[1:,:,:,:])))
+                if self.__create_sparse_mask:
+                    # take labels with terrain and sparse mask as input data
+                    input = data
+                else:
+                    input = torch.cat((input_data[0,:,:,:].unsqueeze(0),
+                                       self.__interpolator.edge_interpolation(input_data[1:,:,:,:])))
 
             else:
                 print('HDF5Dataset Error: Input mode ', self.__input_mode, ' is not supported')

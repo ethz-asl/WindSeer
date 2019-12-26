@@ -86,6 +86,10 @@ data:
     terrain_scaling: 1.0
     autoscale: True
 
+    # sparse mask
+    create_sparse_mask: True,
+    percentage_of_sparse_data: 0.1 # percentage of inputs used for training the network
+
 # model parameters
 model:
     name_prefix: 'test_model'
@@ -123,5 +127,4 @@ model:
 
         # sparse input params
         use_sparse_mask: True,
-        percentage_of_sparse_data: 0.1 # percentage of inputs used for training the network
     }
