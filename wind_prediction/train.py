@@ -15,21 +15,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
-import numpy as np
-import random
-
-
-def add_sparse_mask(dataloader_inputs, dataloader_labels, percentage_of_sparse_data):
-    percentage = percentage_of_sparse_data
-    channels, nx, ny, nz = dataloader_inputs.shape
-    dataloader_inputs[1:4, :] = dataloader_labels
-    boolean_terrains = dataloader_inputs[0, :].clone().detach().cpu().numpy() <= 0
-    # Change (percentage) of False values in boolean terrain to True
-    # mask1 = np.logical_and(boolean_terrains, random.random() < percentage)
-    mask = [not elem if (not elem and random.random() < percentage) else elem for elem in boolean_terrains.flat]
-    sparse_wind_mask = np.resize(mask, (1, nx, ny, nz)) * 1
-    # sparse_mask = np.random.choice([0, 1], size=(batches, 1, nx, ny, nz), p=[1-percentage, percentage])
-    return np.concatenate(([dataloader_inputs, sparse_wind_mask]), axis=0)
 
 
 now_time = time.strftime("%Y_%m_%d-%H_%M")
