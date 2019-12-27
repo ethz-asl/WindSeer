@@ -52,6 +52,7 @@ class HDF5Dataset(Dataset):
     __default_loss_weighting_clamp = True
     __default_create_sparse_mask = False
     __default_percentage_of_sparse_data = 1
+    __default_add_gaussian_noise = False
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -225,6 +226,13 @@ class HDF5Dataset(Dataset):
             if verbose:
                 print('HDF5Dataset: percentage_of_sparse_data not present in kwargs, using default value:', self.__default_percentage_of_sparse_data)
 
+        try:
+            self.__add_gaussian_noise = kwargs['add_gaussian_noise']
+        except KeyError:
+            self.__add_gaussian_noise = self.__default_add_gaussian_noise
+            if verbose:
+                print('HDF5Dataset: add_gaussian_noise not present in kwargs, using default value:', self.__default_add_gaussian_noise)
+
 
         # --------------------------------------- initializing class params --------------------------------------------
         if len(input_channels) == 0 or len(label_channels) == 0:
@@ -339,6 +347,7 @@ class HDF5Dataset(Dataset):
                 terrain_data = [torch.from_numpy(sample['terrain'][...]).float().unsqueeze(0) / self.__scaling_dict['terrain']]
                 channels, nx, ny, nz = terrain_data[0].shape
                 percentage = self.__percentage_of_sparse_data
+                # percentage = random.randint(1, 10)/100
                 boolean_terrain = terrain_data[0].clone().detach().cpu().numpy() <= 0
                 # Change (percentage) of False values in boolean terrain to True
                 # mask1 = np.logical_and(boolean_terrains, random.random() < percentage)
@@ -370,6 +379,11 @@ class HDF5Dataset(Dataset):
             # extract channel data and apply scaling
             data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
         data = torch.cat(data_from_channels, 0)
+        # add noise to train data
+        is_train_set = 'train' in self.__filename
+        if self.__add_gaussian_noise and is_train_set:
+            noise = torch.rand(data[1:, :].shape) / 2
+            data[1:, :] += noise
         # add sparse mask to data
         if self.__create_sparse_mask:
             data = torch.cat(([data, self.__sparse_masks[index, :].unsqueeze(0)]))
