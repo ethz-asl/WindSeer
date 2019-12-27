@@ -87,7 +87,7 @@ data:
     autoscale: True
 
     # sparse mask
-    create_sparse_mask: True,
+    create_sparse_mask: True
     percentage_of_sparse_data: 0.1 # percentage of inputs used for training the network
 
     # noise
