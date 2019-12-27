@@ -296,7 +296,7 @@ class ModelEDNN2D(nn.Module):
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1) * x
 
-        return x
+        return {'pred': x}
 
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension

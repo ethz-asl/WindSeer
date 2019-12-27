@@ -45,7 +45,7 @@ def test_model(Model, d3, batch_size, error_counter, test_counter, **kwargs):
         return error_counter, test_counter
 
     try:
-        loss = loss_fn(output, labels)
+        loss = loss_fn(output['pred'], labels)
         loss.backward()
 
     except:
@@ -331,6 +331,14 @@ if __name__ == "__main__":
                     'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 12,
                     'channel_multiplier': 2.3, 'grid_size': [1,1,1]})
 
+    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
+                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
+                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
+                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
+                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
+                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
+                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
+                    'channel_multiplier': 2, 'grid_size': [1,1,1], 'vae': True})
 
     print("--------------------------------------------------------")
     print("ModelEDNN2D tests")

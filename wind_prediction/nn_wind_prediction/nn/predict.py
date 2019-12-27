@@ -120,7 +120,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
             if (inputs.shape[0] > 1):
                 raise Exception('To compute the prediction error a batchsize of 1 is required')
 
-            outputs = net(inputs)
+            outputs = net(inputs)['pred']
 
             # move the tensors to the cpu
             outputs.squeeze_()
@@ -308,7 +308,7 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
         # predict and measure how long it takes
         input, label = input.to(device), label.to(device)
         start_time = time.time()
-        output = net(input.unsqueeze(0))
+        output = net(input.unsqueeze(0))['pred']
         print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
         input = input.squeeze()
         output = output.squeeze()
@@ -396,7 +396,7 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 inputs, labels = inputs.to(device), labels.to(device)
 
                 for model in models_list:
-                    outputs = model['net'](inputs)
+                    outputs = model['net'](inputs)['pred']
                     outputs = outputs.squeeze()
 
                     if gridshape == None:
@@ -497,7 +497,7 @@ def compute_prediction_metrics(net, device, params, loader_testset, save=True, s
 
         inputs, labels = inputs.to(device), labels.to(device)
 
-        outputs = net(inputs)
+        outputs = net(inputs)['pred']
 
         scale = 1.0
         if params.data['autoscale']:

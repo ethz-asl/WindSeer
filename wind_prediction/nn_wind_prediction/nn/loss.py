@@ -66,7 +66,7 @@ class CombinedLoss(Module):
                 self.learn_scaling = False
 
     def forward(self, predicted, target, input, W=None):
-        if (len(predicted.shape) != 5):
+        if (len(predicted['pred'].shape) != 5):
             raise ValueError('CombinedLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
         # make sure weighting matrix is not empty or None
@@ -83,7 +83,7 @@ class CombinedLoss(Module):
         # compute all of the loss components of the combined loss, store them in the last computed dict for retrieval
         for k in range(len(self.loss_components)):
             # move the loss factor to the same device as the prediction tensor
-            factor = self.loss_factors[k].to(predicted.device)
+            factor = self.loss_factors[k].to(predicted['pred'].device)
 
             # compute the value individual component
             loss_component = self.loss_components[k](predicted, target, input, W)
@@ -130,14 +130,14 @@ class LPLoss(Module):
                   self.__default_exclude_terrain)
 
     def forward(self, predicted, target, input, W=1.0):
-        if (predicted.shape != target.shape):
+        if (predicted['pred'].shape != target.shape):
             raise ValueError('LPLoss: predicted and target do not have the same shape, pred:{}, target:{}'
-                             .format(predicted.shape, target.shape))
+                             .format(predicted['pred'].shape, target.shape))
 
-        if (len(predicted.shape) != 5) or (len(input.shape) != 5):
+        if (len(predicted['pred'].shape) != 5) or (len(input.shape) != 5):
             raise ValueError('LPLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input, W)
+        return self.compute_loss(predicted['pred'], target, input, W)
 
     def compute_loss(self, predicted, target, input, W):
         # first compute the p-loss for each sample in the batch
@@ -215,7 +215,7 @@ class ScaledLoss(Module):
 
     def forward(self, prediction, label, input, W=1.0):
         # compute the loss per pixel, apply weighting and take the mean over the channels
-        loss = (self.__loss(prediction, label)*W).mean(dim=1)
+        loss = (self.__loss(prediction['pred'], label)*W).mean(dim=1)
 
         if self.__no_scaling:
             scale = torch.ones_like(loss)
@@ -287,14 +287,14 @@ class DivergenceFreeLoss(Module):
 
 
     def forward(self, predicted, target, input, W=1):
-        if (predicted.shape != target.shape):
+        if (predicted['pred'].shape != target.shape):
             raise ValueError('DivergenceFreeLoss: predicted and target do not have the same shape, pred:{}, target:{}'
-                    .format(predicted.shape, target.shape))
+                    .format(predicted['pred'].shape, target.shape))
 
-        if (len(predicted.shape) != 5):
+        if (len(predicted['pred'].shape) != 5):
             raise ValueError('DivergenceFreeLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input, W)
+        return self.compute_loss(predicted['pred'], target, input, W)
 
     def compute_loss(self, predicted, target, input, W):
         target = torch.zeros_like(target).to(predicted.device)
@@ -359,14 +359,14 @@ class VelocityGradientLoss(Module):
             raise ValueError('VelocityGradientLoss: unknown loss type ', self.__loss_type)
 
     def forward(self, predicted, target, input, W=1.0):
-        if (predicted.shape != target.shape):
+        if (predicted['pred'].shape != target.shape):
             raise ValueError('VelocityGradientLoss: predicted and target do not have the same shape, pred:{}, target:{}'
                              .format(predicted.shape, target.shape))
 
-        if (len(predicted.shape) != 5):
+        if (len(predicted['pred'].shape) != 5):
             raise ValueError('VelocityGradientLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input, W)
+        return self.compute_loss(predicted['pred'], target, input, W)
 
     def compute_loss(self, predicted, target, input, W):
         terrain = input[:, 0:1]
@@ -387,6 +387,33 @@ class VelocityGradientLoss(Module):
 
         # return batchwise mean of loss
         return loss.mean()
+
+#------------------------------------------- Velocity Gradient Loss  ---------------------------------------------------
+class KLDivLoss(Module):
+    '''
+    Upgraded version of Stream Function Loss according to https://arxiv.org/abs/1806.02071.
+    Loss function in which predicted flow field spatial gradient is compared to target flow spatial gradient.
+
+    '''
+
+    def __init__(self, **kwargs):
+        super(KLDivLoss, self).__init__()
+
+    def forward(self, predicted, target, input, W=1.0):
+        if ('distribution_mean' not in predicted.keys()):
+            raise ValueError('KLDivLoss: distribution_mean needs to be in the prediction dict')
+
+        if ('distribution_logvar' not in predicted.keys()):
+            raise ValueError('KLDivLoss: distribution_mean needs to be in the prediction dict')
+
+        if (predicted['distribution_mean'].shape != predicted['distribution_logvar'].shape):
+            raise ValueError('KLDivLoss: the mean and logvar need to have the same shape')
+
+
+        return self.compute_loss(predicted['distribution_mean'], predicted['distribution_logvar'])
+
+    def compute_loss(self, mean, logvar):
+        return -0.5 * torch.sum(1.0 + logvar - mean.pow(2) - logvar.exp())
 
 #------------------------------------------ Gaussian Log Likelihood Loss  ----------------------------------------------
 class GaussianLogLikelihoodLoss(Module):

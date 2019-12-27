@@ -2,7 +2,7 @@
 run:
     plot_every_n_batches: 5
     n_epochs: 500
-    batchsize: 45
+    batchsize: 35
     num_workers: 6
     learning_rate_initial: 1.0E-4
     learning_rate_decay: 0.5
@@ -28,7 +28,7 @@ run:
 
 # loss parameters
 loss:
-    # Combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss'].
+    # Combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss', 'KLDivLoss'].
     # Multiple instances of one loss type can be used. Just add numbering behind 'Loss', e.g. 'L1Loss1/2/3'.
     # For 'LPLoss', P can be replaced with the desired order (int>0). If decimal order desired use LPLoss with p in kwargs.
     # 'GaussianLogLikelihoodLoss' can only be used alone.
@@ -49,6 +49,7 @@ loss:
     DivergenceFreeLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
     VelocityGradientLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
     GaussianLogLikelihoodLoss_kwargs: {exclude_terrain: True, uncertainty_loss_eps: 1e-8}
+    KLDivLoss_kwargs: {loss_factor_init: 1.0}
 
     # If the individual loss components and their factors should be logged using tensorboard
     log_loss_components: True
@@ -111,6 +112,7 @@ model:
         activation_args: {negative_slope: 0.1},
         verbose: True,
         submodel_type: 'ModelEDNN3D',
+        vae: False,
 
         # uncertainty prediction params
         predict_uncertainty: False,

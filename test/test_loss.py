@@ -10,11 +10,15 @@ print('------------------------------------------------------------------')
 # test combined loss
 input = torch.rand(10,4,64,64,64, requires_grad=False)
 label = torch.rand(10,4,64,64,64, requires_grad=False)
-output = torch.rand(10,4,64,64,64, requires_grad=True)
+output = {'pred': torch.rand(10,4,64,64,64, requires_grad=True),
+          'distribution_mean': torch.rand(10,128, requires_grad=True),
+          'distribution_logvar': torch.rand(10,128, requires_grad=True),}
 input[:,0,:10,:,:] = 0.0 # generate some terrain
 W = torch.ones(10,1,64,64,64) # generate a weighting function for the loss
 
-label, output, input, W = label.to(device), output.to(device), input.to(device), W.to(device)
+label, input, W = label.to(device), input.to(device), W.to(device)
+for key in output.keys():
+    output[key] = output[key].to(device)
 
 #------------------------------------------ ADD CONFIGS TO TEST HERE ---------------------------------------------------
 configs = []
@@ -80,20 +84,26 @@ configs.append({'loss_components': ['VelocityGradientLoss'],
                 'learn_scaling': False,
                 'VelocityGradientLoss_kwargs':{'exclude_terrain': False, 'loss_type': 'MSE'}})
 
-# single loss testing : GLL
-configs.append({'loss_components': ['GaussianLogLikelihoodLoss'],
+# single loss testing : KLDiv
+configs.append({'loss_components': ['KLDivLoss'],
                 'learn_scaling': False,
-                'GaussianLogLikelihoodLoss_kwargs':{'exclude_terrain': True, 'uncertainty_loss_eps': 1e-8}})
+                'KLDivLoss_kwargs':{}})
 
-configs.append({'loss_components': ['GaussianLogLikelihoodLoss'],
-                'learn_scaling': False,
-                'GaussianLogLikelihoodLoss_kwargs':{'exclude_terrain': True, 'uncertainty_loss_eps': 1e-8}})
+# single loss testing : GLL TODO
+# configs.append({'loss_components': ['GaussianLogLikelihoodLoss'],
+#                 'learn_scaling': False,
+#                 'GaussianLogLikelihoodLoss_kwargs':{'exclude_terrain': True, 'uncertainty_loss_eps': 1e-8}})
+#
+# configs.append({'loss_components': ['GaussianLogLikelihoodLoss'],
+#                 'learn_scaling': False,
+#                 'GaussianLogLikelihoodLoss_kwargs':{'exclude_terrain': True, 'uncertainty_loss_eps': 1e-8}})
 
 # multiple combined loss testing
-configs.append({'loss_components': ['L2Loss', 'L1Loss'],
+configs.append({'loss_components': ['L2Loss', 'L1Loss', 'KLDivLoss'],
                 'learn_scaling': False,
                 'L2Loss_kwargs':{'exclude_terrain': True, 'loss_factor_init': 1.0},
-                'L1Loss_kwargs':{'exclude_terrain': True, 'loss_factor_init': 1.0}})
+                'L1Loss_kwargs':{'exclude_terrain': True, 'loss_factor_init': 1.0},
+                'KLDivLoss_kwargs':{'loss_factor_init': 1.0}})
 
 configs.append({'loss_components': ['DivergenceFreeLoss', 'L1Loss'],
                 'learn_scaling': True,

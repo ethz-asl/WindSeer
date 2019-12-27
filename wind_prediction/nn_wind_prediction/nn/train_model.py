@@ -104,9 +104,6 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
         train_max_uncertainty = float('-inf')
         train_min_uncertainty = float('inf')
 
-        # adjust the learning rate if necessary
-        scheduler_lr.step()
-
         for i, data in enumerate(loader_trainset, 0):
             if should_exit:
                 break
@@ -296,6 +293,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
 
             print(('[%d] train loss: %.6f, validation loss: %.6f, epoch_time: %.2f s' %
                    (epoch + 1, train_loss, validation_loss, time.time() - epoch_start)))
+
+        # adjust the learning rate if necessary
+        scheduler_lr.step()
 
     print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 

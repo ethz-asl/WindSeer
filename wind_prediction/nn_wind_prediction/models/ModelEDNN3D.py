@@ -38,6 +38,7 @@ class ModelEDNN3D(nn.Module):
     __default_use_epsilon = False
     __default_use_nut = False
     __default_grid_size = [1, 1, 1]
+    __default_vae = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -196,6 +197,17 @@ class ModelEDNN3D(nn.Module):
             if verbose:
                 print('EDNN3D: use_nut not present in kwargs, using default value:', self.__default_use_nut)
 
+        try:
+            self.__vae = kwargs['vae']
+        except KeyError:
+            self.__vae = self.__default_vae
+            if verbose:
+                print('EDNN3D: vae not present in kwargs, using default value:', self.__default_vae)
+
+        if self.__vae and not self.__use_fc_layers:
+            print('EDNN3D: Error, to use the vae mode the fc layers need to be enabled.')
+            sys.exit()
+
         if self.__n_downsample_layers <= 0:
             print('EDNN3D: Error, n_downsample_layers must be larger than 0')
             sys.exit()
@@ -249,7 +261,13 @@ class ModelEDNN3D(nn.Module):
             else:
                 n_features = int(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))) *  # number of channels
                                  self.__n_x * self.__n_y * self.__n_z / ((2**self.__n_downsample_layers)**3)) # number of pixels
-            self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
+
+            if self.__vae:
+                self.__vae_dim = int(n_features/self.__fc_scaling)
+                self.__fc1 = nn.Linear(n_features, 2 * int(n_features/self.__fc_scaling))
+                print("EDNN3D: VAE state space is {} dimensional".format(self.__vae_dim))
+            else:
+                self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
             self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
         else:
             self.__c1 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
@@ -351,6 +369,7 @@ class ModelEDNN3D(nn.Module):
         self.apply(init_weights)
 
     def forward(self, x):
+        output = {}
         if self.__use_terrain_mask:
             # store the terrain data
             is_wind = x[:,0, :].unsqueeze(1).clone()
@@ -371,6 +390,15 @@ class ModelEDNN3D(nn.Module):
             shape = x.size()
             x = x.view(-1, self.num_flat_features(x))
             x = self.__activation(self.__fc1(x))
+            if self.__vae:
+                output['distribution_mean'] = x[:,:self.__vae_dim].clone()
+                output['distribution_logvar'] = x[:,self.__vae_dim:].clone()
+                if self.training:
+                    std = torch.torch.exp(0.5 * x[:,self.__vae_dim:])
+                    x = x[:,:self.__vae_dim] + std * torch.randn_like(std)
+                else:
+                    x = x[:,:self.__vae_dim]
+
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
         else:
@@ -407,7 +435,8 @@ class ModelEDNN3D(nn.Module):
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
 
-        return x
+        output['pred'] = x
+        return output
 
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension
