@@ -1,8 +1,8 @@
 # training parameters
 run:
-    plot_every_n_batches: 5
-    n_epochs: 500
-    batchsize: 45
+    plot_every_n_batches: 25
+    n_epochs: 300
+    batchsize: 35
     num_workers: 6
     learning_rate_initial: 1.0E-4
     learning_rate_decay: 0.5
@@ -99,7 +99,7 @@ model:
         n_y: 64,
         n_z: 64,
         n_downsample_layers: 4,
-        n_first_conv_channels: 16,
+        n_first_conv_channels: 8,
         channel_multiplier: 2,
         filter_kernel_size: 3,
         interpolation_mode: 'nearest',
