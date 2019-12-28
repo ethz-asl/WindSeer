@@ -167,6 +167,7 @@ class PlotUtils():
         self.__out_images = []
         self.__error_images = []
         self.__uncertainty_images = []
+        self.__mask_images = []
 
         # NUT
         self.__nut_images = []
@@ -369,7 +370,7 @@ class PlotUtils():
         else:
             raise NotImplementedError('Sorry, 2D sample plotting needs to be reimplemented.')
 
-    def plot_prediction(self, save, label_name='CFD', input_name='Prediction'):
+    def plot_prediction(self, save=False, add_sparse_mask=False, label_name='CFD', input_name='Prediction'):
         # get the number of already open figures, used in slider and button callbacks
         self.__n_already_open_figures = len(list(map(plt.figure, plt.get_fignums())))
 
@@ -436,6 +437,19 @@ class PlotUtils():
 
                         ah_in[3][i].set_xticks([])
                         ah_in[3][i].set_yticks([])
+                    if add_sparse_mask:
+                        self.__mask_images.append(
+                            ah_in[4][i].imshow(self.__uncertainty[i, :, slice, :], origin='lower',
+                                               vmin=self.__uncertainty[i, :, :, :].min(),
+                                               vmax=self.__uncertainty[i, :, :, :].max(), aspect='auto',
+                                               cmap=self.__cmap))
+                        chbar = self.__figures[j].colorbar(self.__uncertainty_images[data_index], ax=ah_in[3][i])
+                        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+                        plt.setp(ah_in[4][i].get_xticklabels(), fontsize=self.__tick_fontsize)
+                        plt.setp(ah_in[4][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+
+                        ah_in[4][i].set_xticks([])
+                        ah_in[4][i].set_yticks([])
 
                     if (i == 0):
                         ah_in[0][i].set_ylabel(label_name,
@@ -445,6 +459,8 @@ class PlotUtils():
                         ah_in[2][i].set_ylabel('Error', fontsize=self.__label_fontsize)
                         if self.__uncertainty_predicted:
                             ah_in[3][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)
+                        if add_sparse_mask:
+                            ah_in[4][i].set_ylabel('Mask', fontsize=self.__label_fontsize)
 
                 plt.tight_layout()
                 plt.subplots_adjust(bottom=0.12)

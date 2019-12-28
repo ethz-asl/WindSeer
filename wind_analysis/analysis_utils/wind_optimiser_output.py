@@ -24,6 +24,7 @@ class WindOptimiserOutput:
         # self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
         self._wind_prediction = self.get_best_wind_estimate()
         self._save_output = True
+        self._add_sparse_mask = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
 
@@ -162,7 +163,8 @@ class WindOptimiserOutput:
     def plot_best_wind_estimate(self):
         # Plot best wind estimate
         fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt.labels.to(self._device),
-                                               self.wind_opt.terrain.network_terrain.squeeze(0), self._save_output)
+                                               self.wind_opt.terrain.network_terrain.squeeze(0),
+                                               self._save_output, self._add_sparse_mask)
 
         if self._save_output:
             self.pp.savefig(fig)
