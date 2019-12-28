@@ -39,6 +39,7 @@ class ModelEDNN3D(nn.Module):
     __default_use_nut = False
     __default_grid_size = [1, 1, 1]
     __default_vae = False
+    __default_predict_uncertainty = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -204,6 +205,13 @@ class ModelEDNN3D(nn.Module):
             if verbose:
                 print('EDNN3D: vae not present in kwargs, using default value:', self.__default_vae)
 
+        try:
+            self.__predict_uncertainty = kwargs['predict_uncertainty']
+        except KeyError:
+            self.__predict_uncertainty = self.__default_predict_uncertainty
+            if verbose:
+                print('EDNN3D: predict_uncertainty not present in kwargs, using default value:', self.__default_predict_uncertainty)
+
         if self.__vae and not self.__use_fc_layers:
             print('EDNN3D: Error, to use the vae mode the fc layers need to be enabled.')
             sys.exit()
@@ -239,6 +247,7 @@ class ModelEDNN3D(nn.Module):
 
         try:
             self.__num_outputs = kwargs['force_num_outputs']
+            self.__predict_uncertainty = False
         except KeyError:
             pass
 
@@ -281,11 +290,15 @@ class ModelEDNN3D(nn.Module):
         self.__deconv1 = nn.ModuleList()
         self.__deconv2 = nn.ModuleList()
 
+        num_out = self.__num_outputs
+        if self.__predict_uncertainty:
+            num_out *= 2
+
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
                 if i == 0:
                     self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1)]
-                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1)]
+                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1)]
                 else:
                     self.__deconv1 += [nn.Conv3d(2*int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
@@ -297,7 +310,7 @@ class ModelEDNN3D(nn.Module):
         else:
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1)]
+                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1)]
                 else:
                     self.__deconv1 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
@@ -305,7 +318,7 @@ class ModelEDNN3D(nn.Module):
 
         # mapping layer
         if self.__use_mapping_layer:
-            self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
+            self.__mapping_layer = nn.Conv3d(num_out,num_out,1,groups=num_out) # for each channel a separate filter
 
         # padding modules
         padding_required = int((self.__filter_kernel_size - 1) / 2)
@@ -433,9 +446,13 @@ class ModelEDNN3D(nn.Module):
             x = torch.cat([utils.curl(x, self.__grid_size, x[:, 0, :]), x[:, 3:, :]], 1)
 
         if self.__use_terrain_mask:
-            x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
+            x = is_wind.repeat(1, x.shape[1], 1, 1, 1) * x
 
-        output['pred'] = x
+        if self.__predict_uncertainty:
+            output['pred'] = x[:,:self.__num_outputs]
+            output['logvar'] = x[:,self.__num_outputs:]
+        else:
+            output['pred'] = x
         return output
 
     def num_flat_features(self, x):

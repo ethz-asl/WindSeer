@@ -9,7 +9,7 @@ run:
     learning_rate_decay_step_size: 100
     compute_validation_loss: True
     custom_init: False
-    minibatch_epoch_loss: False
+    minibatch_epoch_loss: True
     evaluate_testset: False
     warm_start: False
 
@@ -28,7 +28,7 @@ run:
 
 # loss parameters
 loss:
-    # Combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss', 'KLDivLoss'].
+    # Combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss', 'KLDivLoss', 'GaussianLogLikelihoodLoss'].
     # Multiple instances of one loss type can be used. Just add numbering behind 'Loss', e.g. 'L1Loss1/2/3'.
     # For 'LPLoss', P can be replaced with the desired order (int>0). If decimal order desired use LPLoss with p in kwargs.
     # 'GaussianLogLikelihoodLoss' can only be used alone.
@@ -48,8 +48,8 @@ loss:
     ScaledLoss_kwargs: {exclude_terrain: True, no_scaling: True, max_scale: 4, norm_threshold: 0.5, loss_factor_init: 0.0}
     DivergenceFreeLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
     VelocityGradientLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
-    GaussianLogLikelihoodLoss_kwargs: {exclude_terrain: True, uncertainty_loss_eps: 1e-8}
-    KLDivLoss_kwargs: {loss_factor_init: 1.0}
+    GaussianLogLikelihoodLoss_kwargs: {exclude_terrain: True, uncertainty_loss_eps: 1e-8, loss_factor_init: 0.0}
+    KLDivLoss_kwargs: {loss_factor_init: 0.0}
 
     # If the individual loss components and their factors should be logged using tensorboard
     log_loss_components: True

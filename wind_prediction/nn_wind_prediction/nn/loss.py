@@ -21,9 +21,6 @@ class CombinedLoss(Module):
         self.loss_factors = []
         self.last_computed_loss_components = dict()
 
-        if 'GaussianLogLikelihoodLoss' in self.loss_component_names and len(self.loss_component_names)>1:
-            raise ValueError('Sorry, for now GaussianLogLikelihoodLoss can only be on its own!')
-
         # if the scaling must be learnt, use a ParameterList for the scaling factors
         if self.learn_scaling and len(self.loss_component_names)>1:
             self.loss_factors = torch.nn.ParameterList(self.loss_factors)
@@ -361,7 +358,7 @@ class VelocityGradientLoss(Module):
     def forward(self, predicted, target, input, W=1.0):
         if (predicted['pred'].shape != target.shape):
             raise ValueError('VelocityGradientLoss: predicted and target do not have the same shape, pred:{}, target:{}'
-                             .format(predicted.shape, target.shape))
+                             .format(predicted['pred'].shape, target.shape))
 
         if (len(predicted['pred'].shape) != 5):
             raise ValueError('VelocityGradientLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
@@ -424,11 +421,12 @@ class GaussianLogLikelihoodLoss(Module):
     __default_eps = 1e-8
     __default_exclude_terrain = True
 
+
     def __init__(self, **kwargs):
         super(GaussianLogLikelihoodLoss, self).__init__()
 
         try:
-            self.__eps = kwargs['uncertainty_loss_eps']
+            self.__eps = float(kwargs['uncertainty_loss_eps'])
         except KeyError:
             self.__eps = self.__default_eps
             print('GaussianLogLikelihoodLoss: uncertainty_loss_eps not present in kwargs, using default value:', self.__eps)
@@ -437,22 +435,27 @@ class GaussianLogLikelihoodLoss(Module):
            self.__exclude_terrain =  kwargs['exclude_terrain']
         except KeyError:
             self.__exclude_terrain = self.__default_exclude_terrain
-            print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
+            print('GaussianLogLikelihoodLoss: exclude_terrain not present in kwargs, using default value:',
                   self.__default_exclude_terrain)
 
-    def forward(self, output, label, input, W=1.0):
-        num_channels = output.shape[1]
+    def forward(self, predicted, target, input, W=1.0):
+        if (predicted['pred'].shape != target.shape):
+            raise ValueError('GaussianLogLikelihoodLoss: predicted and target do not have the same shape, pred:{}, target:{}'
+                             .format(predicted['pred'].shape, target.shape))
 
-        if (output.shape[1] != 2 * label.shape[1]) and (num_channels % 2 != 0):
-            raise ValueError('The output has to have twice the number of channels of the labels')
+        if 'logvar' not in predicted.keys():
+            raise ValueError('GaussianLogLikelihoodLoss: the uncertainty needs to be predicted and present in the output dict (logvar)')
 
-        return self.compute_loss(output[:,:int(num_channels/2),:], output[:,int(num_channels/2):,:], label, input, W)
+        if (len(predicted['pred'].shape) != 5):
+            raise ValueError('GaussianLogLikelihoodLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-    def compute_loss(self, mean, log_variance, label, input, W):
-        if (mean.shape[1] != log_variance.shape[1]):
-            raise ValueError('The variance and the mean need to have the same number of channels')
+        if (predicted['pred'].shape != predicted['logvar'].shape):
+            raise ValueError('The variance and the mean need to have the same shape')
 
-        mean_error =  mean - label
+        return self.compute_loss(predicted['pred'], predicted['logvar'], target, input, W)
+
+    def compute_loss(self, mean, log_variance, target, input, W):
+        mean_error =  mean - target
 
         # compute loss for all elements
         loss = log_variance + (mean_error * mean_error) / log_variance.exp().clamp(self.__eps)
