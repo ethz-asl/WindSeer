@@ -1,7 +1,7 @@
 # training parameters
 run:
     plot_every_n_batches: 25
-    n_epochs: 300
+    n_epochs: 500
     batchsize: 35
     num_workers: 6
     learning_rate_initial: 1.0E-4
@@ -59,9 +59,9 @@ loss:
 
 # dataset parameters
 data:
-    trainset_name: '../wind_analysis/data/wind_test/test_planning.hdf5'
-    validationset_name: '../wind_analysis/data/wind_test/test_planning.hdf5'
-    testset_name: '../wind_analysis/data/wind_test/test_planning.hdf5'
+    trainset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
+    validationset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
+    testset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
 
     # channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels : ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities must be loaded for EDNN3D
@@ -92,6 +92,10 @@ data:
 
     # noise
     add_gaussian_noise: True
+
+    # curriculum training
+    apply_curriculum_training: True
+    curriculum_percentages: [0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
 
 # model parameters
 model:

@@ -53,8 +53,10 @@ class HDF5Dataset(Dataset):
     __default_create_sparse_mask = False
     __default_percentage_of_sparse_data = 1
     __default_add_gaussian_noise = False
+    __default_apply_curriculum_training = False
+    __default_curriculum_percentages = 1
 
-    def __init__(self, filename, input_channels, label_channels, **kwargs):
+    def __init__(self, filename, i_perc, input_channels, label_channels, **kwargs):
         '''
         Params:
             device:
@@ -233,6 +235,20 @@ class HDF5Dataset(Dataset):
             if verbose:
                 print('HDF5Dataset: add_gaussian_noise not present in kwargs, using default value:', self.__default_add_gaussian_noise)
 
+        try:
+            self.__apply_curriculum_training = kwargs['apply_curriculum_training']
+        except KeyError:
+            self.__apply_curriculum_training = self.__default_apply_curriculum_training
+            if verbose:
+                print('HDF5Dataset: apply_curriculum_training not present in kwargs, using default value:', self.__default_apply_curriculum_training)
+
+        try:
+            self.__curriculum_percentages = kwargs['curriculum_percentages']
+        except KeyError:
+            self.__curriculum_percentages = self.__default_curriculum_percentages
+            if verbose:
+                print('HDF5Dataset: curriculum_percentages not present in kwargs, using default value:', self.__default_curriculum_percentages)
+
 
         # --------------------------------------- initializing class params --------------------------------------------
         if len(input_channels) == 0 or len(label_channels) == 0:
@@ -347,6 +363,8 @@ class HDF5Dataset(Dataset):
                 terrain_data = [torch.from_numpy(sample['terrain'][...]).float().unsqueeze(0) / self.__scaling_dict['terrain']]
                 channels, nx, ny, nz = terrain_data[0].shape
                 percentage = self.__percentage_of_sparse_data
+                if self.__apply_curriculum_training:
+                    percentage = i_perc
                 # percentage = random.randint(1, 10)/100
                 boolean_terrain = terrain_data[0].clone().detach().cpu().numpy() <= 0
                 # Change (percentage) of False values in boolean terrain to True

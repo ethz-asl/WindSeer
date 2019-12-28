@@ -61,20 +61,40 @@ else:
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define dataset and dataloader
-trainset = data.HDF5Dataset(trainset_name,
-                      augmentation = run_params.data['augmentation'],
-                      augmentation_mode = run_params.data['augmentation_mode'],
-                      augmentation_kwargs = run_params.data['augmentation_kwargs'],
-                      **run_params.Dataset_kwargs())
+if run_params.data['apply_curriculum_training']:
+    trainloader = []
+    validationloader = []
+    for i in run_params.data['curriculum_percentages']:
+        trainset = data.HDF5Dataset(trainset_name, i,
+                              augmentation = run_params.data['augmentation'],
+                              augmentation_mode = run_params.data['augmentation_mode'],
+                              augmentation_kwargs = run_params.data['augmentation_kwargs'],
+                              **run_params.Dataset_kwargs())
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                shuffle=True, num_workers=run_params.run['num_workers'])
+        trainloader += [torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
+                        shuffle=True, num_workers=run_params.run['num_workers'])]
 
-validationset = data.HDF5Dataset(validationset_name,
-                subsample = False, augmentation = False, **run_params.Dataset_kwargs())
+        validationset = data.HDF5Dataset(validationset_name, i,
+                        subsample=False, augmentation=False, **run_params.Dataset_kwargs())
 
-validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                num_workers=run_params.run['num_workers'])
+        validationloader += [torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
+                        num_workers=run_params.run['num_workers'])]
+else:
+    trainset = data.HDF5Dataset(trainset_name,
+                                augmentation=run_params.data['augmentation'],
+                                augmentation_mode=run_params.data['augmentation_mode'],
+                                augmentation_kwargs=run_params.data['augmentation_kwargs'],
+                                **run_params.Dataset_kwargs())
+
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
+                                                shuffle=True, num_workers=run_params.run['num_workers'])
+
+    validationset = data.HDF5Dataset(validationset_name,
+                                     subsample=False, augmentation=False, **run_params.Dataset_kwargs())
+
+    validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
+                                    num_workers=run_params.run['num_workers'])
+
 
 # define model
 NetworkType = getattr(models, run_params.model['model_type'])
@@ -177,6 +197,7 @@ net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optim
                        run_params.run['n_epochs'], run_params.run['plot_every_n_batches'],
                        run_params.run['save_model_every_n_epoch'], run_params.run['save_params_hist_every_n_epoch'],
                        run_params.run['minibatch_epoch_loss'],run_params.run['compute_validation_loss'],
+                       run_params.data['apply_curriculum_training'],
                        log_loss_components, model_dir, args.use_writer, predict_uncertainty,
                        uncertainty_train_mode, warm_start_epoch)
 
