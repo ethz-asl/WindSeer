@@ -39,6 +39,7 @@ class ModelEDNN3D(nn.Module):
     __default_use_nut = False
     __default_grid_size = [1, 1, 1]
     __default_vae = False
+    __default_logvar_scaling = 10
     __default_predict_uncertainty = False
 
     def __init__(self, **kwargs):
@@ -204,6 +205,13 @@ class ModelEDNN3D(nn.Module):
             self.__vae = self.__default_vae
             if verbose:
                 print('EDNN3D: vae not present in kwargs, using default value:', self.__default_vae)
+
+        try:
+            self.__logvar_scaling = kwargs['logvar_scaling']
+        except KeyError:
+            self.__logvar_scaling = self.__default_logvar_scaling
+            if verbose:
+                print('EDNN3D: logvar_scaling not present in kwargs, using default value:', self.__default_logvar_scaling)
 
         try:
             self.__predict_uncertainty = kwargs['predict_uncertainty']
@@ -450,9 +458,10 @@ class ModelEDNN3D(nn.Module):
 
         if self.__predict_uncertainty:
             output['pred'] = x[:,:self.__num_outputs]
-            output['logvar'] = x[:,self.__num_outputs:]
+            output['logvar'] = self.__logvar_scaling * torch.nn.functional.softsign(x[:,self.__num_outputs:])
         else:
             output['pred'] = x
+
         return output
 
     def num_flat_features(self, x):
