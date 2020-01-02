@@ -458,7 +458,7 @@ class GaussianLogLikelihoodLoss(Module):
         mean_error =  mean - target
 
         # compute loss for all elements
-        loss = log_variance + (mean_error * mean_error) / log_variance.exp().clamp(self.__eps)
+        loss = 0.5*log_variance + (mean_error * mean_error) / log_variance.exp().clamp(min=self.__eps, max=1e10)
 
         # average weighted loss over each sample in batch
         loss = (loss*W).mean(tuple(range(1, len(mean_error.shape))))
