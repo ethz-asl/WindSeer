@@ -9,7 +9,7 @@ import time
 import torch
 from torch.nn.functional import mse_loss
 import nn_wind_prediction.utils as utils
-
+import builtins
 
 should_exit = False
 sig_dict = dict((k, v) for v, k in reversed(sorted(signal.__dict__.items())) if v.startswith('SIG') and not v.startswith('SIG_'))
@@ -112,17 +112,12 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
         # adjust the learning rate if necessary
         scheduler_lr.step()
 
-        # curriculum training
+        # TODO: builins.curriculum_set is a temporary workaround. Should not be done like this!
         if apply_curriculum_training:
-            sample = epoch//50
-            if sample > 9:
-                sample = 9
-            loader_trainset_sample = loader_trainset[sample]
-            loader_validationset_sample = loader_validationset[sample]
-        else:
-            loader_trainset_sample = loader_trainset
-            loader_validationset_sample = loader_validationset
-        for i, data in enumerate(loader_trainset_sample, 0):
+            builtins.curriculum_set = epoch//50
+            if builtins.curriculum_set > 9:
+                builtins.curriculum_set = 9
+        for i, data in enumerate(loader_trainset, 0):
             if should_exit:
                 break
 
@@ -193,7 +188,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_avg_uncertainty = 0.0
                 train_max_uncertainty = float('-inf')
                 train_min_uncertainty = float('inf')
-                for data in loader_trainset_sample:
+                for data in loader_trainset:
                     if should_exit:
                         break
 
@@ -225,10 +220,10 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         train_loss += loss.item()
                         for k,v in train_loss_components.items(): train_loss_components[k]+= loss_fn.last_computed_loss_components[k]
 
-            train_loss /= len(loader_trainset_sample)
-            for k,v in train_loss_components.items(): train_loss_components[k] /= len(loader_trainset_sample)
-            train_avg_mean /= len(loader_trainset_sample)
-            train_avg_uncertainty /= len(loader_trainset_sample)
+            train_loss /= len(loader_trainset)
+            for k,v in train_loss_components.items(): train_loss_components[k] /= len(loader_trainset)
+            train_avg_mean /= len(loader_trainset)
+            train_avg_uncertainty /= len(loader_trainset)
 
             validation_loss = 0.0
             validation_loss_components = dict.fromkeys(loss_fn.last_computed_loss_components, 0.0)
@@ -237,7 +232,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             validation_max_uncertainty = float('-inf')
             validation_min_uncertainty = float('inf')
             if compute_validation_loss:
-                for data in loader_validationset_sample:
+                for data in loader_validationset:
                     if should_exit:
                         break
 
@@ -268,8 +263,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                         validation_loss += loss.item()
                         for k, v in validation_loss_components.items(): validation_loss_components[k] += loss_fn.last_computed_loss_components[k]
 
-                validation_loss /= len(loader_validationset_sample)
-                for k, v in validation_loss_components.items(): validation_loss_components[k] /=len(loader_validationset_sample)
+                validation_loss /= len(loader_validationset)
+                for k, v in validation_loss_components.items(): validation_loss_components[k] /=len(loader_validationset)
 
             if use_writer and not should_exit:
                 writer.add_scalar('Train/Loss', train_loss, epoch + 1)

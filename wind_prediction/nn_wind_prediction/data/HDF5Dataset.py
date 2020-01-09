@@ -10,7 +10,7 @@ import torch
 from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
-
+import builtins
 
 class HDF5Dataset(Dataset):
     '''
@@ -56,7 +56,7 @@ class HDF5Dataset(Dataset):
     __default_apply_curriculum_training = False
     __default_curriculum_percentages = 1
 
-    def __init__(self, filename, i_perc, input_channels, label_channels, **kwargs):
+    def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
         Params:
             device:
@@ -354,26 +354,33 @@ class HDF5Dataset(Dataset):
                           self.__default_scaling_dict[channel])
 
         # Create sparse masks for all terrains
+        if self.__apply_curriculum_training:
+            curriculum_percentages = self.__curriculum_percentages
+        else:
+            curriculum_percentages = 1
         if self.__create_sparse_mask:
             sparse_wind_masks = []
-            for i in range(self.__num_files):
-                h5_file = h5py.File(self.__filename, 'r', swmr=True)
-                sample = h5_file[self.__memberslist[i]]
-                # load the terrain
-                terrain_data = [torch.from_numpy(sample['terrain'][...]).float().unsqueeze(0) / self.__scaling_dict['terrain']]
-                channels, nx, ny, nz = terrain_data[0].shape
-                percentage = self.__percentage_of_sparse_data
-                if self.__apply_curriculum_training:
-                    percentage = i_perc
-                # percentage = random.randint(1, 10)/100
-                boolean_terrain = terrain_data[0].clone().detach().cpu().numpy() <= 0
-                # Change (percentage) of False values in boolean terrain to True
-                # mask1 = np.logical_and(boolean_terrains, random.random() < percentage)
-                mask = [not elem if (not elem and random.random() < percentage) else elem for elem in
-                        boolean_terrain.flat]
-                sparse_mask = np.resize(mask, (channels, nx, ny, nz)) * 1
-                sparse_wind_masks += [torch.from_numpy(sparse_mask.astype(np.float32))]
-                # sparse_mask = np.random.choice([0, 1], size=(batches, 1, nx, ny, nz), p=[1-percentage, percentage])
+            for j in range(len(curriculum_percentages)):
+                for i in range(self.__num_files):
+                    h5_file = h5py.File(self.__filename, 'r', swmr=True)
+                    sample = h5_file[self.__memberslist[i]]
+                    # load the terrain
+                    terrain_data = [torch.from_numpy(sample['terrain'][...]).float().unsqueeze(0) / self.__scaling_dict['terrain']]
+                    channels, nx, ny, nz = terrain_data[0].shape
+                    # percentage of sparse data
+                    if self.__apply_curriculum_training:
+                        percentage = curriculum_percentages[j]
+                    else:
+                        percentage = self.__percentage_of_sparse_data
+                    # percentage = random.randint(1, 10)/100
+                    boolean_terrain = terrain_data[0].clone().detach().cpu().numpy() <= 0
+                    # Change (percentage) of False values in boolean terrain to True
+                    # mask1 = np.logical_and(boolean_terrains, random.random() < percentage)
+                    mask = [not elem if (not elem and random.random() < percentage) else elem for elem in
+                            boolean_terrain.flat]
+                    sparse_mask = np.resize(mask, (channels, nx, ny, nz)) * 1
+                    sparse_wind_masks += [torch.from_numpy(sparse_mask.astype(np.float32))]
+                    # sparse_mask = np.random.choice([0, 1], size=(batches, 1, nx, ny, nz), p=[1-percentage, percentage])
             self.__sparse_masks = torch.cat(sparse_wind_masks, 0)
 
         # initialize random number generator used for the subsampling
@@ -397,14 +404,19 @@ class HDF5Dataset(Dataset):
             # extract channel data and apply scaling
             data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
         data = torch.cat(data_from_channels, 0)
+
         # add noise to train data
         is_train_set = 'train' in self.__filename
         if self.__add_gaussian_noise and is_train_set:
             noise = torch.rand(data[1:, :].shape) / 2
             data[1:, :] += noise
+
         # add sparse mask to data
-        if self.__create_sparse_mask:
+        # TODO: builins.curriculum_set is a temporary workaround. Should not be done like this!
+        if self.__create_sparse_mask and not self.__apply_curriculum_training:
             data = torch.cat(([data, self.__sparse_masks[index, :].unsqueeze(0)]))
+        elif self.__create_sparse_mask and self.__apply_curriculum_training:
+            data = torch.cat(([data, self.__sparse_masks[builtins.curriculum_set*self.__num_files + index, :].unsqueeze(0)]))
 
         # send full data to device
         data = data.to(self.__device)

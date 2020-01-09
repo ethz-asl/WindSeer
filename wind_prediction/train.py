@@ -16,7 +16,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 
-
 now_time = time.strftime("%Y_%m_%d-%H_%M")
 t1 = time.time()
 parser = argparse.ArgumentParser(description='Training an EDNN for predicting wind data from terrain')
@@ -61,39 +60,20 @@ else:
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define dataset and dataloader
-if run_params.data['apply_curriculum_training']:
-    trainloader = []
-    validationloader = []
-    for i in run_params.data['curriculum_percentages']:
-        trainset = data.HDF5Dataset(trainset_name, i,
-                              augmentation = run_params.data['augmentation'],
-                              augmentation_mode = run_params.data['augmentation_mode'],
-                              augmentation_kwargs = run_params.data['augmentation_kwargs'],
-                              **run_params.Dataset_kwargs())
+trainset = data.HDF5Dataset(trainset_name,
+                            augmentation=run_params.data['augmentation'],
+                            augmentation_mode=run_params.data['augmentation_mode'],
+                            augmentation_kwargs=run_params.data['augmentation_kwargs'],
+                            **run_params.Dataset_kwargs())
 
-        trainloader += [torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                        shuffle=True, num_workers=run_params.run['num_workers'])]
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
+                                            shuffle=True, num_workers=run_params.run['num_workers'])
 
-        validationset = data.HDF5Dataset(validationset_name, i,
-                        subsample=False, augmentation=False, **run_params.Dataset_kwargs())
+validationset = data.HDF5Dataset(validationset_name,
+                                 subsample=False, augmentation=False, **run_params.Dataset_kwargs())
 
-        validationloader += [torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                        num_workers=run_params.run['num_workers'])]
-else:
-    trainset = data.HDF5Dataset(trainset_name,
-                                augmentation=run_params.data['augmentation'],
-                                augmentation_mode=run_params.data['augmentation_mode'],
-                                augmentation_kwargs=run_params.data['augmentation_kwargs'],
-                                **run_params.Dataset_kwargs())
-
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                                                shuffle=True, num_workers=run_params.run['num_workers'])
-
-    validationset = data.HDF5Dataset(validationset_name,
-                                     subsample=False, augmentation=False, **run_params.Dataset_kwargs())
-
-    validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                                    num_workers=run_params.run['num_workers'])
+validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
+                                num_workers=run_params.run['num_workers'])
 
 
 # define model
