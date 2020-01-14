@@ -38,17 +38,17 @@ if optimise_corners:
 
 if wind_opt.flag.test_simulated_data:
     if original_input:
-        wind_predictions, loss = wind_opt.get_original_input_prediction()
+        wind_predictions, losses = wind_opt.get_original_input_prediction()
     elif wind_opt.flag.use_scattered_points:
-        wind_predictions, loss = wind_opt.scattered_points_optimisation()
+        wind_predictions, losses, inputs = wind_opt.scattered_points_optimisation()
     elif wind_opt.flag.use_trajectory:
-        wind_predictions, loss = wind_opt.cfd_trajectory_optimisation()
+        wind_predictions, losses = wind_opt.cfd_trajectory_optimisation()
 if wind_opt.flag.test_flight_data:
     if wind_opt.flag.predict_ulog:
-        wind_predictions, loss = wind_opt.flight_ulog_optimisation()
+        wind_predictions, losses = wind_opt.flight_ulog_optimisation()
 
 # Analyse optimised wind
-wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, loss)
+wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs)
 # Plot graphs
 wind_opt_output.plot()
 # # Print losses

@@ -74,7 +74,7 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/20191015_TODO/'
-  name: 'test_model_2'
+  name: 'test_model_12'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'

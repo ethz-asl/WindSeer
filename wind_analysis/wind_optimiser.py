@@ -626,7 +626,7 @@ class WindOptimiser(object):
         return output, loss
 
     def scattered_points_optimisation(self):
-        outputs, losses = [], []
+        outputs, losses, inputs = [], [], []
 
         wind_corners = self.get_rotated_wind()
         interpolated_wind = self._interpolator.edge_interpolation(wind_corners)
@@ -659,25 +659,27 @@ class WindOptimiser(object):
                 else:
                     wind_input = interpolated_wind + wind_zeros
 
-                input_ = torch.cat([self.terrain.network_terrain, wind_input])
-                output = self.run_prediction(input_)
+                input = torch.cat([self.terrain.network_terrain, wind_input])
+                output = self.run_prediction(input)
                 loss = self.evaluate_loss(output)
                 outputs.append(output)
                 losses.append(loss)
+                inputs.append(input)
                 print(t,
                       ' percentage: ', self._wind_args.params['scattered_points']['initial_percentage'] + p*t,
                       ' loss: ', loss.item())
                 t += 1
         else:
-            input_ = torch.cat([self.terrain.network_terrain, wind_input])
-            output = self.run_prediction(input_)
+            input = torch.cat([self.terrain.network_terrain, wind_input])
+            output = self.run_prediction(input)
             loss = self.evaluate_loss(output)
             outputs.append(output)
             losses.append(loss)
+            inputs.append(input)
             print(' percentage: ', self._wind_args.params['scattered_points']['final_percentage'],
                   ' loss: ', loss.item())
 
-        return outputs, losses
+        return outputs, losses, inputs
 
     def cfd_trajectory_optimisation(self):
         outputs, losses = 0, 1

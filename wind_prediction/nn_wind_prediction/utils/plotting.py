@@ -37,7 +37,7 @@ class PlotUtils():
     the default channels for prediction plotting
     ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     '''
-    def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design,
+    def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design, masked_input=None,
                  uncertainty_predicted = False, plot_divergence = False, ds = None, title_dict = None,
                  title_fontsize = 16, label_fontsize = 15, tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
 
@@ -186,6 +186,15 @@ class PlotUtils():
         self.__cmap = cmap
         self.__cmap.set_bad(terrain_color)
 
+        # get masked input if it is provided
+        if masked_input is not None:
+            self.__masked_input = np.ma.MaskedArray(np.zeros(masked_input.shape))
+            is_mask = np.logical_not(masked_input[0].cpu().numpy().astype(bool))
+            for i, channel in enumerate(input.cpu()):
+                self.__masked_input[i] = np.ma.masked_where(is_mask, channel)
+        else:
+            self.__masked_input = masked_input
+
         # handle uncertainty prediction case
         if uncertainty_predicted and plot_mode == 'prediction':
             self.__uncertainty = self.__input[int(self.__n_channels/2):,:]
@@ -226,6 +235,10 @@ class PlotUtils():
                 im.set_data(self.__uncertainty[i, :, :, slice_number])
                 im.set_extent([0, self.__uncertainty.shape[2], 0, self.__uncertainty.shape[1]])
 
+            for i, im in enumerate(self.__mask_images):
+                im.set_data(self.__masked_input[i, slice_number, :, :])
+                im.set_extent([0, self.__masked_input.shape[2], 0, self.__uncertainty.shape[1]])
+
             # NUT
             for i, im in enumerate(self.__nut_images):
                 im.set_data(self.__label[6, :, :, slice_number])
@@ -249,6 +262,10 @@ class PlotUtils():
                 im.set_data(self.__uncertainty[i, slice_number, :, :])
                 im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[2]])
 
+            for i, im in enumerate(self.__mask_images):
+                im.set_data(self.__masked_input[i, slice_number, :, :])
+                im.set_extent([0, self.__masked_input.shape[3], 0, self.__uncertainty.shape[2]])
+
             # NUT
             for i, im in enumerate(self.__nut_images):
                 im.set_data(self.__label[6, slice_number, :, :])
@@ -270,6 +287,10 @@ class PlotUtils():
             for i, im in enumerate(self.__uncertainty_images):
                 im.set_data(self.__uncertainty[i, :, slice_number, :])
                 im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[1]])
+
+            for i, im in enumerate(self.__mask_images):
+                im.set_data(self.__masked_input[i, slice_number, :, :])
+                im.set_extent([0, self.__masked_input.shape[3], 0, self.__uncertainty.shape[1]])
 
             # NUT
             for i, im in enumerate(self.__nut_images):
@@ -370,7 +391,7 @@ class PlotUtils():
         else:
             raise NotImplementedError('Sorry, 2D sample plotting needs to be reimplemented.')
 
-    def plot_prediction(self, save=False, add_sparse_mask=False, label_name='CFD', input_name='Prediction'):
+    def plot_prediction(self, save=False, label_name='CFD', input_name='Prediction', add_sparse_mask_row=False):
         # get the number of already open figures, used in slider and button callbacks
         self.__n_already_open_figures = len(list(map(plt.figure, plt.get_fignums())))
 
@@ -386,10 +407,15 @@ class PlotUtils():
                 column_size = 5
 
                 # create new figure
-                if self.__uncertainty_predicted:
-                    fig_in, ah_in = plt.subplots(4, n_columns,figsize=(n_columns* column_size,12), squeeze=False)
+                if self.__uncertainty_predicted and add_sparse_mask_row:
+                    n_rows = 5
+                elif self.__uncertainty_predicted and not add_sparse_mask_row:
+                    n_rows = 4
+                elif not self.__uncertainty_predicted and add_sparse_mask_row:
+                    n_rows = 4
                 else:
-                    fig_in, ah_in = plt.subplots(3, n_columns,figsize=(n_columns* column_size,12), squeeze=False)
+                    n_rows = 3
+                fig_in, ah_in = plt.subplots(n_rows, n_columns, figsize=(n_columns * column_size, 12), squeeze=False)
 
                 fig_in.patch.set_facecolor('white')
                 slice = self.__n_slices[j]
@@ -429,27 +455,36 @@ class PlotUtils():
                     plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
                     if self.__uncertainty_predicted:
-                        self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                        chbar = self.__figures[j].colorbar(self.__uncertainty_images[data_index], ax=ah_in[3][i])
+                        if add_sparse_mask_row:
+                            row = n_rows - 2
+                        else:
+                            row = n_rows - 1
+                        self.__uncertainty_images.append(
+                            ah_in[row][i].imshow(self.__uncertainty[i,:,slice,:], origin='lower',
+                                               vmin=self.__uncertainty[i,:,:,:].min(),
+                                               vmax=self.__uncertainty[i,:,:,:].max(),
+                                               aspect = 'auto', cmap=self.__cmap))
+                        chbar = self.__figures[j].colorbar(self.__uncertainty_images[data_index], ax=ah_in[row][i])
                         plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                        plt.setp(ah_in[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
-                        plt.setp(ah_in[3][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+                        plt.setp(ah_in[row][i].get_xticklabels(), fontsize=self.__tick_fontsize)
+                        plt.setp(ah_in[row][i].get_yticklabels(), fontsize=self.__tick_fontsize)
 
-                        ah_in[3][i].set_xticks([])
-                        ah_in[3][i].set_yticks([])
-                    if add_sparse_mask:
+                        ah_in[row][i].set_xticks([])
+                        ah_in[row][i].set_yticks([])
+                    if add_sparse_mask_row:
+                        row = n_rows - 1
                         self.__mask_images.append(
-                            ah_in[4][i].imshow(self.__uncertainty[i, :, slice, :], origin='lower',
-                                               vmin=self.__uncertainty[i, :, :, :].min(),
-                                               vmax=self.__uncertainty[i, :, :, :].max(), aspect='auto',
-                                               cmap=self.__cmap))
-                        chbar = self.__figures[j].colorbar(self.__uncertainty_images[data_index], ax=ah_in[3][i])
-                        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
-                        plt.setp(ah_in[4][i].get_xticklabels(), fontsize=self.__tick_fontsize)
-                        plt.setp(ah_in[4][i].get_yticklabels(), fontsize=self.__tick_fontsize)
+                            ah_in[row][i].imshow(self.__masked_input[i, :, slice, :], origin='lower',
+                                               vmin=self.__masked_input[i, :, :, :].min(),
+                                               vmax=self.__masked_input[i, :, :, :].max(),
+                                               aspect='auto', cmap=self.__cmap))
 
-                        ah_in[4][i].set_xticks([])
-                        ah_in[4][i].set_yticks([])
+                        ah_in[row][i].set_xticks([])
+                        ah_in[row][i].set_yticks([])
+
+                        # chbar = self.__figures[j].colorbar(self.__mask_images[data_index], ax=ah_in[row][i])
+                        chbar = fig_in.colorbar(self.__mask_images[data_index], ax=ah_in[row][i])
+                        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
                     if (i == 0):
                         ah_in[0][i].set_ylabel(label_name,
@@ -458,9 +493,14 @@ class PlotUtils():
                                                fontsize=self.__label_fontsize)
                         ah_in[2][i].set_ylabel('Error', fontsize=self.__label_fontsize)
                         if self.__uncertainty_predicted:
-                            ah_in[3][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)
-                        if add_sparse_mask:
-                            ah_in[4][i].set_ylabel('Mask', fontsize=self.__label_fontsize)
+                            if add_sparse_mask_row:
+                                row = n_rows - 2
+                            else:
+                                row = n_rows - 1
+                            ah_in[row][i].set_ylabel('Uncertainty', fontsize=self.__label_fontsize)
+                        if add_sparse_mask_row:
+                            row = n_rows - 1
+                            ah_in[row][i].set_ylabel('Mask', fontsize=self.__label_fontsize)
 
                 plt.tight_layout()
                 plt.subplots_adjust(bottom=0.12)

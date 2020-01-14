@@ -168,9 +168,9 @@ def plot_wind_estimates(time, wind_array, wind_names=None, polar=False):
     return f2, a2
 
 
-def plot_prediction_observations(input, label, terrain, save, add_sparse_mask):
+def plot_prediction_observations(input, label, terrain, save, add_sparse_mask_row, masked_input):
     i2 = input
     instance = PlotUtils('prediction', ['ux', 'uy', 'uz'],
-                         ['ux', 'uy', 'uz'], i2, label, terrain, design=1)
-    fig, ax = instance.plot_prediction(save, add_sparse_mask=False, label_name='Observed wind')
+                         ['ux', 'uy', 'uz'], i2, label, terrain, design=1, masked_input=masked_input)
+    fig, ax = instance.plot_prediction(save, label_name='Observed wind',  add_sparse_mask_row=add_sparse_mask_row)
     return fig, ax

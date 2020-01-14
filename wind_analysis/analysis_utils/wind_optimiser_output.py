@@ -13,18 +13,20 @@ def angle_wrap(angles):
 
 
 class WindOptimiserOutput:
-    def __init__(self, wind_opt, all_ov, losses):
+    def __init__(self, wind_opt, wind_predictions, losses, inputs):
         self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.wind_opt = wind_opt
         # self._optimisers = opt
-        self._all_ov = all_ov
+        self._wind_predictions = wind_predictions
+        self._wind_prediction = self.get_best_wind_estimate()
         self._losses = losses
+        self._inputs = inputs
+        self._masked_input = self.get_masked_input()
         # self._grads = grads
         # self._names = self.get_names()
         # self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
-        self._wind_prediction = self.get_best_wind_estimate()
         self._save_output = True
-        self._add_sparse_mask = True
+        self._add_sparse_mask_row = False
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
 
@@ -36,16 +38,22 @@ class WindOptimiserOutput:
     def get_best_wind_estimate(self):
         # # Extract best wind estimate
         # best_method_index = np.argmin([l[-1] for l in self._losses])
-        # best_ov = self._all_ov[best_method_index]
+        # best_ov = self._wind_predictions[best_method_index]
         # best_opt_var = [best_ov[-1, 0], best_ov[-1, 1], best_ov[-1, 2], best_ov[-1, 3]]
         # self.wind_opt.reset_optimisation_variables(best_opt_var)
         # wind_prediction = self.wind_opt.get_prediction().detach()
         # return wind_prediction, best_method_index, best_ov
-        # if len(self._all_ov) > 3:
-        wind_prediction = self._all_ov[-1]
+        # if len(self._wind_predictions) > 3:
+        wind_prediction = self._wind_predictions[-1]
         # else:
-        #     wind_prediction = self._all_ov
+        #     wind_prediction = self._wind_predictions
         return wind_prediction
+
+    def get_masked_input(self):
+        input = self._inputs[-1]
+        sparse_mask = input[4, :].unsqueeze(0).clone()
+        masked_input = sparse_mask.repeat(3, 1, 1, 1) * input[1:4, :, :]
+        return masked_input
 
     def plot_wind_profile(self):
         fig, ax = plt.subplots(4, 4)
@@ -85,7 +93,7 @@ class WindOptimiserOutput:
     def plot_final_values(self):
         # Plot final values and associated losses
         fig, ax = plt.subplots()
-        for ov, loss in zip(self._all_ov, self._losses):
+        for ov, loss in zip(self._wind_predictions, self._losses):
             neg_scale = ov[:, 1] < 0
             ov[neg_scale, 0] += np.pi
             ov[neg_scale, 1] *= -1
@@ -164,7 +172,7 @@ class WindOptimiserOutput:
         # Plot best wind estimate
         fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt.labels.to(self._device),
                                                self.wind_opt.terrain.network_terrain.squeeze(0),
-                                               self._save_output, self._add_sparse_mask)
+                                               self._save_output, self._add_sparse_mask_row, self._masked_input)
 
         if self._save_output:
             self.pp.savefig(fig)
@@ -174,7 +182,7 @@ class WindOptimiserOutput:
     def print_losses(self):
         # Get minimum losses
         min_losses = []
-        for o, loss, ov in zip(self._optimisers, self._losses, self._all_ov):
+        for o, loss, ov in zip(self._optimisers, self._losses, self._wind_predictions):
             min_loss = loss.min()
             idx = np.argmin(loss)
             opt_var = ov[idx, :]
