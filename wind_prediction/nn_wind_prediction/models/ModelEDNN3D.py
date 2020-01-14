@@ -39,6 +39,7 @@ class ModelEDNN3D(nn.Module):
     __default_use_nut = False
     __default_grid_size = [1, 1, 1]
     __default_use_sparse_mask = False
+    __default_use_sparse_convolution = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -175,6 +176,13 @@ class ModelEDNN3D(nn.Module):
             self.__use_sparse_mask = self.__default_use_sparse_mask
             if verbose:
                 print('EDNN3D: use_sparse_mask not present in kwargs, using default value:', self.__default_use_sparse_mask)
+
+        try:
+            self.__use_sparse_convolution = kwargs['use_sparse_convolution']
+        except KeyError:
+            self.__use_sparse_convolution = self.__default_use_sparse_convolution
+            if verbose:
+                print('EDNN3D: use_sparse_convolution not present in kwargs, using default value:', self.__default_use_sparse_convolution)
 
         try:
             self.__use_turbulence = kwargs['use_turbulence']
@@ -321,6 +329,9 @@ class ModelEDNN3D(nn.Module):
             self.__pooling = nn.MaxPool3d(1, stride=2)
         else:
             raise ValueError('The pooling method value is invalid: ' + self.__pooling_method)
+        # mask pooling
+        if self.__use_sparse_convolution:
+            self.__mask_pooling = nn.MaxPool3d(1, stride=2)
 
     def new_epoch_callback(self, epoch):
         # nothing to do here
@@ -362,9 +373,10 @@ class ModelEDNN3D(nn.Module):
 
     def forward(self, x):
         if self.__use_sparse_mask:
-            # apply sparse mask
+            # # apply sparse mask
             sparse_mask = x[:, -1, :].unsqueeze(1).clone()
             x[:, 1:-1, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:-1, :]
+            # sparse_mask = x[:, -1, :].unsqueeze(1).clone()
 
         if self.__use_terrain_mask:
             # store the terrain data
@@ -374,9 +386,21 @@ class ModelEDNN3D(nn.Module):
         x_skip = []
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
-                x = self.__activation(self.__conv[i](self.__pad_conv(x)))
-                x_skip.append(x.clone())
-                x = self.__pooling(x)
+                if self.__use_sparse_convolution:
+                    # sparse convolution
+                    x[:, 1:-1, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:-1, :]
+                    x = self.__conv[i](self.__pad_conv(x))
+
+                    weights = torch.ones_like(self.__conv[i].weight[:, 0, :]).unsqueeze(1)
+                    norm = F.conv3d(self.__pad_conv(sparse_mask), weights, bias=None, stride=self.__conv[i].stride,
+                                    padding=self.__conv[i].padding, dilation=self.__conv[i].dilation)
+                    norm = torch.clamp(norm, min=1e-5)
+                    norm = 1. / norm
+                    x[:, 1:, :] = norm.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:, :]
+                else:
+                    x = self.__activation(self.__conv[i](self.__pad_conv(x)))
+                    x_skip.append(x.clone())
+                    x = self.__pooling(x)
 
         else:
             for i in range(self.__n_downsample_layers):

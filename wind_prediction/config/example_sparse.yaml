@@ -134,4 +134,5 @@ model:
 
         # sparse input params
         use_sparse_mask: True,
+        use_sparse_convolution: False
     }
