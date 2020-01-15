@@ -190,7 +190,7 @@ class PlotUtils():
         if masked_input is not None:
             self.__masked_input = np.ma.MaskedArray(np.zeros(masked_input.shape))
             is_mask = np.logical_not(masked_input[0].cpu().numpy().astype(bool))
-            for i, channel in enumerate(input.cpu()):
+            for i, channel in enumerate(masked_input.cpu()):
                 self.__masked_input[i] = np.ma.masked_where(is_mask, channel)
         else:
             self.__masked_input = masked_input
