@@ -26,7 +26,7 @@ class WindOptimiserOutput:
         # self._names = self.get_names()
         # self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
         self._save_output = True
-        self._add_sparse_mask_row = False
+        self._add_sparse_mask_row = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
 

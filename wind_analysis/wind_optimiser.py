@@ -267,10 +267,12 @@ class WindOptimiser(object):
         # Copy of the true wind labels
         wind = self.labels.clone()
         channels, nx, ny, nz = wind.shape
-        # percentage = (self._wind_args.params['scattered_points']['initial_percentage'] + p) / 100
-        # boolean_terrain = self.binary_terrain.clone().detach().cpu().numpy()
+        boolean_terrain = self.binary_terrain.clone().detach().cpu().numpy()
         # Change (percentage) of False values in binary terrain to True
-        sparse_mask = np.random.choice([0, 1], size=(1, nx, ny, nz), p=[1-p, p])
+        mask = [not elem if (not elem and random.random() < p) else elem for elem in
+                boolean_terrain.flat]
+        sparse_mask = np.resize(mask, (1, nx, ny, nz)) * 1
+        # sparse_mask = np.random.choice([0, 1], size=(1, nx, ny, nz), p=[1-p, p])
         sparse_wind_mask = torch.from_numpy(sparse_mask.astype(np.float32))
         augmented_wind = torch.cat(([wind, sparse_wind_mask]))
         return augmented_wind.to(self._device)
@@ -671,11 +673,12 @@ class WindOptimiser(object):
                 t += 1
         else:
             input = torch.cat([self.terrain.network_terrain, wind_input])
+            original_input = input.clone()
             output = self.run_prediction(input)
             loss = self.evaluate_loss(output)
             outputs.append(output)
             losses.append(loss)
-            inputs.append(input)
+            inputs.append(original_input)
             print(' percentage: ', self._wind_args.params['scattered_points']['final_percentage'],
                   ' loss: ', loss.item())
 
