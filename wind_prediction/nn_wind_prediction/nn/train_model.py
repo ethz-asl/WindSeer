@@ -9,7 +9,6 @@ import time
 import torch
 from torch.nn.functional import mse_loss
 import nn_wind_prediction.utils as utils
-import builtins
 
 should_exit = False
 sig_dict = dict((k, v) for v, k in reversed(sorted(signal.__dict__.items())) if v.startswith('SIG') and not v.startswith('SIG_'))
@@ -27,7 +26,6 @@ def signal_handler(sig, frame):
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
                 save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss,
-                apply_curriculum_training,
                 log_loss_components, model_directory, use_writer, predict_uncertainty,
                 uncertainty_train_mode, start_epoch=0):
     '''
@@ -112,11 +110,6 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
         # adjust the learning rate if necessary
         scheduler_lr.step()
 
-        # TODO: builins.curriculum_set is a temporary workaround. Should not be done like this!
-        if apply_curriculum_training:
-            builtins.curriculum_set = epoch//50
-            if builtins.curriculum_set > 9:
-                builtins.curriculum_set = 9
         for i, data in enumerate(loader_trainset, 0):
             if should_exit:
                 break

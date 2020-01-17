@@ -84,9 +84,7 @@ class EDNNParameters(object):
                 'loss_weighting_fn': self.loss['loss_weighting_fn'],
                 'create_sparse_mask': self.data['create_sparse_mask'],
                 'percentage_of_sparse_data': self.data['percentage_of_sparse_data'],
-                'add_gaussian_noise': self.data['add_gaussian_noise'],
-                'apply_curriculum_training': self.data['apply_curriculum_training'],
-                'curriculum_percentages': self.data['curriculum_percentages']}
+                'add_gaussian_noise': self.data['add_gaussian_noise']}
 
     def model_kwargs(self):
         return self.model['model_args']
