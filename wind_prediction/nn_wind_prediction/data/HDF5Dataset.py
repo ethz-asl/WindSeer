@@ -344,18 +344,25 @@ class HDF5Dataset(Dataset):
                 sample = h5_file[self.__memberslist[i]]
                 # load the terrain
                 terrain_data = [torch.from_numpy(sample['terrain'][...]).float().unsqueeze(0) / self.__scaling_dict['terrain']]
-                channels, nx, ny, nz = terrain_data[0].shape
+                terrain = terrain_data[0]
+                channels, nx, ny, nz = terrain.shape
                 # percentage of sparse data
                 percentage = self.__percentage_of_sparse_data
                 # percentage = random.randint(1, 10)/100
-                boolean_terrain = terrain_data[0].clone().detach().cpu().numpy() <= 0
+                # boolean_terrain = terrain_data[0].clone().detach().cpu().numpy() <= 0
                 # Change (percentage) of False values in boolean terrain to True
                 # mask1 = np.logical_and(boolean_terrains, random.random() < percentage)
-                mask = [not elem if (not elem and random.random() < percentage) else elem for elem in
-                        boolean_terrain.flat]
-                sparse_mask = np.resize(mask, (channels, nx, ny, nz)) * 1
-                sparse_wind_masks += [torch.from_numpy(sparse_mask.astype(np.float32))]
+                # mask = [not elem if (not elem and random.random() < percentage) else elem for elem in
+                #         boolean_terrain.flat]
+                # sparse_mask = np.resize(mask, (channels, nx, ny, nz)) * 1
                 # sparse_mask = np.random.choice([0, 1], size=(batches, 1, nx, ny, nz), p=[1-percentage, percentage])
+                # sparse_wind_masks += [torch.from_numpy(sparse_mask.astype(np.float32))]
+                numel = int(terrain.numel() * percentage)
+                idx = torch.nonzero(terrain)
+                select = torch.randperm(idx.shape[0])
+                mask = torch.zeros_like(terrain)
+                mask[idx[select][:numel].split(1, dim=1)] = 1
+                sparse_wind_masks += [mask.float()]
             self.__sparse_masks = torch.cat(sparse_wind_masks, 0)
 
         # initialize random number generator used for the subsampling

@@ -116,7 +116,8 @@ class WindOptimiser(object):
         self._loss_fn = self.get_loss_function()
         # Load data
         if self.flag.test_simulated_data:
-            self.original_input, self.labels, self.scale, self.data_set_name, self.grid_size, self.binary_terrain \
+            self.original_input, self.labels, self.scale, self.data_set_name, self.grid_size, \
+                self.binary_terrain, self.original_terrain \
                 = self.load_data_set()
             self.terrain = self.get_cfd_terrain()
         if self.flag.test_flight_data:
@@ -247,7 +248,8 @@ class WindOptimiser(object):
         grid_size = data.get_grid_size(self._cfd_args.params['testset_name'])
         # Convert distance transformed matrix back to binary matrix
         binary_terrain = data_set[0][0, :, :, :] <= 0
-        return input_, label, scale, name, grid_size, binary_terrain
+        terrain = data_set[0][0, :, :, :]
+        return input_, label, scale, name, grid_size, binary_terrain, terrain
 
     def get_cfd_terrain(self):
         nx, ny, nz = self.binary_terrain.shape
@@ -267,13 +269,20 @@ class WindOptimiser(object):
         # Copy of the true wind labels
         wind = self.labels.clone()
         channels, nx, ny, nz = wind.shape
-        boolean_terrain = self.binary_terrain.clone().detach().cpu().numpy()
+        # boolean_terrain = self.binary_terrain.clone().detach().cpu().numpy()
+        terrain = self.original_terrain
         # Change (percentage) of False values in binary terrain to True
-        mask = [not elem if (not elem and random.random() < p) else elem for elem in
-                boolean_terrain.flat]
-        sparse_mask = np.resize(mask, (1, nx, ny, nz)) * 1
-        # sparse_mask = np.random.choice([0, 1], size=(1, nx, ny, nz), p=[1-p, p])
-        sparse_wind_mask = torch.from_numpy(sparse_mask.astype(np.float32))
+        # mask = [not elem if (not elem and random.random() < p) else elem for elem in
+        #         boolean_terrain.flat]
+        # sparse_mask = np.resize(mask, (1, nx, ny, nz)) * 1
+        # # sparse_mask = np.random.choice([0, 1], size=(1, nx, ny, nz), p=[1-p, p])
+        # sparse_wind_mask = torch.from_numpy(sparse_mask.astype(np.float32))
+        numel = int(terrain.numel() * p)
+        idx = torch.nonzero(terrain)
+        select = torch.randperm(idx.shape[0])
+        mask = torch.zeros_like(terrain)
+        mask[idx[select][:numel].split(1, dim=1)] = 1
+        sparse_wind_mask = mask.float().unsqueeze(0)
         augmented_wind = torch.cat(([wind, sparse_wind_mask]))
         return augmented_wind.to(self._device)
 
