@@ -26,19 +26,27 @@ def signal_handler(sig, frame):
 def add_sparse_mask(inputs, labels):
     batches, channels, nx, ny, nz = inputs.shape
     inputs[:, 1:4, :] = labels
-    masks = []
-    terrain = inputs[:, 0, :]
-    for i in range(batches):
-        p = random.random() / 10
-        if p < 0.001:
-            p = 0.001
-        numel = int(terrain[i].numel() * p)
-        idx = torch.nonzero(terrain[i])
-        select = torch.randperm(idx.shape[0])
-        mask = torch.zeros_like(terrain[i])
-        mask[idx[select][:numel].split(1, dim=1)] = 1
-        masks += [mask.unsqueeze(0)]
-    out_mask = torch.cat(masks, 0)
+    # masks = []
+    # terrain = inputs[:, 0, :]
+    # for i in range(batches):
+    #     p = random.random() / 10
+    #     if p < 0.001:
+    #         p = 0.001
+    #     numel = int(terrain[i].numel() * p)
+    #     idx = torch.nonzero(terrain[i])
+    #     select = torch.randperm(idx.shape[0])
+    #     mask = torch.zeros_like(terrain[i])
+    #     mask[idx[select][:numel].split(1, dim=1)] = 1
+    #     masks += [mask.unsqueeze(0)]
+    # out_mask = torch.cat(masks, 0)
+    p = random.random() / 10
+    if p < 0.001:
+        p = 0.001
+    boolean_terrain = inputs[:, 0, :] > 0
+    uniform_mask = torch.FloatTensor(batches, nx, ny, nz).uniform_()
+    pre_mask = boolean_terrain * uniform_mask
+    mask = pre_mask > (1 - p)
+    out_mask = mask.float()
     return torch.cat(([inputs, out_mask.unsqueeze(1)]), dim=1)
 
 
