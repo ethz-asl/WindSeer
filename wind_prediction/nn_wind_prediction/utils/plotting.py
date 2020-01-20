@@ -236,8 +236,8 @@ class PlotUtils():
                 im.set_extent([0, self.__uncertainty.shape[2], 0, self.__uncertainty.shape[1]])
 
             for i, im in enumerate(self.__mask_images):
-                im.set_data(self.__masked_input[i, slice_number, :, :])
-                im.set_extent([0, self.__masked_input.shape[2], 0, self.__uncertainty.shape[1]])
+                im.set_data(self.__masked_input[i, :, :, slice_number])
+                im.set_extent([0, self.__masked_input.shape[2], 0, self.__masked_input.shape[1]])
 
             # NUT
             for i, im in enumerate(self.__nut_images):
@@ -264,7 +264,7 @@ class PlotUtils():
 
             for i, im in enumerate(self.__mask_images):
                 im.set_data(self.__masked_input[i, slice_number, :, :])
-                im.set_extent([0, self.__masked_input.shape[3], 0, self.__uncertainty.shape[2]])
+                im.set_extent([0, self.__masked_input.shape[3], 0, self.__masked_input.shape[2]])
 
             # NUT
             for i, im in enumerate(self.__nut_images):
@@ -289,8 +289,8 @@ class PlotUtils():
                 im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[1]])
 
             for i, im in enumerate(self.__mask_images):
-                im.set_data(self.__masked_input[i, slice_number, :, :])
-                im.set_extent([0, self.__masked_input.shape[3], 0, self.__uncertainty.shape[1]])
+                im.set_data(self.__masked_input[i, :, slice_number, :])
+                im.set_extent([0, self.__masked_input.shape[3], 0, self.__masked_input.shape[1]])
 
             # NUT
             for i, im in enumerate(self.__nut_images):
