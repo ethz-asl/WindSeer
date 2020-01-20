@@ -42,7 +42,7 @@ if wind_opt.flag.test_simulated_data:
     elif wind_opt.flag.use_scattered_points:
         wind_predictions, losses, inputs = wind_opt.scattered_points_optimisation()
     elif wind_opt.flag.use_trajectory:
-        wind_predictions, losses = wind_opt.cfd_trajectory_optimisation()
+        wind_predictions, losses, inputs = wind_opt.cfd_trajectory_optimisation()
 if wind_opt.flag.test_flight_data:
     if wind_opt.flag.predict_ulog:
         wind_predictions, losses = wind_opt.flight_ulog_optimisation()

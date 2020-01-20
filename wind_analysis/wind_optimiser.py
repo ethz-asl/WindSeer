@@ -310,6 +310,14 @@ class WindOptimiser(object):
         wind_zeros[wind_mask] = 0
         return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device)
 
+    def add_trajectory_mask(self):
+        # Copy of the true wind labels
+        wind = self._wind_zeros.clone()
+        sparse_trajectory_mask = self._wind_mask[0].__invert__().float()
+        augmented_wind = torch.cat(([wind, sparse_trajectory_mask.unsqueeze(0)]))
+        return augmented_wind.to(self._device)
+
+
     def get_ulog_wind_blocks(self, ulog_data):
         #print('Getting binned wind blocks...', end='', flush=True)
         #t_start = time.time()
@@ -694,8 +702,27 @@ class WindOptimiser(object):
         return outputs, losses, inputs
 
     def cfd_trajectory_optimisation(self):
-        outputs, losses = 0, 1
-        return outputs, losses
+        outputs = []
+        losses = []
+        inputs = []
+        # get wind zeros
+        wind_blocks = self._wind_blocks.clone()
+        wind_zeros = self._wind_zeros.clone()
+        # add noise
+        if self.flag.add_gaussian_noise:
+            wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
+        # create mask
+        wind_input = self.add_trajectory_mask()
+        # run prediction
+        input = torch.cat([self.terrain.network_terrain, wind_input])
+        original_input = input.clone()
+        output = self.run_prediction(input)
+        loss = self.evaluate_loss(output)
+        outputs.append(output)
+        losses.append(loss)
+        inputs.append(original_input)
+        print(' loss: ', loss.item())
+        return outputs, losses, inputs
 
     def flight_ulog_optimisation(self):
         # Sliding window variables

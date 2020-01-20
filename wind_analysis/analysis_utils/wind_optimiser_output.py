@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import RegularGridInterpolator
 from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates
 import datetime
@@ -25,7 +26,7 @@ class WindOptimiserOutput:
         # self._grads = grads
         # self._names = self.get_names()
         # self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
-        self._save_output = True
+        self._save_output = False
         self._add_sparse_mask_row = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
@@ -210,6 +211,29 @@ class WindOptimiserOutput:
                     print("Best optimization method: {0}".format(
                         self._names[self._best_method_index]))
 
+    def plot_trajectory(self):
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+
+        # trajectory
+        indeces = self._inputs[0][4,:].nonzero()
+        wind_indeces = np.array(indeces.cpu().detach().numpy())
+        xs = wind_indeces[:, 0]
+        ys = wind_indeces[:, 1]
+        zs = wind_indeces[:, 2]
+        # ax.scatter(xs, ys, zs, label='trajectory curve')
+        # ax.plot(xs, ys, zs, label='trajectory curve')
+
+        # terrain
+        indeces = self._inputs[0][0,:]
+        terrain_indeces = np.array(indeces.cpu().detach().numpy())
+        pos = np.where(terrain_indeces > 0)
+        ax.scatter(pos[0], pos[1], pos[2], c='black')
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
+
     def close(self):
             self.pp.close()
 
@@ -222,6 +246,8 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         self.plot_best_wind_estimate()
+        self.plot_trajectory()
+
 
         if self._save_output:
             self.close()
