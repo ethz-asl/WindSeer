@@ -17,6 +17,7 @@ import torch
 import os
 import time
 import copy
+import math
 
 class TerrainBlock(object):
     def __init__(self, x_terr, y_terr, z_terr, h_terr, full_block, device=None, boolean_terrain=False):
@@ -287,9 +288,29 @@ class WindOptimiser(object):
         return augmented_wind.to(self._device)
 
     def get_trajectory_wind_blocks(self):
-        x = self._wind_args.params['trajectory']['x']
-        y = self._wind_args.params['trajectory']['y']
-        z = self._wind_args.params['trajectory']['z']
+        # x = self._wind_args.params['trajectory']['x']
+        # y = self._wind_args.params['trajectory']['y']
+        # z = self._wind_args.params['trajectory']['z']
+        # x, y, z = []
+        # for i in range(0, 100, 2):
+        #     if i%2 == 0:
+        #         x.append(10+i)
+        #         y.append(10+i)
+        #         z.append(50)
+        #     elif (i+1)%2 == 0:
+        #         x.append(10+i)
+        #         y.append(900+i)
+        #         z.append(50)
+        dot = 400
+        d = dot * 0.1
+        x = []
+        y = []
+        z = []
+        for i in range(dot):
+            t = i / d * np.pi
+            x.append(750 + t * math.cos(t) * 19)
+            y.append(750 + t * math.sin(t) * 19)
+            z.append(0 + 700/dot*i)
         num_points = self._wind_args.params['trajectory']['num_points']
         x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
         # Get the grid points and winds along the trajectory

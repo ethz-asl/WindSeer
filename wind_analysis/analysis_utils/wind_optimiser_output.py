@@ -217,18 +217,18 @@ class WindOptimiserOutput:
 
         # trajectory
         indeces = self._inputs[0][4,:].nonzero()
-        wind_indeces = np.array(indeces.cpu().detach().numpy())
-        xs = wind_indeces[:, 0]
-        ys = wind_indeces[:, 1]
-        zs = wind_indeces[:, 2]
-        # ax.scatter(xs, ys, zs, label='trajectory curve')
+        wind_indices = np.array(indeces.cpu().detach().numpy())
+        xs = wind_indices[:, 0]
+        ys = wind_indices[:, 1]
+        zs = wind_indices[:, 2]
+        ax.scatter(xs, ys, zs, label='trajectory curve')
         # ax.plot(xs, ys, zs, label='trajectory curve')
 
         # terrain
         indeces = self._inputs[0][0,:]
         terrain_indeces = np.array(indeces.cpu().detach().numpy())
-        pos = np.where(terrain_indeces > 0)
-        ax.scatter(pos[0], pos[1], pos[2], c='black')
+        pos = np.where(terrain_indeces == 0)
+        # ax.scatter(pos[0], pos[1], pos[2], c='grey')
         if self._save_output:
             self.pp.savefig(fig)
         else:
@@ -245,8 +245,8 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
+        # self.plot_trajectory()
         self.plot_best_wind_estimate()
-        self.plot_trajectory()
 
 
         if self._save_output:
