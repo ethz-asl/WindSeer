@@ -237,6 +237,12 @@ class WindOptimiser(object):
         test_set = nn_data.HDF5Dataset(self._cfd_args.params['testset_name'],
                                        augmentation=False, return_grid_size=True,
                                        **self.params.Dataset_kwargs())
+        # print names of files in test_set
+        print_names = False
+        if print_names:
+            for i in range(test_set.__len__()):
+                name = test_set.get_name(i)
+                print(i, name)
         # Get data set from test set
         data_set = test_set[self._cfd_args.params['index']]
         input_ = data_set[0]
@@ -660,7 +666,7 @@ class WindOptimiser(object):
         original_input = self.original_input.to(self._device)
         labels = self.labels.to(self._device)
         output = self.run_prediction(original_input)
-        self.rescale_prediction(output, labels)
+        # self.rescale_prediction(output, labels)
         loss = self._loss_fn(output, labels)
         print('Loss value for original input is: ', loss.item())
         return output, loss
@@ -714,6 +720,7 @@ class WindOptimiser(object):
             original_input = input.clone()
             output = self.run_prediction(input)
             loss = self.evaluate_loss(output)
+            self.rescale_prediction(output, self.labels)
             outputs.append(output)
             losses.append(loss)
             inputs.append(original_input)
