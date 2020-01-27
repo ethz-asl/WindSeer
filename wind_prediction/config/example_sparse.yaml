@@ -129,6 +129,6 @@ model:
         submodel_terrain_mask: False,
 
         # sparse input params
-        use_sparse_mask: True,
-        use_sparse_convolution: False
+        use_sparse_mask: False,
+        use_sparse_convolution: True
     }

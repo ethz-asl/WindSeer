@@ -393,7 +393,7 @@ class HDF5Dataset(Dataset):
 
                 # turb handling
                 if 'turb' in self.__channels_to_load:
-                    data[self.__channels_to_load.index('turb'), :, :, :] /= scale * scale
+                    data[self.__channels_to_load.index('turb'), :, :, :] /= scale*scale
 
                 # p handling
                 if 'p' in self.__channels_to_load:
