@@ -378,7 +378,7 @@ class ModelEDNN3D(nn.Module):
             x[:, 1:-1, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:-1, :]
 
         if self.__use_sparse_convolution:
-            # remove mask from inputs and treat it separately
+            # separate mask from inputs and treat it separately
             sparse_mask = x[:, -1, :].unsqueeze(1).clone()
             x = x[:, :-1, :]
 
@@ -395,7 +395,6 @@ class ModelEDNN3D(nn.Module):
                 if self.__use_sparse_convolution:  # sparse convolution operation
                     # elementwise multiplication
                     sparse_mask_expanded = sparse_mask.expand_as(x)
-                    sparse_mask_skip.append(sparse_mask_expanded.clone())
                     x = sparse_mask_expanded * x
 
                     # convolution
@@ -413,6 +412,7 @@ class ModelEDNN3D(nn.Module):
                     # activation
                     x = self.__activation(x)
                     x_skip.append(x.clone())
+                    sparse_mask_skip.append(sparse_mask.expand_as(x).clone())
 
                     # pooling
                     x = self.__pooling(x)
@@ -525,7 +525,7 @@ class ModelEDNN3D(nn.Module):
                                                                     mode=self.__interpolation_mode,
                                                                     align_corners=self.__align_corners)
                         sparse_mask_expanded_interp = torch.gt(sparse_mask_expanded_interp, 0).float()
-                        norm = F.conv3d(self.__pad_conv(torch.cat([sparse_mask_expanded_interp, sparse_mask_skip[i]], 1)),
+                        norm = F.conv3d(self.__pad_deconv(torch.cat([sparse_mask_expanded_interp, sparse_mask_skip[i]], 1)),
                                         weights, bias=None, stride=self.__deconv1[i].stride,
                                         padding=self.__deconv1[i].padding, dilation=self.__deconv1[i].dilation)
                         norm = torch.clamp(norm, min=1e-5)
@@ -576,7 +576,7 @@ class ModelEDNN3D(nn.Module):
                                                                     mode=self.__interpolation_mode,
                                                                     align_corners=self.__align_corners)
                         sparse_mask_expanded_interp = torch.gt(sparse_mask_expanded_interp, 0).float()
-                        norm = F.conv3d(self.__pad_conv(torch.cat([sparse_mask_expanded_interp, sparse_mask_skip[i]], 1)),
+                        norm = F.conv3d(self.__pad_deconv(torch.cat([sparse_mask_expanded_interp, sparse_mask_skip[i]], 1)),
                                         weights, bias=None, stride=self.__deconv1[i].stride,
                                         padding=self.__deconv1[i].padding, dilation=self.__deconv1[i].dilation)
                         norm = torch.clamp(norm, min=1e-5)
