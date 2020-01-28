@@ -248,17 +248,21 @@ class ModelEDNN3D(nn.Module):
         except KeyError:
             pass
 
+        if self.__use_sparse_convolution:
+            use_bias = False
+        else:
+            use_bias = True
         # down-convolution layers
         self.__conv = nn.ModuleList()
         for i in range(self.__n_downsample_layers):
             if i == 0:
                 self.__conv += [nn.Conv3d(self.__num_inputs,
                                           self.__n_first_conv_channels,
-                                          self.__filter_kernel_size)]
+                                          self.__filter_kernel_size, bias=use_bias)]
             else:
                 self.__conv += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
                                           int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
-                                          self.__filter_kernel_size)]
+                                          self.__filter_kernel_size, bias=use_bias)]
 
         # fully connected layers
         if self.__use_fc_layers:
@@ -272,10 +276,10 @@ class ModelEDNN3D(nn.Module):
         else:
             self.__c1 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
                                   int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
-                                  self.__filter_kernel_size)
+                                  self.__filter_kernel_size, bias=use_bias)
             self.__c2 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
                                   int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
-                                  self.__filter_kernel_size)
+                                  self.__filter_kernel_size, bias=use_bias)
 
         # up-convolution layers
         self.__deconv1 = nn.ModuleList()
@@ -284,28 +288,31 @@ class ModelEDNN3D(nn.Module):
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1)]
-                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1)]
+                    self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1, bias=use_bias)]
                 else:
                     self.__deconv1 += [nn.Conv3d(2*int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
-                                                 self.__filter_kernel_size+1)]
+                                                 self.__filter_kernel_size+1, bias=use_bias)]
                     self.__deconv2 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
-                                                 self.__filter_kernel_size+1)]
+                                                 self.__filter_kernel_size+1, bias=use_bias)]
 
         else:
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1)]
+                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1, bias=use_bias)]
                 else:
                     self.__deconv1 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
-                                                 self.__filter_kernel_size+1)]
+                                                 self.__filter_kernel_size+1, bias=use_bias)]
+
+        # bias for sparse convolution
+        self.bias = nn.Parameter(torch.zeros(self.__num_outputs).float(), requires_grad=True)
 
         # mapping layer
         if self.__use_mapping_layer:
-            self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
+            self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs, bias=use_bias) # for each channel a separate filter
 
         # padding modules
         padding_required = int((self.__filter_kernel_size - 1) / 2)
@@ -365,7 +372,7 @@ class ModelEDNN3D(nn.Module):
                 except:
                     pass
                 try:
-                    torch.nn.init.normal_(m.bias, mean = 0.0, std = 0.02)
+                    torch.nn.init.normal_(m.bias, mean=0.0, std=0.02)
                 except:
                     pass
 
@@ -408,6 +415,7 @@ class ModelEDNN3D(nn.Module):
                     norm = torch.clamp(norm, min=1e-5)
                     norm = 1. / norm
                     x = norm * x
+                    # x = self.bias.view(1, self.bias.size(0), 1, 1).expand_as(x)
 
                     # activation
                     x = self.__activation(x)
