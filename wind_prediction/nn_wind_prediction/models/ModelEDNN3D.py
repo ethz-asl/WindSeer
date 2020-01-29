@@ -254,15 +254,18 @@ class ModelEDNN3D(nn.Module):
             use_bias = True
         # down-convolution layers
         self.__conv = nn.ModuleList()
+        self.__bias_conv = nn.ParameterList()
         for i in range(self.__n_downsample_layers):
             if i == 0:
                 self.__conv += [nn.Conv3d(self.__num_inputs,
                                           self.__n_first_conv_channels,
                                           self.__filter_kernel_size, bias=use_bias)]
+                self.__bias_conv += [nn.Parameter(torch.zeros(1, self.__n_first_conv_channels, 1, 1, 1).float().cuda(), requires_grad=True)]
             else:
                 self.__conv += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
                                           int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                           self.__filter_kernel_size, bias=use_bias)]
+                self.__bias_conv += [nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels*(self.__channel_multiplier**i)), 1, 1, 1).float().cuda(), requires_grad=True)]
 
         # fully connected layers
         if self.__use_fc_layers:
@@ -277,26 +280,35 @@ class ModelEDNN3D(nn.Module):
             self.__c1 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
                                   int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
                                   self.__filter_kernel_size, bias=use_bias)
+            self.__bias_c1 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)), 1, 1, 1).float().cuda(), requires_grad=True)
             self.__c2 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
                                   int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
                                   self.__filter_kernel_size, bias=use_bias)
+            self.__bias_c2 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))), 1, 1, 1).float().cuda(), requires_grad=True)
 
         # up-convolution layers
         self.__deconv1 = nn.ModuleList()
         self.__deconv2 = nn.ModuleList()
 
+        self.__bias_deconv1 = nn.ParameterList()
+        self.__bias_deconv2 = nn.ParameterList()
+
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
                 if i == 0:
                     self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, self.__n_first_conv_channels, 1, 1, 1).float().cuda(), requires_grad=True)]
                     self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__bias_deconv2 += [nn.Parameter(torch.zeros(1, self.__num_outputs, 1, 1, 1).float().cuda(), requires_grad=True)]
                 else:
                     self.__deconv1 += [nn.Conv3d(2*int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels*(self.__channel_multiplier**i)), 1, 1, 1).float().cuda(), requires_grad=True)]
                     self.__deconv2 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
                                                  self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__bias_deconv2 += [nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))), 1, 1, 1).float().cuda(), requires_grad=True)]
 
         else:
             for i in range(self.__n_downsample_layers):
@@ -308,7 +320,7 @@ class ModelEDNN3D(nn.Module):
                                                  self.__filter_kernel_size+1, bias=use_bias)]
 
         # bias for sparse convolution
-        self.bias = nn.Parameter(torch.zeros(self.__num_outputs).float(), requires_grad=True)
+        # self.__bias = nn.Parameter(torch.zeros(1, self.__num_inputs, 1, 1, 1).float(), requires_grad=True)
 
         # mapping layer
         if self.__use_mapping_layer:
@@ -415,7 +427,10 @@ class ModelEDNN3D(nn.Module):
                     norm = torch.clamp(norm, min=1e-5)
                     norm = 1. / norm
                     x = norm * x
-                    # x = self.bias.view(1, self.bias.size(0), 1, 1).expand_as(x)
+
+                    # add bias
+                    bias = self.__bias_conv[i].expand_as(x)
+                    x = x + bias
 
                     # activation
                     x = self.__activation(x)
@@ -448,6 +463,10 @@ class ModelEDNN3D(nn.Module):
                     norm = torch.clamp(norm, min=1e-5)
                     norm = 1. / norm
                     x = norm * x
+
+                    # add bias
+                    bias = self.__bias_conv[i].expand_as(x)
+                    x = x + bias
 
                     # activation
                     x = self.__activation(x)
@@ -484,6 +503,10 @@ class ModelEDNN3D(nn.Module):
                 norm = 1. / norm
                 x = norm * x
 
+                # add bias
+                bias = self.__bias_c1.expand_as(x)
+                x = x + bias
+
                 # activation
                 x = self.__activation(x)
 
@@ -503,6 +526,10 @@ class ModelEDNN3D(nn.Module):
                 norm = torch.clamp(norm, min=1e-5)
                 norm = 1. / norm
                 x = norm * x
+
+                # add bias
+                bias = self.__bias_c2.expand_as(x)
+                x = x + bias
 
                 # activation
                 x = self.__activation(x)
@@ -540,6 +567,10 @@ class ModelEDNN3D(nn.Module):
                         norm = 1. / norm
                         x = norm * x
 
+                        # add bias
+                        bias = self.__bias_deconv1[i].expand_as(x)
+                        x = x + bias
+
                         # activation
                         x = self.__activation(x)
 
@@ -565,6 +596,10 @@ class ModelEDNN3D(nn.Module):
                         norm = torch.clamp(norm, min=1e-5)
                         norm = 1. / norm
                         x = norm * x
+
+                        # add bias
+                        bias = self.__bias_deconv2[i].expand_as(x)
+                        x = x + bias
                     else:
                         # Deconv 1
                         # elementwise multiplication
@@ -591,6 +626,10 @@ class ModelEDNN3D(nn.Module):
                         norm = 1. / norm
                         x = norm * x
 
+                        # add bias
+                        bias = self.__bias_deconv1[i].expand_as(x)
+                        x = x + bias
+
                         # activation
                         x = self.__activation(x)
 
@@ -616,6 +655,10 @@ class ModelEDNN3D(nn.Module):
                         norm = torch.clamp(norm, min=1e-5)
                         norm = 1. / norm
                         x = norm * x
+
+                        # add bias
+                        bias = self.__bias_deconv2[i].expand_as(x)
+                        x = x + bias
 
                         # activation
                         x = self.__activation(x)
@@ -658,6 +701,10 @@ class ModelEDNN3D(nn.Module):
                         norm = 1. / norm
                         x = norm * x
 
+                        # add bias
+                        bias = self.__bias_deconv1[i].expand_as(x)
+                        x = x + bias
+
                         # mask upsampling
                         sparse_mask_interpolated = F.interpolate(sparse_mask, scale_factor=2,
                                                                  mode=self.__interpolation_mode,
@@ -687,6 +734,10 @@ class ModelEDNN3D(nn.Module):
                         norm = torch.clamp(norm, min=1e-5)
                         norm = 1. / norm
                         x = norm * x
+
+                        # add bias
+                        bias = self.__bias_deconv1[i].expand_as(x)
+                        x = x + bias
 
                         # activation
                         x = self.__activation(x)
