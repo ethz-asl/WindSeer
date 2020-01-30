@@ -45,6 +45,8 @@ if wind_opt.flag.test_simulated_data:
         wind_predictions, losses, inputs = wind_opt.cfd_trajectory_optimisation()
 if wind_opt.flag.test_flight_data:
     if wind_opt.flag.predict_ulog:
+        wind_predictions, losses, inputs = wind_opt.flight_ulog_prediction()
+    if wind_opt.flag.optimise_ulog:
         wind_predictions, losses = wind_opt.flight_ulog_optimisation()
 
 # Analyse optimised wind

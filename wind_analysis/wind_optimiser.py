@@ -84,9 +84,10 @@ class SelectionFlags(object):
         self.use_scattered_points = wind.params['scattered_points']['use_scattered_points']
         self.use_trajectory = wind.params['trajectory']['use_trajectory_generation']
         self.predict_ulog = wind.params['ulog_flight']['predict_ulog']
+        self.optimise_ulog = wind.params['ulog_flight']['optimise_ulog']
         self.generate_turbulence = noise.params['generate_turbulence']
         self.add_gaussian_noise = noise.params['add_gaussian_noise']
-        self.optimize_corners_individually = optimisation.params['optimise_corners_individually']
+        self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
         self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
         self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
 
@@ -135,6 +136,8 @@ class WindOptimiser(object):
         if self.flag.test_flight_data:
             self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask \
                 = self.get_ulog_wind_blocks(self._ulog_data)
+            # TODO: replace if there are actual labels for flight data
+            self.labels = self._wind_zeros
         # Noise
         if self.flag.add_gaussian_noise:
             self._wind_blocks, self._wind_zeros = self.add_gaussian_noise(self._wind_zeros, self._wind_blocks)
@@ -264,6 +267,7 @@ class WindOptimiser(object):
         y_terr = torch.Tensor([self.grid_size[1]*i for i in range(ny)])
         z_terr = torch.Tensor([self.grid_size[2]*i for i in range(nz)])
         h_terr = torch.Tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2]))
+        h_terr = torch.clamp(h_terr, 0, z_terr[-1])  # make sure height is not bigger than max z_terr
         # Get terrain object
         boolean_terrain = self._model_args.params['boolean_terrain']
         terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain,
@@ -337,11 +341,10 @@ class WindOptimiser(object):
         wind_zeros[wind_mask] = 0
         return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device)
 
-    def add_trajectory_mask(self):
-        # Copy of the true wind labels
+    def add_mask(self):
         wind = self._wind_zeros.clone()
-        sparse_trajectory_mask = self._wind_mask[0].__invert__().float()
-        augmented_wind = torch.cat(([wind, sparse_trajectory_mask.unsqueeze(0)]))
+        sparse_mask = self._wind_mask[0].__invert__().float()
+        augmented_wind = torch.cat(([wind, sparse_mask.unsqueeze(0)]))
         return augmented_wind.to(self._device)
 
 
@@ -416,7 +419,7 @@ class WindOptimiser(object):
         opt_var = [rotation, scale, spline]
         optimisation_variables = [var for var in opt_var if var != []]
         # Replicate optimisation variables for each corner
-        if self.flag.optimize_corners_individually:
+        if self.flag.optimise_corners_individually:
             optimisation_variables = [optimisation_variables[:] for i in range(4)]
 
         return optimisation_variables
@@ -569,7 +572,7 @@ class WindOptimiser(object):
 
     def sliding_window_split(self, window_size=1, response_size=1, step_size=1):
         input_ulog = {}; output_ulog = {}
-        if self.flag.predict_ulog:
+        if self.flag.optimise_ulog:
             for keys, values in self._ulog_data.items():
                 input_batch = values[step_size : step_size+window_size]
                 output_batch = values[step_size+window_size : step_size+window_size+response_size]
@@ -740,7 +743,7 @@ class WindOptimiser(object):
         if self.flag.add_gaussian_noise:
             wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
         # create mask
-        wind_input = self.add_trajectory_mask()
+        wind_input = self.add_mask()
         # run prediction
         input = torch.cat([self.terrain.network_terrain, wind_input])
         original_input = input.clone()
@@ -752,8 +755,23 @@ class WindOptimiser(object):
         print(' loss: ', loss.item())
         return outputs, losses, inputs
 
+    def flight_ulog_prediction(self):
+        outputs, losses, inputs = [], [], []
+
+        # add mask to input
+        wind_input = self.add_mask()
+
+        # run prediction
+        input = torch.cat([self.terrain.network_terrain, wind_input])
+        output = self.run_prediction(input)
+        loss = 1
+        outputs.append(output)
+        losses.append(loss)
+        inputs.append(input)
+        return outputs, losses, inputs
+
     def flight_ulog_optimisation(self):
-        # Sliding window variables
+        # sliding window variables
         window_size = 4
         response_size = 2
         step_size = 1
@@ -761,15 +779,15 @@ class WindOptimiser(object):
 
         for i in range(max_num_windows):
             outputs, losses = [], []
-            # Split data into input and output based on window variables
+            # split data into input and output based on window variables
             input_ulog_data, output_ulog_data = \
                 self.sliding_window_split(window_size, response_size, i*step_size)
 
-            # Bin input log data
+            # bin input log data
             wind_blocks, var_blocks, wind_zeros, wind_mask \
                 = self.get_ulog_wind_blocks(input_ulog_data)
 
-            # Get prediction
+            # get prediction
             wind = wind_zeros.to(self._device)
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
@@ -777,12 +795,12 @@ class WindOptimiser(object):
             input_ = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input_)
 
-            # Interpolate prediction to scattered ulog data locations used for testing
+            # interpolate prediction to scattered ulog data locations used for testing
             grid_dimensions = None
             UlogInterpolator = UlogInterpolation(input_ulog_data, grid_dimensions, self.terrain)
             interpolated_output = UlogInterpolator.interpolate_log_data_from_grid(output, output_ulog_data)
 
-            # Loss
+            # loss
             wind_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
             labels = np.array([output_ulog_data['wn'], output_ulog_data['we'], output_ulog_data['wd']])
             loss = self._loss_fn(torch.Tensor(wind_output).to(self._device), torch.Tensor(labels).to(self._device))

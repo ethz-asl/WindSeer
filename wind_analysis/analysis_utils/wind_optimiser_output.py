@@ -216,7 +216,7 @@ class WindOptimiserOutput:
         ax = fig.gca(projection='3d')
 
         # trajectory
-        indeces = self._inputs[0][4,:].nonzero()
+        indeces = self._inputs[0][4, :].nonzero()
         wind_indices = np.array(indeces.cpu().detach().numpy())
         xs = wind_indices[:, 0]
         ys = wind_indices[:, 1]
@@ -225,10 +225,17 @@ class WindOptimiserOutput:
         # ax.plot(xs, ys, zs, label='trajectory curve')
 
         # terrain
-        indeces = self._inputs[0][0,:]
-        terrain_indeces = np.array(indeces.cpu().detach().numpy())
-        pos = np.where(terrain_indeces == 0)
-        # ax.scatter(pos[0], pos[1], pos[2], c='grey')
+        h_gird = (self.wind_opt.terrain.z_terr[-1] - self.wind_opt.terrain.z_terr[0])/64
+        h_network_terrain = np.floor((self.wind_opt.terrain.h_terr - self.wind_opt.terrain.z_terr[0])/h_gird)
+        if 'torch' in str(h_network_terrain.dtype):
+            h_network_terrain = h_network_terrain.detach().cpu().numpy()
+        nx, ny = h_network_terrain.shape
+        x = np.arange(0, nx, 1)
+        y = np.arange(0, ny, 1)
+        X, Y = np.meshgrid(x, y)
+        ax = fig.gca(projection='3d')
+        ax.plot_surface(X, Y, h_network_terrain, rstride=1, cstride=1, cmap=plt.cm.gray,
+                        linewidth=0)
         if self._save_output:
             self.pp.savefig(fig)
         else:
@@ -245,7 +252,7 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
-        # self.plot_trajectory()
+        self.plot_trajectory()
         self.plot_best_wind_estimate()
 
 
