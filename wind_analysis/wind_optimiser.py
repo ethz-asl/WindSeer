@@ -341,8 +341,11 @@ class WindOptimiser(object):
         wind_zeros[wind_mask] = 0
         return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device)
 
-    def add_mask(self):
-        wind = self._wind_zeros.clone()
+    def add_mask(self, wind_provided=None):
+        if wind_provided is None:
+            wind = self._wind_zeros.clone()
+        else:
+            wind = wind_provided
         sparse_mask = self._wind_mask[0].__invert__().float()
         augmented_wind = torch.cat(([wind, sparse_mask.unsqueeze(0)]))
         return augmented_wind.to(self._device)
@@ -775,7 +778,7 @@ class WindOptimiser(object):
         window_size = 4
         response_size = 2
         step_size = 1
-        max_num_windows = self._ulog_data['x'].size - (window_size + response_size) + 1
+        max_num_windows = int((self._ulog_data['x'].size - (window_size + response_size)) / step_size + 1)
 
         for i in range(max_num_windows):
             outputs, losses = [], []
@@ -792,6 +795,7 @@ class WindOptimiser(object):
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
                 wind += interpolated_cosmo_corners
+            # wind = self.add_mask(wind)
             input_ = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input_)
 
