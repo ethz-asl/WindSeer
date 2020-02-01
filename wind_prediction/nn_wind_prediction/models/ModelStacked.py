@@ -142,4 +142,5 @@ class ModelStacked(nn.Module):
                     # only pass the terrain information
                     x = self.__models[i](torch.cat((input[:,0,:].unsqueeze(1), x['pred']),1))
 
-        return x
+        output['pred'] = x
+        return output
