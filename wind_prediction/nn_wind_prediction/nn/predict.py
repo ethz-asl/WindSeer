@@ -308,10 +308,11 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
         # predict and measure how long it takes
         input, label = input.to(device), label.to(device)
         start_time = time.time()
-        output = net(input.unsqueeze(0))['pred']
+        output = net(input.unsqueeze(0))
+        pred = output['pred']
         print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
         input = input.squeeze()
-        output = output.squeeze()
+        pred = pred.squeeze()
 
         channels_to_predict = params.data['label_channels']
 
@@ -326,39 +327,33 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
         # rescale the labels and predictions
         for i, channel in enumerate(channels_to_predict):
             if channel == 'terrain':
-                output[i] *= params.data[channel + '_scaling']
+                pred[i] *= params.data[channel + '_scaling']
                 label[i] *= params.data[channel + '_scaling']
             elif channel.startswith('u') or channel == 'nut':
-                output[i] *= scale * params.data[channel +'_scaling']
+                pred[i] *= scale * params.data[channel +'_scaling']
                 label[i] *= scale * params.data[channel + '_scaling']
             elif channel == 'p' or channel == 'turb':
-                output[i] *= scale * scale * params.data[channel + '_scaling']
+                pred[i] *= scale * scale * params.data[channel + '_scaling']
                 label[i] *= scale * scale * params.data[channel + '_scaling']
             elif channel == 'epsilon':
-                output[i] *= scale * scale * scale * params.data[channel + '_scaling']
+                pred[i] *= scale * scale * scale * params.data[channel + '_scaling']
                 label[i] *= scale * scale * scale * params.data[channel + '_scaling']
 
         try:
-            predict_uncertainty = params.model['model_args']['predict_uncertainty']
+            uncertainty = output['logvar'].squeeze()
         except KeyError as e:
-            predict_uncertainty = False
-            print('predict_channel: predict_uncertainty key not available, setting default value: False')
+            uncertainty = None
 
-        if predict_uncertainty:
-            num_channels = output.shape[0]
-            if loss_fn:
-                print('Loss: {}'.format(loss_fn(output[:int(num_channels/2)], label)))
-        else:
-            if loss_fn:
-                for i, channel in enumerate(channels_to_predict):
-                    print('Loss ' + channel + ': {}'.format(loss_fn(output[i], label[i])))
-                print('Loss: {}'.format(loss_fn(output, label)))
+        if loss_fn:
+            for i, channel in enumerate(channels_to_predict):
+                print('Loss ' + channel + ': {}'.format(loss_fn(pred[i], label[i])))
+            print('Loss: {}'.format(loss_fn(pred, label)))
 
         if savename is not None:
-            np.save(savename, output.cpu().numpy())
+            np.save(savename, pred.cpu().numpy())
 
         if channels_to_plot:
-            utils.plot_prediction(channels_to_predict, channels_to_plot, output, label, input[0],predict_uncertainty,
+            utils.plot_prediction(channels_to_predict, channels_to_plot, pred, label, input[0],uncertainty,
                                   plot_divergence, ds=nn_data.get_grid_size(dataset))
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
