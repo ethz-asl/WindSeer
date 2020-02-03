@@ -388,9 +388,7 @@ class VelocityGradientLoss(Module):
 #------------------------------------------- Velocity Gradient Loss  ---------------------------------------------------
 class KLDivLoss(Module):
     '''
-    Upgraded version of Stream Function Loss according to https://arxiv.org/abs/1806.02071.
-    Loss function in which predicted flow field spatial gradient is compared to target flow spatial gradient.
-
+    Kullback-Leibler Divergence Loss according to https://arxiv.org/pdf/1312.6114.pdf
     '''
 
     def __init__(self, **kwargs):

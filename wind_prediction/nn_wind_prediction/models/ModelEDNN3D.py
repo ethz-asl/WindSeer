@@ -414,6 +414,8 @@ class ModelEDNN3D(nn.Module):
             if self.__vae:
                 output['distribution_mean'] = x[:,:self.__vae_dim].clone()
                 output['distribution_logvar'] = x[:,self.__vae_dim:].clone()
+
+                # during training sample from the distribution, during inference take values with the maximum probability
                 if self.training:
                     std = torch.torch.exp(0.5 * x[:,self.__vae_dim:])
                     x = x[:,:self.__vae_dim] + std * torch.randn_like(std)
