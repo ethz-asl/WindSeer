@@ -211,16 +211,16 @@ class WindOptimiserOutput:
                     print("Best optimization method: {0}".format(
                         self._names[self._best_method_index]))
 
-    def plot_trajectory(self):
+    def plot_trajectory_and_terrain(self):
         fig = plt.figure()
         ax = fig.gca(projection='3d')
 
         # trajectory
         indeces = self._inputs[0][4, :].nonzero()
         wind_indices = np.array(indeces.cpu().detach().numpy())
-        xs = wind_indices[:, 0]
+        zs = wind_indices[:, 0]
         ys = wind_indices[:, 1]
-        zs = wind_indices[:, 2]
+        xs = wind_indices[:, 2]
         ax.scatter(xs, ys, zs, label='trajectory curve')
         # ax.plot(xs, ys, zs, label='trajectory curve')
 
@@ -252,7 +252,7 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
-        self.plot_trajectory()
+        self.plot_trajectory_and_terrain()
         self.plot_best_wind_estimate()
 
 
