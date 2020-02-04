@@ -394,6 +394,14 @@ class KLDivLoss(Module):
     def __init__(self, **kwargs):
         super(KLDivLoss, self).__init__()
 
+    @staticmethod
+    def kld_gaussian(mean1, logvar1, mean2, logvar2):
+        # TODO: This could/should probably be an external function, since it is static and could be used elsewhere
+        # Assuming p and q are *univariate* gaussian (no cross-correlation terms):
+        # KL(p || q) = log(\sigma_q/\sigma_p) + (\sigma_p^2 + (\mu_p - \mu_q)^2)/(2\sigma_q^2) - 1/2
+        # Recall: log (x^2) = 2 log (x), so we can take the 1/2 out of the first term if we are given log variances
+        return -0.5 * torch.sum(1.0 + logvar1 - logvar2 - (logvar1.exp() + (mean1 - mean2).pow(2)) / logvar2.exp())
+
     def forward(self, predicted, target, input, W=1.0):
         if ('distribution_mean' not in predicted.keys()):
             raise ValueError('KLDivLoss: distribution_mean needs to be in the prediction dict')
@@ -404,11 +412,12 @@ class KLDivLoss(Module):
         if (predicted['distribution_mean'].shape != predicted['distribution_logvar'].shape):
             raise ValueError('KLDivLoss: the mean and logvar need to have the same shape')
 
-
         return self.compute_loss(predicted['distribution_mean'], predicted['distribution_logvar'])
 
     def compute_loss(self, mean, logvar):
-        return -0.5 * torch.sum(1.0 + logvar - mean.pow(2) - logvar.exp())
+        # We assume the loss is being computed as KLD with respect to zero mean, unit variance (log(1) = 0)
+        return self.kld_gaussian(mean, logvar, mean2=torch.zeros(1, device=mean.device), logvar2=torch.zeros(1, device=mean.device))
+
 
 #------------------------------------------ Gaussian Log Likelihood Loss  ----------------------------------------------
 class GaussianLogLikelihoodLoss(Module):

@@ -412,15 +412,17 @@ class ModelEDNN3D(nn.Module):
             x = x.view(-1, self.num_flat_features(x))
             x = self.__activation(self.__fc1(x))
             if self.__vae:
-                output['distribution_mean'] = x[:,:self.__vae_dim].clone()
-                output['distribution_logvar'] = x[:,self.__vae_dim:].clone()
+                x_mean = x[:,:self.__vae_dim]
+                x_logvar = x[:,self.__vae_dim:]
+                output['distribution_mean'] = x_mean.clone()
+                output['distribution_logvar'] = x_logvar.clone()
 
                 # during training sample from the distribution, during inference take values with the maximum probability
                 if self.training:
-                    std = torch.torch.exp(0.5 * x[:,self.__vae_dim:])
-                    x = x[:,:self.__vae_dim] + std * torch.randn_like(std)
+                    std = torch.torch.exp(0.5 * x_logvar)
+                    x = x_mean + std * torch.randn_like(std)
                 else:
-                    x = x[:,:self.__vae_dim]
+                    x = x_mean
 
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
