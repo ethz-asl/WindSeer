@@ -38,7 +38,7 @@ class PlotUtils():
     ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     '''
     def __init__(self, plot_mode, provided_channels, channels_to_plot, input, label, terrain, design,
-                 uncertainty_predicted = False, plot_divergence = False, ds = None, title_dict = None,
+                 uncertainty = None, plot_divergence = False, ds = None, title_dict = None,
                  title_fontsize = 16, label_fontsize = 15, tick_fontsize = 10, cmap=cm.jet, terrain_color='grey'):
 
         if plot_mode != 'sample' and plot_mode !='prediction':
@@ -46,7 +46,7 @@ class PlotUtils():
 
         # Input is the prediction, label is CFD
         self.__axis = 'x-z'
-        self.__uncertainty_predicted = uncertainty_predicted
+        self.__uncertainty_predicted = uncertainty is not None
 
         if channels_to_plot == 'all':
             channels_to_plot = list(provided_channels)
@@ -180,22 +180,17 @@ class PlotUtils():
         self.__label = np.ma.MaskedArray(np.zeros(label.shape))
         for i, channel in enumerate(label.cpu()):
             self.__label[i] = np.ma.masked_where(is_terrain, channel)
-        self.__uncertainty = None
+
+        if self.__uncertainty_predicted:
+            self.__uncertainty = np.ma.MaskedArray(np.zeros(uncertainty.shape))
+            for i, channel in enumerate(uncertainty.cpu()):
+                self.__uncertainty[i] = np.ma.masked_where(is_terrain, channel)
 
         self.__cmap = cmap
         self.__cmap.set_bad(terrain_color)
 
-        # handle uncertainty prediction case
-        if uncertainty_predicted and plot_mode == 'prediction':
-            self.__uncertainty = self.__input[int(self.__n_channels/2):,:]
-            print('Warning: Uncertainty plotting has not been used in a while. It might be broken.')
-
         if design == 1:
-            if uncertainty_predicted and plot_mode == 'prediction':
-
-                self.__error = self.__label - self.__input[:int(self.__n_channels/2),:]
-            else:
-                self.__error = self.__label - self.__input
+            self.__error = self.__label - self.__input
         else:
             self.__error = None # in this case the error plot will not be executed anyway
 
@@ -429,7 +424,7 @@ class PlotUtils():
 
                     if self.__uncertainty_predicted:
                         self.__uncertainty_images.append(ah_in[3][i].imshow(self.__uncertainty[i,:,slice,:], origin='lower', vmin=self.__uncertainty[i,:,:,:].min(), vmax=self.__uncertainty[i,:,:,:].max(), aspect = 'auto', cmap=self.__cmap))
-                        chbar = self.__figures[j].colorbar(self.__uncertainty_images[data_index], ax=ah_in[3][i])
+                        chbar = fig_in.colorbar(self.__uncertainty_images[data_index], ax=ah_in[3][i])
                         plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
                         plt.setp(ah_in[3][i].get_xticklabels(), fontsize=self.__tick_fontsize)
                         plt.setp(ah_in[3][i].get_yticklabels(), fontsize=self.__tick_fontsize)
@@ -550,9 +545,9 @@ def plot_sample(provided_channels, channels_to_plot, input, label, terrain, plot
                          ds, title_dict =title_dict)
     instance.plot_sample()
 
-def plot_prediction(provided_channels, channels_to_plot, output, label, terrain, uncertainty_predicted = False, plot_divergence = False,
+def plot_prediction(provided_channels, channels_to_plot, output, label, terrain, uncertainty = None, plot_divergence = False,
                  ds = None, title_dict = None):
-    instance = PlotUtils('prediction',provided_channels, channels_to_plot, output, label, terrain, 1, uncertainty_predicted,
+    instance = PlotUtils('prediction',provided_channels, channels_to_plot, output, label, terrain, 1, uncertainty,
                          plot_divergence, ds, title_dict =title_dict)
     instance.plot_prediction()
 

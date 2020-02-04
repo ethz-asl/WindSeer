@@ -21,9 +21,6 @@ class CombinedLoss(Module):
         self.loss_factors = []
         self.last_computed_loss_components = dict()
 
-        if 'GaussianLogLikelihoodLoss' in self.loss_component_names and len(self.loss_component_names)>1:
-            raise ValueError('Sorry, for now GaussianLogLikelihoodLoss can only be on its own!')
-
         # if the scaling must be learnt, use a ParameterList for the scaling factors
         if self.learn_scaling and len(self.loss_component_names)>1:
             self.loss_factors = torch.nn.ParameterList(self.loss_factors)
@@ -66,7 +63,7 @@ class CombinedLoss(Module):
                 self.learn_scaling = False
 
     def forward(self, predicted, target, input, W=None):
-        if (len(predicted.shape) != 5):
+        if (len(predicted['pred'].shape) != 5):
             raise ValueError('CombinedLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
         # make sure weighting matrix is not empty or None
@@ -83,7 +80,7 @@ class CombinedLoss(Module):
         # compute all of the loss components of the combined loss, store them in the last computed dict for retrieval
         for k in range(len(self.loss_components)):
             # move the loss factor to the same device as the prediction tensor
-            factor = self.loss_factors[k].to(predicted.device)
+            factor = self.loss_factors[k].to(predicted['pred'].device)
 
             # compute the value individual component
             loss_component = self.loss_components[k](predicted, target, input, W)
@@ -130,14 +127,14 @@ class LPLoss(Module):
                   self.__default_exclude_terrain)
 
     def forward(self, predicted, target, input, W=1.0):
-        if (predicted.shape != target.shape):
+        if (predicted['pred'].shape != target.shape):
             raise ValueError('LPLoss: predicted and target do not have the same shape, pred:{}, target:{}'
-                             .format(predicted.shape, target.shape))
+                             .format(predicted['pred'].shape, target.shape))
 
-        if (len(predicted.shape) != 5) or (len(input.shape) != 5):
+        if (len(predicted['pred'].shape) != 5) or (len(input.shape) != 5):
             raise ValueError('LPLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input, W)
+        return self.compute_loss(predicted['pred'], target, input, W)
 
     def compute_loss(self, predicted, target, input, W):
         # first compute the p-loss for each sample in the batch
@@ -215,7 +212,7 @@ class ScaledLoss(Module):
 
     def forward(self, prediction, label, input, W=1.0):
         # compute the loss per pixel, apply weighting and take the mean over the channels
-        loss = (self.__loss(prediction, label)*W).mean(dim=1)
+        loss = (self.__loss(prediction['pred'], label)*W).mean(dim=1)
 
         if self.__no_scaling:
             scale = torch.ones_like(loss)
@@ -287,14 +284,14 @@ class DivergenceFreeLoss(Module):
 
 
     def forward(self, predicted, target, input, W=1):
-        if (predicted.shape != target.shape):
+        if (predicted['pred'].shape != target.shape):
             raise ValueError('DivergenceFreeLoss: predicted and target do not have the same shape, pred:{}, target:{}'
-                    .format(predicted.shape, target.shape))
+                    .format(predicted['pred'].shape, target.shape))
 
-        if (len(predicted.shape) != 5):
+        if (len(predicted['pred'].shape) != 5):
             raise ValueError('DivergenceFreeLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input, W)
+        return self.compute_loss(predicted['pred'], target, input, W)
 
     def compute_loss(self, predicted, target, input, W):
         target = torch.zeros_like(target).to(predicted.device)
@@ -359,14 +356,14 @@ class VelocityGradientLoss(Module):
             raise ValueError('VelocityGradientLoss: unknown loss type ', self.__loss_type)
 
     def forward(self, predicted, target, input, W=1.0):
-        if (predicted.shape != target.shape):
+        if (predicted['pred'].shape != target.shape):
             raise ValueError('VelocityGradientLoss: predicted and target do not have the same shape, pred:{}, target:{}'
-                             .format(predicted.shape, target.shape))
+                             .format(predicted['pred'].shape, target.shape))
 
-        if (len(predicted.shape) != 5):
+        if (len(predicted['pred'].shape) != 5):
             raise ValueError('VelocityGradientLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-        return self.compute_loss(predicted, target, input, W)
+        return self.compute_loss(predicted['pred'], target, input, W)
 
     def compute_loss(self, predicted, target, input, W):
         terrain = input[:, 0:1]
@@ -388,6 +385,40 @@ class VelocityGradientLoss(Module):
         # return batchwise mean of loss
         return loss.mean()
 
+#------------------------------------------- Velocity Gradient Loss  ---------------------------------------------------
+class KLDivLoss(Module):
+    '''
+    Kullback-Leibler Divergence Loss according to https://arxiv.org/pdf/1312.6114.pdf
+    '''
+
+    def __init__(self, **kwargs):
+        super(KLDivLoss, self).__init__()
+
+    @staticmethod
+    def kld_gaussian(mean1, logvar1, mean2, logvar2):
+        # TODO: This could/should probably be an external function, since it is static and could be used elsewhere
+        # Assuming p and q are *univariate* gaussian (no cross-correlation terms):
+        # KL(p || q) = log(\sigma_q/\sigma_p) + (\sigma_p^2 + (\mu_p - \mu_q)^2)/(2\sigma_q^2) - 1/2
+        # Recall: log (x^2) = 2 log (x), so we can take the 1/2 out of the first term if we are given log variances
+        return -0.5 * torch.sum(1.0 + logvar1 - logvar2 - (logvar1.exp() + (mean1 - mean2).pow(2)) / logvar2.exp())
+
+    def forward(self, predicted, target, input, W=1.0):
+        if ('distribution_mean' not in predicted.keys()):
+            raise ValueError('KLDivLoss: distribution_mean needs to be in the prediction dict')
+
+        if ('distribution_logvar' not in predicted.keys()):
+            raise ValueError('KLDivLoss: distribution_mean needs to be in the prediction dict')
+
+        if (predicted['distribution_mean'].shape != predicted['distribution_logvar'].shape):
+            raise ValueError('KLDivLoss: the mean and logvar need to have the same shape')
+
+        return self.compute_loss(predicted['distribution_mean'], predicted['distribution_logvar'])
+
+    def compute_loss(self, mean, logvar):
+        # We assume the loss is being computed as KLD with respect to zero mean, unit variance (log(1) = 0)
+        return self.kld_gaussian(mean, logvar, mean2=torch.zeros(1, device=mean.device), logvar2=torch.zeros(1, device=mean.device))
+
+
 #------------------------------------------ Gaussian Log Likelihood Loss  ----------------------------------------------
 class GaussianLogLikelihoodLoss(Module):
     '''
@@ -397,11 +428,12 @@ class GaussianLogLikelihoodLoss(Module):
     __default_eps = 1e-8
     __default_exclude_terrain = True
 
+
     def __init__(self, **kwargs):
         super(GaussianLogLikelihoodLoss, self).__init__()
 
         try:
-            self.__eps = kwargs['uncertainty_loss_eps']
+            self.__eps = float(kwargs['uncertainty_loss_eps'])
         except KeyError:
             self.__eps = self.__default_eps
             print('GaussianLogLikelihoodLoss: uncertainty_loss_eps not present in kwargs, using default value:', self.__eps)
@@ -410,25 +442,30 @@ class GaussianLogLikelihoodLoss(Module):
            self.__exclude_terrain =  kwargs['exclude_terrain']
         except KeyError:
             self.__exclude_terrain = self.__default_exclude_terrain
-            print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
+            print('GaussianLogLikelihoodLoss: exclude_terrain not present in kwargs, using default value:',
                   self.__default_exclude_terrain)
 
-    def forward(self, output, label, input, W=1.0):
-        num_channels = output.shape[1]
+    def forward(self, predicted, target, input, W=1.0):
+        if (predicted['pred'].shape != target.shape):
+            raise ValueError('GaussianLogLikelihoodLoss: predicted and target do not have the same shape, pred:{}, target:{}'
+                             .format(predicted['pred'].shape, target.shape))
 
-        if (output.shape[1] != 2 * label.shape[1]) and (num_channels % 2 != 0):
-            raise ValueError('The output has to have twice the number of channels of the labels')
+        if 'logvar' not in predicted.keys():
+            raise ValueError('GaussianLogLikelihoodLoss: the uncertainty needs to be predicted and present in the output dict (logvar)')
 
-        return self.compute_loss(output[:,:int(num_channels/2),:], output[:,int(num_channels/2):,:], label, input, W)
+        if (len(predicted['pred'].shape) != 5):
+            raise ValueError('GaussianLogLikelihoodLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
-    def compute_loss(self, mean, log_variance, label, input, W):
-        if (mean.shape[1] != log_variance.shape[1]):
-            raise ValueError('The variance and the mean need to have the same number of channels')
+        if (predicted['pred'].shape != predicted['logvar'].shape):
+            raise ValueError('The variance and the mean need to have the same shape')
 
-        mean_error =  mean - label
+        return self.compute_loss(predicted['pred'], predicted['logvar'], target, input, W)
+
+    def compute_loss(self, mean, log_variance, target, input, W):
+        mean_error =  mean - target
 
         # compute loss for all elements
-        loss = log_variance + (mean_error * mean_error) / log_variance.exp().clamp(self.__eps)
+        loss = 0.5*log_variance + (mean_error * mean_error) / log_variance.exp().clamp(min=self.__eps, max=1e10)
 
         # average weighted loss over each sample in batch
         loss = (loss*W).mean(tuple(range(1, len(mean_error.shape))))

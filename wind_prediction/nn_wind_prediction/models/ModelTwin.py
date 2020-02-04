@@ -75,20 +75,13 @@ class ModelTwin(nn.Module):
         return self.__model_mean.num_inputs()
 
     def num_outputs(self):
-        return self.__model_mean.num_outputs() + self.__model_uncertainty.num_outputs()
+        return self.__model_mean.num_outputs()
 
     def init_params(self):
         self.__model_mean.init_params()
         self.__model_uncertainty.init_params()
 
     def forward(self, x):
-        x1 = self.__model_mean.forward(x)
-        x2 = self.__model_uncertainty.forward(x)
-        x = torch.cat([x1,x2],1)
-        return x
-
-    def predict_mean(self, x):
-        return self.__model_mean.forward(x)
-
-    def predict_uncertainty(self, x):
-        return self.__model_uncertainty.forward(x)
+        mean = self.__model_mean.forward(x)['pred']
+        logvar = self.__model_uncertainty.forward(x)['pred']
+        return {'pred': x, 'logvar': logvar}

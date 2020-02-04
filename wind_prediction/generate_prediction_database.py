@@ -59,6 +59,7 @@ for item in models:
     net = NetType(**params.model_kwargs())
     net.load_state_dict(torch.load('trained_models/' + item['name'] + '/' + item['version'] + '.model', map_location=lambda storage, loc: storage))
     net.to(device)
+    net.eval()
     try:
         net.set_prediction_level(item['prediction_level'])
     except AttributeError:

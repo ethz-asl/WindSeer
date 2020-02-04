@@ -74,6 +74,7 @@ state_dict = torch.load('trained_models/' + args.model_name + '/' + args.model_v
 # load params
 net.load_state_dict(state_dict)
 net.to(device)
+net.eval()
 
 try:
     net.set_prediction_level(prediction_level)
