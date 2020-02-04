@@ -40,6 +40,9 @@ class ModelEDNN3D(nn.Module):
     __default_grid_size = [1, 1, 1]
     __default_use_sparse_mask = False
     __default_use_sparse_convolution = False
+    __default_vae = False
+    __default_logvar_scaling = 10
+    __default_predict_uncertainty = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -212,6 +215,31 @@ class ModelEDNN3D(nn.Module):
             if verbose:
                 print('EDNN3D: use_nut not present in kwargs, using default value:', self.__default_use_nut)
 
+        try:
+            self.__vae = kwargs['vae']
+        except KeyError:
+            self.__vae = self.__default_vae
+            if verbose:
+                print('EDNN3D: vae not present in kwargs, using default value:', self.__default_vae)
+
+        try:
+            self.__logvar_scaling = kwargs['logvar_scaling']
+        except KeyError:
+            self.__logvar_scaling = self.__default_logvar_scaling
+            if verbose:
+                print('EDNN3D: logvar_scaling not present in kwargs, using default value:', self.__default_logvar_scaling)
+
+        try:
+            self.__predict_uncertainty = kwargs['predict_uncertainty']
+        except KeyError:
+            self.__predict_uncertainty = self.__default_predict_uncertainty
+            if verbose:
+                print('EDNN3D: predict_uncertainty not present in kwargs, using default value:', self.__default_predict_uncertainty)
+
+        if self.__vae and not self.__use_fc_layers:
+            print('EDNN3D: Error, to use the vae mode the fc layers need to be enabled.')
+            sys.exit()
+
         if self.__n_downsample_layers <= 0:
             print('EDNN3D: Error, n_downsample_layers must be larger than 0')
             sys.exit()
@@ -245,6 +273,7 @@ class ModelEDNN3D(nn.Module):
 
         try:
             self.__num_outputs = kwargs['force_num_outputs']
+            self.__predict_uncertainty = False
         except KeyError:
             pass
 
@@ -277,7 +306,13 @@ class ModelEDNN3D(nn.Module):
             else:
                 n_features = int(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))) *  # number of channels
                                  self.__n_x * self.__n_y * self.__n_z / ((2**self.__n_downsample_layers)**3)) # number of pixels
-            self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
+
+            if self.__vae:
+                self.__vae_dim = int(n_features/self.__fc_scaling)
+                self.__fc1 = nn.Linear(n_features, 2 * int(n_features/self.__fc_scaling))
+                print("EDNN3D: VAE state space is {} dimensional".format(self.__vae_dim))
+            else:
+                self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
             self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
         else:
             self.__c1 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
@@ -298,14 +333,18 @@ class ModelEDNN3D(nn.Module):
         self.__bias_deconv1 = nn.ParameterList()
         self.__bias_deconv2 = nn.ParameterList()
 
+        num_out = self.__num_outputs
+        if self.__predict_uncertainty:
+            num_out *= 2
+
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
                 if i == 0:
                     self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1, bias=use_bias)]
-                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1, bias=use_bias)]
                     if self.__use_sparse_convolution:
                         self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, self.__n_first_conv_channels, 1, 1, 1).float().cuda(), requires_grad=True)]
-                        self.__bias_deconv2 += [nn.Parameter(torch.zeros(1, self.__num_outputs, 1, 1, 1).float().cuda(), requires_grad=True)]
+                        self.__bias_deconv2 += [nn.Parameter(torch.zeros(1, num_out, 1, 1, 1).float().cuda(), requires_grad=True)]
                 else:
                     self.__deconv1 += [nn.Conv3d(2*int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
@@ -321,9 +360,9 @@ class ModelEDNN3D(nn.Module):
         else:
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, self.__num_outputs, self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1, bias=use_bias)]
                     if self.__use_sparse_convolution:
-                        self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, self.__num_outputs, 1, 1, 1).float().cuda(), requires_grad=True)]
+                        self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, num_out, 1, 1, 1).float().cuda(), requires_grad=True)]
                 else:
                     self.__deconv1 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
@@ -336,7 +375,7 @@ class ModelEDNN3D(nn.Module):
 
         # mapping layer
         if self.__use_mapping_layer:
-            self.__mapping_layer = nn.Conv3d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs, bias=use_bias) # for each channel a separate filter
+            self.__mapping_layer = nn.Conv3d(num_out,num_out,1,groups=num_out, bias=use_bias) # for each channel a separate filter
 
         # padding modules
         padding_required = int((self.__filter_kernel_size - 1) / 2)
@@ -418,6 +457,7 @@ class ModelEDNN3D(nn.Module):
             is_wind = x[:, 0, :].unsqueeze(1).clone()
             is_wind.sign_()
 
+        output = {}
         x_skip = []
         sparse_mask_skip = []
         # down-convolution
@@ -494,6 +534,19 @@ class ModelEDNN3D(nn.Module):
             shape = x.size()
             x = x.view(-1, self.num_flat_features(x))
             x = self.__activation(self.__fc1(x))
+            if self.__vae:
+                x_mean = x[:,:self.__vae_dim]
+                x_logvar = x[:,self.__vae_dim:]
+                output['distribution_mean'] = x_mean.clone()
+                output['distribution_logvar'] = x_logvar.clone()
+
+                # during training sample from the distribution, during inference take values with the maximum probability
+                if self.training:
+                    std = torch.torch.exp(0.5 * x_logvar)
+                    x = x_mean + std * torch.randn_like(std)
+                else:
+                    x = x_mean
+
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
         else:
@@ -776,9 +829,15 @@ class ModelEDNN3D(nn.Module):
             x = torch.cat([utils.curl(x, self.__grid_size, x[:, 0, :]), x[:, 3:, :]], 1)
 
         if self.__use_terrain_mask:
-            x = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
+            x = is_wind.repeat(1, x.shape[1], 1, 1, 1) * x
 
-        return x
+        if self.__predict_uncertainty:
+            output['pred'] = x[:,:self.__num_outputs]
+            output['logvar'] = self.__logvar_scaling * torch.nn.functional.softsign(x[:,self.__num_outputs:])
+        else:
+            output['pred'] = x
+
+        return output
 
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension

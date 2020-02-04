@@ -151,18 +151,6 @@ print(' ')
 run_params.print()
 print('-----------------------------------------------------------------------------')
 
-try:
-    predict_uncertainty = run_params.model['model_args']['predict_uncertainty']
-except KeyError as e:
-    predict_uncertainty = False
-    print('train.py: predict_uncertainty key not available, setting default value: False')
-
-try:
-    uncertainty_train_mode = run_params.model['model_args']['uncertainty_train_mode']
-except KeyError as e:
-    uncertainty_train_mode = 'alternating'
-    print('train.py: predict_uncertainty key not available, setting default value: alternating')
-
 # if the loss components and their respective factors should be plotted in tensorboard
 try:
     log_loss_components = run_params.loss['log_loss_components']
@@ -173,12 +161,12 @@ except:
 t2 = time.time()
 print('Time until actual training: ', t2-t1, 's')
 # start the actual training
-net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer, loss_fn, device,
-                       run_params.run['n_epochs'], run_params.run['plot_every_n_batches'],
-                       run_params.run['save_model_every_n_epoch'], run_params.run['save_params_hist_every_n_epoch'],
-                       run_params.run['minibatch_epoch_loss'],run_params.run['compute_validation_loss'],
-                       log_loss_components, model_dir, args.use_writer, predict_uncertainty,
-                       uncertainty_train_mode, warm_start_epoch)
+net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer,
+                       loss_fn, device, run_params.run['n_epochs'],
+                       run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
+                       run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
+                       run_params.run['compute_validation_loss'], log_loss_components,
+                       model_dir, args.use_writer, warm_start_epoch)
 
 # save the model if requested
 if (run_params.run['save_model']):
