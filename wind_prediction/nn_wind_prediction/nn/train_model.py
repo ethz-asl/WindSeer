@@ -66,7 +66,6 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
     Return:
         net: The trained network
     '''
-    use_sparse_mask = True
 
     # setup the signal handling
     global should_exit

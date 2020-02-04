@@ -199,11 +199,6 @@ class PlotUtils():
         else:
             self.__masked_input = masked_input
 
-        # handle uncertainty prediction case
-        if uncertainty_predicted and plot_mode == 'prediction':
-            self.__uncertainty = self.__input[int(self.__n_channels/2):,:]
-            print('Warning: Uncertainty plotting has not been used in a while. It might be broken.')
-
         if design == 1:
             self.__error = self.__label - self.__input
         else:
@@ -391,7 +386,7 @@ class PlotUtils():
         else:
             raise NotImplementedError('Sorry, 2D sample plotting needs to be reimplemented.')
 
-    def plot_prediction(self, save=False, label_name='CFD', input_name='Prediction', add_sparse_mask_row=False):
+    def plot_prediction(self, label_name='CFD', input_name='Prediction', save=False, add_sparse_mask_row=False):
         # get the number of already open figures, used in slider and button callbacks
         self.__n_already_open_figures = len(list(map(plt.figure, plt.get_fignums())))
 

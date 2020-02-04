@@ -172,5 +172,5 @@ def plot_prediction_observations(input, label, terrain, save, add_sparse_mask_ro
     i2 = input
     instance = PlotUtils('prediction', ['ux', 'uy', 'uz'],
                          ['ux', 'uy', 'uz'], i2, label, terrain, design=1, masked_input=masked_input)
-    fig, ax = instance.plot_prediction(save, label_name='Observed wind',  add_sparse_mask_row=add_sparse_mask_row)
+    fig, ax = instance.plot_prediction(label_name='Observed wind', save=save, add_sparse_mask_row=add_sparse_mask_row)
     return fig, ax

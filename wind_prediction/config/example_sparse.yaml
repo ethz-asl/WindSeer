@@ -9,7 +9,7 @@ run:
     learning_rate_decay_step_size: 100
     compute_validation_loss: True
     custom_init: False
-    minibatch_epoch_loss: False
+    minibatch_epoch_loss: True
     evaluate_testset: False
     warm_start: False
 
@@ -28,7 +28,7 @@ run:
 
 # loss parameters
 loss:
-    # Combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss'].
+    # Combine any loss components from: ['LPLoss', 'ScaledLoss', 'VelocityGradientLoss','DivergenceFreeLoss', 'KLDivLoss', 'GaussianLogLikelihoodLoss'].
     # Multiple instances of one loss type can be used. Just add numbering behind 'Loss', e.g. 'L1Loss1/2/3'.
     # For 'LPLoss', P can be replaced with the desired order (int>0). If decimal order desired use LPLoss with p in kwargs.
     # 'GaussianLogLikelihoodLoss' can only be used alone.
@@ -48,7 +48,8 @@ loss:
     ScaledLoss_kwargs: {exclude_terrain: True, no_scaling: True, max_scale: 4, norm_threshold: 0.5, loss_factor_init: 0.0}
     DivergenceFreeLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
     VelocityGradientLoss_kwargs: {exclude_terrain: True, loss_type: 'L1', loss_factor_init: -1.5}
-    GaussianLogLikelihoodLoss_kwargs: {exclude_terrain: True, uncertainty_loss_eps: 1e-8}
+    GaussianLogLikelihoodLoss_kwargs: {exclude_terrain: True, uncertainty_loss_eps: 1e-8, loss_factor_init: 0.0}
+    KLDivLoss_kwargs: {loss_factor_init: 0.0}
 
     # If the individual loss components and their factors should be logged using tensorboard
     log_loss_components: True
@@ -59,9 +60,9 @@ loss:
 
 # dataset parameters
 data:
-    trainset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
-    validationset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
-    testset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
+    trainset_name: 'data/train.hdf5'
+    validationset_name: 'data/validation.hdf5'
+    testset_name: 'data/test.hdf5'
 
     # channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels : ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities must be loaded for EDNN3D
@@ -86,13 +87,6 @@ data:
     terrain_scaling: 1.0
     autoscale: True
 
-    # sparse mask
-    create_sparse_mask: True
-    percentage_of_sparse_data: 0.1 # percentage of inputs used for training the network
-
-    # noise
-    add_gaussian_noise: True
-
 # model parameters
 model:
     name_prefix: 'test_model'
@@ -102,7 +96,7 @@ model:
         n_y: 64,
         n_z: 64,
         n_downsample_layers: 4,
-        n_first_conv_channels: 8,
+        n_first_conv_channels: 16,
         channel_multiplier: 2,
         filter_kernel_size: 3,
         interpolation_mode: 'nearest',
@@ -118,6 +112,7 @@ model:
         activation_args: {negative_slope: 0.1},
         verbose: True,
         submodel_type: 'ModelEDNN3D',
+        vae: False,
 
         # uncertainty prediction params
         predict_uncertainty: False,
@@ -126,9 +121,5 @@ model:
         # uncertainty prediction params
         n_stacked: 3,
         pass_full_output: False,
-        submodel_terrain_mask: False,
-
-        # sparse input params
-        use_sparse_mask: False,
-        use_sparse_convolution: True
+        submodel_terrain_mask: False
     }
