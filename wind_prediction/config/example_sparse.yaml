@@ -1,7 +1,7 @@
 # training parameters
 run:
     plot_every_n_batches: 25
-    n_epochs: 500
+    n_epochs: 1000
     batchsize: 35
     num_workers: 6
     learning_rate_initial: 1.0E-4
@@ -12,6 +12,7 @@ run:
     minibatch_epoch_loss: True
     evaluate_testset: False
     warm_start: False
+    vae_custom_weight_initialization: True
 
     # options to store data
     save_model: True
@@ -32,7 +33,7 @@ loss:
     # Multiple instances of one loss type can be used. Just add numbering behind 'Loss', e.g. 'L1Loss1/2/3'.
     # For 'LPLoss', P can be replaced with the desired order (int>0). If decimal order desired use LPLoss with p in kwargs.
     # 'GaussianLogLikelihoodLoss' can only be used alone.
-    loss_components: ['L2Loss']
+    loss_components: ['L2Loss','KLDivLoss']
 
     # If the homoscedastic uncertainty factors of the losses should be learnt during training. Auto disable if 1 loss comp.
     learn_scaling: True
@@ -60,9 +61,9 @@ loss:
 
 # dataset parameters
 data:
-    trainset_name: 'data/train.hdf5'
-    validationset_name: 'data/validation.hdf5'
-    testset_name: 'data/test.hdf5'
+    trainset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
+    validationset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
+    testset_name: '../wind_analysis/data/wind_test/csv_single_sample.hdf5'
 
     # channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels : ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities must be loaded for EDNN3D
@@ -87,6 +88,13 @@ data:
     terrain_scaling: 1.0
     autoscale: True
 
+    # sparse mask
+    create_sparse_mask: True
+    percentage_of_sparse_data: 0.1 # percentage of inputs used for training the network
+
+    # noise
+    add_gaussian_noise: False
+
 # model parameters
 model:
     name_prefix: 'test_model'
@@ -101,10 +109,10 @@ model:
         filter_kernel_size: 3,
         interpolation_mode: 'nearest',
         align_corners: False,
-        skipping: True,
+        skipping: False,
         use_terrain_mask: True,
         pooling_method: 'striding',
-        use_fc_layers: False,
+        use_fc_layers: True,
         fc_scaling: 8,
         use_mapping_layer: False,
         potential_flow: False,
@@ -112,7 +120,7 @@ model:
         activation_args: {negative_slope: 0.1},
         verbose: True,
         submodel_type: 'ModelEDNN3D',
-        vae: False,
+        vae: True,
 
         # uncertainty prediction params
         predict_uncertainty: False,
@@ -121,5 +129,9 @@ model:
         # uncertainty prediction params
         n_stacked: 3,
         pass_full_output: False,
-        submodel_terrain_mask: False
+        submodel_terrain_mask: False,
+
+        # sparse input params
+        use_sparse_mask: True,
+        use_sparse_convolution: False
     }

@@ -118,6 +118,20 @@ else:
     if run_params.run['custom_init']:
         net.init_params()
 
+if run_params.run['vae_custom_weight_initialization']:
+    net.load_state_dict(torch.load(os.path.join(model_dir, 'e1000.model'), map_location=lambda storage, loc: storage))
+    counter = 0
+    for child in net.children():
+        if counter == 0:
+            # reset weights for the encoder
+            for j in range(len(child)):
+                child[j].reset_parameters()
+        elif 0 < counter < 4:
+            # freeze loaded weights for the decoder
+            for param in child.parameters():
+                param.requires_grad = False
+        counter += 1
+
 # parallelize the data if multiple gpus can be used
 if torch.cuda.device_count() > 1:
   print("Using ", torch.cuda.device_count(), " GPUs!")
