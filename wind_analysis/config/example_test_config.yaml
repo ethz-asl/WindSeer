@@ -24,7 +24,7 @@ cosmo:
 
 # ULOG data
 ulog:
-    file: 'data/13_33_46.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
+    file: 'data/14_15_04.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05
     filtered_dir: 'data/'
     use_ekf_wind: False
 
@@ -51,7 +51,7 @@ wind:
     ulog_flight: {
         predict_ulog: True,
         optimise_ulog: False,
-        interpolation_method: 'bin',
+        interpolation_method: 'bin',   #['bin', 'idw', 'krigging']
     }
 
 # Noise parameters

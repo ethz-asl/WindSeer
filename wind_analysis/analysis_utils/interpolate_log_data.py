@@ -153,16 +153,16 @@ class UlogInterpolation:
         for i in range(len(self._x_coord)):
             # North
             k3d, ss3d = OK3d_north.execute('grid', self._x_coord[i], self._y_coord[i], self._z_coord[i])
-            wind[0, self._idx_x[i], self._idx_y[i], self._idx_z[i]] = k3d[0][0][0]
-            variance[0, self._idx_x[i], self._idx_y[i], self._idx_z[i]] = ss3d[0][0][0]
+            wind[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+            variance[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
             # East
             k3d, ss3d = OK3d_east.execute('grid', self._x_coord[i], self._y_coord[i], self._z_coord[i])
-            wind[1, self._idx_x[i], self._idx_y[i], self._idx_z[i]] = k3d[0][0][0]
-            variance[1, self._idx_x[i], self._idx_y[i], self._idx_z[i]] = ss3d[0][0][0]
+            wind[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+            variance[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
             # Down
             k3d, ss3d = OK3d_down.execute('grid', self._x_coord[i], self._y_coord[i], self._z_coord[i])
-            wind[2, self._idx_x[i], self._idx_y[i], self._idx_z[i]] = k3d[0][0][0]
-            variance[2, self._idx_x[i], self._idx_y[i], self._idx_z[i]] = ss3d[0][0][0]
+            wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+            variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
 
         return wind, variance
 

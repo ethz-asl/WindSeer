@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import RegularGridInterpolator
-from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates
+from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates, plot_wind_3d
 import datetime
 import torch
 
@@ -221,12 +221,24 @@ class WindOptimiserOutput:
         zs = wind_indices[:, 0]
         ys = wind_indices[:, 1]
         xs = wind_indices[:, 2]
-        ax.scatter(xs, ys, zs, label='trajectory curve')
-        # ax.plot(xs, ys, zs, label='trajectory curve')
+        ax.scatter(xs, ys, zs, label='trajectory curve', color='red')
+        ax.plot(xs, ys, zs, label='trajectory curve', color='red')
+
+        # wind vectors
+        wind = self._inputs[0][1:-1, :].cpu().detach().numpy()
+
+        wskip = 1
+        zs_skip = zs[::wskip]
+        ys_skip = ys[::wskip]
+        xs_skip = xs[::wskip]
+        ax.quiver(xs_skip, ys_skip, zs_skip, wind[0, zs_skip, ys_skip, xs_skip], wind[1, zs_skip, ys_skip, xs_skip],
+                  wind[2, zs_skip, ys_skip, xs_skip],
+                  length=1)
+
 
         # terrain
-        h_gird = (self.wind_opt.terrain.z_terr[-1] - self.wind_opt.terrain.z_terr[0])/64
-        h_network_terrain = np.floor((self.wind_opt.terrain.h_terr - self.wind_opt.terrain.z_terr[0])/h_gird)
+        h_grid = (self.wind_opt.terrain.z_terr[-1] - self.wind_opt.terrain.z_terr[0])/64
+        h_network_terrain = np.floor((self.wind_opt.terrain.h_terr - self.wind_opt.terrain.z_terr[0])/h_grid)
         if 'torch' in str(h_network_terrain.dtype):
             h_network_terrain = h_network_terrain.detach().cpu().numpy()
         nx, ny = h_network_terrain.shape
@@ -236,13 +248,18 @@ class WindOptimiserOutput:
         ax = fig.gca(projection='3d')
         ax.plot_surface(X, Y, h_network_terrain, rstride=1, cstride=1, cmap=plt.cm.gray,
                         linewidth=0)
+
+        # elev = 10
+        # azim = -50
+        # plt.gca().view_init(elev, azim)
+
         if self._save_output:
             self.pp.savefig(fig)
         else:
             plt.show()
 
     def close(self):
-            self.pp.close()
+        self.pp.close()
 
     def plot(self):
         if self._save_output:

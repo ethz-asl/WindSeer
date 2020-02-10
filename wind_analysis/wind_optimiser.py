@@ -134,8 +134,10 @@ class WindOptimiser(object):
                 self._wind_blocks, self._wind_zeros, self._wind_mask\
                     = self.get_trajectory_wind_blocks()
         if self.flag.test_flight_data:
+            input_ulog_data = self._ulog_data
+            # input_ulog_data, _ = self.sliding_window_split(300, 1, 600)
             self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask \
-                = self.get_ulog_wind_blocks(self._ulog_data)
+                = self.get_ulog_wind_blocks(input_ulog_data)
             # TODO: replace if there are actual labels for flight data
             self.labels = self._wind_zeros
         # Noise
@@ -555,7 +557,7 @@ class WindOptimiser(object):
             print('CSV filename parameter (csv:file) not found in {0}, csv not saved'.format(self._config_yaml))
 
     def run_prediction(self, input):
-        return self.net(input.unsqueeze(0)).squeeze(0)
+        return self.net(input.unsqueeze(0))['pred'].squeeze(0)
 
     def evaluate_loss(self, output):
         # input = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
@@ -575,12 +577,11 @@ class WindOptimiser(object):
 
     def sliding_window_split(self, window_size=1, response_size=1, step_size=1):
         input_ulog = {}; output_ulog = {}
-        if self.flag.optimise_ulog:
-            for keys, values in self._ulog_data.items():
-                input_batch = values[step_size : step_size+window_size]
-                output_batch = values[step_size+window_size : step_size+window_size+response_size]
-                input_ulog.update({keys: input_batch})
-                output_ulog.update({keys: output_batch})
+        for keys, values in self._ulog_data.items():
+            input_batch = values[step_size : step_size+window_size]
+            output_batch = values[step_size+window_size : step_size+window_size+response_size]
+            input_ulog.update({keys: input_batch})
+            output_ulog.update({keys: output_batch})
 
         return input_ulog, output_ulog
 
