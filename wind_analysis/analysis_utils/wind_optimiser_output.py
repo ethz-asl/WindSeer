@@ -221,16 +221,19 @@ class WindOptimiserOutput:
         zs = wind_indices[:, 0]
         ys = wind_indices[:, 1]
         xs = wind_indices[:, 2]
-        ax.scatter(xs, ys, zs, label='trajectory curve', color='red')
-        ax.plot(xs, ys, zs, label='trajectory curve', color='red')
 
-        # wind vectors
-        wind = self._inputs[0][1:-1, :].cpu().detach().numpy()
-
+        # skip values
         wskip = 1
         zs_skip = zs[::wskip]
         ys_skip = ys[::wskip]
         xs_skip = xs[::wskip]
+
+        # plot trajectory
+        ax.scatter(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
+        ax.plot(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
+
+        # plot wind vectors
+        wind = self._inputs[0][1:-1, :].cpu().detach().numpy()
         ax.quiver(xs_skip, ys_skip, zs_skip, wind[0, zs_skip, ys_skip, xs_skip], wind[1, zs_skip, ys_skip, xs_skip],
                   wind[2, zs_skip, ys_skip, xs_skip],
                   length=1)
