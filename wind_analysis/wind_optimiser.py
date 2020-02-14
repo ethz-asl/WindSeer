@@ -281,20 +281,29 @@ class WindOptimiser(object):
     def get_scattered_wind_blocks(self, p=0):
         # Copy of the true wind labels
         wind = self.labels.clone()
-        channels, nx, ny, nz = wind.shape
-        # boolean_terrain = self.binary_terrain.clone().detach().cpu().numpy()
+        channels, nz, ny, nx = wind.shape
         terrain = self.original_terrain
-        # Change (percentage) of False values in binary terrain to True
-        # mask = [not elem if (not elem and random.random() < p) else elem for elem in
-        #         boolean_terrain.flat]
-        # sparse_mask = np.resize(mask, (1, nx, ny, nz)) * 1
-        # # sparse_mask = np.random.choice([0, 1], size=(1, nx, ny, nz), p=[1-p, p])
-        # sparse_wind_mask = torch.from_numpy(sparse_mask.astype(np.float32))
-        numel = int(terrain.numel() * p)
-        idx = torch.nonzero(terrain)
-        select = torch.randperm(idx.shape[0])
-        mask = torch.zeros_like(terrain)
-        mask[idx[select][:numel].split(1, dim=1)] = 1
+        region_method = True
+        if region_method:
+            boolean_terrain = terrain > 0
+            p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
+            unifrom_dist_region = torch.zeros((nz, ny, nx)).float()
+            l = int(np.sqrt(nx * ny * p_sample))
+            x0 = int(l / 2) + 1
+            x1 = nx - (int(l / 2) + 1)
+            rx = random.randint(x0, x1)
+            ry = random.randint(x0, x1)
+            unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] = torch.FloatTensor(nz, l, l).uniform_()
+            terrain_uniform_mask = boolean_terrain.float() * unifrom_dist_region
+            percentage = p / p_sample
+            # sparcity mask
+            mask = terrain_uniform_mask > (1 - percentage)
+        else:
+            numel = int(terrain.numel() * p)
+            idx = torch.nonzero(terrain)
+            select = torch.randperm(idx.shape[0])
+            mask = torch.zeros_like(terrain)
+            mask[idx[select][:numel].split(1, dim=1)] = 1
         sparse_wind_mask = mask.float().unsqueeze(0)
         augmented_wind = torch.cat(([wind, sparse_wind_mask]))
         return augmented_wind.to(self._device)

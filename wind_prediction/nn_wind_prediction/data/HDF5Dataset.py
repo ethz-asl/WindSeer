@@ -373,7 +373,7 @@ class HDF5Dataset(Dataset):
         # create and add sparse mask to data
         if self.__create_sparse_mask:
             terrain = data[0, :]
-            nx, ny, nz = terrain.shape
+            nz, ny, nx = terrain.shape
             boolean_terrain = terrain > 0
             # percentage of sparse data
             p = random.random() * self.__max_percentage_of_sparse_data
@@ -391,13 +391,13 @@ class HDF5Dataset(Dataset):
             if sample_terrain_region:
                 # sample terrain region
                 p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
-                unifrom_dist_region = torch.zeros((nx, ny, nz)).float()
+                unifrom_dist_region = torch.zeros((nz, ny, nx)).float()
                 l = int(np.sqrt(nx*ny*p_sample))
                 x0 = int(l/2) + 1
                 x1 = nx - (int(l/2) + 1)
                 rx = random.randint(x0, x1)
                 ry = random.randint(x0, x1)
-                unifrom_dist_region[rx-int((l+1)/2):rx+int(l/2), ry-int((l+1)/2):ry+int(l/2), :] = torch.FloatTensor(l, l, nz).uniform_()
+                unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] = torch.FloatTensor(nz, l, l).uniform_()
                 terrain_uniform_mask = boolean_terrain.float() * unifrom_dist_region
                 # percentage correction for the sampled terrain patch
                 percentage = percentage/p_sample
