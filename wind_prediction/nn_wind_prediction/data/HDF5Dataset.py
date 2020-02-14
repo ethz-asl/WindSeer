@@ -50,7 +50,8 @@ class HDF5Dataset(Dataset):
     __default_loss_weighting_fn = 0
     __default_loss_weighting_clamp = True
     __default_create_sparse_mask = False
-    __default_percentage_of_sparse_data = 1
+    __default_max_percentage_of_sparse_data = 1
+    __default_terrain_percentage_correction = False
     __default_add_gaussian_noise = False
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
@@ -219,11 +220,19 @@ class HDF5Dataset(Dataset):
                 print('HDF5Dataset: create_sparse_mask not present in kwargs, using default value:', self.__default_create_sparse_mask)
 
         try:
-            self.__percentage_of_sparse_data = kwargs['percentage_of_sparse_data']
+            self.__max_percentage_of_sparse_data = kwargs['max_percentage_of_sparse_data']
         except KeyError:
-            self.__percentage_of_sparse_data = self.__default_percentage_of_sparse_data
+            self.__max_percentage_of_sparse_data = self.__default_max_percentage_of_sparse_data
             if verbose:
-                print('HDF5Dataset: percentage_of_sparse_data not present in kwargs, using default value:', self.__default_percentage_of_sparse_data)
+                print('HDF5Dataset: max_percentage_of_sparse_data not present in kwargs, using default value:', self.__default_max_percentage_of_sparse_data)
+
+        try:
+            self.__terrain_percentage_correction = kwargs['terrain_percentage_correction']
+        except KeyError:
+            self.__terrain_percentage_correction = self.__default_terrain_percentage_correction
+            if verbose:
+                print('HDF5Dataset: add_gaussian_noise not present in kwargs, using default value:', self.__default_terrain_percentage_correction)
+
 
         try:
             self.__add_gaussian_noise = kwargs['add_gaussian_noise']
@@ -365,13 +374,23 @@ class HDF5Dataset(Dataset):
         if self.__create_sparse_mask:
             terrain = data[0, :]
             nx, ny, nz = terrain.shape
-            p = random.random() / 10
+            # percentage of sparse data
+            p = random.random() * self.__max_percentage_of_sparse_data
             if p < 1e-5:
                 p = 1e-5
             boolean_terrain = terrain > 0
-            uniform_mask = torch.FloatTensor(nx, ny, nz).uniform_()
-            pre_mask = boolean_terrain.float() * uniform_mask
-            mask = pre_mask > (1 - p)
+            uniform_dist = torch.FloatTensor(nx, ny, nz).uniform_()
+            terrain_uniform_mask = boolean_terrain.float() * uniform_dist
+            # terrain correction
+            if self.__terrain_percentage_correction:
+                terrain_percentage = 1 - boolean_terrain.sum().item() / boolean_terrain.numel()
+                correctected_percentage = p / (1 - terrain_percentage)
+                percentage = correctected_percentage
+            else:
+                percentage = p
+            # sparcity mask
+            mask = terrain_uniform_mask > (1 - percentage)
+            # add mask to data
             data = torch.cat([data, mask.float().unsqueeze(0)])
 
         # send full data to device

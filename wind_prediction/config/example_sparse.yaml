@@ -12,7 +12,7 @@ run:
     minibatch_epoch_loss: True
     evaluate_testset: False
     warm_start: False
-    vae_custom_weight_initialization: True
+    vae_custom_weight_initialization: False
 
     # options to store data
     save_model: True
@@ -33,7 +33,7 @@ loss:
     # Multiple instances of one loss type can be used. Just add numbering behind 'Loss', e.g. 'L1Loss1/2/3'.
     # For 'LPLoss', P can be replaced with the desired order (int>0). If decimal order desired use LPLoss with p in kwargs.
     # 'GaussianLogLikelihoodLoss' can only be used alone.
-    loss_components: ['L2Loss','KLDivLoss']
+    loss_components: ['L2Loss']
 
     # If the homoscedastic uncertainty factors of the losses should be learnt during training. Auto disable if 1 loss comp.
     learn_scaling: True
@@ -90,7 +90,8 @@ data:
 
     # sparse mask
     create_sparse_mask: True
-    percentage_of_sparse_data: 0.1 # percentage of inputs used for training the network
+    max_percentage_of_sparse_data: 0.05 # percentage of inputs used for training the network
+    terrain_percentage_correction: False
 
     # noise
     add_gaussian_noise: False

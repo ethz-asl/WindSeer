@@ -83,7 +83,8 @@ class EDNNParameters(object):
                 'autoscale': self.data['autoscale'],
                 'loss_weighting_fn': self.loss['loss_weighting_fn'],
                 'create_sparse_mask': self.data['create_sparse_mask'],
-                'percentage_of_sparse_data': self.data['percentage_of_sparse_data'],
+                'max_percentage_of_sparse_data': self.data['max_percentage_of_sparse_data'],
+                'terrain_percentage_correction': self.data['terrain_percentage_correction'],
                 'add_gaussian_noise': self.data['add_gaussian_noise']}
 
     def model_kwargs(self):
