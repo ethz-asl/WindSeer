@@ -81,7 +81,9 @@ class SelectionFlags(object):
         self.use_ekf_wind = ulog.params['use_ekf_wind']
         self.add_wind_measurements = wind.params['add_wind_measurements']
         self.add_corners = wind.params['add_corners']
-        self.use_scattered_points = wind.params['scattered_points']['use_scattered_points']
+        self.use_sparse_data = wind.params['sparse_data']['use_sparse_data']
+        self.terrain_percentage_correction = wind.params['sparse_data']['terrain_percentage_correction']
+        self.sample_random_region = wind.params['sparse_data']['sample_random_region']
         self.use_trajectory = wind.params['trajectory']['use_trajectory_generation']
         self.predict_ulog = wind.params['ulog_flight']['predict_ulog']
         self.optimise_ulog = wind.params['ulog_flight']['optimise_ulog']
@@ -128,8 +130,8 @@ class WindOptimiser(object):
             self.terrain = self.load_cosmo_terrain()
         # Wind measurements variables
         if self.flag.test_simulated_data:
-            if self.flag.use_scattered_points:
-                self._wind_zeros = self.get_scattered_wind_blocks()
+            if self.flag.use_sparse_data:
+                self._wind_zeros = self.get_sparse_wind_blocks()
             if self.flag.use_trajectory:
                 self._wind_blocks, self._wind_zeros, self._wind_mask\
                     = self.get_trajectory_wind_blocks()
@@ -278,32 +280,47 @@ class WindOptimiser(object):
 
     # --- Wind generation ---
 
-    def get_scattered_wind_blocks(self, p=0):
+    def get_sparse_wind_blocks(self, p=0):
         # Copy of the true wind labels
         wind = self.labels.clone()
         channels, nz, ny, nx = wind.shape
         terrain = self.original_terrain
-        region_method = True
-        if region_method:
-            boolean_terrain = terrain > 0
-            p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
-            unifrom_dist_region = torch.zeros((nz, ny, nx)).float()
-            l = int(np.sqrt(nx * ny * p_sample))
-            x0 = int(l / 2) + 1
-            x1 = nx - (int(l / 2) + 1)
-            rx = random.randint(x0, x1)
-            ry = random.randint(x0, x1)
-            unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] = torch.FloatTensor(nz, l, l).uniform_()
-            terrain_uniform_mask = boolean_terrain.float() * unifrom_dist_region
-            percentage = p / p_sample
-            # sparcity mask
-            mask = terrain_uniform_mask > (1 - percentage)
-        else:
+        boolean_terrain = terrain > 0
+        use_nonzero_idx = False
+        if use_nonzero_idx:
             numel = int(terrain.numel() * p)
             idx = torch.nonzero(terrain)
             select = torch.randperm(idx.shape[0])
             mask = torch.zeros_like(terrain)
             mask[idx[select][:numel].split(1, dim=1)] = 1
+        else:
+            # terrain correction
+            if self.flag.terrain_percentage_correction:
+                terrain_percentage = 1 - boolean_terrain.sum().item() / boolean_terrain.numel()
+                correctected_percentage = p / (1 - terrain_percentage)
+                percentage = correctected_percentage
+            else:
+                percentage = p
+
+            # sample random region
+            if self.flag.sample_random_region:
+                p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
+                unifrom_dist_region = torch.zeros((nz, ny, nx)).float()
+                l = int(np.sqrt(nx * ny * p_sample))
+                x0 = int(l / 2) + 1
+                x1 = nx - (int(l / 2) + 1)
+                rx = random.randint(x0, x1)
+                ry = random.randint(x0, x1)
+                unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] = torch.FloatTensor(nz, l, l).uniform_()
+                terrain_uniform_mask = boolean_terrain.float() * unifrom_dist_region
+                percentage = p / p_sample
+            else:
+                uniform_dist = torch.FloatTensor(nz, ny, nx).uniform_()
+                terrain_uniform_mask = boolean_terrain.float() * uniform_dist
+
+            # sparsity mask
+            mask = terrain_uniform_mask > (1 - percentage)
+
         sparse_wind_mask = mask.float().unsqueeze(0)
         augmented_wind = torch.cat(([wind, sparse_wind_mask]))
         return augmented_wind.to(self._device)
@@ -565,6 +582,11 @@ class WindOptimiser(object):
         except:
             print('CSV filename parameter (csv:file) not found in {0}, csv not saved'.format(self._config_yaml))
 
+    def get_prediction(self):
+        input = self.generate_wind_input()       # Set new rotation
+        output = self.run_prediction(input)      # Run network prediction with input csv
+        return output
+
     def run_prediction(self, input):
         return self.net(input.unsqueeze(0))['pred'].squeeze(0)
 
@@ -578,11 +600,6 @@ class WindOptimiser(object):
             # nn_output[self._wind_mask] = 0.0
             labels = self._wind_zeros
         return self._loss_fn(nn_output, labels)
-
-    def get_prediction(self):
-        input = self.generate_wind_input()       # Set new rotation
-        output = self.run_prediction(input)      # Run network prediction with input csv
-        return output
 
     def sliding_window_split(self, window_size=1, response_size=1, step_size=1):
         input_ulog = {}; output_ulog = {}
@@ -687,12 +704,15 @@ class WindOptimiser(object):
         print('Loss value for original input is: ', loss.item())
         return output, loss
 
-    def scattered_points_optimisation(self):
+    def sparse_data_prediction(self):
         outputs, losses, inputs = [], [], []
 
-        wind_corners = self.get_rotated_wind()
-        interpolated_wind = self._interpolator.edge_interpolation(wind_corners)
-        wind_zeros = self.get_scattered_wind_blocks(self._wind_args.params['scattered_points']['final_percentage']/100)
+        if self.flag.add_corners:
+            wind_corners = self.get_rotated_wind()
+            interpolated_wind = self._interpolator.edge_interpolation(wind_corners)
+
+        p = (self._wind_args.params['sparse_data']['percentage_of_sparse_data'])
+        wind_zeros = self.get_sparse_wind_blocks(p)
         # interpolated_wind[self._wind_mask] = 0
         if self.flag.add_corners and not self.flag.add_wind_measurements:
             wind_input = interpolated_wind
@@ -701,47 +721,17 @@ class WindOptimiser(object):
         else:
             wind_input = interpolated_wind + wind_zeros
 
-        num_steps = self._wind_args.params['scattered_points']['num_steps']
-        p = (self._wind_args.params['scattered_points']['final_percentage']
-             - self._wind_args.params['scattered_points']['initial_percentage']) / num_steps
-        if num_steps > 1:
-            t = 0
-            while t <= num_steps:
-                wind_zeros = self.get_scattered_wind_blocks(p*t)
-                # Add noise to data
-                # if self.flag.add_gaussian_noise:
-                #     wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
-                # if self.flag.generate_turbulence:
-                #     wind_blocks, wind_zeros = self.generate_turbulence(wind_zeros, wind_blocks)
-                # Get wind input using wind measurements/corners
-                if self.flag.add_corners and not self.flag.add_wind_measurements:
-                    wind_input = interpolated_wind
-                elif self.flag.add_wind_measurements and not self.flag.add_corners:
-                    wind_input = wind_zeros
-                else:
-                    wind_input = interpolated_wind + wind_zeros
-
-                input = torch.cat([self.terrain.network_terrain, wind_input])
-                output = self.run_prediction(input)
-                loss = self.evaluate_loss(output)
-                outputs.append(output)
-                losses.append(loss)
-                inputs.append(input)
-                print(t,
-                      ' percentage: ', self._wind_args.params['scattered_points']['initial_percentage'] + p*t,
-                      ' loss: ', loss.item())
-                t += 1
-        else:
-            input = torch.cat([self.terrain.network_terrain, wind_input])
-            original_input = input.clone()
-            output = self.run_prediction(input)
-            loss = self.evaluate_loss(output)
-            self.rescale_prediction(output, self.labels)
-            outputs.append(output)
-            losses.append(loss)
-            inputs.append(original_input)
-            print(' percentage: ', self._wind_args.params['scattered_points']['final_percentage'],
-                  ' loss: ', loss.item())
+        # get prediction
+        input = torch.cat([self.terrain.network_terrain, wind_input])
+        original_input = input.clone()
+        output = self.run_prediction(input)
+        loss = self.evaluate_loss(output)
+        self.rescale_prediction(output, self.labels)
+        outputs.append(output)
+        losses.append(loss)
+        inputs.append(original_input)
+        print(' percentage: ', p,
+              ' loss: ', loss.item())
 
         return outputs, losses, inputs
 
