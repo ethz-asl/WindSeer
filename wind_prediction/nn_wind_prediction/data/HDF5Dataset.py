@@ -387,7 +387,7 @@ class HDF5Dataset(Dataset):
             else:
                 percentage = p
 
-            sample_terrain_region = True
+            sample_terrain_region = False
             if sample_terrain_region:
                 # sample terrain region
                 p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
@@ -402,9 +402,9 @@ class HDF5Dataset(Dataset):
                 # percentage correction for the sampled terrain patch
                 percentage = percentage/p_sample
             else:
-                uniform_dist = torch.FloatTensor(nx, ny, nz).uniform_()
+                uniform_dist = torch.FloatTensor(nz, ny, nx).uniform_()
                 terrain_uniform_mask = boolean_terrain.float() * uniform_dist
-            # sparcity mask
+            # sparsity mask
             mask = terrain_uniform_mask > (1 - percentage)
             # add mask to data
             data = torch.cat([data, mask.float().unsqueeze(0)])
