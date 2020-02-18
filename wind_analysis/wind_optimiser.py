@@ -12,6 +12,7 @@ from sklearn import metrics
 from datetime import datetime
 from scipy import ndimage
 from scipy.interpolate import CubicSpline
+from scipy.spatial import distance
 import random
 import torch
 import os
@@ -326,43 +327,109 @@ class WindOptimiser(object):
         return augmented_wind.to(self._device)
 
     def get_trajectory_wind_blocks(self):
-        # x = self._wind_args.params['trajectory']['x']
-        # y = self._wind_args.params['trajectory']['y']
-        # z = self._wind_args.params['trajectory']['z']
-        # x, y, z = []
-        # for i in range(0, 100, 2):
-        #     if i%2 == 0:
-        #         x.append(10+i)
-        #         y.append(10+i)
-        #         z.append(50)
-        #     elif (i+1)%2 == 0:
-        #         x.append(10+i)
-        #         y.append(900+i)
-        #         z.append(50)
-        dot = 400
-        d = dot * 0.1
-        x = []
-        y = []
-        z = []
-        for i in range(dot):
-            t = i / d * np.pi
-            x.append(750 + t * math.cos(t) * 19)
-            y.append(750 + t * math.sin(t) * 19)
-            z.append(0 + 700/dot*i)
-        num_points = self._wind_args.params['trajectory']['num_points']
-        x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
-        # Get the grid points and winds along the trajectory
-        wind = torch.zeros(self.labels.shape) * float('nan')
-        num_segments, segment_length = x_traj.shape
-        counter = 0
-        for i in range(num_segments):
-            for j in range(segment_length):
-                id_x = (int((x_traj[i][j] - self.terrain.x_terr[0]) / self.grid_size[0]))
-                id_y = (int((y_traj[i][j] - self.terrain.y_terr[0]) / self.grid_size[1]))
-                id_z = (int((z_traj[i][j] - self.terrain.z_terr[0]) / self.grid_size[2]))
-                if all(v == 0 for v in wind[:, id_x, id_y, id_z]):
-                    counter += 1
-                wind[:, id_x, id_y, id_z] = self.labels[:, id_x, id_y, id_z]
+        # type of trajectories
+        spiral_trajectory = False
+        zig_zag_trajectory = False
+        random_trajectory = True
+
+        # zig zag trajectory
+        if zig_zag_trajectory:
+            # x = self._wind_args.params['trajectory']['x']
+            # y = self._wind_args.params['trajectory']['y']
+            # z = self._wind_args.params['trajectory']['z']
+            x, y, z = [], [], []
+            for i in range(0, 100, 2):
+                if i % 2 == 0:
+                    x.append(10+i)
+                    y.append(10+i)
+                    z.append(50)
+                elif (i+1) % 2 == 0:
+                    x.append(10+i)
+                    y.append(900+i)
+                    z.append(50)
+
+        # spiral trajectory
+        if spiral_trajectory:
+            dot = 400
+            d = dot * 0.1
+            x = []
+            y = []
+            z = []
+            for i in range(dot):
+                t = i / d * np.pi
+                x.append(750 + t * math.cos(t) * 19)
+                y.append(750 + t * math.sin(t) * 19)
+                z.append(0 + 700/dot*i)
+            num_points = self._wind_args.params['trajectory']['num_points']
+            x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain)
+            # Get the grid points and winds along the trajectory
+            wind = torch.zeros(self.labels.shape) * float('nan')
+            num_segments, segment_length = x_traj.shape
+            counter = 0
+            for i in range(num_segments):
+                for j in range(segment_length):
+                    id_x = (int((x_traj[i][j] - self.terrain.x_terr[0]) / self.grid_size[0]))
+                    id_y = (int((y_traj[i][j] - self.terrain.y_terr[0]) / self.grid_size[1]))
+                    id_z = (int((z_traj[i][j] - self.terrain.z_terr[0]) / self.grid_size[2]))
+                    if all(v == 0 for v in wind[:, id_x, id_y, id_z]):
+                        counter += 1
+                    wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
+
+        # random trajectory
+        if random_trajectory:
+            terrain = self.original_terrain.clone()
+            numel = 100
+            idx = torch.nonzero(terrain)
+            select = torch.randperm(idx.shape[0])
+            # 3D positions of the random points
+            pos_x = idx[select][:numel][:, 2].float() * self.grid_size[0]
+            pos_y = idx[select][:numel][:, 1].float() * self.grid_size[1]
+            pos_z = idx[select][:numel][:, 0].float() * self.grid_size[2]
+            # random starting point
+            start = random.randint(0, numel)
+            # get trajectory points
+            points = torch.cat((pos_x.unsqueeze(1), pos_y.unsqueeze(1), pos_z.unsqueeze(1)), dim=1)
+            distances = distance.squareform(distance.pdist(points))
+            closest = np.argsort(distances, axis=1)
+            x, y, z = [], [], []
+            closest_point = 0
+            current_points = []
+            for i in range(closest.shape[0]):
+                if i == 0:
+                    closest_point = start
+                    current_points.append(closest_point)
+                else:
+                    n = 1
+                    for j in range(closest.shape[1]):
+                        closest_point = closest[closest_point, n]
+                        # check that we don't go back to the same points
+                        if closest_point in current_points:
+                            n += 1
+                            if n == closest.shape[1]-1:
+                                break
+                        else:
+                            current_points.append(closest_point)
+                            break
+                print(closest_point)
+                x.append(pos_x[closest_point])
+                y.append(pos_y[closest_point])
+                z.append(pos_z[closest_point])
+
+            num_points = 10
+            x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain, z_above_terrain=True)
+            # Get the grid points and winds along the trajectory
+            wind = torch.zeros(self.labels.shape) * float('nan')
+            num_segments, segment_length = x_traj.shape
+            counter = 0
+            for i in range(num_segments):
+                for j in range(segment_length):
+                    id_x = (int((x_traj[i][j] - self.terrain.x_terr[0]) / self.grid_size[0]))
+                    id_y = (int((y_traj[i][j] - self.terrain.y_terr[0]) / self.grid_size[1]))
+                    id_z = (int((z_traj[i][j] - self.terrain.z_terr[0]) / self.grid_size[2]))
+                    if all(v == 0 for v in wind[:, id_x, id_y, id_z]):
+                        counter += 1
+                    wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
+
 
         wind_mask = torch.isnan(wind)
         wind_zeros = wind.clone()
@@ -628,7 +695,7 @@ class WindOptimiser(object):
                 output[i] *= self.params.data[channel + '_scaling']
                 label[i] *= self.params.data[channel + '_scaling']
             elif channel.startswith('u') or channel == 'nut':
-                output[i] *= self.scale * self.params.data[channel +'_scaling']
+                output[i] *= self.scale * self.params.data[channel + '_scaling']
                 label[i] *= self.scale * self.params.data[channel + '_scaling']
             elif channel == 'p' or channel == 'turb':
                 output[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']

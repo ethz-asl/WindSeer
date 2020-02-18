@@ -35,14 +35,14 @@ wind:
 
     # Sparse points: generate random wind data by randomly sampling from the CFD labels
     sparse_data: {
-        use_sparse_data: True,
+        use_sparse_data: False,
         percentage_of_sparse_data: 0.05,
         terrain_percentage_correction: False,
         sample_random_region: False,
     }
     # Trajectory generation
     trajectory: {
-        use_trajectory_generation: False,
+        use_trajectory_generation: True,
         x: [50, 200, 450, 850],
         y: [50, 350, 700, 920],
         z: [70, 60, 55, 200],
