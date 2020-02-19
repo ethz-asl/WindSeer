@@ -410,7 +410,6 @@ class WindOptimiser(object):
                         else:
                             current_points.append(closest_point)
                             break
-                print(closest_point)
                 x.append(pos_x[closest_point])
                 y.append(pos_y[closest_point])
                 z.append(pos_z[closest_point])

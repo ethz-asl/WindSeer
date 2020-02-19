@@ -251,6 +251,8 @@ class WindOptimiserOutput:
         ax = fig.gca(projection='3d')
         ax.plot_surface(X, Y, h_network_terrain, rstride=1, cstride=1, cmap=plt.cm.gray,
                         linewidth=0)
+        # X, Y = np.meshgrid(self.wind_opt.terrain.x_terr/self.wind_opt.grid_size[0], self.wind_opt.terrain.y_terr//self.wind_opt.grid_size[0])
+        # ax.plot_surface(X, Y, self.wind_opt.terrain.h_terr.detach().cpu().numpy()/self.wind_opt.grid_size[2], cmap=plt.cm.gray)
 
         # elev = 10
         # azim = -50
