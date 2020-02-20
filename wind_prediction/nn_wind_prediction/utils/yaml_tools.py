@@ -216,3 +216,18 @@ class UlogParameters(BasicParameters):
 
     def print(self):
         self._print('Ulog parameters:')
+
+
+class FlightParameters(BasicParameters):
+
+    def __init__(self, yaml_file):
+        super(FlightParameters, self).__init__(yaml_file, subdict='flight')
+
+    def load_yaml(self, file):
+        return self._load_yaml(file, "Using YAML flight config: ")
+
+    def save(self, dir=None):
+        self._save(dir, 'flight.yaml')
+
+    def print(self):
+        self._print('Flight parameters:')

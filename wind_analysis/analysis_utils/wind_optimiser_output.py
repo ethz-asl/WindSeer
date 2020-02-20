@@ -113,11 +113,11 @@ class WindOptimiserOutput:
 
     def plot_wind_over_time(self):
         # Plot wind over time
-        w_vanes = np.array([self.wind_opt._ulog_data['we'], self.wind_opt._ulog_data['wn'], self.wind_opt._ulog_data['wd']])
+        w_vanes = np.array([self.wind_opt._flight_data['we'], self.wind_opt._flight_data['wn'], self.wind_opt._flight_data['wd']])
         w_ekfest = np.array(
-            [self.wind_opt._ulog_data['we_east'], self.wind_opt._ulog_data['we_north'], self.wind_opt._ulog_data['we_down']])
+            [self.wind_opt._flight_data['we_east'], self.wind_opt._flight_data['we_north'], self.wind_opt._flight_data['we_down']])
         all_winds = [w_vanes, w_ekfest]
-        plot_time = (self.wind_opt._ulog_data['gp_time'] - self.wind_opt._ulog_data['gp_time'][0]) * 1e-6
+        plot_time = (self.wind_opt._flight_data['gp_time'] - self.wind_opt._flight_data['gp_time'][0]) * 1e-6
         fig, ax = plot_wind_estimates(plot_time, all_winds, ['Raw vane estimates', 'On-board EKF estimate'],
                                         polar=False)
 
@@ -131,17 +131,17 @@ class WindOptimiserOutput:
             prediction_interp.append(RegularGridInterpolator((z_terr2, y_terr2, x_terr2), pred_dim))
 
         # Get all the in bounds points
-        inbounds = np.ones(self.wind_opt._ulog_data['x'].shape, dtype='bool')
+        inbounds = np.ones(self.wind_opt._flight_data['x'].shape, dtype='bool')
         inbounds = np.logical_and.reduce(
-            [self.wind_opt._ulog_data['x'] > x_terr2[0], self.wind_opt._ulog_data['x'] < x_terr2[-1], inbounds])
+            [self.wind_opt._flight_data['x'] > x_terr2[0], self.wind_opt._flight_data['x'] < x_terr2[-1], inbounds])
         inbounds = np.logical_and.reduce(
-            [self.wind_opt._ulog_data['y'] > y_terr2[0], self.wind_opt._ulog_data['y'] < y_terr2[-1], inbounds])
+            [self.wind_opt._flight_data['y'] > y_terr2[0], self.wind_opt._flight_data['y'] < y_terr2[-1], inbounds])
         inbounds = np.logical_and.reduce(
-            [self.wind_opt._ulog_data['alt'] > z_terr2[0], self.wind_opt._ulog_data['alt'] < z_terr2[-1], inbounds])
+            [self.wind_opt._flight_data['alt'] > z_terr2[0], self.wind_opt._flight_data['alt'] < z_terr2[-1], inbounds])
 
-        pred_t = (self.wind_opt._ulog_data['gp_time'][inbounds] - self.wind_opt._ulog_data['gp_time'][0]) * 1e-6
-        points = np.array([self.wind_opt._ulog_data['alt'][inbounds], self.wind_opt._ulog_data['y'][inbounds],
-                           self.wind_opt._ulog_data['x'][inbounds]]).T
+        pred_t = (self.wind_opt._flight_data['gp_time'][inbounds] - self.wind_opt._flight_data['gp_time'][0]) * 1e-6
+        points = np.array([self.wind_opt._flight_data['alt'][inbounds], self.wind_opt._flight_data['y'][inbounds],
+                           self.wind_opt._flight_data['x'][inbounds]]).T
         pred_wind = [prediction_interp[0](points), prediction_interp[1](points), prediction_interp[2](points)]
 
         opt_var, opt_var_names = self.wind_opt.get_optimisation_variables()

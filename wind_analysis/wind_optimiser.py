@@ -75,19 +75,19 @@ class OptTest(object):
 
 
 class SelectionFlags(object):
-    def __init__(self, test, cfd, ulog, wind, noise, optimisation):
+    def __init__(self, test, cfd, flight, wind, noise, optimisation):
         self.test_simulated_data = test.params['test_simulated_data']
         self.test_flight_data = test.params['test_flight_data']
         self.batch_test = cfd.params['batch_test']
-        self.use_ekf_wind = ulog.params['use_ekf_wind']
+        self.use_ekf_wind = flight.params['use_ekf_wind']
         self.add_wind_measurements = wind.params['add_wind_measurements']
         self.add_corners = wind.params['add_corners']
         self.use_sparse_data = wind.params['sparse_data']['use_sparse_data']
         self.terrain_percentage_correction = wind.params['sparse_data']['terrain_percentage_correction']
         self.sample_random_region = wind.params['sparse_data']['sample_random_region']
         self.use_trajectory = wind.params['trajectory']['use_trajectory_generation']
-        self.predict_ulog = wind.params['ulog_flight']['predict_ulog']
-        self.optimise_ulog = wind.params['ulog_flight']['optimise_ulog']
+        self.predict_flight = wind.params['flight']['predict_flight']
+        self.optimise_flight = wind.params['flight']['optimise_flight']
         self.generate_turbulence = noise.params['generate_turbulence']
         self.add_gaussian_noise = noise.params['add_gaussian_noise']
         self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
@@ -106,14 +106,14 @@ class WindOptimiser(object):
         self._test_args = utils.BasicParameters(self._config_yaml, 'test')
         self._cfd_args = utils.BasicParameters(self._config_yaml, 'cfd')
         self._cosmo_args = utils.COSMOParameters(self._config_yaml)
-        self._ulog_args = utils.UlogParameters(self._config_yaml)
+        self._flight_args = utils.FlightParameters(self._config_yaml)
         self._wind_args = utils.BasicParameters(self._config_yaml, 'wind')
         self._noise_args = utils.BasicParameters(self._config_yaml, 'noise')
         self._optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._resolution = resolution
         # Selection flags
-        self.flag = SelectionFlags(self._test_args, self._cfd_args, self._ulog_args,
+        self.flag = SelectionFlags(self._test_args, self._cfd_args, self._flight_args,
                                    self._wind_args, self._noise_args, self._optimisation_args)
         # Network model and loss function
         self.net, self.params = self.load_network_model()
@@ -126,7 +126,7 @@ class WindOptimiser(object):
                 = self.load_data_set()
             self.terrain = self.get_cfd_terrain()
         if self.flag.test_flight_data:
-            self._ulog_data = self.load_ulog_data()
+            self._flight_data = self.load_flight_data()
             self._cosmo_wind = self.load_wind()
             self.terrain = self.load_cosmo_terrain()
         # Wind measurements variables
@@ -137,10 +137,10 @@ class WindOptimiser(object):
                 self._wind_blocks, self._wind_zeros, self._wind_mask\
                     = self.get_trajectory_wind_blocks()
         if self.flag.test_flight_data:
-            input_ulog_data = self._ulog_data
-            # input_ulog_data, _ = self.sliding_window_split(300, 1, 600)
+            input_flight_data = self._flight_data
+            # input_flight_data, _ = self.sliding_window_split(300, 1, 600)
             self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask \
-                = self.get_ulog_wind_blocks(input_ulog_data)
+                = self.get_flight_wind_blocks(input_flight_data)
             # TODO: replace if there are actual labels for flight data
             self.labels = self._wind_zeros
         # Noise
@@ -189,34 +189,56 @@ class WindOptimiser(object):
 
     # --- Load data ---
 
-    def load_ulog_data(self):
-        print('Loading ulog data...', end='', flush=True)
-        t_start = time.time()
-        self._ulog_args.print()
-        ulog_data = ulog_utils.get_log_data(self._ulog_args.params['file'])
+    def load_flight_data(self):
+        self._flight_args.print()
+        file_name = self._flight_args.params['file']
+        extension = file_name.split('.')[-1]
+        if extension == 'ulg':
+            print('Loading ulog flight data...', end='', flush=True)
+            t_start = time.time()
+            ulog_data = ulog_utils.get_log_data(self._flight_args.params['file'])
 
-        if self.flag.use_ekf_wind:
-            ulog_data['we'] = ulog_data['we_east']
-            ulog_data['wn'] = ulog_data['we_north']
-            ulog_data['wd'] = ulog_data['we_down']
+            if self.flag.use_ekf_wind:
+                ulog_data['we'] = ulog_data['we_east']
+                ulog_data['wn'] = ulog_data['we_north']
+                ulog_data['wd'] = ulog_data['we_down']
+            else:
+                ulog_data['we'] = ulog_data['we']
+                ulog_data['wn'] = ulog_data['wn']
+                ulog_data['wd'] = ulog_data['wd']
+            flight_data = ulog_data
+            print(' done [{:.2f} s]'.format(time.time() - t_start))
+        elif extension == 'hdf5':
+            print('Loading hdf5 flight data...', end='', flush=True)
+            t_start = time.time()
+            hdf5_data = ulog_utils.read_filtered_hdf5(self._flight_args.params['file'], skip_amount=10)
+            hdf5_data['we'] = hdf5_data['wind_e']
+            hdf5_data['wn'] = hdf5_data['wind_n']
+            hdf5_data['wd'] = hdf5_data['wind_d']
+            flight_data = hdf5_data
+            print(' done [{:.2f} s]'.format(time.time() - t_start))
         else:
-            ulog_data['we'] = ulog_data['we']
-            ulog_data['wn'] = ulog_data['wn']
-            ulog_data['wd'] = ulog_data['wd']
-        print(' done [{:.2f} s]'.format(time.time() - t_start))
+            raise ValueError('Unknown file type: ' + extension + '. ' + file_name + ' should have a .ulg or .hdf5 extension')
 
-        return ulog_data
+        return flight_data
 
     def load_wind(self):
         print('Loading COSMO wind...', end='', flush=True)
         t_start = time.time()
         self._cosmo_args.print()
 
-        lat0, lon0 = self._ulog_data['lat'][0], self._ulog_data['lon'][0]
+        lat0, lon0 = self._flight_data['lat'][0], self._flight_data['lon'][0]
 
+        # Get time of flight
+        # t0 = datetime.utcfromtimestamp(self._flight_data['utc_microsec'][0] / 1e6)
+        # time_of_flight = t0.hour
+        try:
+            file_name = self._flight_args.params['file']
+            time_of_flight = int(file_name.split('/')[-1].split('_')[0])
+        except:
+            raise ValueError('Cannot extract hour of flight from file name')
         # Get cosmo wind
-        t0 = datetime.utcfromtimestamp(self._ulog_data['utc_microsec'][0] / 1e6)
-        offset_cosmo_time = self._cosmo_args.get_cosmo_time(t0.hour)
+        offset_cosmo_time = self._cosmo_args.get_cosmo_time(time_of_flight)
         cosmo_wind = cosmo.extract_cosmo_data(self._cosmo_args.params['file'], lat0, lon0, offset_cosmo_time,
                                               terrain_file=self._cosmo_args.params['terrain_file'])
         print(' done [{:.2f} s]'.format(time.time() - t_start))
@@ -226,7 +248,7 @@ class WindOptimiser(object):
         print('Loading terrain...', end='', flush=True)
         t_start = time.time()
         # Get corresponding terrain
-        # min_height = min(ulog_data['alt'].min(), h_terr.min())
+        # min_height = min(flight_data['alt'].min(), h_terr.min())
         block_height = [1100.0 / 95 * 63]
         # x_terr, y_terr and z_terr are the (regular, monotonic) index arrays for the h_terr and full_block arrays
         # h_terr is the terrain height
@@ -445,7 +467,7 @@ class WindOptimiser(object):
         return augmented_wind.to(self._device)
 
 
-    def get_ulog_wind_blocks(self, ulog_data):
+    def get_flight_wind_blocks(self, flight_data):
         #print('Getting binned wind blocks...', end='', flush=True)
         #t_start = time.time()
 
@@ -456,19 +478,19 @@ class WindOptimiser(object):
         grid_dimensions = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
                            'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
 
-        UlogInterpolator = UlogInterpolation(ulog_data, grid_dimensions, self.terrain)
+        FlightInterpolator = UlogInterpolation(flight_data, grid_dimensions, self.terrain)
 
         # bin the data into the regular grid
         try:
-            if self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'bin':
-                wind, variance = UlogInterpolator.bin_log_data()
-            elif self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'krigging':
-                wind, variance = UlogInterpolator.interpolate_log_data_krigging()
-            elif self._wind_args.params['ulog_flight']['interpolation_method'].lower() == 'idw':
-                wind, variance = UlogInterpolator.interpolate_log_data_idw()
+            if self._wind_args.params['flight']['interpolation_method'].lower() == 'bin':
+                wind, variance = FlightInterpolator.bin_log_data()
+            elif self._wind_args.params['flight']['interpolation_method'].lower() == 'krigging':
+                wind, variance = FlightInterpolator.interpolate_log_data_krigging()
+            elif self._wind_args.params['flight']['interpolation_method'].lower() == 'idw':
+                wind, variance = FlightInterpolator.interpolate_log_data_idw()
             else:
                 print('Specified interpolation method: {0} unknown!'
-                      .format(self._ulog_args.params['interpolation_method']))
+                      .format(self._flight_args.params['interpolation_method']))
                 raise ValueError
         except KeyError:
             print('Interpolation method not specified in file: {0}'
@@ -615,16 +637,16 @@ class WindOptimiser(object):
     def calculate_metrics(self, predicted_wind):
         test_wind_inside_terrain = np.zeros((3, len(predicted_wind[0])))
         j = 0
-        for i in range(len(self._test_ulog_data['x'])):
-            if ((self._test_ulog_data['x'][i] > self.terrain.x_terr[0]) and
-                    (self._test_ulog_data['x'][i] < self.terrain.x_terr[-1]) and
-                    (self._test_ulog_data['y'][i] > self.terrain.y_terr[0]) and
-                    (self._test_ulog_data['y'][i] < self.terrain.y_terr[-1]) and
-                    (self._test_ulog_data['alt'][i] > self.terrain.z_terr[0]) and
-                    (self._test_ulog_data['alt'][i] < self.terrain.z_terr[-1])):
-                test_wind_inside_terrain[0][j] = self._test_ulog_data['wn'][i]
-                test_wind_inside_terrain[1][j] = self._test_ulog_data['we'][i]
-                test_wind_inside_terrain[2][j] = self._test_ulog_data['wd'][i]
+        for i in range(len(self._test_flight_data['x'])):
+            if ((self._test_flight_data['x'][i] > self.terrain.x_terr[0]) and
+                    (self._test_flight_data['x'][i] < self.terrain.x_terr[-1]) and
+                    (self._test_flight_data['y'][i] > self.terrain.y_terr[0]) and
+                    (self._test_flight_data['y'][i] < self.terrain.y_terr[-1]) and
+                    (self._test_flight_data['alt'][i] > self.terrain.z_terr[0]) and
+                    (self._test_flight_data['alt'][i] < self.terrain.z_terr[-1])):
+                test_wind_inside_terrain[0][j] = self._test_flight_data['wn'][i]
+                test_wind_inside_terrain[1][j] = self._test_flight_data['we'][i]
+                test_wind_inside_terrain[2][j] = self._test_flight_data['wd'][i]
                 j += 1
 
         test_wind_inside_terrain = list(test_wind_inside_terrain)
@@ -668,14 +690,14 @@ class WindOptimiser(object):
         return self._loss_fn(nn_output, labels)
 
     def sliding_window_split(self, window_size=1, response_size=1, step_size=1):
-        input_ulog = {}; output_ulog = {}
-        for keys, values in self._ulog_data.items():
+        input_flight = {}; output_flight = {}
+        for keys, values in self._flight_data.items():
             input_batch = values[step_size : step_size+window_size]
             output_batch = values[step_size+window_size : step_size+window_size+response_size]
-            input_ulog.update({keys: input_batch})
-            output_ulog.update({keys: output_batch})
+            input_flight.update({keys: input_batch})
+            output_flight.update({keys: output_batch})
 
-        return input_ulog, output_ulog
+        return input_flight, output_flight
 
     def rescale_prediction(self, output, label):
         output = output.squeeze()
@@ -824,7 +846,7 @@ class WindOptimiser(object):
         print(' loss: ', loss.item())
         return outputs, losses, inputs
 
-    def flight_ulog_prediction(self):
+    def flight_prediction(self):
         outputs, losses, inputs = [], [], []
 
         # add mask to input
@@ -839,22 +861,22 @@ class WindOptimiser(object):
         inputs.append(input)
         return outputs, losses, inputs
 
-    def flight_ulog_optimisation(self):
+    def flight_optimisation(self):
         # sliding window variables
         window_size = 4
         response_size = 2
         step_size = 1
-        max_num_windows = int((self._ulog_data['x'].size - (window_size + response_size)) / step_size + 1)
+        max_num_windows = int((self._flight_data['x'].size - (window_size + response_size)) / step_size + 1)
 
         for i in range(max_num_windows):
             outputs, losses = [], []
             # split data into input and output based on window variables
-            input_ulog_data, output_ulog_data = \
+            input_flight_data, output_flight_data = \
                 self.sliding_window_split(window_size, response_size, i*step_size)
 
             # bin input log data
             wind_blocks, var_blocks, wind_zeros, wind_mask \
-                = self.get_ulog_wind_blocks(input_ulog_data)
+                = self.get_flight_wind_blocks(input_flight_data)
 
             # get prediction
             wind = wind_zeros.to(self._device)
@@ -865,14 +887,14 @@ class WindOptimiser(object):
             input_ = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input_)
 
-            # interpolate prediction to scattered ulog data locations used for testing
+            # interpolate prediction to scattered flight data locations used for testing
             grid_dimensions = None
-            UlogInterpolator = UlogInterpolation(input_ulog_data, grid_dimensions, self.terrain)
-            interpolated_output = UlogInterpolator.interpolate_log_data_from_grid(output, output_ulog_data)
+            FlightInterpolator = UlogInterpolation(input_flight_data, grid_dimensions, self.terrain)
+            interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(output, output_flight_data)
 
             # loss
             wind_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
-            labels = np.array([output_ulog_data['wn'], output_ulog_data['we'], output_ulog_data['wd']])
+            labels = np.array([output_flight_data['wn'], output_flight_data['we'], output_flight_data['wd']])
             loss = self._loss_fn(torch.Tensor(wind_output).to(self._device), torch.Tensor(labels).to(self._device))
             outputs.append(wind_output)
             losses.append(loss)

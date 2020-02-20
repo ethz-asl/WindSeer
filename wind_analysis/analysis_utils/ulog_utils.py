@@ -162,7 +162,7 @@ def build_csv(x_terr, y_terr, z_terr, full_block, cosmo_corners, outfile, origin
                     csv_writer.writerow(base)
 
 
-def read_filtered_hdf5(filename, proj_logfile=None, proj_output=None):
+def read_filtered_hdf5(filename, proj_logfile=None, proj_output=None, skip_amount=1):
     # default projections
     if proj_logfile is None:
         proj_logfile = pyproj.Proj(proj='latlong', datum='WGS84')
@@ -173,7 +173,7 @@ def read_filtered_hdf5(filename, proj_logfile=None, proj_output=None):
     out_dict = {}
     f = h5py.File(filename, 'r')
     for key, value in f['wind_out'].items():
-        out_dict[key] = np.array(value).squeeze()
+        out_dict[key] = np.array(value).squeeze()[::skip_amount]
     # Convert time stamps back to uint64 microseconds
     out_dict['time'] = (out_dict['time']*1e6).astype('int64')
 
