@@ -20,6 +20,21 @@ import time
 import copy
 import math
 
+
+def angle_between_vectors(v1, v2, deg_rad=0):
+    """ Returns angle in deg or rad between two vectors 'v1' and 'v2' """
+    # Unit vectors
+    v1_u = v1 / np.linalg.norm(v1)
+    v2_u = v2 / np.linalg.norm(v2)
+
+    angle_rad = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+    angle_deg = angle_rad * 180 / math.pi
+
+    if deg_rad == 0:
+        return angle_deg
+    else:
+        return angle_rad
+
 class TerrainBlock(object):
     def __init__(self, x_terr, y_terr, z_terr, h_terr, full_block, device=None, boolean_terrain=False):
         self.x_terr = x_terr
@@ -129,6 +144,7 @@ class WindOptimiser(object):
             self._flight_data = self.load_flight_data()
             self._cosmo_wind = self.load_wind()
             self.terrain = self.load_cosmo_terrain()
+            self.wind_vector_angles = self.get_angles_between_wind_vectors()
         # Wind measurements variables
         if self.flag.test_simulated_data:
             if self.flag.use_sparse_data:
@@ -601,6 +617,16 @@ class WindOptimiser(object):
         return cosmo_corners
 
     # --- Helper functions ---
+
+    def get_angles_between_wind_vectors(self):
+        wind_e = self._flight_data['we']
+        wind_n = self._flight_data['wn']
+        wind_d = self._flight_data['wd']
+        wind_vectors = [[wind_e[i], wind_n[i], wind_d[i]] for i in range(len(wind_e))]
+        angles = []
+        for i in range(len(wind_e)-1):
+            angles.append(angle_between_vectors(wind_vectors[i], wind_vectors[i+1]))
+        return angles
 
     def get_rotated_wind(self):
         sr = []; cr = []
