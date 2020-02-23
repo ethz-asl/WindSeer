@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.transforms as transforms
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import RegularGridInterpolator
 from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates, plot_wind_3d
@@ -263,6 +264,26 @@ class WindOptimiserOutput:
         else:
             plt.show()
 
+    def plot_wind_vectors_angles(self):
+        fig, ax = plt.subplots()
+        wind_vectors_angles = self.wind_opt.wind_vector_angles
+        mean = sum(wind_vectors_angles)/len(wind_vectors_angles)
+        measurements = np.arange(0, len(wind_vectors_angles), 1)
+
+        ax.bar(measurements, wind_vectors_angles, color='blue')
+        ax.set_xlabel('Measurements')
+        ax.set_ylabel('Angles between the wind vectors (deg)')
+        # add mean line
+        ax.axhline(mean, color='red', linewidth=2)
+        trans = transforms.blended_transform_factory(
+            ax.get_yticklabels()[0].get_transform(), ax.transData)
+        ax.text(0, mean, "{:.2f}".format(mean), color='red', transform=trans, ha='right', va='center')
+
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
+
     def close(self):
         self.pp.close()
 
@@ -274,8 +295,9 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
-        self.plot_trajectory_and_terrain()
-        self.plot_best_wind_estimate()
+        # self.plot_trajectory_and_terrain()
+        # self.plot_best_wind_estimate()
+        self.plot_wind_vectors_angles()
 
 
         if self._save_output:

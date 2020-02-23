@@ -50,8 +50,8 @@ wind:
     }
     # Real data flight
     flight: {
-        predict_flight: False,
-        optimise_flight: True,
+        predict_flight: True,
+        optimise_flight: False,
         interpolation_method: 'bin',   #['bin', 'idw', 'krigging']
     }
 
