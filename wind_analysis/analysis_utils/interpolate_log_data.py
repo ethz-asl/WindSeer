@@ -229,7 +229,7 @@ class UlogInterpolation:
                                        inferred_wind_data[2, :, :, :].detach().cpu().numpy())
 
         # Initialize empty list of points where the wind is interpolated
-        pts = [[] for i in range(len(predict_wind_data['x']))]
+        pts = []
         for i in range(len(predict_wind_data['x'])):
             if ((predict_wind_data['x'][i] > self._terrain.x_terr[0]) and
                     (predict_wind_data['x'][i] < self._terrain.x_terr[-1]) and
@@ -237,10 +237,7 @@ class UlogInterpolation:
                     (predict_wind_data['y'][i] < self._terrain.y_terr[-1]) and
                     (predict_wind_data['alt'][i] > self._terrain.z_terr[0]) and
                     (predict_wind_data['alt'][i] < self._terrain.z_terr[-1])):
-                pts[i].append([predict_wind_data['x'][i], predict_wind_data['y'][i], predict_wind_data['alt'][i]])
-
-        # Remove empty lists from pts
-        pts = [x for x in pts if x != []]
+                pts.append([predict_wind_data['x'][i], predict_wind_data['y'][i], predict_wind_data['alt'][i]])
 
         interpolated_log_data_x = interpolating_function_x(pts)
         interpolated_log_data_y = interpolating_function_y(pts)

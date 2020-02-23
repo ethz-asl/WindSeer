@@ -222,6 +222,8 @@ class WindOptimiser(object):
                 ulog_data['we'] = ulog_data['we']
                 ulog_data['wn'] = ulog_data['wn']
                 ulog_data['wd'] = ulog_data['wd']
+            ulog_data['time_microsec'] = ulog_data['utc_microsec']
+
             flight_data = ulog_data
             print(' done [{:.2f} s]'.format(time.time() - t_start))
         elif extension == 'hdf5':
@@ -231,6 +233,8 @@ class WindOptimiser(object):
             hdf5_data['we'] = hdf5_data['wind_e']
             hdf5_data['wn'] = hdf5_data['wind_n']
             hdf5_data['wd'] = hdf5_data['wind_d']
+            hdf5_data['time_microsec'] = hdf5_data['time']
+
             flight_data = hdf5_data
             print(' done [{:.2f} s]'.format(time.time() - t_start))
         else:
@@ -478,7 +482,7 @@ class WindOptimiser(object):
             wind = self._wind_zeros.clone()
         else:
             wind = wind_provided
-        sparse_mask = self._wind_mask[0].__invert__().float()
+        sparse_mask = (~self._wind_mask[0]).float()
         augmented_wind = torch.cat(([wind, sparse_mask.unsqueeze(0)]))
         return augmented_wind.to(self._device)
 
@@ -888,14 +892,30 @@ class WindOptimiser(object):
         return outputs, losses, inputs
 
     def flight_optimisation(self):
-        # sliding window variables
-        window_size = 4
-        response_size = 2
-        step_size = 1
-        max_num_windows = int((self._flight_data['x'].size - (window_size + response_size)) / step_size + 1)
+        # sliding window variables (in seconds)
+        window_time = 100  # seconds
+        response_time = 20  # seconds
+        step_time = 120  # seconds
 
+        # time between two consecutive flight measurements
+        dt = (self._flight_data['time_microsec'][1]-self._flight_data['time_microsec'][0]) / 1e6
+        total_time_of_flight = (self._flight_data['time_microsec'][-1]-self._flight_data['time_microsec'][0]) / 1e6
+
+        # sliding window variables
+        window_size = int(window_time/dt)
+        response_size = int(response_time/dt)
+        step_size = int(step_time/dt)
+        # window_size = 4
+        # response_size = 2
+        # step_size = 1
+
+        # total
+        max_num_windows = int((self._flight_data['x'].size - (window_size + response_size)) / step_size + 1)
+        total_time_of_flight = (self._flight_data['time_microsec'][-1] - self._flight_data['time_microsec'][0]) / 1e6
+        print('Number of windows: ', max_num_windows, 'Total time of flight', total_time_of_flight)
+
+        outputs, losses = [], []
         for i in range(max_num_windows):
-            outputs, losses = [], []
             # split data into input and output based on window variables
             input_flight_data, output_flight_data = \
                 self.sliding_window_split(window_size, response_size, i*step_size)
@@ -909,7 +929,7 @@ class WindOptimiser(object):
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
                 wind += interpolated_cosmo_corners
-            # wind = self.add_mask(wind)
+            wind = self.add_mask(wind)
             input_ = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input_)
 
@@ -917,12 +937,32 @@ class WindOptimiser(object):
             grid_dimensions = None
             FlightInterpolator = UlogInterpolation(input_flight_data, grid_dimensions, self.terrain)
             interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(output, output_flight_data)
+            wind_output = np.resize(np.array(interpolated_output), (len(interpolated_output[0]), 3))
+
+            # labels
+            # filter out points in the response window which are outside the terrain sample
+            valid_output = []
+            for j in range(len(output_flight_data['x'])):
+                if ((output_flight_data['x'][j] > self.terrain.x_terr[0]) and
+                        (output_flight_data['x'][j] < self.terrain.x_terr[-1]) and
+                        (output_flight_data['y'][j] > self.terrain.y_terr[0]) and
+                        (output_flight_data['y'][j] < self.terrain.y_terr[-1]) and
+                        (output_flight_data['alt'][j] > self.terrain.z_terr[0]) and
+                        (output_flight_data['alt'][j] < self.terrain.z_terr[-1])):
+                    valid_output.append([output_flight_data['wn'][j], output_flight_data['we'][j], output_flight_data['wd'][j]])
+            labels = np.resize(np.array(valid_output), (len(valid_output), 3))
+            # wind_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
+            # labels = np.array([output_flight_data['wn'], output_flight_data['we'], output_flight_data['wd']])
 
             # loss
-            wind_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
-            labels = np.array([output_flight_data['wn'], output_flight_data['we'], output_flight_data['wd']])
-            loss = self._loss_fn(torch.Tensor(wind_output).to(self._device), torch.Tensor(labels).to(self._device))
+            if len(valid_output) == 0:
+                loss = torch.zeros(1)
+            else:
+                loss = self._loss_fn(torch.Tensor(wind_output).to(self._device), torch.Tensor(labels).to(self._device))
             outputs.append(wind_output)
             losses.append(loss)
-            print('Loss is: ', loss.item())
+            print(i, ' Loss is: ', loss.item())
+        losses_items = [losses[i].item() for i in range(len(losses))]
+        average_loss = sum(losses_items)/len(losses_items)
+        print('Average loss is: ', average_loss)
         return outputs, losses
