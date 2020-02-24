@@ -90,7 +90,7 @@ class OptTest(object):
 
 
 class SelectionFlags(object):
-    def __init__(self, test, cfd, flight, wind, noise, optimisation):
+    def __init__(self, test, cfd, flight, wind, noise, window_split, optimisation):
         self.test_simulated_data = test.params['test_simulated_data']
         self.test_flight_data = test.params['test_flight_data']
         self.batch_test = cfd.params['batch_test']
@@ -102,9 +102,9 @@ class SelectionFlags(object):
         self.sample_random_region = wind.params['sparse_data']['sample_random_region']
         self.use_trajectory = wind.params['trajectory']['use_trajectory_generation']
         self.predict_flight = wind.params['flight']['predict_flight']
-        self.optimise_flight = wind.params['flight']['optimise_flight']
         self.generate_turbulence = noise.params['generate_turbulence']
         self.add_gaussian_noise = noise.params['add_gaussian_noise']
+        self.use_window_split = window_split.params['use_window_split']
         self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
         self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
         self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
@@ -124,12 +124,13 @@ class WindOptimiser(object):
         self._flight_args = utils.FlightParameters(self._config_yaml)
         self._wind_args = utils.BasicParameters(self._config_yaml, 'wind')
         self._noise_args = utils.BasicParameters(self._config_yaml, 'noise')
+        self._window_splits_args = utils.BasicParameters(self._config_yaml, 'window_split')
         self._optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._resolution = resolution
         # Selection flags
-        self.flag = SelectionFlags(self._test_args, self._cfd_args, self._flight_args,
-                                   self._wind_args, self._noise_args, self._optimisation_args)
+        self.flag = SelectionFlags(self._test_args, self._cfd_args, self._flight_args, self._wind_args,
+                                   self._noise_args, self._window_splits_args, self._optimisation_args)
         # Network model and loss function
         self.net, self.params = self.load_network_model()
         self.net.freeze_model()
@@ -420,7 +421,7 @@ class WindOptimiser(object):
         # random trajectory
         if random_trajectory:
             terrain = self.original_terrain.clone()
-            numel = 100
+            numel = self._wind_args.params['trajectory']['num_points_generated']
             idx = torch.nonzero(terrain)
             select = torch.randperm(idx.shape[0])
             # 3D positions of the random points
@@ -456,7 +457,7 @@ class WindOptimiser(object):
                 y.append(pos_y[closest_point])
                 z.append(pos_z[closest_point])
 
-            num_points = 10
+            num_points = self._wind_args.params['trajectory']['num_points_between_data']
             x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain, z_above_terrain=True)
             # Get the grid points and winds along the trajectory
             wind = torch.zeros(self.labels.shape) * float('nan')
@@ -471,21 +472,10 @@ class WindOptimiser(object):
                         counter += 1
                     wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
 
-
         wind_mask = torch.isnan(wind)
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
         return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device)
-
-    def add_mask(self, wind_provided=None):
-        if wind_provided is None:
-            wind = self._wind_zeros.clone()
-        else:
-            wind = wind_provided
-        sparse_mask = (~self._wind_mask[0]).float()
-        augmented_wind = torch.cat(([wind, sparse_mask.unsqueeze(0)]))
-        return augmented_wind.to(self._device)
-
 
     def get_flight_wind_blocks(self, flight_data):
         #print('Getting binned wind blocks...', end='', flush=True)
@@ -521,13 +511,6 @@ class WindOptimiser(object):
 
         #print(' done [{:.2f} s]'.format(time.time() - t_start))
         return wind, variance, wind_zeros.to(self._device), wind_mask.to(self._device)
-
-    def run_original_wind_prediction(self, data_set):
-        input_ = data_set[0].to(self._device)
-        labels = data_set[1].to(self._device)
-        output = self.get_wind_prediction(input_)
-        loss = self._loss_fn(output, labels)
-        print("Loss is: ", loss.item())
 
     # --- Add noise to data ---
 
@@ -621,6 +604,14 @@ class WindOptimiser(object):
         return cosmo_corners
 
     # --- Helper functions ---
+    def add_mask_to_wind(self, wind_provided=None):
+        if wind_provided is None:
+            wind = self._wind_zeros.clone()
+        else:
+            wind = wind_provided
+        sparse_mask = (~self._wind_mask[0]).float()
+        augmented_wind = torch.cat(([wind, sparse_mask.unsqueeze(0)]))
+        return augmented_wind.to(self._device)
 
     def get_angles_between_wind_vectors(self):
         wind_e = self._flight_data['we']
@@ -663,33 +654,6 @@ class WindOptimiser(object):
             interpolated_wind += self._wind_zeros
         input_ = torch.cat([self.terrain.network_terrain, interpolated_wind])
         return input_
-
-    def calculate_metrics(self, predicted_wind):
-        test_wind_inside_terrain = np.zeros((3, len(predicted_wind[0])))
-        j = 0
-        for i in range(len(self._test_flight_data['x'])):
-            if ((self._test_flight_data['x'][i] > self.terrain.x_terr[0]) and
-                    (self._test_flight_data['x'][i] < self.terrain.x_terr[-1]) and
-                    (self._test_flight_data['y'][i] > self.terrain.y_terr[0]) and
-                    (self._test_flight_data['y'][i] < self.terrain.y_terr[-1]) and
-                    (self._test_flight_data['alt'][i] > self.terrain.z_terr[0]) and
-                    (self._test_flight_data['alt'][i] < self.terrain.z_terr[-1])):
-                test_wind_inside_terrain[0][j] = self._test_flight_data['wn'][i]
-                test_wind_inside_terrain[1][j] = self._test_flight_data['we'][i]
-                test_wind_inside_terrain[2][j] = self._test_flight_data['wd'][i]
-                j += 1
-
-        test_wind_inside_terrain = list(test_wind_inside_terrain)
-        mean_absolute_error_x = metrics.mean_absolute_error(test_wind_inside_terrain[0], predicted_wind[0])
-        mean_absolute_error_y = metrics.mean_absolute_error(test_wind_inside_terrain[1], predicted_wind[1])
-        mean_absolute_error_z = metrics.mean_absolute_error(test_wind_inside_terrain[2], predicted_wind[2])
-        mean_squared_error_x = metrics.mean_squared_error(test_wind_inside_terrain[0], predicted_wind[0])
-        mean_squared_error_y = metrics.mean_squared_error(test_wind_inside_terrain[1], predicted_wind[1])
-        mean_squared_error_z = metrics.mean_squared_error(test_wind_inside_terrain[2], predicted_wind[2])
-        mean_absolute_error = mean_absolute_error_x + mean_absolute_error_y + mean_absolute_error_z
-        mean_squared_error = mean_squared_error_x + mean_squared_error_y + mean_squared_error_z
-        print('Mean absolute error is: ', mean_absolute_error)
-        print('Mean square error is: ', mean_squared_error)
 
     def build_csv(self):
         try:
@@ -864,7 +828,7 @@ class WindOptimiser(object):
         if self.flag.add_gaussian_noise:
             wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
         # create mask
-        wind_input = self.add_mask()
+        wind_input = self.add_mask_to_wind()
         # run prediction
         input = torch.cat([self.terrain.network_terrain, wind_input])
         original_input = input.clone()
@@ -880,7 +844,7 @@ class WindOptimiser(object):
         outputs, losses, inputs = [], [], []
 
         # add mask to input
-        wind_input = self.add_mask()
+        wind_input = self.add_mask_to_wind()
 
         # run prediction
         input = torch.cat([self.terrain.network_terrain, wind_input])
@@ -891,11 +855,11 @@ class WindOptimiser(object):
         inputs.append(input)
         return outputs, losses, inputs
 
-    def flight_optimisation(self):
+    def window_split_optimisation(self):
         # sliding window variables (in seconds)
-        window_time = 100  # seconds
-        response_time = 20  # seconds
-        step_time = 120  # seconds
+        window_time = self._window_splits_args.params['window_time']  # seconds
+        response_time = self._window_splits_args.params['response_time']  # seconds
+        step_time = self._window_splits_args.params['step_time']  # seconds
 
         # time between two consecutive flight measurements
         dt = (self._flight_data['time_microsec'][1]-self._flight_data['time_microsec'][0]) / 1e6
@@ -942,7 +906,7 @@ class WindOptimiser(object):
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
                 wind += interpolated_cosmo_corners
-            wind = self.add_mask(wind)
+            wind = self.add_mask_to_wind(wind)
             input = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input)
 

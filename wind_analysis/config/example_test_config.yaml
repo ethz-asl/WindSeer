@@ -24,11 +24,11 @@ cosmo:
 
 # flight data
 flight:
-    file: 'data/14_47_05_filtered2.hdf5' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05   14_47_05_filtered.hdf5
+    file: 'data/14_47_05.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05   14_47_05_filtered.hdf5
     filtered_dir: 'data/'
     use_ekf_wind: False
 
-# Wind generation parameters
+# Wind measurements parameters
 wind:
     add_wind_measurements: True
     add_corners: False
@@ -43,15 +43,12 @@ wind:
     # Trajectory generation
     trajectory: {
         use_trajectory_generation: True,
-        x: [50, 200, 450, 850],
-        y: [50, 350, 700, 920],
-        z: [70, 60, 55, 200],
-        num_points: 200
+        num_points_generated: 10,
+        num_points_between_data: 10
     }
-    # Real data flight
+    # Real flight wind data
     flight: {
         predict_flight: False,
-        optimise_flight: True,
         interpolation_method: 'bin',   #['bin', 'idw', 'krigging']
     }
 
@@ -59,6 +56,13 @@ wind:
 noise:
   generate_turbulence: False
   add_gaussian_noise: False
+
+# Window split parameters
+window_split:
+  use_window_split: True
+  window_time: 100 # seconds
+  response_time: 20 # seconds
+  step_time: 120 # seconds
 
 # Corner optimisation parameters
 optimisation:
