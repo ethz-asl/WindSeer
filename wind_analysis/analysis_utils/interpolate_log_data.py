@@ -222,11 +222,11 @@ class UlogInterpolation:
         '''
 
         interpolating_function_x = RGI((self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr),
-                                       inferred_wind_data[0, :, :, :].detach().cpu().numpy())
+                                       inferred_wind_data[0, :].detach().cpu().numpy(), method='nearest')
         interpolating_function_y = RGI((self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr),
-                                       inferred_wind_data[1, :, :, :].detach().cpu().numpy())
+                                       inferred_wind_data[1, :].detach().cpu().numpy(), method='nearest')
         interpolating_function_z = RGI((self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr),
-                                       inferred_wind_data[2, :, :, :].detach().cpu().numpy())
+                                       inferred_wind_data[2, :].detach().cpu().numpy(), method='nearest')
 
         # Initialize empty list of points where the wind is interpolated
         pts = []

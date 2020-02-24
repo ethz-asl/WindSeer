@@ -1,7 +1,7 @@
 # Test parameters
 test:
-    test_simulated_data: False
-    test_flight_data: True
+    test_simulated_data: True
+    test_flight_data: False
 
 # CFD data
 cfd:
@@ -43,8 +43,9 @@ wind:
     # Trajectory generation
     trajectory: {
         use_trajectory_generation: True,
-        num_points_generated: 10,
-        num_points_between_data: 10
+        num_points_generated: 100,
+        uav_speed: 15,
+        dt: 0.1 # seconds
     }
     # Real flight wind data
     flight: {

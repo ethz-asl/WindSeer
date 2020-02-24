@@ -8,11 +8,11 @@ from analysis_utils.generate_trajectory import generate_trajectory
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 import nn_wind_prediction.data as data
 import nn_wind_prediction.data as nn_data
-from sklearn import metrics
 from datetime import datetime
 from scipy import ndimage
 from scipy.interpolate import CubicSpline
 from scipy.spatial import distance
+from scipy.interpolate import RegularGridInterpolator as RGI
 import random
 import torch
 import os
@@ -151,7 +151,7 @@ class WindOptimiser(object):
             if self.flag.use_sparse_data:
                 self._wind_zeros = self.get_sparse_wind_blocks()
             if self.flag.use_trajectory:
-                self._wind_blocks, self._wind_zeros, self._wind_mask\
+                self._wind_blocks, self._wind_zeros, self._wind_mask, self._simulated_flight_data\
                     = self.get_trajectory_wind_blocks()
         if self.flag.test_flight_data:
             input_flight_data = self._flight_data
@@ -372,24 +372,7 @@ class WindOptimiser(object):
     def get_trajectory_wind_blocks(self):
         # type of trajectories
         spiral_trajectory = False
-        zig_zag_trajectory = False
         random_trajectory = True
-
-        # zig zag trajectory
-        if zig_zag_trajectory:
-            # x = self._wind_args.params['trajectory']['x']
-            # y = self._wind_args.params['trajectory']['y']
-            # z = self._wind_args.params['trajectory']['z']
-            x, y, z = [], [], []
-            for i in range(0, 100, 2):
-                if i % 2 == 0:
-                    x.append(10+i)
-                    y.append(10+i)
-                    z.append(50)
-                elif (i+1) % 2 == 0:
-                    x.append(10+i)
-                    y.append(900+i)
-                    z.append(50)
 
         # spiral trajectory
         if spiral_trajectory:
@@ -457,25 +440,45 @@ class WindOptimiser(object):
                 y.append(pos_y[closest_point])
                 z.append(pos_z[closest_point])
 
-            num_points = self._wind_args.params['trajectory']['num_points_between_data']
-            x_traj, y_traj, z_traj = generate_trajectory(x, y, z, num_points, self.terrain, z_above_terrain=True)
-            # Get the grid points and winds along the trajectory
+            uav_speed = self._wind_args.params['trajectory']['uav_speed']
+            dt = self._wind_args.params['trajectory']['dt']
+            x_traj, y_traj, z_traj = generate_trajectory(x, y, z, uav_speed, dt, self.terrain, z_above_terrain=True)
+
+            # generate simulated flight data
+            simulated_flight_data = {}
+            interpolating_function_x = RGI((self.terrain.x_terr, self.terrain.y_terr, self.terrain.z_terr),
+                                           self.labels[0, :].detach().cpu().numpy(), method='nearest')
+            interpolating_function_y = RGI((self.terrain.x_terr, self.terrain.y_terr, self.terrain.z_terr),
+                                           self.labels[1, :].detach().cpu().numpy(), method='nearest')
+            interpolating_function_z = RGI((self.terrain.x_terr, self.terrain.y_terr, self.terrain.z_terr),
+                                           self.labels[2, :].detach().cpu().numpy(), method='nearest')
+            pts = np.column_stack((x_traj, y_traj, z_traj))
+            # distances = np.sqrt(np.sum(np.diff(pts, axis=0)**2, 1))
+
+            interpolated_flight_data_x = interpolating_function_x(pts)
+            interpolated_flight_data_y = interpolating_function_y(pts)
+            interpolated_flight_data_z = interpolating_function_z(pts)
+            simulated_flight_data['x'] = pts[:, 0]
+            simulated_flight_data['y'] = pts[:, 1]
+            simulated_flight_data['alt'] = pts[:, 2]
+            simulated_flight_data['wn'] = interpolated_flight_data_x.astype(float)
+            simulated_flight_data['we'] = interpolated_flight_data_y.astype(float)
+            simulated_flight_data['wd'] = interpolated_flight_data_z.astype(float)
+            simulated_flight_data['time_microsec'] = np.array([i*dt*1e6 for i in range(x_traj.size)])
+
+
+            # Get the bins and wind along the trajectory
             wind = torch.zeros(self.labels.shape) * float('nan')
-            num_segments, segment_length = x_traj.shape
-            counter = 0
-            for i in range(num_segments):
-                for j in range(segment_length):
-                    id_x = (int((x_traj[i][j] - self.terrain.x_terr[0]) / self.grid_size[0]))
-                    id_y = (int((y_traj[i][j] - self.terrain.y_terr[0]) / self.grid_size[1]))
-                    id_z = (int((z_traj[i][j] - self.terrain.z_terr[0]) / self.grid_size[2]))
-                    if all(v == 0 for v in wind[:, id_x, id_y, id_z]):
-                        counter += 1
+            for i in range(x_traj.size):
+                    id_x = (int((x_traj[i] - self.terrain.x_terr[0]) / self.grid_size[0]))
+                    id_y = (int((y_traj[i] - self.terrain.y_terr[0]) / self.grid_size[1]))
+                    id_z = (int((z_traj[i] - self.terrain.z_terr[0]) / self.grid_size[2]))
                     wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
 
         wind_mask = torch.isnan(wind)
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
-        return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device)
+        return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device), simulated_flight_data
 
     def get_flight_wind_blocks(self, flight_data):
         #print('Getting binned wind blocks...', end='', flush=True)
@@ -683,9 +686,9 @@ class WindOptimiser(object):
             labels = self._wind_zeros
         return self._loss_fn(nn_output, labels)
 
-    def sliding_window_split(self, window_size=1, response_size=1, step_size=1):
+    def sliding_window_split(self, flight_data, window_size=1, response_size=1, step_size=1):
         input_flight = {}; output_flight = {}
-        for keys, values in self._flight_data.items():
+        for keys, values in flight_data.items():
             input_batch = values[step_size : step_size+window_size]
             output_batch = values[step_size+window_size : step_size+window_size+response_size]
             input_flight.update({keys: input_batch})
@@ -856,13 +859,18 @@ class WindOptimiser(object):
         return outputs, losses, inputs
 
     def window_split_optimisation(self):
+        if self.flag.test_flight_data:
+            flight_data = self._flight_data
+        if self.flag.test_simulated_data:
+            flight_data = self._simulated_flight_data
+
         # sliding window variables (in seconds)
         window_time = self._window_splits_args.params['window_time']  # seconds
         response_time = self._window_splits_args.params['response_time']  # seconds
         step_time = self._window_splits_args.params['step_time']  # seconds
 
         # time between two consecutive flight measurements
-        dt = (self._flight_data['time_microsec'][1]-self._flight_data['time_microsec'][0]) / 1e6
+        dt = (flight_data['time_microsec'][1]-flight_data['time_microsec'][0]) / 1e6
 
         # sliding window variables
         window_size = int(window_time/dt)
@@ -870,8 +878,8 @@ class WindOptimiser(object):
         step_size = int(step_time/dt)
 
         # total time of flight and maximum number of windows
-        max_num_windows = int((self._flight_data['x'].size - (window_size + response_size)) / step_size + 1)
-        total_time_of_flight = (self._flight_data['time_microsec'][-1] - self._flight_data['time_microsec'][0]) / 1e6
+        max_num_windows = int((flight_data['x'].size - (window_size + response_size)) / step_size + 1)
+        total_time_of_flight = (flight_data['time_microsec'][-1] - flight_data['time_microsec'][0]) / 1e6
         print('Number of windows: ', max_num_windows, 'Total time of flight', total_time_of_flight)
 
         inputs, outputs = [], []
@@ -879,7 +887,7 @@ class WindOptimiser(object):
         for i in range(max_num_windows):
             # split data into input and label based on window variables
             input_flight_data, label_flight_data = \
-                self.sliding_window_split(window_size, response_size, i*step_size)
+                self.sliding_window_split(flight_data, window_size, response_size, i*step_size)
 
             # labels
             # filter out points in the labels which are outside the terrain sample
