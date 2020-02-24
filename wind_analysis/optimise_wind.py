@@ -47,11 +47,11 @@ if wind_opt.flag.test_flight_data:
     if wind_opt.flag.predict_flight:
         wind_predictions, losses, inputs = wind_opt.flight_prediction()
     if wind_opt.flag.optimise_flight:
-        wind_predictions, losses = wind_opt.flight_optimisation()
+        wind_predictions, losses, inputs = wind_opt.flight_optimisation()
 
 # Analyse optimised wind
-wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs)
+# wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs)
 # Plot graphs
-wind_opt_output.plot()
+# wind_opt_output.plot()
 # # Print losses
 # wind_opt_output.print_losses()

@@ -122,7 +122,7 @@ class UlogInterpolation:
     def interpolate_log_data_krigging(self):
         '''
         Create a wind map from the wind measurements using krigging interpolation
-        (or Gaussian regression process).
+        (Gaussian regression process).
         Compute the mean velocity and variance at the center of each bin by
         evaluating the wind map.
 

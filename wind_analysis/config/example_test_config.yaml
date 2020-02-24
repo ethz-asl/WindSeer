@@ -24,7 +24,7 @@ cosmo:
 
 # flight data
 flight:
-    file: 'data/14_47_05.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05   14_47_05_filtered.hdf5
+    file: 'data/14_47_05_filtered2.hdf5' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05   14_47_05_filtered.hdf5
     filtered_dir: 'data/'
     use_ekf_wind: False
 
@@ -50,8 +50,8 @@ wind:
     }
     # Real data flight
     flight: {
-        predict_flight: True,
-        optimise_flight: False,
+        predict_flight: False,
+        optimise_flight: True,
         interpolation_method: 'bin',   #['bin', 'idw', 'krigging']
     }
 
