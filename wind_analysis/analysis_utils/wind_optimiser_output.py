@@ -211,15 +211,15 @@ class WindOptimiserOutput:
         # trajectory
         indeces = self._input[4, :].nonzero()
         wind_indices = np.array(indeces.cpu().detach().numpy())
-        zs = wind_indices[:, 0]
-        ys = wind_indices[:, 1]
         xs = wind_indices[:, 2]
+        ys = wind_indices[:, 1]
+        zs = wind_indices[:, 0]
 
         # skip values
         wskip = 1
-        zs_skip = zs[::wskip]
-        ys_skip = ys[::wskip]
         xs_skip = xs[::wskip]
+        ys_skip = ys[::wskip]
+        zs_skip = zs[::wskip]
 
         # plot trajectory
         ax.scatter(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
@@ -287,10 +287,9 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
-        # self.plot_trajectory_and_terrain()
         # self.plot_wind_vectors_angles()
+        self.plot_trajectory_and_terrain()
         self.plot_best_wind_estimate()
-
 
         if self._save_output:
             self.close()

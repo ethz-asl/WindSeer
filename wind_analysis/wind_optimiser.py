@@ -128,13 +128,16 @@ class WindOptimiser(object):
         self._optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._resolution = resolution
+
         # Selection flags
         self.flag = SelectionFlags(self._test_args, self._cfd_args, self._flight_args, self._wind_args,
                                    self._noise_args, self._window_splits_args, self._optimisation_args)
+
         # Network model and loss function
         self.net, self.params = self.load_network_model()
         self.net.freeze_model()
         self._loss_fn = self.get_loss_function()
+
         # Load data
         if self.flag.test_simulated_data:
             self.original_input, self.labels, self.scale, self.data_set_name, self.grid_size, \
@@ -146,6 +149,7 @@ class WindOptimiser(object):
             self._cosmo_wind = self.load_wind()
             self.terrain = self.load_cosmo_terrain()
             self.wind_vector_angles = self.get_angles_between_wind_vectors()
+
         # Wind measurements variables
         if self.flag.test_simulated_data:
             if self.flag.use_sparse_data:
@@ -155,16 +159,18 @@ class WindOptimiser(object):
                     = self.get_trajectory_wind_blocks()
         if self.flag.test_flight_data:
             input_flight_data = self._flight_data
-            # input_flight_data, _ = self.sliding_window_split(300, 1, 600)
+            # input_flight_data, _ = self.sliding_window_split(self._flight_data, 300, 1, 600)
             self._wind_blocks, self._var_blocks, self._wind_zeros, self._wind_mask \
                 = self.get_flight_wind_blocks(input_flight_data)
             # TODO: replace if there are actual labels for flight data
             self.labels = self._wind_zeros
+
         # Noise
         if self.flag.add_gaussian_noise:
             self._wind_blocks, self._wind_zeros = self.add_gaussian_noise(self._wind_zeros, self._wind_blocks)
         if self.flag.generate_turbulence:
             self._wind_blocks, self._wind_zeros = self.generate_turbulence(self._wind_zeros, self._wind_blocks)
+
         # Optimisation variables
         self._optimisation_variables = self.get_optimisation_variables()
         self.reset_optimisation_variables()

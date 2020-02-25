@@ -119,53 +119,6 @@ class UlogInterpolation:
         print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
         return wind, variance
 
-    def interpolate_log_data_krigging(self):
-        '''
-        Create a wind map from the wind measurements using krigging interpolation
-        (Gaussian regression process).
-        Compute the mean velocity and variance at the center of each bin by
-        evaluating the wind map.
-
-        The return consists of three tensors:
-        @out [wind]: (3,n,n,n) tensor containing the mean velocities of each cell
-        @out [variance]: (3,n,n,n) tensor containing the velocity variance of each cell
-        '''
-
-        # Create the ordinary kriging object
-        OK3d_north = OrdinaryKriging3D(self._wind_data['x'], self._wind_data['y'], self._wind_data['alt'],
-                                      self._wind_data['wn'], variogram_model='linear')
-        OK3d_east = OrdinaryKriging3D(self._wind_data['x'], self._wind_data['y'], self._wind_data['alt'],
-                                      self._wind_data['we'], variogram_model='linear')
-        OK3d_down = OrdinaryKriging3D(self._wind_data['x'], self._wind_data['y'], self._wind_data['alt'],
-                                      self._wind_data['wd'], variogram_model='linear')
-
-        # Initialize empty wind and variance
-        wind = torch.zeros((3,
-                            self._grid_dimensions['n_cells'],
-                            self._grid_dimensions['n_cells'],
-                            self._grid_dimensions['n_cells'])) * float('nan')
-        variance = torch.zeros((3,
-                                self._grid_dimensions['n_cells'],
-                                self._grid_dimensions['n_cells'],
-                                self._grid_dimensions['n_cells'])) * float('nan')
-
-        # Loop over the data and create the krigged grid and the variance grid
-        for i in range(len(self._x_coord)):
-            # North
-            k3d, ss3d = OK3d_north.execute('grid', self._x_coord[i], self._y_coord[i], self._z_coord[i])
-            wind[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
-            variance[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
-            # East
-            k3d, ss3d = OK3d_east.execute('grid', self._x_coord[i], self._y_coord[i], self._z_coord[i])
-            wind[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
-            variance[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
-            # Down
-            k3d, ss3d = OK3d_down.execute('grid', self._x_coord[i], self._y_coord[i], self._z_coord[i])
-            wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
-            variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
-
-        return wind, variance
-
     def interpolate_log_data_idw(self):
         '''
         Compute the wind value at the center of each bin using an inverse distance
@@ -212,6 +165,54 @@ class UlogInterpolation:
                         wind[0, i, j, k] = np.average(self._wx[i][j][k], axis=None, weights=id_xyz[i][j][k])
                         wind[1, i, j, k] = np.average(self._wy[i][j][k], axis=None, weights=id_xyz[i][j][k])
                         wind[2, i, j, k] = np.average(self._wz[i][j][k], axis=None, weights=id_xyz[i][j][k])
+
+        return wind, variance
+
+    def interpolate_log_data_krigging(self):
+        '''
+        Create a wind map from the wind measurements using krigging interpolation.
+        Compute the mean velocity and variance at the center of each bin by
+        evaluating the wind map.
+
+        The return consists of three tensors:
+        @out [wind]: (3,n,n,n) tensor containing the mean velocities of each cell
+        @out [variance]: (3,n,n,n) tensor containing the velocity variance of each cell
+
+        (Requires installation of pykrige library)
+        '''
+
+        # Create the ordinary kriging object
+        OK3d_north = OrdinaryKriging3D(self._wind_data['alt'], self._wind_data['y'], self._wind_data['x'],
+                                       self._wind_data['wn'], variogram_model='linear')
+        OK3d_east = OrdinaryKriging3D(self._wind_data['alt'], self._wind_data['y'], self._wind_data['x'],
+                                      self._wind_data['we'], variogram_model='linear')
+        OK3d_down = OrdinaryKriging3D(self._wind_data['alt'], self._wind_data['y'], self._wind_data['x'],
+                                      -self._wind_data['wd'], variogram_model='linear')
+
+        # Initialize empty wind and variance
+        wind = torch.zeros((3,
+                            self._grid_dimensions['n_cells'],
+                            self._grid_dimensions['n_cells'],
+                            self._grid_dimensions['n_cells'])) * float('nan')
+        variance = torch.zeros((3,
+                                self._grid_dimensions['n_cells'],
+                                self._grid_dimensions['n_cells'],
+                                self._grid_dimensions['n_cells'])) * float('nan')
+
+        # Loop over the data and create the krigged grid and the variance grid
+        for i in range(len(self._x_coord)):
+            # x
+            k3d, ss3d = OK3d_north.execute('grid', self._z_coord[i], self._y_coord[i], self._x_coord[i])
+            wind[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+            variance[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
+            # y
+            k3d, ss3d = OK3d_east.execute('grid', self._z_coord[i], self._y_coord[i], self._x_coord[i])
+            wind[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+            variance[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
+            # z
+            k3d, ss3d = OK3d_down.execute('grid', self._z_coord[i], self._y_coord[i], self._x_coord[i])
+            wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+            variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
 
         return wind, variance
 
