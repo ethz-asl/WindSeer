@@ -50,8 +50,8 @@ if wind_opt.flag.use_window_split:
     wind_predictions, losses, inputs = wind_opt.window_split_optimisation()
 
 # Analyse optimised wind
-# wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs)
+wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs)
 # Plot graphs
-# wind_opt_output.plot()
+wind_opt_output.plot()
 # # Print losses
 # wind_opt_output.print_losses()

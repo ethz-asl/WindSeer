@@ -16,17 +16,16 @@ def angle_wrap(angles):
 
 class WindOptimiserOutput:
     def __init__(self, wind_opt, wind_predictions, losses, inputs):
-        self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.wind_opt = wind_opt
         # self._optimisers = opt
         self._wind_predictions = wind_predictions
-        self._wind_prediction = self.get_best_wind_estimate()
         self._losses = losses
         self._inputs = inputs
+        self._wind_prediction, self._input, self._loss  = self.get_last_wind_estimate()
         self._masked_input = self.get_masked_input()
         # self._grads = grads
         # self._names = self.get_names()
-        # self._wind_prediction, self._best_method_index, self._best_ov = self.get_best_wind_estimate()
         self._save_output = False
         self._add_sparse_mask_row = True
         self._base_path = "analysis_output/"
@@ -37,22 +36,15 @@ class WindOptimiserOutput:
         names = [o.opt.__name__ for o in self._optimisers]
         return names
 
-    def get_best_wind_estimate(self):
-        # # Extract best wind estimate
-        # best_method_index = np.argmin([l[-1] for l in self._losses])
-        # best_ov = self._wind_predictions[best_method_index]
-        # best_opt_var = [best_ov[-1, 0], best_ov[-1, 1], best_ov[-1, 2], best_ov[-1, 3]]
-        # self.wind_opt.reset_optimisation_variables(best_opt_var)
-        # wind_prediction = self.wind_opt.get_prediction().detach()
-        # return wind_prediction, best_method_index, best_ov
-        # if len(self._wind_predictions) > 3:
+    def get_last_wind_estimate(self):
+        # # Extract last wind estimate
         wind_prediction = self._wind_predictions[-1]
-        # else:
-        #     wind_prediction = self._wind_predictions
-        return wind_prediction
+        input = self._inputs[-1]
+        loss = self._losses[-1]
+        return wind_prediction, input, loss
 
     def get_masked_input(self):
-        input = self._inputs[-1]
+        input = self._input
         sparse_mask = input[4, :].unsqueeze(0).clone()
         masked_input = sparse_mask.repeat(3, 1, 1, 1) * input[1:4, :, :]
         return masked_input
@@ -172,7 +164,7 @@ class WindOptimiserOutput:
 
     def plot_best_wind_estimate(self):
         # Plot best wind estimate
-        fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt.labels.to(self._device),
+        fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt.labels.to(self.device),
                                                self.wind_opt.terrain.network_terrain.squeeze(0),
                                                self._save_output, self._add_sparse_mask_row, self._masked_input)
 
@@ -217,7 +209,7 @@ class WindOptimiserOutput:
         ax = fig.gca(projection='3d')
 
         # trajectory
-        indeces = self._inputs[0][4, :].nonzero()
+        indeces = self._input[4, :].nonzero()
         wind_indices = np.array(indeces.cpu().detach().numpy())
         zs = wind_indices[:, 0]
         ys = wind_indices[:, 1]
@@ -234,7 +226,7 @@ class WindOptimiserOutput:
         ax.plot(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
 
         # plot wind vectors
-        wind = self._inputs[0][1:-1, :].cpu().detach().numpy()
+        wind = self._input[1:-1, :].cpu().detach().numpy()
         ax.quiver(xs_skip, ys_skip, zs_skip, wind[0, zs_skip, ys_skip, xs_skip], wind[1, zs_skip, ys_skip, xs_skip],
                   wind[2, zs_skip, ys_skip, xs_skip],
                   length=1)
@@ -296,8 +288,8 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         # self.plot_trajectory_and_terrain()
-        self.plot_wind_vectors_angles()
-        # self.plot_best_wind_estimate()
+        # self.plot_wind_vectors_angles()
+        self.plot_best_wind_estimate()
 
 
         if self._save_output:

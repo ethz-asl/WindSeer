@@ -16,7 +16,7 @@ class UlogInterpolation:
         self._x_coord, self._y_coord, self._z_coord = self.get_bin_coordinates()
 
     def get_grid_resolution(self):
-        x_res = 0; y_res = 0; z_res = 0
+        x_res, y_res, z_res = 0, 0, 0
         if self._grid_dimensions is not None:
             x_res = (self._grid_dimensions['x_max'] - self._grid_dimensions['x_min']) / self._grid_dimensions['n_cells']
             y_res = (self._grid_dimensions['y_max'] - self._grid_dimensions['y_min']) / self._grid_dimensions['n_cells']
@@ -110,13 +110,13 @@ class UlogInterpolation:
 
                         counter += 1
                         vals_per_cell.append(len(self._wx[i][j][k]))
-        # print('')
-        # print('\tNumber of cells with values:     {}'.format(counter))
-        # print('\tPercentage of cells with values: {:.2f}'.format(
-        #     100 * counter / (self._grid_dimensions['n_cells']
-        #                      * self._grid_dimensions['n_cells']
-        #                      * self._grid_dimensions['n_cells'])))
-        # print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
+        print('')
+        print('\tNumber of cells with values:     {}'.format(counter))
+        print('\tPercentage of cells with values: {:.2f}'.format(
+            100 * counter / (self._grid_dimensions['n_cells']
+                             * self._grid_dimensions['n_cells']
+                             * self._grid_dimensions['n_cells'])))
+        print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
         return wind, variance
 
     def interpolate_log_data_krigging(self):

@@ -869,7 +869,7 @@ class WindOptimiser(object):
         response_time = self._window_splits_args.params['response_time']  # seconds
         step_time = self._window_splits_args.params['step_time']  # seconds
 
-        # time between two consecutive flight measurements
+        # time interval between two consecutive flight measurements
         dt = (flight_data['time_microsec'][1]-flight_data['time_microsec'][0]) / 1e6
 
         # sliding window variables
@@ -882,7 +882,12 @@ class WindOptimiser(object):
         # if max_num_windows < 0:
         #     raise ValueError('window time exceeds flight time')
         total_time_of_flight = (flight_data['time_microsec'][-1] - flight_data['time_microsec'][0]) / 1e6
-        print('Number of windows: ', max_num_windows, 'Total time of flight', total_time_of_flight)
+        print('Number of windows: ', max_num_windows)
+        print('Number of measurements per window: ', window_size)
+        print('Number of measurements per response: ', response_size)
+        print('Number of measurements per step: ', step_size)
+        print('Total time of flight', total_time_of_flight)
+        print('Time interval between two consecutive flight measurements', dt, '\n')
 
         inputs, outputs = [], []
         nn_losses, zero_wind_losses, average_wind_losses = [], [], []
@@ -951,7 +956,7 @@ class WindOptimiser(object):
 
             # outputs
             inputs.append(input)
-            outputs.append(interpolated_output)
+            outputs.append(output)
             nn_losses.append(nn_loss)
             zero_wind_losses.append(zero_wind_loss)
             average_wind_losses.append(average_wind_loss)
