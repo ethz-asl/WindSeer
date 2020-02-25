@@ -503,10 +503,12 @@ class WindOptimiser(object):
         try:
             if self._wind_args.params['flight']['interpolation_method'].lower() == 'bin':
                 wind, variance = FlightInterpolator.bin_log_data()
-            elif self._wind_args.params['flight']['interpolation_method'].lower() == 'krigging':
-                wind, variance = FlightInterpolator.interpolate_log_data_krigging()
             elif self._wind_args.params['flight']['interpolation_method'].lower() == 'idw':
                 wind, variance = FlightInterpolator.interpolate_log_data_idw()
+            elif self._wind_args.params['flight']['interpolation_method'].lower() == 'krigging':
+                wind, variance = FlightInterpolator.interpolate_log_data_krigging()
+            elif self._wind_args.params['flight']['interpolation_method'].lower() == 'gpr':
+                wind, variance = FlightInterpolator.interpolate_log_data_gpr()
             else:
                 print('Specified interpolation method: {0} unknown!'
                       .format(self._flight_args.params['interpolation_method']))
@@ -514,6 +516,7 @@ class WindOptimiser(object):
         except KeyError:
             print('Interpolation method not specified in file: {0}'
                   .format(self._config_yaml))
+
         wind_mask = torch.isnan(wind)       # This is a binary mask with ones where there are invalid wind estimates
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0

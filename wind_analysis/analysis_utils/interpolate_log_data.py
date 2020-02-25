@@ -3,6 +3,9 @@ import torch
 import math
 from pykrige.ok3d import OrdinaryKriging3D
 from scipy.interpolate import RegularGridInterpolator as RGI
+from sklearn.gaussian_process import GaussianProcessRegressor as GPR
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+import time
 
 
 class UlogInterpolation:
@@ -180,7 +183,7 @@ class UlogInterpolation:
 
         (Requires installation of pykrige library)
         '''
-
+        t_start = time.time()
         # Create the ordinary kriging object
         OK3d_north = OrdinaryKriging3D(self._wind_data['alt'], self._wind_data['y'], self._wind_data['x'],
                                        self._wind_data['wn'], variogram_model='linear')
@@ -199,7 +202,7 @@ class UlogInterpolation:
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'])) * float('nan')
 
-        # Loop over the data and create the krigged grid and the variance grid
+        # Loop over the data and get the bins' wind and variance
         for i in range(len(self._x_coord)):
             # x
             k3d, ss3d = OK3d_north.execute('grid', self._z_coord[i], self._y_coord[i], self._x_coord[i])
@@ -214,9 +217,69 @@ class UlogInterpolation:
             wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
             variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
 
+        print('Krigging interpolation is done [{:.2f} s]'.format(time.time() - t_start))
         return wind, variance
 
-    def interpolate_log_data_from_grid(self, inferred_wind_data, predict_wind_data):
+    def interpolate_log_data_gpr(self):
+        '''
+        Create a wind map from the wind measurements using Gaussian Process Regresion
+        for interpolation.
+        Compute the mean velocity and variance at the center of each bin by
+        evaluating the wind map.
+
+        The return consists of three tensors:
+        @out [wind]: (3,n,n,n) tensor containing the mean velocities of each cell
+        @out [variance]: (3,n,n,n) tensor containing the velocity variance of each cell
+        '''
+        t_start = time.time()
+        # Instantiate a Gaussian Process model for each direction
+        kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (1e-2, 1e2))
+        gp_x = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)
+        gp_y = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)
+        gp_z = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)
+
+        # Fit to data using Maximum Likelihood Estimation of the parameters
+        gp_x.fit(np.column_stack([self._wind_data['alt'], self._wind_data['y'], self._wind_data['x']]),
+                 self._wind_data['wn'])
+        gp_y.fit(np.column_stack([self._wind_data['alt'], self._wind_data['y'], self._wind_data['x']]),
+                 self._wind_data['we'])
+        gp_z.fit(np.column_stack([self._wind_data['alt'], self._wind_data['y'], self._wind_data['x']]),
+                 -self._wind_data['wn'])
+
+        # Initialize empty wind and variance
+        wind = torch.zeros((3,
+                            self._grid_dimensions['n_cells'],
+                            self._grid_dimensions['n_cells'],
+                            self._grid_dimensions['n_cells'])) * float('nan')
+        variance = torch.zeros((3,
+                                self._grid_dimensions['n_cells'],
+                                self._grid_dimensions['n_cells'],
+                                self._grid_dimensions['n_cells'])) * float('nan')
+
+        # Loop over the data and the bins' wind and variance
+        for i in range(len(self._x_coord)):
+            # x
+            mean_x, var_x = gp_x.predict(np.column_stack([self._z_coord[i], self._y_coord[i], self._x_coord[i]]),
+                                         return_std=True)
+            wind[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_x.item()
+            variance[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_x.item()
+            # y
+            mean_y, var_y = gp_y.predict(np.column_stack([self._z_coord[i], self._y_coord[i], self._x_coord[i]]),
+                                         return_std=True)
+            wind[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_y.item()
+            variance[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_y.item()
+
+            # z
+            mean_z, var_z = gp_z.predict(np.column_stack([self._z_coord[i], self._y_coord[i], self._x_coord[i]]),
+                                         return_std=True)
+            wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_z.item()
+            variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_z.item()
+
+
+        print('GPR interpolation is done [{:.2f} s]'.format(time.time() - t_start))
+        return wind, variance
+
+    def interpolate_log_data_from_grid(self, inferred_wind_data, wind_data_for_prediction):
         '''
         Use inferred wind data from the output of the NN to interpolate the wind
         values at the points along the trajectory which are used for testing.
@@ -231,14 +294,15 @@ class UlogInterpolation:
 
         # Initialize empty list of points where the wind is interpolated
         pts = []
-        for i in range(len(predict_wind_data['x'])):
-            if ((predict_wind_data['x'][i] > self._terrain.x_terr[0]) and
-                    (predict_wind_data['x'][i] < self._terrain.x_terr[-1]) and
-                    (predict_wind_data['y'][i] > self._terrain.y_terr[0]) and
-                    (predict_wind_data['y'][i] < self._terrain.y_terr[-1]) and
-                    (predict_wind_data['alt'][i] > self._terrain.z_terr[0]) and
-                    (predict_wind_data['alt'][i] < self._terrain.z_terr[-1])):
-                pts.append([predict_wind_data['alt'][i], predict_wind_data['y'][i], predict_wind_data['x'][i]])
+        for i in range(len(wind_data_for_prediction['x'])):
+            if ((wind_data_for_prediction['x'][i] > self._terrain.x_terr[0]) and
+                    (wind_data_for_prediction['x'][i] < self._terrain.x_terr[-1]) and
+                    (wind_data_for_prediction['y'][i] > self._terrain.y_terr[0]) and
+                    (wind_data_for_prediction['y'][i] < self._terrain.y_terr[-1]) and
+                    (wind_data_for_prediction['alt'][i] > self._terrain.z_terr[0]) and
+                    (wind_data_for_prediction['alt'][i] < self._terrain.z_terr[-1])):
+                pts.append([wind_data_for_prediction['alt'][i], wind_data_for_prediction['y'][i],
+                            wind_data_for_prediction['x'][i]])
 
         interpolated_log_data_x = interpolating_function_x(pts)
         interpolated_log_data_y = interpolating_function_y(pts)
