@@ -446,24 +446,24 @@ class WindOptimiser(object):
 
             # generate simulated flight data
             simulated_flight_data = {}
-            interpolating_function_x = RGI((self.terrain.x_terr, self.terrain.y_terr, self.terrain.z_terr),
+            interpolating_function_x = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
                                            self.labels[0, :].detach().cpu().numpy(), method='nearest')
-            interpolating_function_y = RGI((self.terrain.x_terr, self.terrain.y_terr, self.terrain.z_terr),
+            interpolating_function_y = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
                                            self.labels[1, :].detach().cpu().numpy(), method='nearest')
-            interpolating_function_z = RGI((self.terrain.x_terr, self.terrain.y_terr, self.terrain.z_terr),
+            interpolating_function_z = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
                                            self.labels[2, :].detach().cpu().numpy(), method='nearest')
-            pts = np.column_stack((x_traj, y_traj, z_traj))
+            pts = np.column_stack((z_traj, y_traj, x_traj))
             # distances = np.sqrt(np.sum(np.diff(pts, axis=0)**2, 1))
 
             interpolated_flight_data_x = interpolating_function_x(pts)
             interpolated_flight_data_y = interpolating_function_y(pts)
             interpolated_flight_data_z = interpolating_function_z(pts)
-            simulated_flight_data['x'] = pts[:, 0]
+            simulated_flight_data['x'] = pts[:, 2]
             simulated_flight_data['y'] = pts[:, 1]
-            simulated_flight_data['alt'] = pts[:, 2]
+            simulated_flight_data['alt'] = pts[:, 0]
             simulated_flight_data['wn'] = interpolated_flight_data_x.astype(float)
             simulated_flight_data['we'] = interpolated_flight_data_y.astype(float)
-            simulated_flight_data['wd'] = interpolated_flight_data_z.astype(float)
+            simulated_flight_data['wd'] = -interpolated_flight_data_z.astype(float)
             simulated_flight_data['time_microsec'] = np.array([i*dt*1e6 for i in range(x_traj.size)])
 
 
@@ -879,6 +879,8 @@ class WindOptimiser(object):
 
         # total time of flight and maximum number of windows
         max_num_windows = int((flight_data['x'].size - (window_size + response_size)) / step_size + 1)
+        # if max_num_windows < 0:
+        #     raise ValueError('window time exceeds flight time')
         total_time_of_flight = (flight_data['time_microsec'][-1] - flight_data['time_microsec'][0]) / 1e6
         print('Number of windows: ', max_num_windows, 'Total time of flight', total_time_of_flight)
 

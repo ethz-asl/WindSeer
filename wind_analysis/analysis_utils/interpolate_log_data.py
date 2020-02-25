@@ -221,11 +221,11 @@ class UlogInterpolation:
         values at the points along the trajectory which are used for testing.
         '''
 
-        interpolating_function_x = RGI((self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr),
+        interpolating_function_x = RGI((self._terrain.z_terr, self._terrain.y_terr, self._terrain.x_terr),
                                        inferred_wind_data[0, :].detach().cpu().numpy(), method='nearest')
-        interpolating_function_y = RGI((self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr),
+        interpolating_function_y = RGI((self._terrain.z_terr, self._terrain.y_terr, self._terrain.x_terr),
                                        inferred_wind_data[1, :].detach().cpu().numpy(), method='nearest')
-        interpolating_function_z = RGI((self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr),
+        interpolating_function_z = RGI((self._terrain.z_terr, self._terrain.y_terr, self._terrain.x_terr),
                                        inferred_wind_data[2, :].detach().cpu().numpy(), method='nearest')
 
         # Initialize empty list of points where the wind is interpolated
@@ -237,7 +237,7 @@ class UlogInterpolation:
                     (predict_wind_data['y'][i] < self._terrain.y_terr[-1]) and
                     (predict_wind_data['alt'][i] > self._terrain.z_terr[0]) and
                     (predict_wind_data['alt'][i] < self._terrain.z_terr[-1])):
-                pts.append([predict_wind_data['x'][i], predict_wind_data['y'][i], predict_wind_data['alt'][i]])
+                pts.append([predict_wind_data['alt'][i], predict_wind_data['y'][i], predict_wind_data['x'][i]])
 
         interpolated_log_data_x = interpolating_function_x(pts)
         interpolated_log_data_y = interpolating_function_y(pts)
