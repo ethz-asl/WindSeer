@@ -258,14 +258,17 @@ class WindOptimiser(object):
 
         lat0, lon0 = self._flight_data['lat'][0], self._flight_data['lon'][0]
 
-        # Get time of flight
-        # t0 = datetime.utcfromtimestamp(self._flight_data['utc_microsec'][0] / 1e6)
-        # time_of_flight = t0.hour
-        try:
-            file_name = self._flight_args.params['file']
-            time_of_flight = int(file_name.split('/')[-1].split('_')[0])
-        except:
-            raise ValueError('Cannot extract hour of flight from file name')
+        if 'utc_microsec' in self._flight_data.keys():
+            # Get time of flight
+            t0 = datetime.utcfromtimestamp(self._flight_data['utc_microsec'][0] / 1e6)
+            time_of_flight = t0.hour
+        else:
+            # Get time of flight from file name
+            try:
+                file_name = self._flight_args.params['file']
+                time_of_flight = int(file_name.split('/')[-1].split('_')[0])
+            except ValueError:
+                print('Cannot extract hour of flight from file name')
         # Get cosmo wind
         offset_cosmo_time = self._cosmo_args.get_cosmo_time(time_of_flight)
         cosmo_wind = cosmo.extract_cosmo_data(self._cosmo_args.params['file'], lat0, lon0, offset_cosmo_time,

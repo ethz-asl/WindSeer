@@ -49,7 +49,7 @@ wind:
     }
     # Real flight wind data
     flight: {
-        predict_flight: True,
+        predict_flight: False,
         interpolation_method: 'bin',   #['bin', 'idw', 'krigging', 'gpr']
     }
 
