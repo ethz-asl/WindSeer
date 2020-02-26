@@ -42,7 +42,7 @@ if wind_opt.flag.test_simulated_data:
     elif wind_opt.flag.use_sparse_data:
         wind_predictions, losses, inputs = wind_opt.sparse_data_prediction()
     elif wind_opt.flag.use_trajectory:
-        wind_predictions, losses, inputs = wind_opt.cfd_trajectory_optimisation()
+        wind_predictions, losses, inputs = wind_opt.cfd_trajectory_prediction()
 if wind_opt.flag.test_flight_data:
     if wind_opt.flag.predict_flight:
         wind_predictions, losses, inputs = wind_opt.flight_prediction()

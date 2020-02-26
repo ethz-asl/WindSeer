@@ -101,6 +101,7 @@ class SelectionFlags(object):
         self.terrain_percentage_correction = wind.params['sparse_data']['terrain_percentage_correction']
         self.sample_random_region = wind.params['sparse_data']['sample_random_region']
         self.use_trajectory = wind.params['trajectory']['use_trajectory_generation']
+        self.use_simulated_trajectory = wind.params['trajectory']['use_simulated_trajectory']
         self.predict_flight = wind.params['flight']['predict_flight']
         self.generate_turbulence = noise.params['generate_turbulence']
         self.add_gaussian_noise = noise.params['add_gaussian_noise']
@@ -416,7 +417,22 @@ class WindOptimiser(object):
         if random_trajectory:
             terrain = self.original_terrain.clone()
             numel = self._wind_args.params['trajectory']['num_points_generated']
-            idx = torch.nonzero(terrain)
+            use_region = False
+            if use_region:
+                channels, nz, ny, nx = self.labels.shape
+                p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
+                random_region = torch.zeros((nz, ny, nx)).float()
+                l = int(np.sqrt(nx * ny * p_sample))
+                x0 = int(l / 2) + 1
+                x1 = nx - (int(l / 2) + 1)
+                rx = random.randint(x0, x1)
+                ry = random.randint(x0, x1)
+                random_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] = \
+                    torch.ones(nz, l, l)
+                terrain_region = terrain * random_region
+            else:
+                terrain_region = terrain
+            idx = torch.nonzero(terrain_region)
             select = torch.randperm(idx.shape[0])
             # 3D positions of the random points
             pos_x = idx[select][:numel][:, 2].float() * self.grid_size[0]
@@ -834,26 +850,38 @@ class WindOptimiser(object):
 
         return outputs, losses, inputs
 
-    def cfd_trajectory_optimisation(self):
-        outputs = []
-        losses = []
-        inputs = []
-        # get wind zeros
-        wind_blocks = self._wind_blocks.clone()
-        wind_zeros = self._wind_zeros.clone()
-        # add noise
-        if self.flag.add_gaussian_noise:
-            wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
-        # create mask
-        wind_input = self.add_mask_to_wind()
-        # run prediction
-        input = torch.cat([self.terrain.network_terrain, wind_input])
-        original_input = input.clone()
-        output = self.run_prediction(input)
-        loss = self.evaluate_loss(output)
+    def cfd_trajectory_prediction(self):
+        outputs, losses, inputs = [], [], []
+        if self.flag.use_simulated_trajectory:
+            # bin trajectory points
+            input_flight_data = self._simulated_flight_data
+            wind_blocks, var_blocks, wind_zeros, wind_mask \
+                = self.get_flight_wind_blocks(input_flight_data)
+            # get prediction
+            wind = wind_zeros.to(self._device)
+            if self.flag.add_corners:
+                interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
+                wind += interpolated_cosmo_corners
+            wind = self.add_mask_to_wind(wind)
+            input = torch.cat([self.terrain.network_terrain, wind])
+            output = self.run_prediction(input)
+            loss = self.evaluate_loss(output)
+        else:
+            # get wind zeros
+            wind_blocks = self._wind_blocks.clone()
+            wind_zeros = self._wind_zeros.clone()
+            # add noise
+            if self.flag.add_gaussian_noise:
+                wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
+            # create mask
+            wind_input = self.add_mask_to_wind()
+            # run prediction
+            input = torch.cat([self.terrain.network_terrain, wind_input])
+            output = self.run_prediction(input)
+            loss = self.evaluate_loss(output)
         outputs.append(output)
         losses.append(loss)
-        inputs.append(original_input)
+        inputs.append(input)
         print(' loss: ', loss.item())
         return outputs, losses, inputs
 
