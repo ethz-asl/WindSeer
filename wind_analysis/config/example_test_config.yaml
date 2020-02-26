@@ -50,7 +50,7 @@ wind:
     # Real flight wind data
     flight: {
         predict_flight: True,
-        interpolation_method: 'gpr',   #['bin', 'idw', 'krigging', 'gpr']
+        interpolation_method: 'bin',   #['bin', 'idw', 'krigging', 'gpr']
     }
 
 # Noise parameters
@@ -60,7 +60,10 @@ noise:
 
 # Window split parameters
 window_split:
-  use_window_split: False
+  use_window_split: True
+  #
+  use_gpr_prediction: False
+  use_krigging_prediction: False
   window_time: 100 # seconds
   response_time: 20 # seconds
   step_time: 120 # seconds

@@ -9,14 +9,16 @@ import time
 
 
 class UlogInterpolation:
-    def __init__(self, wind_data, grid_dimensions=None, terrain=None):
-        self._terrain = terrain
+    def __init__(self, wind_data, grid_dimensions=None, terrain=None, predict=False, wind_data_for_prediction=None):
         self._wind_data = wind_data
         self._grid_dimensions = grid_dimensions
+        self._terrain = terrain
+        self._predict = predict
+        self._wind_data_for_prediction = wind_data_for_prediction
         self._x_res, self._y_res, self._z_res = self.get_grid_resolution()
         self._idx_x, self._idx_y, self._idx_z, \
             self._wx, self._wy, self._wz = self.get_bin_indices_and_winds()
-        self._x_coord, self._y_coord, self._z_coord = self.get_bin_coordinates()
+        self._bin_x_coord, self._bin_y_coord, self._bin_z_coord = self.get_bin_coordinates()
 
     def get_grid_resolution(self):
         x_res, y_res, z_res = 0, 0, 0
@@ -161,6 +163,8 @@ class UlogInterpolation:
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'])) * float('nan')
+        counter = 0
+        vals_per_cell = []
         for i in range(self._grid_dimensions['n_cells']):
             for j in range(self._grid_dimensions['n_cells']):
                 for k in range(self._grid_dimensions['n_cells']):
@@ -169,6 +173,19 @@ class UlogInterpolation:
                         wind[1, i, j, k] = np.average(self._wy[i][j][k], axis=None, weights=id_xyz[i][j][k])
                         wind[2, i, j, k] = np.average(self._wz[i][j][k], axis=None, weights=id_xyz[i][j][k])
 
+                        variance[0, i, j, k] = np.var(self._wx[i][j][k])
+                        variance[1, i, j, k] = np.var(self._wy[i][j][k])
+                        variance[2, i, j, k] = np.var(self._wz[i][j][k])
+
+                        counter += 1
+                        vals_per_cell.append(len(self._wx[i][j][k]))
+        print('')
+        print('\tNumber of cells with values:     {}'.format(counter))
+        print('\tPercentage of cells with values: {:.2f}'.format(
+            100 * counter / (self._grid_dimensions['n_cells']
+                             * self._grid_dimensions['n_cells']
+                             * self._grid_dimensions['n_cells'])))
+        print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
         return wind, variance
 
     def interpolate_log_data_krigging(self):
@@ -192,33 +209,60 @@ class UlogInterpolation:
         OK3d_down = OrdinaryKriging3D(self._wind_data['alt'], self._wind_data['y'], self._wind_data['x'],
                                       -self._wind_data['wd'], variogram_model='linear')
 
-        # Initialize empty wind and variance
-        wind = torch.zeros((3,
-                            self._grid_dimensions['n_cells'],
-                            self._grid_dimensions['n_cells'],
-                            self._grid_dimensions['n_cells'])) * float('nan')
-        variance = torch.zeros((3,
+        # Initialize empty wind, variance and predicted_log_data
+        if self._grid_dimensions is not None:
+            wind = torch.zeros((3,
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'])) * float('nan')
+            variance = torch.zeros((3,
+                                    self._grid_dimensions['n_cells'],
+                                    self._grid_dimensions['n_cells'],
+                                    self._grid_dimensions['n_cells'])) * float('nan')
+        else:
+            wind, variance = [], []
+        predicted_log_data = []
 
-        # Loop over the data and get the bins' wind and variance
-        for i in range(len(self._x_coord)):
-            # x
-            k3d, ss3d = OK3d_north.execute('grid', self._z_coord[i], self._y_coord[i], self._x_coord[i])
-            wind[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
-            variance[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
-            # y
-            k3d, ss3d = OK3d_east.execute('grid', self._z_coord[i], self._y_coord[i], self._x_coord[i])
-            wind[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
-            variance[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
-            # z
-            k3d, ss3d = OK3d_down.execute('grid', self._z_coord[i], self._y_coord[i], self._x_coord[i])
-            wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
-            variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
+        if self._predict is True and self._wind_data_for_prediction:  # predict ulog data
+            # Make sure points are inside terrain
+            pts = []
+            for i in range(len(self._wind_data_for_prediction['x'])):
+                if ((self._wind_data_for_prediction['x'][i] > self._terrain.x_terr[0]) and
+                        (self._wind_data_for_prediction['x'][i] < self._terrain.x_terr[-1]) and
+                        (self._wind_data_for_prediction['y'][i] > self._terrain.y_terr[0]) and
+                        (self._wind_data_for_prediction['y'][i] < self._terrain.y_terr[-1]) and
+                        (self._wind_data_for_prediction['alt'][i] > self._terrain.z_terr[0]) and
+                        (self._wind_data_for_prediction['alt'][i] < self._terrain.z_terr[-1])):
+                    pts.append([self._wind_data_for_prediction['alt'][i], self._wind_data_for_prediction['y'][i],
+                                self._wind_data_for_prediction['x'][i]])
+            if not pts:
+                predicted_log_data = [pts, pts, pts]
+            else:
+                predicted_log_data_x, _ = OK3d_north.execute(
+                    'points', np.array(pts)[:, 0], np.array(pts)[:, 1], np.array(pts)[:, 2])
+                predicted_log_data_y, _ = OK3d_north.execute(
+                    'points', np.array(pts)[:, 0], np.array(pts)[:, 1], np.array(pts)[:, 2])
+                predicted_log_data_z, _ = OK3d_north.execute(
+                    'points', np.array(pts)[:, 0], np.array(pts)[:, 1], np.array(pts)[:, 2])
+                predicted_log_data = [predicted_log_data_x, predicted_log_data_y, predicted_log_data_z]
+
+        else:  # Bin data
+            for i in range(len(self._bin_x_coord)):
+                # x
+                k3d, ss3d = OK3d_north.execute('grid', self._bin_z_coord[i], self._bin_y_coord[i], self._bin_x_coord[i])
+                wind[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+                variance[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
+                # y
+                k3d, ss3d = OK3d_east.execute('grid', self._bin_z_coord[i], self._bin_y_coord[i], self._bin_x_coord[i])
+                wind[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+                variance[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
+                # z
+                k3d, ss3d = OK3d_down.execute('grid', self._bin_z_coord[i], self._bin_y_coord[i], self._bin_x_coord[i])
+                wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = k3d[0][0][0]
+                variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
 
         print('Krigging interpolation is done [{:.2f} s]'.format(time.time() - t_start))
-        return wind, variance
+        return wind, variance, predicted_log_data
 
     def interpolate_log_data_gpr(self):
         '''
@@ -246,40 +290,66 @@ class UlogInterpolation:
         gp_z.fit(np.column_stack([self._wind_data['alt'], self._wind_data['y'], self._wind_data['x']]),
                  -self._wind_data['wn'])
 
-        # Initialize empty wind and variance
-        wind = torch.zeros((3,
-                            self._grid_dimensions['n_cells'],
-                            self._grid_dimensions['n_cells'],
-                            self._grid_dimensions['n_cells'])) * float('nan')
-        variance = torch.zeros((3,
+        # Initialize empty wind, variance and predicted_log_data
+        if self._grid_dimensions is not None:
+            wind = torch.zeros((3,
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'],
                                 self._grid_dimensions['n_cells'])) * float('nan')
+            variance = torch.zeros((3,
+                                    self._grid_dimensions['n_cells'],
+                                    self._grid_dimensions['n_cells'],
+                                    self._grid_dimensions['n_cells'])) * float('nan')
+        else:
+            wind, variance = [], []
+        predicted_log_data = []
 
-        # Loop over the data and the bins' wind and variance
-        for i in range(len(self._x_coord)):
-            # x
-            mean_x, var_x = gp_x.predict(np.column_stack([self._z_coord[i], self._y_coord[i], self._x_coord[i]]),
-                                         return_std=True)
-            wind[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_x.item()
-            variance[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_x.item()
-            # y
-            mean_y, var_y = gp_y.predict(np.column_stack([self._z_coord[i], self._y_coord[i], self._x_coord[i]]),
-                                         return_std=True)
-            wind[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_y.item()
-            variance[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_y.item()
+        if self._predict is True and self._wind_data_for_prediction:  # predict ulog data
+            # Make sure points are inside terrain
+            pts = []
+            for i in range(len(self._wind_data_for_prediction['x'])):
+                if ((self._wind_data_for_prediction['x'][i] > self._terrain.x_terr[0]) and
+                        (self._wind_data_for_prediction['x'][i] < self._terrain.x_terr[-1]) and
+                        (self._wind_data_for_prediction['y'][i] > self._terrain.y_terr[0]) and
+                        (self._wind_data_for_prediction['y'][i] < self._terrain.y_terr[-1]) and
+                        (self._wind_data_for_prediction['alt'][i] > self._terrain.z_terr[0]) and
+                        (self._wind_data_for_prediction['alt'][i] < self._terrain.z_terr[-1])):
+                    pts.append([self._wind_data_for_prediction['alt'][i], self._wind_data_for_prediction['y'][i],
+                                self._wind_data_for_prediction['x'][i]])
+            if not pts:
+                predicted_log_data = [pts, pts, pts]
+            else:
+                predicted_log_data_x = gp_x.predict(np.array(pts))
+                predicted_log_data_y = gp_y.predict(np.array(pts))
+                predicted_log_data_z = gp_z.predict(np.array(pts))
+                predicted_log_data = [predicted_log_data_x, predicted_log_data_y, predicted_log_data_z]
 
-            # z
-            mean_z, var_z = gp_z.predict(np.column_stack([self._z_coord[i], self._y_coord[i], self._x_coord[i]]),
-                                         return_std=True)
-            wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_z.item()
-            variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_z.item()
+        else:  # bin data
+            for i in range(len(self._bin_x_coord)):
+                # x
+                mean_x, var_x = gp_x.predict(np.column_stack(
+                    [self._bin_z_coord[i], self._bin_y_coord[i], self._bin_x_coord[i]]),
+                                             return_std=True)
+                wind[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_x.item()
+                variance[0, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_x.item()
+                # y
+                mean_y, var_y = gp_y.predict(np.column_stack(
+                    [self._bin_z_coord[i], self._bin_y_coord[i], self._bin_x_coord[i]]),
+                                             return_std=True)
+                wind[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_y.item()
+                variance[1, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_y.item()
+                # z
+                mean_z, var_z = gp_z.predict(np.column_stack(
+                    [self._bin_z_coord[i], self._bin_y_coord[i], self._bin_x_coord[i]]),
+                                             return_std=True)
+                wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_z.item()
+                variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_z.item()
 
 
         print('GPR interpolation is done [{:.2f} s]'.format(time.time() - t_start))
-        return wind, variance
+        return wind, variance, predicted_log_data
 
-    def interpolate_log_data_from_grid(self, inferred_wind_data, wind_data_for_prediction):
+    def interpolate_log_data_from_grid(self, inferred_wind_data):
         '''
         Use inferred wind data from the output of the NN to interpolate the wind
         values at the points along the trajectory which are used for testing.
@@ -294,15 +364,15 @@ class UlogInterpolation:
 
         # Initialize empty list of points where the wind is interpolated
         pts = []
-        for i in range(len(wind_data_for_prediction['x'])):
-            if ((wind_data_for_prediction['x'][i] > self._terrain.x_terr[0]) and
-                    (wind_data_for_prediction['x'][i] < self._terrain.x_terr[-1]) and
-                    (wind_data_for_prediction['y'][i] > self._terrain.y_terr[0]) and
-                    (wind_data_for_prediction['y'][i] < self._terrain.y_terr[-1]) and
-                    (wind_data_for_prediction['alt'][i] > self._terrain.z_terr[0]) and
-                    (wind_data_for_prediction['alt'][i] < self._terrain.z_terr[-1])):
-                pts.append([wind_data_for_prediction['alt'][i], wind_data_for_prediction['y'][i],
-                            wind_data_for_prediction['x'][i]])
+        for i in range(len(self._wind_data_for_prediction['x'])):
+            if ((self._wind_data_for_prediction['x'][i] > self._terrain.x_terr[0]) and
+                    (self._wind_data_for_prediction['x'][i] < self._terrain.x_terr[-1]) and
+                    (self._wind_data_for_prediction['y'][i] > self._terrain.y_terr[0]) and
+                    (self._wind_data_for_prediction['y'][i] < self._terrain.y_terr[-1]) and
+                    (self._wind_data_for_prediction['alt'][i] > self._terrain.z_terr[0]) and
+                    (self._wind_data_for_prediction['alt'][i] < self._terrain.z_terr[-1])):
+                pts.append([self._wind_data_for_prediction['alt'][i], self._wind_data_for_prediction['y'][i],
+                            self._wind_data_for_prediction['x'][i]])
 
         interpolated_log_data_x = interpolating_function_x(pts)
         interpolated_log_data_y = interpolating_function_y(pts)

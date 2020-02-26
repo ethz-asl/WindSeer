@@ -105,6 +105,8 @@ class SelectionFlags(object):
         self.generate_turbulence = noise.params['generate_turbulence']
         self.add_gaussian_noise = noise.params['add_gaussian_noise']
         self.use_window_split = window_split.params['use_window_split']
+        self.use_gpr_prediction = window_split.params['use_gpr_prediction']
+        self.use_krigging_prediction = window_split.params['use_krigging_prediction']
         self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
         self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
         self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
@@ -506,9 +508,9 @@ class WindOptimiser(object):
             elif self._wind_args.params['flight']['interpolation_method'].lower() == 'idw':
                 wind, variance = FlightInterpolator.interpolate_log_data_idw()
             elif self._wind_args.params['flight']['interpolation_method'].lower() == 'krigging':
-                wind, variance = FlightInterpolator.interpolate_log_data_krigging()
+                wind, variance, _ = FlightInterpolator.interpolate_log_data_krigging()
             elif self._wind_args.params['flight']['interpolation_method'].lower() == 'gpr':
-                wind, variance = FlightInterpolator.interpolate_log_data_gpr()
+                wind, variance, _ = FlightInterpolator.interpolate_log_data_gpr()
             else:
                 print('Specified interpolation method: {0} unknown!'
                       .format(self._flight_args.params['interpolation_method']))
@@ -900,6 +902,7 @@ class WindOptimiser(object):
 
         inputs, outputs = [], []
         nn_losses, zero_wind_losses, average_wind_losses = [], [], []
+        gpr_wind_losses, krigging_wind_losses = [], []
         for i in range(max_num_windows):
             # split data into input and label based on window variables
             input_flight_data, label_flight_data = \
@@ -935,23 +938,42 @@ class WindOptimiser(object):
             output = self.run_prediction(input)
 
             # interpolate prediction to scattered flight data locations corresponding to the labels
-            FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain)
-            interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(output, label_flight_data)
+            FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
+                                                   wind_data_for_prediction=label_flight_data)
+            interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(output)
             nn_output = np.resize(np.array(interpolated_output), (len(interpolated_output[0]), 3))
 
             # interpolated_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
 
-            # --- Zero wind ---
+            # --- Zero wind prediction---
             zero_wind_output = np.zeros_like(labels)
 
-            # --- Average wind ---
+            # --- Average wind prediction ---
             input_wind = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
             average_wind_output = np.ones_like(labels) * input_wind.mean()
 
-            # loss
+            # --- Interpolation (Krigging) prediction ---
+            if self.flag.use_krigging_prediction:
+                FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain, predict=True,
+                                                       wind_data_for_prediction=label_flight_data)
+                _, _, predicted_output = FlightInterpolator.interpolate_log_data_krigging()
+                krigging_output = np.resize(np.array(predicted_output), (len(predicted_output[0]), 3))
+
+            # --- Interpolation (Gaussian Process Regression) prediction ---
+            if self.flag.use_gpr_prediction:
+                FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain, predict=True,
+                                                       wind_data_for_prediction=label_flight_data)
+                _, _, predicted_output = FlightInterpolator.interpolate_log_data_gpr()
+                gpr_output = np.resize(np.array(predicted_output), (len(predicted_output[0]), 3))
+
+            # losses
             if len(valid_labels) == 0:
                 print('Labels outside terrain dimensions')
-                loss = torch.zeros(1)
+                nn_loss = torch.zeros(1)
+                zero_wind_loss = torch.zeros(1)
+                average_wind_loss = torch.zeros(1)
+                gpr_wind_loss = torch.zeros(1)
+                krigging_wind_loss = torch.zeros(1)
             else:
                 nn_loss = self._loss_fn(torch.Tensor(nn_output).to(self._device),
                                      torch.Tensor(labels).to(self._device))
@@ -959,9 +981,19 @@ class WindOptimiser(object):
                                      torch.Tensor(labels).to(self._device))
                 average_wind_loss = self._loss_fn(torch.Tensor(average_wind_output).to(self._device),
                                      torch.Tensor(labels).to(self._device))
+                if self.flag.use_krigging_prediction:
+                    krigging_wind_loss = self._loss_fn(torch.Tensor(krigging_output).to(self._device),
+                                         torch.Tensor(labels).to(self._device))
+                if self.flag.use_gpr_prediction:
+                    gpr_wind_loss = self._loss_fn(torch.Tensor(gpr_output).to(self._device),
+                                         torch.Tensor(labels).to(self._device))
             print(i, ' NN loss is: ', nn_loss.item())
             print(i, ' Zero wind loss is: ', zero_wind_loss.item())
             print(i, ' Average wind loss is: ', average_wind_loss.item())
+            if self.flag.use_krigging_prediction:
+                print(i, ' Krigging wind loss is: ', krigging_wind_loss.item())
+            if self.flag.use_gpr_prediction:
+                print(i, ' GPR wind loss is: ', gpr_wind_loss.item())
 
             # outputs
             inputs.append(input)
@@ -969,6 +1001,10 @@ class WindOptimiser(object):
             nn_losses.append(nn_loss)
             zero_wind_losses.append(zero_wind_loss)
             average_wind_losses.append(average_wind_loss)
+            if self.flag.use_krigging_prediction:
+                krigging_wind_losses.append(krigging_wind_loss)
+            if self.flag.use_gpr_prediction:
+                gpr_wind_losses.append(gpr_wind_loss)
 
         losses_items = [nn_losses[i].item() for i in range(len(nn_losses))]
         average_loss = sum(losses_items)/len(losses_items)
@@ -979,5 +1015,13 @@ class WindOptimiser(object):
         losses_items = [average_wind_losses[i].item() for i in range(len(average_wind_losses))]
         average_loss = sum(losses_items)/len(losses_items)
         print('Average wind average loss is: ', average_loss)
+        if self.flag.use_krigging_prediction:
+            losses_items = [krigging_wind_losses[i].item() for i in range(len(krigging_wind_losses))]
+            average_loss = sum(losses_items)/len(losses_items)
+            print('Krigging wind average loss is: ', average_loss)
+        if self.flag.use_gpr_prediction:
+            losses_items = [gpr_wind_losses[i].item() for i in range(len(gpr_wind_losses))]
+            average_loss = sum(losses_items)/len(losses_items)
+            print('GPR wind average loss is: ', average_loss)
 
         return outputs, nn_losses, inputs
