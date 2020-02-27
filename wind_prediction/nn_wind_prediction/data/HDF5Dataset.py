@@ -367,7 +367,8 @@ class HDF5Dataset(Dataset):
         # add noise to data
         is_train_set = 'train' in self.__filename
         if self.__add_gaussian_noise and is_train_set:
-            noise = torch.rand(data[1:, :].shape) / 2
+            eps = 1/2
+            noise = eps * torch.rand(data[1:, :].shape)
             data[1:, :] += noise
 
         # create and add sparse mask to data
@@ -387,7 +388,7 @@ class HDF5Dataset(Dataset):
             else:
                 percentage = p
 
-            sample_terrain_region = False
+            sample_terrain_region = True
             if sample_terrain_region:
                 # sample terrain region
                 p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5

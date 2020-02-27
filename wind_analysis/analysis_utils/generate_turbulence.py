@@ -58,12 +58,9 @@ def generate_turbulence():
     nz = len(z)
 
     X, Y, Z = np.meshgrid(x, y, z)
-    U = np.array(0 * X)
-    U = U.astype(complex)
-    V = np.array(0 * Y)
-    V = V.astype(complex)
-    W = np.array(0 * Z)
-    W = W.astype(complex)
+    U = np.array(0 * X).astype(complex)
+    V = np.array(0 * Y).astype(complex)
+    W = np.array(0 * Z).astype(complex)
 
 
     ### Spectral parameters
@@ -80,12 +77,14 @@ def generate_turbulence():
     # frequency spacing
     dk_x = k_x[1] - k_x[0]
     dk_y = k_y[1] - k_y[0]
-    dk_z = k_z[1] - k_x[0]
+    dk_z = k_z[1] - k_z[0]
 
     sigma = 1
     L = 725
 
     ## Fourier Simulation
+
+    # Create random phase for every frequency component
     xi = (np.random.randn(3, nk_x, nk_y, nk_z) + 1j*np.random.randn(3, nk_x, nk_y, nk_z))/np.sqrt(2)
 
     v_r = np.zeros((3, 1), dtype=np.complex_)
@@ -115,11 +114,12 @@ def generate_turbulence():
     N = len(x) * len(y) * len(z)
 
     if not use_fft:
+        # Direct computation of turbulence at arbitrary position, expensive
         for ipx in range(len(x)):
             for ipy in range(len(y)):
                 for ipz in range(len(z)):
 
-                    print(perc/N)
+                    # print(perc/N)
                     perc = perc + 1
 
                     r = np.array([x[ipx], y[ipy], z[ipz]])
@@ -139,6 +139,7 @@ def generate_turbulence():
                     W[ipx, ipy, ipz] = v_r[2]
 
     if use_fft:
+        # IFFT
         complex_field = np.zeros((3, nk_x, nk_y, nk_z), dtype=complex)
         for ikx in range(nk_x):
             for iky in range(nk_y):
