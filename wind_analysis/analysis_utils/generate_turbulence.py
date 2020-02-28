@@ -25,7 +25,7 @@ def spec_tens_iso_inc(k, L, sigma):
     return Phi
 
 
-def generate_turbulence_spectral():
+def generate_turbulence_spectral(use_fft=True, check_statistics=False):
     '''
     Prototyping Turbulent Wind Fields based on Spectral Domain Simulation
 
@@ -40,13 +40,11 @@ def generate_turbulence_spectral():
               - Simulation of Three-Dimensional Turbulent Velocity Fields,
               R. Frehlich & L.Cornman, J. of applied Meteorology, vol.40, 2000
     '''
-    t_start = time.time()
-    use_fft = False
     lambda_min = 10
 
-    x_range = [0, 1]  # x-grid range [m] (north)
-    y_range = [0, 1]  # y-grid range [m] (east)
-    z_range = [0, 1]  # z-grid range [m] (down)
+    x_range = [0, 15]  # x-grid range [m] (north)
+    y_range = [0, 15]  # y-grid range [m] (east)
+    z_range = [0, 15]  # z-grid range [m] (down)
 
     dx = 0.5
     dy = 0.5
@@ -67,7 +65,7 @@ def generate_turbulence_spectral():
 
 
     ### Spectral parameters
-    nk = 5
+    nk = 51
     nk_x = nk
     nk_y = nk
     nk_z = nk
@@ -90,7 +88,6 @@ def generate_turbulence_spectral():
     # Create random phase for every frequency component
     xi = (np.random.randn(3, nk_x, nk_y, nk_z) + 1j*np.random.randn(3, nk_x, nk_y, nk_z))/np.sqrt(2)
 
-    v_r = np.zeros((3, 1), dtype=np.complex_)
     C_ij = np.zeros((3, 3, nk_x, nk_y, nk_z))
     Phi_ij = np.zeros((3, 3, nk_x, nk_y, nk_z))
     E_ij = np.zeros((nk_x, nk_y, nk_z))
@@ -105,7 +102,7 @@ def generate_turbulence_spectral():
                     Phi_ij[:, :, ikx, iky, ikz] = spec_tens_iso_inc(k, L, sigma)
                     E = karman_E(k, L, sigma)
                     E_ij[ikx, iky, ikz] = E
-
+                    #
                     E_sum = E_sum + E / (np.linalg.norm(k) ** 2 * 4 * np.pi) * dk_x * dk_y * dk_z
                     A_ij = np.sqrt(E / (4 * np.pi)) / (np.linalg.norm(k) ** 2) * np.array([[0, k[2], -k[1]],
                                                                                              [- k[2], 0, k[0]],
@@ -167,26 +164,27 @@ def generate_turbulence_spectral():
 
         X2, Y2, Z2 = np.meshgrid(x2, y2, z2)
 
-        prsv_pred = 0
-        for ikx in range(nk_x):
-            for iky in range(nk_y):
-                prsv_pred = prsv_pred + np.array(np.transpose(complex_field[:, ikx, iky, ikz])).dot(complex_field[:, ikx, iky, ikz])
+        if check_statistics:
+            prsv_pred = 0
+            for ikx in range(nk_x):
+                for iky in range(nk_y):
+                    prsv_pred = prsv_pred + np.array(np.transpose(complex_field[:, ikx, iky, ikz])).dot(complex_field[:, ikx, iky, ikz])
 
-        # check statistics of field
-        # turbulent component standard deviation
-        std_real = [np.std(np.reshape(np.real(U2), (1, -1))),
-                    np.std(np.reshape(np.real(V2), (1, -1))),
-                    np.std(np.reshape(np.real(W2), (1, -1)))]
-        # turbulent kinetic energy (of real valued field)
-        tke_real = 0.5 * np.sum(np.multiply(std_real, std_real))
-        # turbulent kinetic energy (of complex valued field)
-        tke_complex = 0.5 / (nk_x*nk_y*nk_z) * (np.sum(np.reshape(np.multiply(np.abs(U2), np.abs(U2)), (1, -1)))
-                                                    + np.sum(np.reshape(np.multiply(np.abs(V2), np.abs(V2)), (1, -1)))
-                                                    + np.sum(np.reshape(np.multiply(np.abs(W2), np.abs(W2)), (1, -1))))
-        prsv = 1 / (nk_x*nk_y*nk_z) * (np.sum(np.reshape(np.multiply(np.abs(U2), np.abs(U2)), (1, -1)))
-                                          + np.sum(np.reshape(np.multiply(np.abs(V2), np.abs(V2)), (1, -1)))
-                                          + np.sum(np.reshape(np.multiply(np.abs(W2), np.abs(W2)), (1, -1))))
-        print(prsv)
+            # check statistics of field
+            # turbulent component standard deviation
+            std_real = [np.std(np.reshape(np.real(U2), (1, -1))),
+                        np.std(np.reshape(np.real(V2), (1, -1))),
+                        np.std(np.reshape(np.real(W2), (1, -1)))]
+            # turbulent kinetic energy (of real valued field)
+            tke_real = 0.5 * np.sum(np.multiply(std_real, std_real))
+            # turbulent kinetic energy (of complex valued field)
+            tke_complex = 0.5 / (nk_x*nk_y*nk_z) * (np.sum(np.reshape(np.multiply(np.abs(U2), np.abs(U2)), (1, -1)))
+                                                        + np.sum(np.reshape(np.multiply(np.abs(V2), np.abs(V2)), (1, -1)))
+                                                        + np.sum(np.reshape(np.multiply(np.abs(W2), np.abs(W2)), (1, -1))))
+            prsv = 1 / (nk_x*nk_y*nk_z) * (np.sum(np.reshape(np.multiply(np.abs(U2), np.abs(U2)), (1, -1)))
+                                              + np.sum(np.reshape(np.multiply(np.abs(V2), np.abs(V2)), (1, -1)))
+                                              + np.sum(np.reshape(np.multiply(np.abs(W2), np.abs(W2)), (1, -1))))
+            print(prsv)
 
     if use_fft:
         U = U2
@@ -196,7 +194,6 @@ def generate_turbulence_spectral():
         Y = Y2
         Z = Z2
 
-    print('Time for 1 run: ', time.time()-t_start)
     return U, V, W, X, Y, Z
 
 
@@ -325,9 +322,9 @@ def generate_turbulence_dryden(h=20, V=15, b=3, u_20=10, n=10, dt=0.5):
     return UVW, PQR
 
 
-# # Test
-t_start = time.time()
-for i in range(5):
-    # u,v,w,x,y,z = generate_turbulence_spectral()
-    uvw, pqr = generate_turbulence_dryden(n=64**2)
+# Test
+for i in range(100):
+    t_start = time.time()
+    u, v, w, x, y, z = generate_turbulence_spectral()
+    # uvw, pqr = generate_turbulence_dryden()
     print('Time per function call: {0}'.format(time.time()-t_start))
