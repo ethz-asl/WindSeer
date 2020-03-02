@@ -169,10 +169,10 @@ class WindOptimiser(object):
             self.labels = self._wind_zeros
 
         # Noise
-        if self.flag.add_gaussian_noise:
-            self._wind_blocks, self._wind_zeros = self.add_gaussian_noise(self._wind_zeros, self._wind_blocks)
-        if self.flag.generate_turbulence:
-            self._wind_blocks, self._wind_zeros = self.generate_turbulence(self._wind_zeros, self._wind_blocks)
+        # if self.flag.add_gaussian_noise:
+        #     self._wind_blocks, self._wind_zeros = self.add_gaussian_noise(self._wind_zeros, self._wind_blocks)
+        # if self.flag.generate_turbulence:
+        #     self._wind_blocks, self._wind_zeros = self.generate_turbulence(self._wind_zeros, self._wind_blocks)
 
         # Optimisation variables
         self._optimisation_variables = self.get_optimisation_variables()
@@ -505,6 +505,8 @@ class WindOptimiser(object):
         wind_mask = torch.isnan(wind)
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
+        if self.flag.add_gaussian_noise:
+            wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
         return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device), simulated_flight_data
 
     def get_flight_wind_blocks(self, flight_data):
@@ -547,13 +549,13 @@ class WindOptimiser(object):
 
     # --- Add noise to data ---
 
-    def add_gaussian_noise(self, wind_zeros, wind_blocks):
-        wind_noise = torch.randn(self._wind_zeros.shape).to(self._device)
-        wind_zeros_noise = self._wind_zeros + wind_noise
-        wind_zeros_noise[self._wind_mask] = 0
-        wind_blocks_noise = self._wind_blocks + wind_noise
-        wind_blocks_noise[self._wind_mask] = float('nan')
-        return wind_blocks_noise, wind_zeros_noise
+    def add_gaussian_noise(self, wind_zeros, wind_mask):
+        wind_noise = torch.randn(wind_zeros.shape).to(self._device)
+        wind_zeros_noise = wind_zeros + wind_noise
+        wind_zeros_noise[wind_mask] = 0
+        # wind_blocks_noise = wind_blocks + wind_noise
+        # wind_blocks_noise[wind_mask] = float('nan')
+        return wind_zeros_noise
 
     def generate_turbulence(self, wind_zeros, wind_blocks):
         wind_blocks, wind_zeros = 0, 0
@@ -871,8 +873,8 @@ class WindOptimiser(object):
             wind_blocks = self._wind_blocks.clone()
             wind_zeros = self._wind_zeros.clone()
             # add noise
-            if self.flag.add_gaussian_noise:
-                wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
+            # if self.flag.add_gaussian_noise:
+            #     wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
             # create mask
             wind_input = self.add_mask_to_wind()
             # run prediction

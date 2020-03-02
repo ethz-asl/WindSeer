@@ -162,17 +162,6 @@ class WindOptimiserOutput:
         else:
             plt.show()
 
-    def plot_best_wind_estimate(self):
-        # Plot best wind estimate
-        fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt.labels.to(self.device),
-                                               self.wind_opt.terrain.network_terrain.squeeze(0),
-                                               self._save_output, self._add_sparse_mask_row, self._masked_input)
-
-        if self._save_output:
-            self.pp.savefig(fig)
-        else:
-            plt.show()
-
     def print_losses(self):
         # Get minimum losses
         min_losses = []
@@ -197,12 +186,50 @@ class WindOptimiserOutput:
                 print("{0}: minimum loss = {1}, rotation = {2} deg, scale = {3}, shear = {4}, exp = {5}".format(
                     name, min_loss,
                     opt_var[0] * 180.0 / np.pi,
-                    opt_var[1], opt_var[2]* 180.0 / (np.pi*10000),
+                    opt_var[1], opt_var[2] * 180.0 / (np.pi*10000),
                     opt_var[3]/10 )
                            + "\n\n")
                 if o == self._optimisers[-1]:
                     print("Best optimization method: {0}".format(
                         self._names[self._best_method_index]))
+
+    def plot_fft_analysis(self):
+        fig, ax = plt.subplots()
+        if self.wind_opt.flag.test_flight_data:
+            flight_data = self.wind_opt._flight_data
+        if self.wind_opt.flag.test_simulated_data:
+            flight_data = self.wind_opt._simulated_flight_data
+
+        # winds in each direction
+        wn = flight_data['wn']
+        we = flight_data['we']
+        wd = flight_data['wd']
+
+        # wind magnitude
+        wind_magnitude = np.sqrt(wn**2 + we**2 + wd**2)
+
+        # time
+        time = (flight_data['time_microsec'] - flight_data['time_microsec'][0]) / 1e6
+
+        T = time[1] - time[0]
+        N = time.size
+
+        f = np.linspace(0, 1/T, N)
+
+        fft = np.fft.fft(wind_magnitude - wind_magnitude.mean())
+
+        ax.plot(f[:N // 2], np.abs(fft)[:N // 2] * 1 / N)
+        ax.set_xlabel('Frequency [Hz]')
+        ax.set_ylabel('Amplitude')
+
+        # ax.plot(time, wn - wn.mean())
+        # ax.set_xlabel('time [s]')
+        # ax.set_ylabel('Wind speed [m/s]')
+
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
 
     def plot_trajectory_and_terrain(self):
         fig = plt.figure()
@@ -230,7 +257,6 @@ class WindOptimiserOutput:
         ax.quiver(xs_skip, ys_skip, zs_skip, wind[0, zs_skip, ys_skip, xs_skip], wind[1, zs_skip, ys_skip, xs_skip],
                   wind[2, zs_skip, ys_skip, xs_skip],
                   length=1)
-
 
         # terrain
         h_grid = (self.wind_opt.terrain.z_terr[-1] - self.wind_opt.terrain.z_terr[0])/64
@@ -276,6 +302,17 @@ class WindOptimiserOutput:
         else:
             plt.show()
 
+    def plot_best_wind_estimate(self):
+        # Plot best wind estimate
+        fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt.labels.to(self.device),
+                                               self.wind_opt.terrain.network_terrain.squeeze(0),
+                                               self._save_output, self._add_sparse_mask_row, self._masked_input)
+
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
+
     def close(self):
         self.pp.close()
 
@@ -287,9 +324,10 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
+        self.plot_fft_analysis()
         # self.plot_wind_vectors_angles()
         # self.plot_trajectory_and_terrain()
-        self.plot_best_wind_estimate()
+        # self.plot_best_wind_estimate()
 
         if self._save_output:
             self.close()
