@@ -10,6 +10,7 @@ import torch
 from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
+from analysis_utils import generate_turbulence
 
 class HDF5Dataset(Dataset):
     '''
@@ -53,6 +54,7 @@ class HDF5Dataset(Dataset):
     __default_max_percentage_of_sparse_data = 1
     __default_terrain_percentage_correction = False
     __default_add_gaussian_noise = False
+    __default_add_turbulence = False
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -241,6 +243,12 @@ class HDF5Dataset(Dataset):
             if verbose:
                 print('HDF5Dataset: add_gaussian_noise not present in kwargs, using default value:', self.__default_add_gaussian_noise)
 
+        try:
+            self.__add_turbulence = kwargs['add_turbulence']
+        except KeyError:
+            self.__add_turbulence = self.__default_add_turbulence
+            if verbose:
+                print('HDF5Dataset: add_turbulence not present in kwargs, using default value:', self.__default_add_turbulence)
 
         # --------------------------------------- initializing class params --------------------------------------------
         if len(input_channels) == 0 or len(label_channels) == 0:
@@ -342,6 +350,15 @@ class HDF5Dataset(Dataset):
                     print('HDF5Dataset: ', 'scaling_' + channel, 'not present in kwargs, using default value:',
                           self.__default_scaling_dict[channel])
 
+        # create turbulent velocity fields
+        if self.__add_turbulence:
+            turbulent_velocity_fields = []
+            for i in range(100):
+                uvw, _ = generate_turbulence.generate_turbulence_spectral()
+                turbulent_velocity_field = uvw[:, :-1, :-1, :-1]
+                turbulent_velocity_fields += [torch.from_numpy(turbulent_velocity_field.astype(np.float32))]
+            self.__turbulent_velocity_fields = torch.cat(turbulent_velocity_fields, 0)
+
         # initialize random number generator used for the subsampling
         self.__rand = random.SystemRandom()
 
@@ -364,12 +381,19 @@ class HDF5Dataset(Dataset):
             data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
         data = torch.cat(data_from_channels, 0)
 
-        # add noise to data
+        # add noise to wind data
         is_train_set = 'train' in self.__filename
         if self.__add_gaussian_noise and is_train_set:
-            eps = 1/2
+            eps = 1
             noise = eps * torch.rand(data[1:, :].shape)
             data[1:, :] += noise
+
+        # add turbulence to wind data
+        is_train_set = 'train' in self.__filename
+        if self.__add_turbulence and is_train_set:
+            rand_num = np.random.randint(0, 99)
+            turbulence = self.__turbulent_velocity_fields[rand_num]
+            data[1:, :] += turbulence
 
         # create and add sparse mask to data
         if self.__create_sparse_mask:

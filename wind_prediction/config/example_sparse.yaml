@@ -90,11 +90,12 @@ data:
 
     # sparse mask
     create_sparse_mask: True
-    max_percentage_of_sparse_data: 0.05 # percentage of inputs used for training the network
+    max_percentage_of_sparse_data: 0.005 # percentage of inputs used for training the network
     terrain_percentage_correction: False
 
     # noise
-    add_gaussian_noise: False
+    add_gaussian_noise: True
+    add_turbulence: True
 
 # model parameters
 model:
@@ -110,10 +111,10 @@ model:
         filter_kernel_size: 3,
         interpolation_mode: 'nearest',
         align_corners: False,
-        skipping: False,
+        skipping: True,
         use_terrain_mask: True,
         pooling_method: 'striding',
-        use_fc_layers: True,
+        use_fc_layers: False,
         fc_scaling: 8,
         use_mapping_layer: False,
         potential_flow: False,
@@ -121,7 +122,7 @@ model:
         activation_args: {negative_slope: 0.1},
         verbose: True,
         submodel_type: 'ModelEDNN3D',
-        vae: True,
+        vae: False,
 
         # uncertainty prediction params
         predict_uncertainty: False,

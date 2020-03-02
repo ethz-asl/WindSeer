@@ -980,8 +980,8 @@ class WindOptimiser(object):
             zero_wind_output = np.zeros_like(labels)
 
             # --- Average wind prediction ---
-            input_wind = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
-            average_wind_output = np.ones_like(labels) * input_wind.mean()
+            average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
+            average_wind_output = np.ones_like(labels) * average_wind_input.mean()
 
             # --- Interpolation (Krigging) prediction ---
             if self.flag.use_krigging_prediction:

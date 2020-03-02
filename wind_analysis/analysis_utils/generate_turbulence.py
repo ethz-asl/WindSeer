@@ -40,7 +40,7 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
               - Simulation of Three-Dimensional Turbulent Velocity Fields,
               R. Frehlich & L.Cornman, J. of applied Meteorology, vol.40, 2000
     '''
-    lambda_min = 10
+    lambda_min = 1100/63  # minimal wavelength of turbulence to simulate, [m]  (min 6cm)
 
     x_range = [0, 15]  # x-grid range [m] (north)
     y_range = [0, 15]  # y-grid range [m] (east)
@@ -65,7 +65,7 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
 
 
     ### Spectral parameters
-    nk = 51
+    nk = 65
     nk_x = nk
     nk_y = nk
     nk_z = nk
@@ -89,9 +89,9 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
     xi = (np.random.randn(3, nk_x, nk_y, nk_z) + 1j*np.random.randn(3, nk_x, nk_y, nk_z))/np.sqrt(2)
 
     C_ij = np.zeros((3, 3, nk_x, nk_y, nk_z))
-    Phi_ij = np.zeros((3, 3, nk_x, nk_y, nk_z))
-    E_ij = np.zeros((nk_x, nk_y, nk_z))
-    E_sum = 0
+    # Phi_ij = np.zeros((3, 3, nk_x, nk_y, nk_z))
+    # E_ij = np.zeros((nk_x, nk_y, nk_z))
+    # E_sum = 0
 
     for ikx in range(nk_x):
         for iky in range(nk_y):
@@ -99,27 +99,26 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
                 k = np.array([k_x[ikx], k_y[iky], k_z[ikz]])
                 k = np.transpose(k)
                 if 0 < np.linalg.norm(k) <= k_x[-1]:
-                    Phi_ij[:, :, ikx, iky, ikz] = spec_tens_iso_inc(k, L, sigma)
+                    # Phi_ij[:, :, ikx, iky, ikz] = spec_tens_iso_inc(k, L, sigma)
                     E = karman_E(k, L, sigma)
-                    E_ij[ikx, iky, ikz] = E
-                    #
-                    E_sum = E_sum + E / (np.linalg.norm(k) ** 2 * 4 * np.pi) * dk_x * dk_y * dk_z
+                    # E_ij[ikx, iky, ikz] = E
+                    # E_sum = E_sum + E / (np.linalg.norm(k) ** 2 * 4 * np.pi) * dk_x * dk_y * dk_z
+
                     A_ij = np.sqrt(E / (4 * np.pi)) / (np.linalg.norm(k) ** 2) * np.array([[0, k[2], -k[1]],
                                                                                              [- k[2], 0, k[0]],
                                                                                              [k[1], -k[0], 0]])
-
                     C_ij[:, :, ikx, iky, ikz] = np.sqrt(dk_x * dk_y * dk_z) * np.array(A_ij)
 
     perc = 0
-    N = len(x) * len(y) * len(z)
+    N = nx * ny * nz
 
     if not use_fft:
         # Direct computation of turbulence at arbitrary position, expensive
-        for ipx in range(len(x)):
-            for ipy in range(len(y)):
-                for ipz in range(len(z)):
+        for ipx in range(nx):
+            for ipy in range(ny):
+                for ipz in range(nz):
 
-                    # print(perc/N)
+                    print(perc/N)
                     perc = perc + 1
 
                     r = np.array([x[ipx], y[ipy], z[ipz]])
@@ -193,8 +192,11 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
         X = X2
         Y = Y2
         Z = Z2
+    # turbulent velocity field matrix
+    UVW = np.stack((np.real(U), np.real(V), np.real(W)), axis=0)
+    XYZ = np.stack((X, Y, Z), axis=0)
 
-    return U, V, W, X, Y, Z
+    return UVW, XYZ
 
 
 def generate_turbulence_dryden(h=20, V=15, b=3, u_20=10, n=10, dt=0.5):
@@ -323,8 +325,8 @@ def generate_turbulence_dryden(h=20, V=15, b=3, u_20=10, n=10, dt=0.5):
 
 
 # Test
-for i in range(100):
-    t_start = time.time()
-    u, v, w, x, y, z = generate_turbulence_spectral()
-    # uvw, pqr = generate_turbulence_dryden()
-    print('Time per function call: {0}'.format(time.time()-t_start))
+# for i in range(100):
+#     t_start = time.time()
+#     u, v, w, x, y, z = generate_turbulence_spectral()
+#     # uvw, pqr = generate_turbulence_dryden()
+#     print('Time per function call: {0}'.format(time.time()-t_start))
