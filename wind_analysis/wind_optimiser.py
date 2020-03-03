@@ -303,7 +303,7 @@ class WindOptimiser(object):
         # print names of files in test_set
         print_names = False
         if print_names:
-            for i in range(test_set.__len__()):
+            for i in range(len(test_set)):
                 name = test_set.get_name(i)
                 print(i, name)
         # Get data set from test set
@@ -433,11 +433,15 @@ class WindOptimiser(object):
             else:
                 terrain_region = terrain
             idx = torch.nonzero(terrain_region)
+            # set torch manual seed
+            torch.manual_seed(7)
             select = torch.randperm(idx.shape[0])
             # 3D positions of the random points
             pos_x = idx[select][:numel][:, 2].float() * self.grid_size[0]
             pos_y = idx[select][:numel][:, 1].float() * self.grid_size[1]
             pos_z = idx[select][:numel][:, 0].float() * self.grid_size[2]
+            # set random manual seed
+            random.seed(7)
             # random starting point
             start = random.randint(0, numel)
             # get trajectory points
@@ -639,12 +643,15 @@ class WindOptimiser(object):
         return cosmo_corners
 
     # --- Helper functions ---
-    def add_mask_to_wind(self, wind_provided=None):
+    def add_mask_to_wind(self, wind_provided=None, wind_mask=None):
         if wind_provided is None:
             wind = self._wind_zeros.clone()
         else:
             wind = wind_provided
-        sparse_mask = (~self._wind_mask[0]).float()
+        if wind_mask is None:
+            sparse_mask = (~self._wind_mask[0]).float()
+        else:
+            sparse_mask = (~wind_mask[0]).float()
         augmented_wind = torch.cat(([wind, sparse_mask.unsqueeze(0)]))
         return augmented_wind.to(self._device)
 
@@ -864,7 +871,7 @@ class WindOptimiser(object):
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
                 wind += interpolated_cosmo_corners
-            wind = self.add_mask_to_wind(wind)
+            wind = self.add_mask_to_wind(wind, wind_mask)
             input = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input)
             loss = self.evaluate_loss(output)
@@ -966,9 +973,11 @@ class WindOptimiser(object):
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
                 wind += interpolated_cosmo_corners
-            wind = self.add_mask_to_wind(wind)
+            wind = self.add_mask_to_wind(wind, wind_mask)
             input = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input)
+            # loss_org = self.evaluate_loss(output)
+            # print(' loss: ', loss_org.item())
 
             # interpolate prediction to scattered flight data locations corresponding to the labels
             FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,

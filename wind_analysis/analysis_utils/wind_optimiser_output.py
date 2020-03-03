@@ -250,7 +250,7 @@ class WindOptimiserOutput:
 
         # plot trajectory
         ax.scatter(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
-        ax.plot(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
+        # ax.plot(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
 
         # plot wind vectors
         wind = self._input[1:-1, :].cpu().detach().numpy()
@@ -324,10 +324,10 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
-        self.plot_fft_analysis()
+        # self.plot_fft_analysis()
         # self.plot_wind_vectors_angles()
-        # self.plot_trajectory_and_terrain()
-        # self.plot_best_wind_estimate()
+        self.plot_trajectory_and_terrain()
+        self.plot_best_wind_estimate()
 
         if self._save_output:
             self.close()
