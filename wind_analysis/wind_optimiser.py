@@ -914,7 +914,7 @@ class WindOptimiser(object):
         step_time = self._window_splits_args.params['step_time']  # seconds
 
         # time interval between two consecutive flight measurements
-        dt = (flight_data['time_microsec'][1]-flight_data['time_microsec'][0]) / 1e6
+        dt = ((flight_data['time_microsec'][-1]-flight_data['time_microsec'][0])/flight_data['time_microsec'].size)/1e6
 
         # sliding window variables
         window_size = int(window_time/dt)

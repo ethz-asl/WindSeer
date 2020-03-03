@@ -10,7 +10,6 @@ import torch
 from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
-from analysis_utils import generate_turbulence
 
 class HDF5Dataset(Dataset):
     '''
@@ -356,7 +355,7 @@ class HDF5Dataset(Dataset):
             for i in range(100):
                 uvw, _ = generate_turbulence.generate_turbulence_spectral()
                 turbulent_velocity_field = uvw[:, :-1, :-1, :-1]
-                turbulent_velocity_fields += [torch.from_numpy(turbulent_velocity_field.astype(np.float32))]
+                turbulent_velocity_fields += [torch.from_numpy(turbulent_velocity_field.astype(np.float32)).unsqueeze(0)]
             self.__turbulent_velocity_fields = torch.cat(turbulent_velocity_fields, 0)
 
         # initialize random number generator used for the subsampling
