@@ -108,6 +108,7 @@ class SelectionFlags(object):
         self.use_window_split = window_split.params['use_window_split']
         self.use_gpr_prediction = window_split.params['use_gpr_prediction']
         self.use_krigging_prediction = window_split.params['use_krigging_prediction']
+        self.rescale_prediction = window_split.params['rescale_prediction']
         self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
         self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
         self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
@@ -726,17 +727,18 @@ class WindOptimiser(object):
         return self._loss_fn(nn_output, labels)
 
     def sliding_window_split(self, flight_data, window_size=1, response_size=1, step_size=1):
-        input_flight = {}; output_flight = {}
+        input_flight, output_flight = {}, {}
         for keys, values in flight_data.items():
             input_batch = values[step_size : step_size+window_size]
             output_batch = values[step_size+window_size : step_size+window_size+response_size]
             input_flight.update({keys: input_batch})
             output_flight.update({keys: output_batch})
 
-        return input_flight, output_flight
+        return copy.deepcopy(input_flight), copy.deepcopy(output_flight)
 
-    def rescale_prediction(self, output, label):
-        output = output.squeeze()
+    def rescale_prediction(self, output=None, label=None):
+        if output is not None:
+            output = output.squeeze()
         channels_to_predict = self.params.data['label_channels']
         # make sure the channels to predict exist and are properly ordered
         default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
@@ -749,17 +751,25 @@ class WindOptimiser(object):
         # rescale the labels and predictions
         for i, channel in enumerate(channels_to_predict):
             if channel == 'terrain':
-                output[i] *= self.params.data[channel + '_scaling']
-                label[i] *= self.params.data[channel + '_scaling']
+                if output is not None:
+                    output[i] *= self.params.data[channel + '_scaling']
+                if label is not None:
+                    label[i] *= self.params.data[channel + '_scaling']
             elif channel.startswith('u') or channel == 'nut':
-                output[i] *= self.scale * self.params.data[channel + '_scaling']
-                label[i] *= self.scale * self.params.data[channel + '_scaling']
+                if output is not None:
+                    output[i] *= self.scale * self.params.data[channel + '_scaling']
+                if label is not None:
+                    label[i] *= self.scale * self.params.data[channel + '_scaling']
             elif channel == 'p' or channel == 'turb':
-                output[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']
-                label[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']
+                if output is not None:
+                    output[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']
+                if label is not None:
+                    label[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']
             elif channel == 'epsilon':
-                output[i] *= self.scale * self.scale * self.scale * self.params.data[channel + '_scaling']
-                label[i] *= self.scale * self.scale * self.scale * self.params.data[channel + '_scaling']
+                if output is not None:
+                    output[i] *= self.scale * self.scale * self.scale * self.params.data[channel + '_scaling']
+                if label is not None:
+                    label[i] *= self.scale * self.scale * self.scale * self.params.data[channel + '_scaling']
 
     # --- Optimisation functions ---
 
@@ -850,7 +860,7 @@ class WindOptimiser(object):
         original_input = input.clone()
         output = self.run_prediction(input)
         loss = self.evaluate_loss(output)
-        self.rescale_prediction(output, self.labels)
+        # self.rescale_prediction(output, self.labels)
         outputs.append(output)
         losses.append(loss)
         inputs.append(original_input)
@@ -874,6 +884,7 @@ class WindOptimiser(object):
             wind = self.add_mask_to_wind(wind, wind_mask)
             input = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input)
+            # self.rescale_prediction(output, self.labels)
             loss = self.evaluate_loss(output)
         else:
             # get wind zeros
@@ -887,6 +898,7 @@ class WindOptimiser(object):
             # run prediction
             input = torch.cat([self.terrain.network_terrain, wind_input])
             output = self.run_prediction(input)
+            # self.rescale_prediction(output, self.labels)
             loss = self.evaluate_loss(output)
         outputs.append(output)
         losses.append(loss)
@@ -947,6 +959,10 @@ class WindOptimiser(object):
             # split data into input and label based on window variables
             input_flight_data, label_flight_data = \
                 self.sliding_window_split(flight_data, window_size, response_size, i*step_size)
+            if self.flag.rescale_prediction:
+                label_flight_data['wn'] *= self.scale * self.params.data['ux' + '_scaling']
+                label_flight_data['we'] *= self.scale * self.params.data['uy' + '_scaling']
+                label_flight_data['wd'] *= self.scale * self.params.data['uz' + '_scaling']
 
             # labels
             # filter out points in the labels which are outside the terrain sample
@@ -960,7 +976,7 @@ class WindOptimiser(object):
                         (label_flight_data['alt'][j] < self.terrain.z_terr[-1])):
                     valid_labels.append([label_flight_data['wn'][j], label_flight_data['we'][j],
                                          label_flight_data['wd'][j]])
-            labels = np.resize(np.array(valid_labels), (len(valid_labels), 3))
+            labels = np.row_stack(valid_labels)
             # labels = np.array([label_flight_data['wn'], label_flight_data['we'], label_flight_data['wd']])
 
             # --- Network prediction ---
@@ -976,14 +992,19 @@ class WindOptimiser(object):
             wind = self.add_mask_to_wind(wind, wind_mask)
             input = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input)
-            # loss_org = self.evaluate_loss(output)
-            # print(' loss: ', loss_org.item())
+            if self.flag.rescale_prediction:
+                if i == 0:
+                    self.rescale_prediction(output, self.labels)
+                else:
+                    self.rescale_prediction(output)
+            loss_org = self.evaluate_loss(output)
+            print(' loss: ', loss_org.item())
 
             # interpolate prediction to scattered flight data locations corresponding to the labels
             FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
                                                    wind_data_for_prediction=label_flight_data)
             interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(output)
-            nn_output = np.resize(np.array(interpolated_output), (len(interpolated_output[0]), 3))
+            nn_output = np.column_stack(interpolated_output)
 
             # interpolated_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
 

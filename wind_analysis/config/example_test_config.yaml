@@ -5,14 +5,14 @@ test:
 
 # CFD data
 cfd:
-    testset_name: 'data/wind_test/test_planning.hdf5'
+    testset_name: 'data/wind_test/test.hdf5'
     # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
     label_channels: ['ux', 'uy', 'uz']  # velocities
     # Get all samples in test set
     batch_test: False
-    # if batch is False get the following sample in the set
-    index: 63
+    # if batch is False get the following sample in the sete
+    index: 664
 
 # COSMO data
 cosmo:
@@ -37,7 +37,7 @@ wind:
     sparse_data: {
         use_sparse_data: False,
         #
-        percentage_of_sparse_data: 0.0003,
+        percentage_of_sparse_data: 0.04,
         terrain_percentage_correction: False,
         sample_random_region: False,
     }
@@ -45,7 +45,7 @@ wind:
     trajectory: {
         use_trajectory_generation: True,
         #
-        use_simulated_trajectory: False,
+        use_simulated_trajectory: True,
         num_points_generated: 100,
         uav_speed: 15,
         dt: 0.1 # seconds
@@ -63,13 +63,14 @@ noise:
 
 # Window split parameters
 window_split:
-  use_window_split: False
+  use_window_split: True
   #
   use_gpr_prediction: False
   use_krigging_prediction: False
-  window_time: 100 # seconds
+  rescale_prediction: True
+  window_time: 60 # seconds
   response_time: 20 # seconds
-  step_time: 120 # seconds
+  step_time: 80 # seconds
 
 # Corner optimisation parameters
 optimisation:
@@ -87,7 +88,7 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/20191015_TODO/'
-  name: 'test_model_38'
+  name: 'test_model_45'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'
