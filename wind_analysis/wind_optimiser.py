@@ -510,8 +510,8 @@ class WindOptimiser(object):
         wind_mask = torch.isnan(wind)
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
-        if self.flag.add_gaussian_noise:
-            wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
+        # if self.flag.add_gaussian_noise:
+        #     wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
         return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device), simulated_flight_data
 
     def get_flight_wind_blocks(self, flight_data):
@@ -555,7 +555,7 @@ class WindOptimiser(object):
     # --- Add noise to data ---
 
     def add_gaussian_noise(self, wind_zeros, wind_mask):
-        wind_noise = torch.randn(wind_zeros.shape).to(self._device)
+        wind_noise = torch.randn(wind_zeros.shape).to(self._device) / self.scale
         wind_zeros_noise = wind_zeros + wind_noise
         wind_zeros_noise[wind_mask] = 0
         # wind_blocks_noise = wind_blocks + wind_noise
@@ -945,6 +945,7 @@ class WindOptimiser(object):
         # if max_num_windows < 0:
         #     raise ValueError('window time exceeds flight time')
         total_time_of_flight = (flight_data['time_microsec'][-1] - flight_data['time_microsec'][0]) / 1e6
+        print('')
         print('Number of windows: ', max_num_windows)
         print('Number of measurements per window: ', window_size)
         print('Number of measurements per response: ', response_size)
@@ -976,7 +977,10 @@ class WindOptimiser(object):
                         (label_flight_data['alt'][j] < self.terrain.z_terr[-1])):
                     valid_labels.append([label_flight_data['wn'][j], label_flight_data['we'][j],
                                          label_flight_data['wd'][j]])
-            labels = np.row_stack(valid_labels)
+            if len(valid_labels) == 0:
+                labels = []
+            else:
+                labels = np.row_stack(valid_labels)
             # labels = np.array([label_flight_data['wn'], label_flight_data['we'], label_flight_data['wd']])
 
             # --- Network prediction ---
@@ -985,6 +989,8 @@ class WindOptimiser(object):
                 = self.get_flight_wind_blocks(input_flight_data)
 
             # get prediction
+            if self.flag.add_gaussian_noise:
+                wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
             wind = wind_zeros.to(self._device)
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
@@ -1069,6 +1075,7 @@ class WindOptimiser(object):
             if self.flag.use_gpr_prediction:
                 gpr_wind_losses.append(gpr_wind_loss)
 
+        print('')
         losses_items = [nn_losses[i].item() for i in range(len(nn_losses))]
         average_loss = sum(losses_items)/len(losses_items)
         print('Average NN loss is: ', average_loss)
