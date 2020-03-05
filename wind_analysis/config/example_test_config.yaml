@@ -9,9 +9,8 @@ cfd:
     # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
     label_channels: ['ux', 'uy', 'uz']  # velocities
-    # Get all samples in test set
-    batch_test: False
-    # if batch is False get the following sample in the sete
+    print_names: False
+    # Index of sample in the test set
     index: 664
 
 # COSMO data

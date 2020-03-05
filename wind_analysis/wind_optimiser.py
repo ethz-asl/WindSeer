@@ -93,7 +93,7 @@ class SelectionFlags(object):
     def __init__(self, test, cfd, flight, wind, noise, window_split, optimisation):
         self.test_simulated_data = test.params['test_simulated_data']
         self.test_flight_data = test.params['test_flight_data']
-        self.batch_test = cfd.params['batch_test']
+        self.print_names = cfd.params['print_names']
         self.use_ekf_wind = flight.params['use_ekf_wind']
         self.add_wind_measurements = wind.params['add_wind_measurements']
         self.add_corners = wind.params['add_corners']
@@ -226,12 +226,12 @@ class WindOptimiser(object):
             ulog_data = ulog_utils.get_log_data(self._flight_args.params['file'])
 
             if self.flag.use_ekf_wind:
-                ulog_data['we'] = ulog_data['we_east']
                 ulog_data['wn'] = ulog_data['we_north']
+                ulog_data['we'] = ulog_data['we_east']
                 ulog_data['wd'] = ulog_data['we_down']
             else:
-                ulog_data['we'] = ulog_data['we']
                 ulog_data['wn'] = ulog_data['wn']
+                ulog_data['we'] = ulog_data['we']
                 ulog_data['wd'] = ulog_data['wd']
             ulog_data['time_microsec'] = ulog_data['utc_microsec']
 
@@ -241,8 +241,8 @@ class WindOptimiser(object):
             print('Loading hdf5 flight data...', end='', flush=True)
             t_start = time.time()
             hdf5_data = ulog_utils.read_filtered_hdf5(self._flight_args.params['file'], skip_amount=10)
-            hdf5_data['we'] = hdf5_data['wind_e']
             hdf5_data['wn'] = hdf5_data['wind_n']
+            hdf5_data['we'] = hdf5_data['wind_e']
             hdf5_data['wd'] = hdf5_data['wind_d']
             hdf5_data['time_microsec'] = hdf5_data['time']
 
@@ -302,15 +302,14 @@ class WindOptimiser(object):
                                        augmentation=False, return_grid_size=True,
                                        **self.params.Dataset_kwargs())
         # print names of files in test_set
-        print_names = False
-        if print_names:
+        if self.flag.print_names:
             for i in range(len(test_set)):
                 name = test_set.get_name(i)
                 print(i, name)
         # Get data set from test set
         data_set = test_set[self._cfd_args.params['index']]
-        input_ = data_set[0]
-        label = data_set[1]
+        input = data_set[0]
+        labels = data_set[1]
         name = test_set.get_name(self._cfd_args.params['index'])
         scale = 1.0
         if self.params.data['autoscale']:
@@ -320,7 +319,7 @@ class WindOptimiser(object):
         # Convert distance transformed matrix back to binary matrix
         binary_terrain = data_set[0][0, :, :, :] <= 0
         terrain = data_set[0][0, :, :, :]
-        return input_, label, scale, name, grid_size, binary_terrain, terrain
+        return input, labels, scale, name, grid_size, binary_terrain, terrain
 
     def get_cfd_terrain(self):
         nx, ny, nz = self.binary_terrain.shape
@@ -338,7 +337,6 @@ class WindOptimiser(object):
     # --- Wind generation ---
 
     def get_sparse_wind_blocks(self, p=0):
-        # Copy of the true wind labels
         wind = self.labels.clone()
         channels, nz, ny, nx = wind.shape
         terrain = self.original_terrain
@@ -368,7 +366,8 @@ class WindOptimiser(object):
                 x1 = nx - (int(l / 2) + 1)
                 rx = random.randint(x0, x1)
                 ry = random.randint(x0, x1)
-                unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] = torch.FloatTensor(nz, l, l).uniform_()
+                unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] \
+                    = torch.FloatTensor(nz, l, l).uniform_()
                 terrain_uniform_mask = boolean_terrain.float() * unifrom_dist_region
                 percentage = p / p_sample
             else:
@@ -998,9 +997,9 @@ class WindOptimiser(object):
             wind = self.add_mask_to_wind(wind, wind_mask)
             input = torch.cat([self.terrain.network_terrain, wind])
             output = self.run_prediction(input)
-            if self.flag.rescale_prediction:
+            if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
                 if i == 0:
-                    self.rescale_prediction(output, self.labels)
+                    self.rescale_prediction(output, self.labels)  # rescale labels only once
                 else:
                     self.rescale_prediction(output)
             loss_org = self.evaluate_loss(output)
