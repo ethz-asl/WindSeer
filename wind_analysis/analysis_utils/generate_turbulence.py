@@ -65,7 +65,7 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
 
 
     ### Spectral parameters
-    nk = 65
+    nk = 91
     nk_x = nk
     nk_y = nk
     nk_z = nk
@@ -327,6 +327,6 @@ def generate_turbulence_dryden(h=20, V=15, b=3, u_20=10, n=10, dt=0.5):
 # Test
 # for i in range(100):
 #     t_start = time.time()
-#     u, v, w, x, y, z = generate_turbulence_spectral()
+#     uvw, xyz = generate_turbulence_spectral()
 #     # uvw, pqr = generate_turbulence_dryden()
 #     print('Time per function call: {0}'.format(time.time()-t_start))

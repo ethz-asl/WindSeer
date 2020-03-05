@@ -86,6 +86,7 @@ class EDNNParameters(object):
                 'create_sparse_mask': self.data['create_sparse_mask'],
                 'max_percentage_of_sparse_data': self.data['max_percentage_of_sparse_data'],
                 'terrain_percentage_correction': self.data['terrain_percentage_correction'],
+                'sample_terrain_region': self.data['sample_terrain_region'],
                 'add_gaussian_noise': self.data['add_gaussian_noise'],
                 'add_turbulence': self.data['add_turbulence']}
 

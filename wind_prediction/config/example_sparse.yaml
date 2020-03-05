@@ -92,10 +92,11 @@ data:
     create_sparse_mask: True
     max_percentage_of_sparse_data: 0.005 # percentage of inputs used for training the network
     terrain_percentage_correction: False
+    sample_terrain_region: True
 
     # noise
     add_gaussian_noise: True
-    add_turbulence: True
+    add_turbulence: False
 
 # model parameters
 model:

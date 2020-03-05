@@ -5,11 +5,14 @@ from nn_wind_prediction.utils.interpolation import DataInterpolation
 from interpolation.splines import UCGrid, eval_linear
 import numpy as np
 import random
-import sys
 import torch
 from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
+import sys
+sys.path.append('../')
+from wind_analysis.analysis_utils import generate_turbulence
+
 
 class HDF5Dataset(Dataset):
     '''
@@ -52,6 +55,7 @@ class HDF5Dataset(Dataset):
     __default_create_sparse_mask = False
     __default_max_percentage_of_sparse_data = 1
     __default_terrain_percentage_correction = False
+    __default_sample_terrain_region = False
     __default_add_gaussian_noise = False
     __default_add_turbulence = False
 
@@ -232,8 +236,14 @@ class HDF5Dataset(Dataset):
         except KeyError:
             self.__terrain_percentage_correction = self.__default_terrain_percentage_correction
             if verbose:
-                print('HDF5Dataset: add_gaussian_noise not present in kwargs, using default value:', self.__default_terrain_percentage_correction)
+                print('HDF5Dataset: terrain_percentage_correction not present in kwargs, using default value:', self.__default_terrain_percentage_correction)
 
+        try:
+            self.__sample_terrain_region = kwargs['sample_terrain_region']
+        except KeyError:
+            self.__sample_terrain_region = self.__default_sample_terrain_region
+            if verbose:
+                print('HDF5Dataset: sample_terrain_region not present in kwargs, using default value:', self.__default_sample_terrain_region)
 
         try:
             self.__add_gaussian_noise = kwargs['add_gaussian_noise']
@@ -352,6 +362,7 @@ class HDF5Dataset(Dataset):
         # create turbulent velocity fields
         if self.__add_turbulence:
             turbulent_velocity_fields = []
+            # generate 100 fields
             for i in range(100):
                 uvw, _ = generate_turbulence.generate_turbulence_spectral()
                 turbulent_velocity_field = uvw[:, :-1, :-1, :-1]
@@ -379,59 +390,6 @@ class HDF5Dataset(Dataset):
             # extract channel data and apply scaling
             data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
         data = torch.cat(data_from_channels, 0)
-
-        # add noise to wind data
-        is_train_set = 'train' in self.__filename
-        if self.__add_gaussian_noise and is_train_set:
-            eps = 1
-            noise = eps * torch.rand(data[1:, :].shape)
-            data[1:, :] += noise
-
-        # add turbulence to wind data
-        is_train_set = 'train' in self.__filename
-        if self.__add_turbulence and is_train_set:
-            rand_num = np.random.randint(0, 99)
-            turbulence = self.__turbulent_velocity_fields[rand_num]
-            data[1:, :] += turbulence
-
-        # create and add sparse mask to data
-        if self.__create_sparse_mask:
-            terrain = data[0, :]
-            nz, ny, nx = terrain.shape
-            boolean_terrain = terrain > 0
-            # percentage of sparse data
-            p = random.random() * self.__max_percentage_of_sparse_data
-            if p < 1e-5:
-                p = 1e-5
-            # terrain correction
-            if self.__terrain_percentage_correction:
-                terrain_percentage = 1 - boolean_terrain.sum().item() / boolean_terrain.numel()
-                correctected_percentage = p / (1 - terrain_percentage)
-                percentage = correctected_percentage
-            else:
-                percentage = p
-
-            sample_terrain_region = True
-            if sample_terrain_region:
-                # sample terrain region
-                p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
-                unifrom_dist_region = torch.zeros((nz, ny, nx)).float()
-                l = int(np.sqrt(nx*ny*p_sample))
-                x0 = int(l/2) + 1
-                x1 = nx - (int(l/2) + 1)
-                rx = random.randint(x0, x1)
-                ry = random.randint(x0, x1)
-                unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] = torch.FloatTensor(nz, l, l).uniform_()
-                terrain_uniform_mask = boolean_terrain.float() * unifrom_dist_region
-                # percentage correction for the sampled terrain patch
-                percentage = percentage/p_sample
-            else:
-                uniform_dist = torch.FloatTensor(nz, ny, nx).uniform_()
-                terrain_uniform_mask = boolean_terrain.float() * uniform_dist
-            # sparsity mask
-            mask = terrain_uniform_mask > (1 - percentage)
-            # add mask to data
-            data = torch.cat([data, mask.float().unsqueeze(0)])
 
         # send full data to device
         data = data.to(self.__device)
@@ -527,6 +485,72 @@ class HDF5Dataset(Dataset):
             else:
                 # no data augmentation
                 data = data[:, :self.__nz, :self.__ny, :self.__nx]
+
+            # add noise to wind data in train set if requested
+            is_train_set = 'train' in self.__filename
+            if self.__add_gaussian_noise and is_train_set:
+                eps = 1
+                noise = eps * torch.rand(data[1:4, :].shape)
+                if self.__autoscale:  # apply scale to noise if necessary
+                    noise /= scale
+                data[1:4, :] += noise
+
+            # add turbulence to wind data in train set if requested
+            is_train_set = 'train' in self.__filename
+            if self.__add_turbulence and is_train_set:
+                # randomly select one of the turbulent velocity fields
+                rand_num = np.random.randint(0, 99)
+                turbulence = self.__turbulent_velocity_fields[rand_num]
+                _, turb_nx, turb_ny, turb_nz = turbulence.shape
+                # subsample turbulent velocity field with the same shape as data
+                _, nz, ny, nx = data[1:4, :].shape
+                start_x = self.__rand.randint(0, turb_nx - nx)
+                start_y = self.__rand.randint(0, turb_ny - ny)
+                start_z = int(self.__rand.triangular(0, (turb_nz - nz), 0))  # triangle distribution
+                turbulence = \
+                    turbulence[:, start_z:start_z+nz,  start_y:start_y+ny,  start_x:start_x+nx]
+                if self.__autoscale:  # apply scale to turbulence if necessary
+                    turbulence /= scale
+                data[1:4, :] += turbulence
+
+            # create and add sparse mask to data if requested
+            if self.__create_sparse_mask:
+                terrain = data[0, :]
+                nz, ny, nx = terrain.shape
+                boolean_terrain = terrain > 0
+                # percentage of sparse data
+                p = random.random() * self.__max_percentage_of_sparse_data
+                if p < 1e-6:
+                    p = 1e-6
+                # terrain correction
+                if self.__terrain_percentage_correction:
+                    terrain_percentage = 1 - boolean_terrain.sum().item() / boolean_terrain.numel()
+                    correctected_percentage = p / (1 - terrain_percentage)
+                    percentage = correctected_percentage
+                else:
+                    percentage = p
+
+                if self.__sample_terrain_region:
+                    # sample terrain region
+                    p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
+                    unifrom_dist_region = torch.zeros((nz, ny, nx)).float()
+                    l = int(np.sqrt(nx * ny * p_sample))
+                    x0 = int(l / 2) + 1
+                    x1 = nx - (int(l / 2) + 1)
+                    rx = random.randint(x0, x1)
+                    ry = random.randint(x0, x1)
+                    unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] \
+                        = torch.FloatTensor(nz, l, l).uniform_()
+                    terrain_uniform_mask = boolean_terrain.float() * unifrom_dist_region
+                    # percentage correction for the sampled terrain region
+                    percentage = percentage / p_sample
+                else:
+                    uniform_dist = torch.FloatTensor(nz, ny, nx).uniform_()
+                    terrain_uniform_mask = boolean_terrain.float() * uniform_dist
+                # sparsity mask
+                mask = terrain_uniform_mask > (1 - percentage)
+                # add mask to data
+                data = torch.cat([data, mask.float().unsqueeze(0)])
 
             # generate the input channels
             if self.__create_sparse_mask:

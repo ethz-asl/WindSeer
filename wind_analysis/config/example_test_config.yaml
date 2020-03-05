@@ -5,13 +5,13 @@ test:
 
 # CFD data
 cfd:
-    testset_name: 'data/wind_test/test.hdf5'
+    testset_name: 'data/wind_test/test_planning.hdf5'
     # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
     label_channels: ['ux', 'uy', 'uz']  # velocities
     print_names: False
     # Index of sample in the test set
-    index: 664
+    index: 63
 
 # COSMO data
 cosmo:
