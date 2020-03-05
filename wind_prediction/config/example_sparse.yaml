@@ -96,7 +96,7 @@ data:
 
     # noise
     add_gaussian_noise: True
-    add_turbulence: False
+    add_turbulence: True
 
 # model parameters
 model:
