@@ -23,7 +23,7 @@
     `pip3 install pyproj==1.9.6`  
 
 5. Other dependencies
-    `pip3 install numpy scipy pyulog pykrige`
+    `pip3 install numpy scipy pyulog pykrige mlrose`
 
 6. Need to manually add the CH1903 definitions to pyproj. You can try to use this simple script.
     ~~~

@@ -10,6 +10,7 @@ import nn_wind_prediction.data as data
 import nn_wind_prediction.data as nn_data
 from datetime import datetime
 from scipy import ndimage
+import mlrose
 from scipy.interpolate import CubicSpline
 from scipy.spatial import distance
 from scipy.interpolate import RegularGridInterpolator as RGI
@@ -666,7 +667,7 @@ class WindOptimiser(object):
         return angles
 
     def get_rotated_wind(self):
-        sr = []; cr = []
+        sr, cr = [], []
         for i in range(self._optimisation_variables.shape[0]):
             sr.append(torch.sin(self._optimisation_variables[i][0]))
             cr.append(torch.cos(self._optimisation_variables[i][0]))
@@ -733,7 +734,8 @@ class WindOptimiser(object):
             input_flight.update({keys: input_batch})
             output_flight.update({keys: output_batch})
 
-        return copy.deepcopy(input_flight), copy.deepcopy(output_flight)
+        # return copy.deepcopy(input_flight), copy.deepcopy(output_flight)
+        return input_flight, output_flight
 
     def rescale_prediction(self, output=None, label=None):
         if output is not None:
@@ -828,6 +830,109 @@ class WindOptimiser(object):
             print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
         return np.array(optimisation_variables_), np.array(losses), np.array(grads)
 
+    def function_window_split(self, window_split_variables):
+        t0 = time.time()
+
+        # window split variables
+        window_size = window_split_variables[0]
+        response_size = window_split_variables[1]
+        step_size = window_split_variables[2]
+
+        # calculate average nn loss
+        if self.flag.test_flight_data:
+            flight_data = self._flight_data
+        if self.flag.test_simulated_data:
+            flight_data = self._simulated_flight_data
+
+        max_num_windows = int((flight_data['x'].size - (window_size + response_size)) / step_size + 1)
+        nn_losses = 0
+        n = 0
+        for i in range(max_num_windows):
+            # split data into input and label based on window variables
+            input_flight_data, label_flight_data = \
+                self.sliding_window_split(flight_data, window_size,
+                                          response_size, i * step_size)
+
+            # labels
+            # filter out points in the labels which are outside the terrain sample
+            valid_labels = []
+            for j in range(len(label_flight_data['x'])):
+                if ((label_flight_data['x'][j] > self.terrain.x_terr[0]) and
+                        (label_flight_data['x'][j] < self.terrain.x_terr[-1]) and
+                        (label_flight_data['y'][j] > self.terrain.y_terr[0]) and
+                        (label_flight_data['y'][j] < self.terrain.y_terr[-1]) and
+                        (label_flight_data['alt'][j] > self.terrain.z_terr[0]) and
+                        (label_flight_data['alt'][j] < self.terrain.z_terr[-1])):
+                    valid_labels.append([label_flight_data['wn'][j], label_flight_data['we'][j],
+                                         label_flight_data['wd'][j]])
+            if len(valid_labels) == 0:
+                labels = []
+                continue
+            else:
+                labels = np.row_stack(valid_labels)
+
+            # --- Network prediction ---
+            # bin input flight data
+            wind_blocks, var_blocks, wind_zeros, wind_mask \
+                = self.get_flight_wind_blocks(input_flight_data)
+
+            # get prediction
+            if self.flag.add_gaussian_noise:
+                wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
+            wind = wind_zeros.to(self._device)
+            if self.flag.add_corners:
+                interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
+                wind += interpolated_cosmo_corners
+            wind = self.add_mask_to_wind(wind, wind_mask)
+            input = torch.cat([self.terrain.network_terrain, wind])
+            output = self.run_prediction(input)
+            loss_org = self.evaluate_loss(output)
+            # print(' loss: ', loss_org.item())
+
+            # interpolate prediction to scattered flight data locations corresponding to the labels
+            FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
+                                                   wind_data_for_prediction=label_flight_data)
+            interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(output)
+            nn_output = np.column_stack(interpolated_output)
+            nn_loss = self._loss_fn(torch.Tensor(nn_output).to(self._device),
+                                    torch.Tensor(labels).to(self._device))
+            # print('NN loss is: ', nn_loss)
+            # interpolated_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
+            nn_losses += nn_loss.item()
+            n += 1
+
+        average_nn_loss = nn_losses/n
+        t1 = time.time()
+        print('Time for 1 iteration', t1-t0)
+        print('Window: ', window_size, 'Response: ', response_size ,' Step: ', step_size)
+        print('Average NN loss is: ', average_nn_loss)
+        # Calculate derivative of loss with respect to window split variables
+        return average_nn_loss
+
+    def window_split_optimisation(self, n=100):
+        window = 20
+        response = 20
+        step = 40
+        window_split_variables = [window, response, step]
+
+        # Set up solver
+        if self.flag.test_flight_data:
+            flight_data = self._flight_data
+        if self.flag.test_simulated_data:
+            flight_data = self._simulated_flight_data
+        max_val = int(flight_data['x'].size / 3)
+
+        fitness_cust = mlrose.CustomFitness(self.function_window_split)
+        problem = mlrose.DiscreteOpt(length=3, fitness_fn=fitness_cust, maximize=False, max_val=max_val)
+        schedule = mlrose.ExpDecay()
+        init_state = np.array(window_split_variables)
+        best_state, best_fitness = mlrose.simulated_annealing(problem, schedule=schedule,
+                                                              max_attempts=int(n/10), max_iters=n,
+                                                              init_state=init_state, random_state=1)
+        print('The best state found is: ', best_state)
+        print('The fitness at the best state is: ', best_fitness)
+        return best_state
+
     def get_original_input_prediction(self):
         original_input = self.original_input.to(self._device)
         labels = self.labels.to(self._device)
@@ -920,7 +1025,7 @@ class WindOptimiser(object):
         inputs.append(input)
         return outputs, losses, inputs
 
-    def window_split_optimisation(self):
+    def window_split_prediction(self):
         if self.flag.test_flight_data:
             flight_data = self._flight_data
         if self.flag.test_simulated_data:
@@ -959,7 +1064,7 @@ class WindOptimiser(object):
             # split data into input and label based on window variables
             input_flight_data, label_flight_data = \
                 self.sliding_window_split(flight_data, window_size, response_size, i*step_size)
-            if self.flag.rescale_prediction:
+            if self.flag.test_simulated_data and self.flag.rescale_prediction: # only for simulated trajectory
                 label_flight_data['wn'] *= self.scale * self.params.data['ux' + '_scaling']
                 label_flight_data['we'] *= self.scale * self.params.data['uy' + '_scaling']
                 label_flight_data['wd'] *= self.scale * self.params.data['uz' + '_scaling']

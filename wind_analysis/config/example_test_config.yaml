@@ -1,7 +1,7 @@
 # Test parameters
 test:
-    test_simulated_data: True
-    test_flight_data: False
+    test_simulated_data: False
+    test_flight_data: True
 
 # CFD data
 cfd:
@@ -86,8 +86,8 @@ optimisation:
 
 # NN model parameters
 model:
-  location: 'data/20191015_TODO/'
-  name: 'test_model_45'
+  location: 'data/trained_models/'
+  name: 'test_model_46'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'

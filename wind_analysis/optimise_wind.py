@@ -19,12 +19,16 @@ optimisers = [OptTest(SimpleStepOptimiser, {'lr': 5.0, 'lr_decay': 0.01}),
               OptTest(torch.optim.SGD, {'lr': 2.0, 'momentum': 0.5, 'nesterov': True}),
               ]
 
+
+
 # Create WindOptimiser object using yaml config
 wind_opt = WindOptimiser(args.input_yaml)
 
 # TODO: hardcoded flags to be put in config file
 original_input = False
 optimise_corners = False
+optimise_window_split_variables = False
+predict_wind = True
 
 
 # Optimise wind variables using each optimisation method
@@ -36,22 +40,29 @@ if optimise_corners:
         losses.append(loss)
         grads.append(grad)
 
-if wind_opt.flag.test_simulated_data:
-    if original_input:
-        wind_predictions, losses = wind_opt.get_original_input_prediction()
-    elif wind_opt.flag.use_sparse_data:
-        wind_predictions, losses, inputs = wind_opt.sparse_data_prediction()
-    elif wind_opt.flag.use_trajectory:
-        wind_predictions, losses, inputs = wind_opt.cfd_trajectory_prediction()
-if wind_opt.flag.test_flight_data:
-    if wind_opt.flag.predict_flight:
-        wind_predictions, losses, inputs = wind_opt.flight_prediction()
-if wind_opt.flag.use_window_split:
-    wind_predictions, losses, inputs = wind_opt.window_split_optimisation()
+# Optimise sliding window variables
+if optimise_window_split_variables:
+    nn_loss = wind_opt.window_split_optimisation(n=100)
 
-# Analyse optimised wind
-wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs)
-# Plot graphs
-wind_opt_output.plot()
-# # Print losses
-# wind_opt_output.print_losses()
+
+if predict_wind:
+    # Wind predictions
+    if wind_opt.flag.test_simulated_data:
+        if original_input:
+            wind_predictions, losses = wind_opt.get_original_input_prediction()
+        elif wind_opt.flag.use_sparse_data:
+            wind_predictions, losses, inputs = wind_opt.sparse_data_prediction()
+        elif wind_opt.flag.use_trajectory:
+            wind_predictions, losses, inputs = wind_opt.cfd_trajectory_prediction()
+    if wind_opt.flag.test_flight_data:
+        if wind_opt.flag.predict_flight:
+            wind_predictions, losses, inputs = wind_opt.flight_prediction()
+    if wind_opt.flag.use_window_split:
+        wind_predictions, losses, inputs = wind_opt.window_split_prediction()
+
+    # Analyse optimised wind
+    wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs)
+    # Plot graphs
+    wind_opt_output.plot()
+    # # Print losses
+    # wind_opt_output.print_losses()
