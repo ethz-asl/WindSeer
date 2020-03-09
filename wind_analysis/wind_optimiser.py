@@ -549,7 +549,7 @@ class WindOptimiser(object):
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
 
-        #print(' done [{:.2f} s]'.format(time.time() - t_start))
+        # print(' done [{:.2f} s]'.format(time.time() - t_start))
         return wind, variance, wind_zeros.to(self._device), wind_mask.to(self._device)
 
     # --- Add noise to data ---
@@ -898,21 +898,31 @@ class WindOptimiser(object):
                                     torch.Tensor(labels).to(self._device))
             # print('NN loss is: ', nn_loss)
             # interpolated_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
-            nn_losses += nn_loss.item()
+
+            # --- Average wind prediction ---
+            average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
+            average_wind_output = np.ones_like(labels) * [average_wind_input[0].mean(),
+                                                          average_wind_input[1].mean(),
+                                                          average_wind_input[2].mean()]
+            average_wind_loss = self._loss_fn(torch.Tensor(average_wind_output).to(self._device),
+                                 torch.Tensor(labels).to(self._device))
+
+            nn_losses += (nn_loss.item() - average_wind_loss.item())
+            # nn_losses += nn_loss.item()
             n += 1
 
         average_nn_loss = nn_losses/n
         t1 = time.time()
         print('Time for 1 iteration', t1-t0)
         print('Window: ', window_size, 'Response: ', response_size ,' Step: ', step_size)
-        print('Average NN loss is: ', average_nn_loss)
+        print('Average loss is: ', average_nn_loss)
         # Calculate derivative of loss with respect to window split variables
         return average_nn_loss
 
     def window_split_optimisation(self, n=100):
-        window = 20
-        response = 20
-        step = 40
+        window = 60
+        response = 40
+        step = 100
         window_split_variables = [window, response, step]
 
         # Set up solver
@@ -1064,7 +1074,7 @@ class WindOptimiser(object):
             # split data into input and label based on window variables
             input_flight_data, label_flight_data = \
                 self.sliding_window_split(flight_data, window_size, response_size, i*step_size)
-            if self.flag.test_simulated_data and self.flag.rescale_prediction: # only for simulated trajectory
+            if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
                 label_flight_data['wn'] *= self.scale * self.params.data['ux' + '_scaling']
                 label_flight_data['we'] *= self.scale * self.params.data['uy' + '_scaling']
                 label_flight_data['wd'] *= self.scale * self.params.data['uz' + '_scaling']
@@ -1082,9 +1092,10 @@ class WindOptimiser(object):
                     valid_labels.append([label_flight_data['wn'][j], label_flight_data['we'][j],
                                          label_flight_data['wd'][j]])
             if len(valid_labels) == 0:
-                labels = []
-            else:
-                labels = np.row_stack(valid_labels)
+                print(i, 'Labels outside terrain dimensions')
+                print('')
+                continue
+            labels = np.row_stack(valid_labels)
             # labels = np.array([label_flight_data['wn'], label_flight_data['we'], label_flight_data['wd']])
 
             # --- Network prediction ---
@@ -1123,10 +1134,6 @@ class WindOptimiser(object):
 
             # --- Average wind prediction ---
             average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
-            if len(valid_labels) == 0:
-                print(i, 'Labels outside terrain dimensions')
-                print('')
-                continue
             average_wind_output = np.ones_like(labels) * [average_wind_input[0].mean(),
                                                           average_wind_input[1].mean(),
                                                           average_wind_input[2].mean()]
@@ -1137,14 +1144,14 @@ class WindOptimiser(object):
                 FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain, predict=True,
                                                        wind_data_for_prediction=label_flight_data)
                 _, _, predicted_output = FlightInterpolator.interpolate_log_data_krigging()
-                krigging_output = np.resize(np.array(predicted_output), (len(predicted_output[0]), 3))
+                krigging_output = np.column_stack(predicted_output)
 
             # --- Interpolation (Gaussian Process Regression) prediction ---
             if self.flag.use_gpr_prediction:
                 FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain, predict=True,
                                                        wind_data_for_prediction=label_flight_data)
                 _, _, predicted_output = FlightInterpolator.interpolate_log_data_gpr()
-                gpr_output = np.resize(np.array(predicted_output), (len(predicted_output[0]), 3))
+                gpr_output = np.column_stack(predicted_output)
 
             # losses
             nn_loss = self._loss_fn(torch.Tensor(nn_output).to(self._device),

@@ -266,7 +266,7 @@ class UlogInterpolation:
 
     def interpolate_log_data_gpr(self):
         '''
-        Create a wind map from the wind measurements using Gaussian Process Regresion
+        Create a wind map from the wind measurements using Gaussian Process Regression
         for interpolation.
         Compute the mean velocity and variance at the center of each bin by
         evaluating the wind map.
@@ -288,7 +288,7 @@ class UlogInterpolation:
         gp_y.fit(np.column_stack([self._wind_data['alt'], self._wind_data['y'], self._wind_data['x']]),
                  self._wind_data['we'])
         gp_z.fit(np.column_stack([self._wind_data['alt'], self._wind_data['y'], self._wind_data['x']]),
-                 -self._wind_data['wn'])
+                 -self._wind_data['wd'])
 
         # Initialize empty wind, variance and predicted_log_data
         if self._grid_dimensions is not None:
@@ -319,10 +319,10 @@ class UlogInterpolation:
             if not pts:
                 predicted_log_data = [pts, pts, pts]
             else:
-                predicted_log_data_x = gp_x.predict(np.array(pts))
-                predicted_log_data_y = gp_y.predict(np.array(pts))
-                predicted_log_data_z = gp_z.predict(np.array(pts))
-                predicted_log_data = [predicted_log_data_x, predicted_log_data_y, predicted_log_data_z]
+                predicted_log_data_x = gp_x.predict(np.row_stack(pts))
+                predicted_log_data_y = gp_y.predict(np.row_stack(pts))
+                predicted_log_data_z = gp_z.predict(np.row_stack(pts))
+                predicted_log_data = [predicted_log_data_x, predicted_log_data_y, -predicted_log_data_z]
 
         else:  # bin data
             for i in range(len(self._bin_x_coord)):
@@ -345,7 +345,6 @@ class UlogInterpolation:
                 wind[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = mean_z.item()
                 variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_z.item()
 
-
         print('GPR interpolation is done [{:.2f} s]'.format(time.time() - t_start))
         return wind, variance, predicted_log_data
 
@@ -356,11 +355,11 @@ class UlogInterpolation:
         '''
 
         interpolating_function_x = RGI((self._terrain.z_terr, self._terrain.y_terr, self._terrain.x_terr),
-                                       inferred_wind_data[0, :].detach().cpu().numpy(), method='nearest')
+                                       inferred_wind_data[0, :].detach().cpu().numpy(), method='linear')
         interpolating_function_y = RGI((self._terrain.z_terr, self._terrain.y_terr, self._terrain.x_terr),
-                                       inferred_wind_data[1, :].detach().cpu().numpy(), method='nearest')
+                                       inferred_wind_data[1, :].detach().cpu().numpy(), method='linear')
         interpolating_function_z = RGI((self._terrain.z_terr, self._terrain.y_terr, self._terrain.x_terr),
-                                       inferred_wind_data[2, :].detach().cpu().numpy(), method='nearest')
+                                       inferred_wind_data[2, :].detach().cpu().numpy(), method='linear')
 
         # Initialize empty list of points where the wind is interpolated
         pts = []
@@ -377,5 +376,5 @@ class UlogInterpolation:
         interpolated_log_data_x = interpolating_function_x(pts)
         interpolated_log_data_y = interpolating_function_y(pts)
         interpolated_log_data_z = interpolating_function_z(pts)
-        interpolated_log_data = [interpolated_log_data_x, interpolated_log_data_y, interpolated_log_data_z]
+        interpolated_log_data = [interpolated_log_data_x, interpolated_log_data_y, -interpolated_log_data_z]
         return interpolated_log_data

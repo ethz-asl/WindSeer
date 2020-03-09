@@ -42,7 +42,7 @@ if optimise_corners:
 
 # Optimise sliding window variables
 if optimise_window_split_variables:
-    nn_loss = wind_opt.window_split_optimisation(n=100)
+    nn_loss = wind_opt.window_split_optimisation(n=50)
 
 
 if predict_wind:
