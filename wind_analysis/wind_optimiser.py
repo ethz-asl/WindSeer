@@ -728,15 +728,14 @@ class WindOptimiser(object):
         else:
             return self.net(input.unsqueeze(0))['pred'].squeeze(0)
 
-    def evaluate_loss(self, output, optimise_wind_corners=False):
+    def evaluate_loss(self, output):
         # input = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
         if self.flag.test_simulated_data:
             nn_output = output[0:3, :, :, :]
             labels = self.labels.to(self._device)
         if self.flag.test_flight_data:
             nn_output = output[0:3, :, :, :]
-            if optimise_wind_corners:
-                nn_output[self._wind_mask] = 0.0
+            # nn_output[self._wind_mask] = 0.0
             labels = self._wind_zeros
         return self._loss_fn(nn_output, labels)
 
@@ -789,6 +788,7 @@ class WindOptimiser(object):
     # --- Optimisation functions ---
 
     def optimise_wind_corners(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5},
+                              wind_zeros=None, wind_mask=None,
                               print_steps=False, verbose=False):
         optimizer = opt([self._optimisation_variables], **opt_kwargs)
         if print_steps:
@@ -817,13 +817,16 @@ class WindOptimiser(object):
             optimizer.zero_grad()
             t1 = time.time()
             output, input = self.get_prediction()
-            if t == n-1:
-                last_output = output.clone()
             # outputs.append(output)
             # inputs.append(input)
             tp = time.time()
 
-            loss = self.evaluate_loss(output, optimise_wind_corners=True)
+            if wind_zeros is None and wind_mask is None:
+                loss = self.evaluate_loss(output)
+            else:
+                output[wind_mask] = 0.0
+                labels = wind_zeros
+                loss = self._loss_fn(output, labels)
             tl = time.time()
 
             losses.append(loss.item())
@@ -843,6 +846,9 @@ class WindOptimiser(object):
             optimizer.step()
             to = time.time()
 
+            if t == n-1 or max_grad < min_gradient:
+                last_output = output.clone()
+
             if verbose:
                 print('Times: prediction: {0:6.3f}s'.format(tp - t1), end='')
                 print(', loss: {0:6.3f}s'.format(tl - tp), end='')
@@ -853,7 +859,8 @@ class WindOptimiser(object):
         tt = time.time()-t0
         if verbose:
             print('Total time: {0}s, avg. per step: {1}'.format(tt, tt/t))
-        print('Total time to optimise corners: {0}s'.format(tt))
+        print('Corner optimisation is done: [{:.2f} s]'.format(tt))
+        print('loss={0:0.3e}, '.format(losses[-1]))
         return last_output, input, np.array(opt_var), np.array(losses), np.array(grads)
 
     def function_window_split(self, window_split_variables):
@@ -1169,8 +1176,10 @@ class WindOptimiser(object):
             # --- Optimized corner prediction ---
             if self.flag.use_optimized_corners:
                 optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
+                n_steps = self._optimisation_args.params['num_of_optimisation_steps']
                 corners_output, _, _, _, _ \
-                    = self.optimise_wind_corners(optimiser.opt, n=10, opt_kwargs=optimiser.kwargs,
+                    = self.optimise_wind_corners(optimiser.opt, n=n_steps, opt_kwargs=optimiser.kwargs,
+                                                 wind_zeros=wind_zeros, wind_mask=wind_mask,
                                                  print_steps=False, verbose=False)
                 # interpolate prediction to scattered flight data locations corresponding to the labels
                 FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
