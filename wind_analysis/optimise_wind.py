@@ -19,8 +19,6 @@ optimisers = [OptTest(SimpleStepOptimiser, {'lr': 5.0, 'lr_decay': 0.01}),
               OptTest(torch.optim.SGD, {'lr': 2.0, 'momentum': 0.5, 'nesterov': True}),
               ]
 
-
-
 # Create WindOptimiser object using yaml config
 wind_opt = WindOptimiser(args.input_yaml)
 
@@ -35,7 +33,8 @@ predict_wind = True
 if optimise_corners:
     all_ov, losses, grads = [], [], []
     for i, o in enumerate(optimisers):
-        ov, loss, grad = wind_opt.optimise_wind_variables(o.opt, n=args.n_steps, opt_kwargs=o.kwargs, verbose=False)
+        output, input, ov, loss, grad = wind_opt.optimise_wind_corners(o.opt, n=args.n_steps, opt_kwargs=o.kwargs,
+                                                                           print_steps=True, verbose=False)
         all_ov.append(ov)
         losses.append(loss)
         grads.append(grad)

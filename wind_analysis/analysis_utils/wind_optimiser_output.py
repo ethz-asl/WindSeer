@@ -325,8 +325,8 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         # self.plot_fft_analysis()
-        # self.plot_wind_vectors_angles()
         self.plot_trajectory_and_terrain()
+        # self.plot_wind_vectors_angles()
         self.plot_best_wind_estimate()
 
         if self._save_output:
