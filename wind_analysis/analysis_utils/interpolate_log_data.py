@@ -278,6 +278,7 @@ class UlogInterpolation:
         t_start = time.time()
         # Instantiate a Gaussian Process model for each direction
         kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (1e-2, 1e2))
+        # kernel = 1.0 * RBF(length_scale=1.33, length_scale_bounds=(1e-1, 10.0))
         gp_x = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)
         gp_y = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)
         gp_z = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)

@@ -817,6 +817,7 @@ class WindOptimiser(object):
             optimizer.zero_grad()
             t1 = time.time()
             output, input = self.get_prediction()
+            output_copy = output.clone()
             # outputs.append(output)
             # inputs.append(input)
             tp = time.time()
@@ -847,7 +848,7 @@ class WindOptimiser(object):
             to = time.time()
 
             if t == n-1 or max_grad < min_gradient:
-                last_output = output.clone()
+                last_output = output_copy.clone()
 
             if verbose:
                 print('Times: prediction: {0:6.3f}s'.format(tp - t1), end='')
@@ -1177,14 +1178,14 @@ class WindOptimiser(object):
             if self.flag.use_optimized_corners:
                 optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
                 n_steps = self._optimisation_args.params['num_of_optimisation_steps']
-                corners_output, _, _, _, _ \
+                opt_corners_output, _, _, _, _ \
                     = self.optimise_wind_corners(optimiser.opt, n=n_steps, opt_kwargs=optimiser.kwargs,
                                                  wind_zeros=wind_zeros, wind_mask=wind_mask,
                                                  print_steps=False, verbose=False)
                 # interpolate prediction to scattered flight data locations corresponding to the labels
                 FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
                                                        wind_data_for_prediction=label_flight_data)
-                interpolated_corners = FlightInterpolator.interpolate_log_data_from_grid(corners_output)
+                interpolated_corners = FlightInterpolator.interpolate_log_data_from_grid(opt_corners_output)
                 corners_output = np.column_stack(interpolated_corners)
 
             # --- Interpolation (Krigging) prediction ---
@@ -1204,6 +1205,14 @@ class WindOptimiser(object):
             # losses
             nn_loss = self._loss_fn(torch.Tensor(nn_output).to(self._device),
                                  torch.Tensor(labels).to(self._device))
+            loss_axis = True
+            if loss_axis:
+                nn_loss_x = self._loss_fn(torch.Tensor(nn_output[:, 0]).to(self._device),
+                                        torch.Tensor(labels[:, 0]).to(self._device))
+                nn_loss_y = self._loss_fn(torch.Tensor(nn_output[:, 1]).to(self._device),
+                                        torch.Tensor(labels[:, 1]).to(self._device))
+                nn_loss_z = self._loss_fn(torch.Tensor(nn_output[:, 2]).to(self._device),
+                                        torch.Tensor(labels[:, 2]).to(self._device))
             zero_wind_loss = self._loss_fn(torch.Tensor(zero_wind_output).to(self._device),
                                  torch.Tensor(labels).to(self._device))
             average_wind_loss = self._loss_fn(torch.Tensor(average_wind_output).to(self._device),
@@ -1218,6 +1227,10 @@ class WindOptimiser(object):
                 optimized_corners_loss = self._loss_fn(torch.Tensor(corners_output).to(self._device),
                                      torch.Tensor(labels).to(self._device))
             print(i, ' NN loss is: ', nn_loss.item())
+            if loss_axis:
+                print(i, ' NN loss x is: ', nn_loss_x.item())
+                print(i, ' NN loss y is: ', nn_loss_y.item())
+                print(i, ' NN loss z is: ', nn_loss_z.item())
             print(i, ' Zero wind loss is: ', zero_wind_loss.item())
             print(i, ' Average wind loss is: ', average_wind_loss.item())
             if self.flag.use_krigging_prediction:
