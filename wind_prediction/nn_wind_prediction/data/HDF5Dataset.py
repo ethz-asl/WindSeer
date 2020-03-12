@@ -113,7 +113,7 @@ class HDF5Dataset(Dataset):
                 Automatically scale the input and return the scale, default False
         '''
 
-        #-------------------------------------------- kwarg fetching ---------------------------------------------------
+        # ------------------------------------------- kwarg fetching ---------------------------------------------------
         try:
             verbose = kwargs['verbose']
         except KeyError:
@@ -359,8 +359,9 @@ class HDF5Dataset(Dataset):
                     print('HDF5Dataset: ', 'scaling_' + channel, 'not present in kwargs, using default value:',
                           self.__default_scaling_dict[channel])
 
-        # create turbulent velocity fields
-        if self.__add_turbulence:
+        # create turbulent velocity fields for train set
+        is_train_set = 'train' in self.__filename
+        if self.__add_turbulence and is_train_set:
             turbulent_velocity_fields = []
             # generate 100 fields
             for i in range(100):
@@ -398,12 +399,14 @@ class HDF5Dataset(Dataset):
 
         data_shape = data[0, :].shape
 
+        noise_scale = 1
         # 3D data transforms
         if (len(data_shape) == 3):
             # apply autoscale if requested
             if self.__autoscale:
                 # the velocities are indices 1,2,3
                 scale = self.__get_scale(data[1:4, :, :, :])
+                noise_scale = scale
 
                 # applying the autoscale to the velocities
                 data[1:4, :, :, :] /= scale
@@ -486,16 +489,17 @@ class HDF5Dataset(Dataset):
                 # no data augmentation
                 data = data[:, :self.__nz, :self.__ny, :self.__nx]
 
-            # add noise to wind data in train set if requested
+            sparse_input = data.clone()
+            # add noise to wind velocities in train set if requested
             is_train_set = 'train' in self.__filename
             if self.__add_gaussian_noise and is_train_set:
                 eps = 1
-                noise = eps * torch.rand(data[1:4, :].shape)
+                noise = eps * torch.rand(sparse_input[1:4, :].shape)
                 if self.__autoscale:  # apply scale to noise if necessary
-                    noise /= scale
-                data[1:4, :] += noise
+                    noise /= noise_scale
+                sparse_input[1:4, :] += noise
 
-            # add turbulence to wind data in train set if requested
+            # add turbulence to wind velocities in train set if requested
             is_train_set = 'train' in self.__filename
             if self.__add_turbulence and is_train_set:
                 # randomly select one of the turbulent velocity fields
@@ -503,19 +507,19 @@ class HDF5Dataset(Dataset):
                 turbulence = self.__turbulent_velocity_fields[rand_num]
                 _, turb_nx, turb_ny, turb_nz = turbulence.shape
                 # subsample turbulent velocity field with the same shape as data
-                _, nz, ny, nx = data[1:4, :].shape
+                _, nz, ny, nx = sparse_input[1:4, :].shape
                 start_x = self.__rand.randint(0, turb_nx - nx)
                 start_y = self.__rand.randint(0, turb_ny - ny)
                 start_z = int(self.__rand.triangular(0, (turb_nz - nz), 0))  # triangle distribution
                 turbulence = \
                     turbulence[:, start_z:start_z+nz,  start_y:start_y+ny,  start_x:start_x+nx]
                 if self.__autoscale:  # apply scale to turbulence if necessary
-                    turbulence /= scale
-                data[1:4, :] += turbulence
+                    turbulence /= noise_scale
+                sparse_input[1:4, :] += turbulence
 
-            # create and add sparse mask to data if requested
+            # create and add sparse mask to input if requested
             if self.__create_sparse_mask:
-                terrain = data[0, :]
+                terrain = sparse_input[0, :]
                 nz, ny, nx = terrain.shape
                 boolean_terrain = terrain > 0
                 # percentage of sparse data
@@ -525,8 +529,8 @@ class HDF5Dataset(Dataset):
                 # terrain correction
                 if self.__terrain_percentage_correction:
                     terrain_percentage = 1 - boolean_terrain.sum().item() / boolean_terrain.numel()
-                    correctected_percentage = p / (1 - terrain_percentage)
-                    percentage = correctected_percentage
+                    corrected_percentage = p / (1 - terrain_percentage)
+                    percentage = corrected_percentage
                 else:
                     percentage = p
 
@@ -550,12 +554,12 @@ class HDF5Dataset(Dataset):
                 # sparsity mask
                 mask = terrain_uniform_mask > (1 - percentage)
                 # add mask to data
-                data = torch.cat([data, mask.float().unsqueeze(0)])
+                sparse_input = torch.cat([sparse_input, mask.float().unsqueeze(0)])
 
             # generate the input channels
             if self.__create_sparse_mask:
-                # take labels with terrain and sparse mask as input data
-                input = data
+                # take modified labels with terrain and sparse mask as input data
+                input = sparse_input
             else:
                 input_data = torch.index_select(data, 0, self.__input_indices)
                 if self.__input_mode == 0:
@@ -766,8 +770,8 @@ class HDF5Dataset(Dataset):
         shape = x.shape
 
         # get data from corners of sample
-        corners = torch.index_select(x, 2, torch.tensor([0,shape[2]-1]))
-        corners = torch.index_select(corners, 3, torch.tensor([0,shape[3]-1]))
+        corners = torch.index_select(x, 2, torch.tensor([0, shape[2]-1]))
+        corners = torch.index_select(corners, 3, torch.tensor([0, shape[3]-1]))
 
         # compute the scale
         scale = corners.norm(dim=0).mean(dim=0).max()
