@@ -460,6 +460,7 @@ class ModelEDNN3D(nn.Module):
         output = {}
         x_skip = []
         sparse_mask_skip = []
+        use_up_sparse_convolution = False
         # down-convolution
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
@@ -550,7 +551,7 @@ class ModelEDNN3D(nn.Module):
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
         else:
-            if self.__use_sparse_convolution:  # sparse convolution operation
+            if self.__use_sparse_convolution and use_up_sparse_convolution:  # sparse convolution operation
                 # C1
                 # elementwise multiplication
                 sparse_mask_expanded = sparse_mask.expand_as(x)
@@ -605,7 +606,7 @@ class ModelEDNN3D(nn.Module):
         # up-convolution
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                if self.__use_sparse_convolution:  # sparse convolution operation
+                if self.__use_sparse_convolution and use_up_sparse_convolution:  # sparse convolution operation
                     if (i == 0):
                         # Deconv 1
                         # elementwise multiplication
@@ -740,7 +741,7 @@ class ModelEDNN3D(nn.Module):
                                        x_skip[i]], 1)))))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                if self.__use_sparse_convolution:  # sparse convolution operation
+                if self.__use_sparse_convolution and use_up_sparse_convolution:  # sparse convolution operation
                     if (i  == 0):
                         # Deconv 1
                         # elementwise multiplication
