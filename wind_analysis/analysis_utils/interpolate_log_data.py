@@ -13,7 +13,7 @@ class UlogInterpolation:
         self._wind_data = wind_data
         self._grid_dimensions = grid_dimensions
         self._terrain = terrain
-        self._predict = predict
+        self.predict = predict
         self._wind_data_for_prediction = wind_data_for_prediction
         self._x_res, self._y_res, self._z_res = self.get_grid_resolution()
         self._idx_x, self._idx_y, self._idx_z, \
@@ -223,7 +223,7 @@ class UlogInterpolation:
             wind, variance = [], []
         predicted_log_data = []
 
-        if self._predict is True and self._wind_data_for_prediction:  # predict ulog data
+        if self.predict is True and self._wind_data_for_prediction:  # predict ulog data
             # Make sure points are inside terrain
             pts = []
             for i in range(len(self._wind_data_for_prediction['x'])):
@@ -305,7 +305,7 @@ class UlogInterpolation:
             wind, variance = [], []
         predicted_log_data = []
 
-        if self._predict is True and self._wind_data_for_prediction:  # predict ulog data
+        if self.predict is True and self._wind_data_for_prediction:  # predict ulog data
             # Make sure points are inside terrain
             pts = []
             for i in range(len(self._wind_data_for_prediction['x'])):
