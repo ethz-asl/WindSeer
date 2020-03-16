@@ -122,7 +122,8 @@ class WindOptimiser(object):
 
     def __init__(self, config_yaml, resolution=64):
         # Configuration variables
-        self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self._device = torch.device("cpu")
         self._config_yaml = config_yaml
         self._test_args = utils.BasicParameters(self._config_yaml, 'test')
         self._cfd_args = utils.BasicParameters(self._config_yaml, 'cfd')
@@ -720,7 +721,7 @@ class WindOptimiser(object):
     def get_prediction(self):
         input = self.generate_wind_input()       # Set new rotation
         output = self.run_prediction(input, second_model=True)      # Run network prediction with input csv
-        return output, input
+        return input, output
 
     def run_prediction(self, input, second_model=False):
         if second_model:
@@ -747,8 +748,7 @@ class WindOptimiser(object):
             input_flight.update({keys: input_batch})
             output_flight.update({keys: output_batch})
 
-        # return copy.deepcopy(input_flight), copy.deepcopy(output_flight)
-        return input_flight, output_flight
+        return copy.deepcopy(input_flight), copy.deepcopy(output_flight)
 
     def rescale_prediction(self, output=None, label=None):
         if output is not None:
@@ -816,8 +816,8 @@ class WindOptimiser(object):
             opt_var.append(self._optimisation_variables.clone().detach().cpu().numpy())
             optimizer.zero_grad()
             t1 = time.time()
-            output, input = self.get_prediction()
-            output_copy = output.clone()
+            input, output = self.get_prediction()
+            output_copy = output.detach().clone()
             # outputs.append(output)
             # inputs.append(input)
             tp = time.time()
@@ -1171,8 +1171,8 @@ class WindOptimiser(object):
             # --- Average wind prediction ---
             average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
             interpolated_average_wind_output = np.ones_like(labels) * [average_wind_input[0].mean(),
-                                                             average_wind_input[1].mean(),
-                                                             average_wind_input[2].mean()]
+                                                                       average_wind_input[1].mean(),
+                                                                       average_wind_input[2].mean()]
             average_wind_output = torch.ones_like(nn_output)
             average_wind_output[0, :] *= average_wind_input[0].mean()
             average_wind_output[1, :] *= average_wind_input[1].mean()
@@ -1182,14 +1182,14 @@ class WindOptimiser(object):
             if self.flag.use_optimized_corners:
                 optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
                 n_steps = self._optimisation_args.params['num_of_optimisation_steps']
-                opt_corners_output, _, _, _, _ \
+                corners_output, _, _, _, _ \
                     = self.optimise_wind_corners(optimiser.opt, n=n_steps, opt_kwargs=optimiser.kwargs,
                                                  wind_zeros=wind_zeros, wind_mask=wind_mask,
                                                  print_steps=False, verbose=False)
                 # interpolate prediction to scattered flight data locations corresponding to the labels
                 FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
                                                        wind_data_for_prediction=label_flight_data)
-                interpolated_corners = FlightInterpolator.interpolate_log_data_from_grid(opt_corners_output)
+                interpolated_corners = FlightInterpolator.interpolate_log_data_from_grid(corners_output)
                 interpolated_corners_output = np.column_stack(interpolated_corners)
 
             # --- Interpolation (Krigging) prediction ---

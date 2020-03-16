@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.transforms as transforms
@@ -16,7 +17,8 @@ def angle_wrap(angles):
 
 class WindOptimiserOutput:
     def __init__(self, wind_opt, wind_predictions, losses, inputs):
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu")
         self.wind_opt = wind_opt
         # self._optimisers = opt
         self._wind_predictions = wind_predictions
@@ -226,12 +228,16 @@ class WindOptimiserOutput:
         # ax.set_xlabel('time [s]')
         # ax.set_ylabel('Wind speed [m/s]')
 
+        # make image full screen
+        fig_manager = plt.get_current_fig_manager()
+        fig_manager.window.maximize()
+
         if self._save_output:
             self.pp.savefig(fig)
         else:
             plt.show()
 
-    def plot_trajectory_and_terrain(self):
+    def plot_trajectory_wind_vectors(self):
         fig = plt.figure()
         ax = fig.gca(projection='3d')
 
@@ -254,9 +260,8 @@ class WindOptimiserOutput:
 
         # plot wind vectors
         wind = self._input[1:-1, :].cpu().detach().numpy()
-        ax.quiver(xs_skip, ys_skip, zs_skip, wind[0, zs_skip, ys_skip, xs_skip], wind[1, zs_skip, ys_skip, xs_skip],
-                  wind[2, zs_skip, ys_skip, xs_skip],
-                  length=1)
+        ax.quiver(xs_skip, ys_skip, zs_skip, wind[0, zs_skip, ys_skip, xs_skip],
+                  wind[1, zs_skip, ys_skip, xs_skip], wind[2, zs_skip, ys_skip, xs_skip], length=1.0)
 
         # terrain
         h_grid = (self.wind_opt.terrain.z_terr[-1] - self.wind_opt.terrain.z_terr[0])/64
@@ -267,15 +272,76 @@ class WindOptimiserOutput:
         x = np.arange(0, nx, 1)
         y = np.arange(0, ny, 1)
         X, Y = np.meshgrid(x, y)
-        ax = fig.gca(projection='3d')
         ax.plot_surface(X, Y, h_network_terrain, rstride=1, cstride=1, cmap=plt.cm.gray,
                         linewidth=0)
-        # X, Y = np.meshgrid(self.wind_opt.terrain.x_terr/self.wind_opt.grid_size[0], self.wind_opt.terrain.y_terr//self.wind_opt.grid_size[0])
-        # ax.plot_surface(X, Y, self.wind_opt.terrain.h_terr.detach().cpu().numpy()/self.wind_opt.grid_size[2], cmap=plt.cm.gray)
+        # X, Y = np.meshgrid(self.wind_opt.terrain.x_terr/self.wind_opt.grid_size[0],
+        #                    self.wind_opt.terrain.y_terr//self.wind_opt.grid_size[0])
+        # ax.plot_surface(X, Y, self.wind_opt.terrain.h_terr.detach().cpu().numpy()/self.wind_opt.grid_size[2],
+                        # cmap=plt.cm.gray)
 
-        # elev = 10
-        # azim = -50
-        # plt.gca().view_init(elev, azim)
+        # make image full screen
+        fig_manager = plt.get_current_fig_manager()
+        fig_manager.window.maximize()
+
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
+
+    def plot_wind_field(self):
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+
+        # plot terrain
+        # grid_size = (self.wind_opt.terrain.x_terr[1]-self.wind_opt.terrain.x_terr[0])
+        # X, Y = np.meshgrid(self.wind_opt.terrain.x_terr/grid_size,
+        #                    self.wind_opt.terrain.y_terr/grid_size)
+        # ax.plot_surface(X, Y, self.wind_opt.terrain.h_terr/grid_size,
+        #                 cmap=plt.cm.terrain)
+        # terrain
+        h_grid = (self.wind_opt.terrain.z_terr[-1] - self.wind_opt.terrain.z_terr[0])/64
+        h_network_terrain = np.floor((self.wind_opt.terrain.h_terr - self.wind_opt.terrain.z_terr[0])/h_grid)
+        if 'torch' in str(h_network_terrain.dtype):
+            h_network_terrain = h_network_terrain.detach().cpu().numpy()
+        nx, ny = h_network_terrain.shape
+        x = np.arange(0, nx, 1)
+        y = np.arange(0, ny, 1)
+        X, Y = np.meshgrid(x, y)
+        ax.plot_surface(X, Y, h_network_terrain, rstride=1, cstride=1, cmap=plt.cm.gray,
+                        linewidth=0)
+
+        # wind field
+        wind_prediction = self._wind_prediction
+        channels, nz, ny, nx = wind_prediction.shape
+
+        # skip values
+        wskip = 8
+        xs_skip = np.arange(0, nx, 1)[::wskip]
+        ys_skip = np.arange(0, ny, 1)[::wskip]
+        zs_skip = np.arange(0, nz, 1)[::wskip]
+        xv_skip, yv_skip, zv_skip = np.meshgrid(xs_skip, ys_skip, zs_skip)
+
+        # set color map
+        colormap = matplotlib.cm.inferno
+        colors = np.sqrt(wind_prediction[0, zv_skip, yv_skip, xv_skip]**2
+                         + wind_prediction[1, zv_skip, yv_skip, xv_skip]**2
+                         + wind_prediction[2, zv_skip, yv_skip, xv_skip]**2)
+        colors = colors.view(-1)
+
+        # normalize colors
+        norm = matplotlib.colors.Normalize()
+        norm.autoscale(colors)
+
+        ax.quiver(xv_skip, yv_skip, zv_skip, wind_prediction[0, zv_skip, yv_skip, xv_skip],
+                  wind_prediction[1, zv_skip, yv_skip, xv_skip], wind_prediction[2, zv_skip, yv_skip, xv_skip],
+                  color=colormap(norm(colors)), length=2.0)
+
+        hc = fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm, cmap=colormap), ax=ax)
+        hc.set_label('Wind speed (m/s)')
+
+        # make image full screen
+        fig_manager = plt.get_current_fig_manager()
+        fig_manager.window.maximize()
 
         if self._save_output:
             self.pp.savefig(fig)
@@ -296,6 +362,10 @@ class WindOptimiserOutput:
         trans = transforms.blended_transform_factory(
             ax.get_yticklabels()[0].get_transform(), ax.transData)
         ax.text(0, mean, "{:.2f}".format(mean), color='red', transform=trans, ha='right', va='center')
+
+        # make image full screen
+        fig_manager = plt.get_current_fig_manager()
+        fig_manager.window.maximize()
 
         if self._save_output:
             self.pp.savefig(fig)
@@ -325,7 +395,8 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         # self.plot_fft_analysis()
-        self.plot_trajectory_and_terrain()
+        # self.plot_trajectory_wind_vectors()
+        self.plot_wind_field()
         # self.plot_wind_vectors_angles()
         self.plot_best_wind_estimate()
 
