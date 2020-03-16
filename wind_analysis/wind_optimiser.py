@@ -333,11 +333,11 @@ class WindOptimiser(object):
 
     def get_cfd_terrain(self):
         nx, ny, nz = self.binary_terrain.shape
-        x_terr = torch.Tensor([self.grid_size[0]*i for i in range(nx)])
-        y_terr = torch.Tensor([self.grid_size[1]*i for i in range(ny)])
-        z_terr = torch.Tensor([self.grid_size[2]*i for i in range(nz)])
-        h_terr = torch.Tensor(np.squeeze(self.binary_terrain.sum(axis=2, keepdims=True)*self.grid_size[2]))
-        h_terr = torch.clamp(h_terr, 0, z_terr[-1])  # make sure height is not bigger than max z_terr
+        x_terr = np.asarray([self.grid_size[0]*i for i in range(nx)])
+        y_terr = np.asarray([self.grid_size[1]*i for i in range(ny)])
+        z_terr = np.asarray([self.grid_size[2]*i for i in range(nz)])
+        h_terr = (self.binary_terrain.sum(axis=0, keepdims=True)*self.grid_size[2]).squeeze(0).detach().cpu().numpy()
+        h_terr = np.clip(h_terr, 0, z_terr[-1])  # make sure height is not bigger than max z_terr
         # Get terrain object
         boolean_terrain = self._model_args.params['boolean_terrain']
         terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain,

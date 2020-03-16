@@ -3,7 +3,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.transforms as transforms
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import RegularGridInterpolator
 from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates, plot_wind_3d
 import datetime
@@ -241,43 +240,37 @@ class WindOptimiserOutput:
         fig = plt.figure()
         ax = fig.gca(projection='3d')
 
-        # trajectory
-        indeces = self._input[4, :].nonzero()
-        wind_indices = np.array(indeces.cpu().detach().numpy())
-        xs = wind_indices[:, 2]
-        ys = wind_indices[:, 1]
-        zs = wind_indices[:, 0]
-
-        # skip values
-        wskip = 1
-        xs_skip = xs[::wskip]
-        ys_skip = ys[::wskip]
-        zs_skip = zs[::wskip]
-
-        # plot trajectory
-        ax.scatter(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
-        # ax.plot(xs_skip, ys_skip, zs_skip, label='trajectory curve', color='red')
-
-        # plot wind vectors
-        wind = self._input[1:-1, :].cpu().detach().numpy()
-        ax.quiver(xs_skip, ys_skip, zs_skip, wind[0, zs_skip, ys_skip, xs_skip],
-                  wind[1, zs_skip, ys_skip, xs_skip], wind[2, zs_skip, ys_skip, xs_skip], length=1.0)
-
         # terrain
-        h_grid = (self.wind_opt.terrain.z_terr[-1] - self.wind_opt.terrain.z_terr[0])/64
+        h_grid = self.wind_opt.terrain.z_terr[1] - self.wind_opt.terrain.z_terr[0]
         h_network_terrain = np.floor((self.wind_opt.terrain.h_terr - self.wind_opt.terrain.z_terr[0])/h_grid)
-        if 'torch' in str(h_network_terrain.dtype):
-            h_network_terrain = h_network_terrain.detach().cpu().numpy()
-        nx, ny = h_network_terrain.shape
+        ny, nx = h_network_terrain.shape
         x = np.arange(0, nx, 1)
         y = np.arange(0, ny, 1)
         X, Y = np.meshgrid(x, y)
         ax.plot_surface(X, Y, h_network_terrain, rstride=1, cstride=1, cmap=plt.cm.gray,
                         linewidth=0)
-        # X, Y = np.meshgrid(self.wind_opt.terrain.x_terr/self.wind_opt.grid_size[0],
-        #                    self.wind_opt.terrain.y_terr//self.wind_opt.grid_size[0])
-        # ax.plot_surface(X, Y, self.wind_opt.terrain.h_terr.detach().cpu().numpy()/self.wind_opt.grid_size[2],
-                        # cmap=plt.cm.gray)
+
+        # trajectory
+        indices = self._input[4, :].nonzero()  # the nonzero values in the NN input correspond to the trajectory points
+        trajectory_indices = np.asarray(indices.detach().cpu().numpy())
+        zt = trajectory_indices[:, 0]
+        yt = trajectory_indices[:, 1]
+        xt = trajectory_indices[:, 2]
+
+        # skip values
+        wskip = 1
+        xt_skip = xt[::wskip]
+        yt_skip = yt[::wskip]
+        zt_skip = zt[::wskip]
+
+        # plot trajectory
+        ax.scatter(xt_skip, yt_skip, zt_skip, label='trajectory curve', color='red')
+        # ax.plot(xt_skip, yt_skip, zt_skip, label='trajectory curve', color='red')
+
+        # plot wind vectors
+        wind = self._input[1:-1, :].detach().cpu().numpy()
+        ax.quiver(xt_skip, yt_skip, zt_skip, wind[0, zt_skip, yt_skip, xt_skip],
+                  wind[1, zt_skip, yt_skip, xt_skip], wind[2, zt_skip, yt_skip, xt_skip], length=1.0)
 
         # make image full screen
         fig_manager = plt.get_current_fig_manager()
@@ -292,22 +285,14 @@ class WindOptimiserOutput:
         fig = plt.figure()
         ax = fig.gca(projection='3d')
 
-        # plot terrain
-        # grid_size = (self.wind_opt.terrain.x_terr[1]-self.wind_opt.terrain.x_terr[0])
-        # X, Y = np.meshgrid(self.wind_opt.terrain.x_terr/grid_size,
-        #                    self.wind_opt.terrain.y_terr/grid_size)
-        # ax.plot_surface(X, Y, self.wind_opt.terrain.h_terr/grid_size,
-        #                 cmap=plt.cm.terrain)
         # terrain
-        h_grid = (self.wind_opt.terrain.z_terr[-1] - self.wind_opt.terrain.z_terr[0])/64
+        h_grid = self.wind_opt.terrain.z_terr[1] - self.wind_opt.terrain.z_terr[0]
         h_network_terrain = np.floor((self.wind_opt.terrain.h_terr - self.wind_opt.terrain.z_terr[0])/h_grid)
-        if 'torch' in str(h_network_terrain.dtype):
-            h_network_terrain = h_network_terrain.detach().cpu().numpy()
-        nx, ny = h_network_terrain.shape
+        ny, nx = h_network_terrain.shape
         x = np.arange(0, nx, 1)
         y = np.arange(0, ny, 1)
         X, Y = np.meshgrid(x, y)
-        ax.plot_surface(X, Y, h_network_terrain, rstride=1, cstride=1, cmap=plt.cm.gray,
+        ax.plot_surface(X, Y, h_network_terrain, rstride=1, cstride=1, cmap=plt.cm.gist_earth,
                         linewidth=0)
 
         # wind field
@@ -327,7 +312,6 @@ class WindOptimiserOutput:
                          + wind_prediction[1, zv_skip, yv_skip, xv_skip]**2
                          + wind_prediction[2, zv_skip, yv_skip, xv_skip]**2)
         colors = colors.view(-1)
-
         # normalize colors
         norm = matplotlib.colors.Normalize()
         norm.autoscale(colors)
@@ -336,6 +320,7 @@ class WindOptimiserOutput:
                   wind_prediction[1, zv_skip, yv_skip, xv_skip], wind_prediction[2, zv_skip, yv_skip, xv_skip],
                   color=colormap(norm(colors)), length=2.0)
 
+        # add color bar
         hc = fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm, cmap=colormap), ax=ax)
         hc.set_label('Wind speed (m/s)')
 
@@ -395,7 +380,7 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         # self.plot_fft_analysis()
-        # self.plot_trajectory_wind_vectors()
+        self.plot_trajectory_wind_vectors()
         self.plot_wind_field()
         # self.plot_wind_vectors_angles()
         self.plot_best_wind_estimate()
