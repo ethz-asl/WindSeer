@@ -8,7 +8,7 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 import time
 
 
-class UlogInterpolation:
+class FlightInterpolation:
     def __init__(self, wind_data, grid_dimensions=None, terrain=None, predict=False, wind_data_for_prediction=None):
         self._wind_data = wind_data
         self._grid_dimensions = grid_dimensions
@@ -81,7 +81,7 @@ class UlogInterpolation:
                 z_coord.append(self._terrain.z_terr[self._idx_z[i]])
         return x_coord, y_coord, z_coord
 
-    def bin_log_data(self):
+    def bin_flight_data(self):
         '''
         Compute the mean velocity and variance of wind values at the center of
         each bin.
@@ -124,7 +124,7 @@ class UlogInterpolation:
         print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
         return wind, variance
 
-    def interpolate_log_data_idw(self):
+    def interpolate_flight_data_idw(self):
         '''
         Compute the wind value at the center of each bin using an inverse distance
         weighted interpolation scheme.
@@ -188,7 +188,7 @@ class UlogInterpolation:
         print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
         return wind, variance
 
-    def interpolate_log_data_krigging(self):
+    def interpolate_flight_data_krigging(self):
         '''
         Create a wind map from the wind measurements using krigging interpolation.
         Compute the mean velocity and variance at the center of each bin by
@@ -209,7 +209,7 @@ class UlogInterpolation:
         OK3d_down = OrdinaryKriging3D(self._wind_data['alt'], self._wind_data['y'], self._wind_data['x'],
                                       -self._wind_data['wd'], variogram_model='linear')
 
-        # Initialize empty wind, variance and predicted_log_data
+        # Initialize empty wind, variance and predicted_flight_data
         if self._grid_dimensions is not None:
             wind = torch.zeros((3,
                                 self._grid_dimensions['n_cells'],
@@ -221,9 +221,9 @@ class UlogInterpolation:
                                     self._grid_dimensions['n_cells'])) * float('nan')
         else:
             wind, variance = [], []
-        predicted_log_data = []
+        predicted_flight_data = []
 
-        if self.predict is True and self._wind_data_for_prediction:  # predict ulog data
+        if self.predict is True and self._wind_data_for_prediction:  # predict flight data
             # Make sure points are inside terrain
             pts = []
             for i in range(len(self._wind_data_for_prediction['x'])):
@@ -236,15 +236,16 @@ class UlogInterpolation:
                     pts.append([self._wind_data_for_prediction['alt'][i], self._wind_data_for_prediction['y'][i],
                                 self._wind_data_for_prediction['x'][i]])
             if not pts:
-                predicted_log_data = [pts, pts, pts]
+                predicted_flight_data = [pts, pts, pts]
             else:
-                predicted_log_data_x, _ = OK3d_north.execute(
+                predicted_flight_data_x, _ = OK3d_north.execute(
                     'points', np.array(pts)[:, 0], np.array(pts)[:, 1], np.array(pts)[:, 2])
-                predicted_log_data_y, _ = OK3d_north.execute(
+                predicted_flight_data_y, _ = OK3d_north.execute(
                     'points', np.array(pts)[:, 0], np.array(pts)[:, 1], np.array(pts)[:, 2])
-                predicted_log_data_z, _ = OK3d_north.execute(
+                predicted_flight_data_z, _ = OK3d_north.execute(
                     'points', np.array(pts)[:, 0], np.array(pts)[:, 1], np.array(pts)[:, 2])
-                predicted_log_data = [predicted_log_data_x, predicted_log_data_y, predicted_log_data_z]
+                predicted_flight_data = [predicted_flight_data_x, predicted_flight_data_y, -predicted_flight_data_z]
+                predicted_flight_data = np.column_stack(predicted_flight_data)
 
         else:  # Bin data
             for i in range(len(self._bin_x_coord)):
@@ -262,9 +263,9 @@ class UlogInterpolation:
                 variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = ss3d[0][0][0]
 
         print('Krigging interpolation is done [{:.2f} s]'.format(time.time() - t_start))
-        return wind, variance, predicted_log_data
+        return wind, variance, predicted_flight_data
 
-    def interpolate_log_data_gpr(self):
+    def interpolate_flight_data_gpr(self):
         '''
         Create a wind map from the wind measurements using Gaussian Process Regression
         for interpolation.
@@ -277,11 +278,10 @@ class UlogInterpolation:
         '''
         t_start = time.time()
         # Instantiate a Gaussian Process model for each direction
-        kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (1e-2, 1e2))
-        # kernel = 1.0 * RBF(length_scale=1.33, length_scale_bounds=(1e-1, 10.0))
-        gp_x = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)
-        gp_y = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)
-        gp_z = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.1, normalize_y=True)
+        kernel = C(1.0, (1e-3, 1e3)) * RBF(100, (1e-3, 1e3))
+        gp_x = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.2, normalize_y=True)
+        gp_y = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.2, normalize_y=True)
+        gp_z = GPR(kernel=kernel, n_restarts_optimizer=10, alpha=0.2, normalize_y=True)
 
         # Fit to data using Maximum Likelihood Estimation of the parameters
         gp_x.fit(np.column_stack([self._wind_data['alt'], self._wind_data['y'], self._wind_data['x']]),
@@ -290,8 +290,9 @@ class UlogInterpolation:
                  self._wind_data['we'])
         gp_z.fit(np.column_stack([self._wind_data['alt'], self._wind_data['y'], self._wind_data['x']]),
                  -self._wind_data['wd'])
+        # gp_x.kernel_.get_params()  # get kernel's hyperparameters
 
-        # Initialize empty wind, variance and predicted_log_data
+        # Initialize empty wind, variance, predicted_flight_data and predicted_wind_field
         if self._grid_dimensions is not None:
             wind = torch.zeros((3,
                                 self._grid_dimensions['n_cells'],
@@ -303,9 +304,11 @@ class UlogInterpolation:
                                     self._grid_dimensions['n_cells'])) * float('nan')
         else:
             wind, variance = [], []
-        predicted_log_data = []
+        predicted_flight_data = []
+        predicted_wind_field = []
 
-        if self.predict is True and self._wind_data_for_prediction:  # predict ulog data
+        if self.predict is True and self._wind_data_for_prediction:  # predict flight data
+            # trajectory prediction
             # Make sure points are inside terrain
             pts = []
             for i in range(len(self._wind_data_for_prediction['x'])):
@@ -318,12 +321,31 @@ class UlogInterpolation:
                     pts.append([self._wind_data_for_prediction['alt'][i], self._wind_data_for_prediction['y'][i],
                                 self._wind_data_for_prediction['x'][i]])
             if not pts:
-                predicted_log_data = [pts, pts, pts]
+                predicted_flight_data = [pts, pts, pts]
             else:
-                predicted_log_data_x = gp_x.predict(np.row_stack(pts))
-                predicted_log_data_y = gp_y.predict(np.row_stack(pts))
-                predicted_log_data_z = gp_z.predict(np.row_stack(pts))
-                predicted_log_data = [predicted_log_data_x, predicted_log_data_y, -predicted_log_data_z]
+                predicted_flight_data_x = gp_x.predict(np.row_stack(pts))
+                predicted_flight_data_y = gp_y.predict(np.row_stack(pts))
+                predicted_flight_data_z = gp_z.predict(np.row_stack(pts))
+                predicted_flight_data = [predicted_flight_data_x, predicted_flight_data_y, -predicted_flight_data_z]
+                predicted_flight_data = np.column_stack(predicted_flight_data)
+
+            # wind field prediction
+            x_terr, y_terr, z_terr = self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr
+            nx, ny, nz = x_terr.size, y_terr.size, z_terr.size
+            xv_terr, yv_terr, zv_terr = np.meshgrid(x_terr, y_terr, z_terr)
+            pts_wind_field = np.column_stack([xv_terr.flatten(), xv_terr.flatten(), xv_terr.flatten()])
+            predicted_wind_field_x = (gp_x.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
+            predicted_wind_field_y = (gp_y.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
+            predicted_wind_field_z = (gp_z.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
+            predicted_wind_field_x = np.expand_dims(predicted_wind_field_x, axis=0)
+            predicted_wind_field_y = np.expand_dims(predicted_wind_field_y, axis=0)
+            predicted_wind_field_z = np.expand_dims(predicted_wind_field_z, axis=0)
+            predicted_wind_field = np.concatenate(
+                (predicted_wind_field_x, predicted_wind_field_y, predicted_wind_field_z), axis=0)
+            # Use terrain mask on gpr predicted wind field
+            is_wind = self._terrain.network_terrain.sign_()
+            predicted_wind_field = is_wind.repeat(predicted_wind_field.shape[0], 1, 1, 1) \
+                                   * torch.from_numpy(predicted_wind_field)
 
         else:  # bin data
             for i in range(len(self._bin_x_coord)):
@@ -347,9 +369,9 @@ class UlogInterpolation:
                 variance[2, self._idx_z[i], self._idx_y[i], self._idx_x[i]] = var_z.item()
 
         print('GPR interpolation is done [{:.2f} s]'.format(time.time() - t_start))
-        return wind, variance, predicted_log_data
+        return wind, variance, predicted_flight_data, predicted_wind_field
 
-    def interpolate_log_data_from_grid(self, inferred_wind_data):
+    def interpolate_flight_data_from_grid(self, inferred_wind_data):
         '''
         Use inferred wind data from the output of the NN to interpolate the wind
         values at the points along the trajectory which are used for testing.
@@ -374,8 +396,8 @@ class UlogInterpolation:
                 pts.append([self._wind_data_for_prediction['alt'][i], self._wind_data_for_prediction['y'][i],
                             self._wind_data_for_prediction['x'][i]])
 
-        interpolated_log_data_x = interpolating_function_x(pts)
-        interpolated_log_data_y = interpolating_function_y(pts)
-        interpolated_log_data_z = interpolating_function_z(pts)
-        interpolated_log_data = [interpolated_log_data_x, interpolated_log_data_y, -interpolated_log_data_z]
-        return interpolated_log_data
+        interpolated_flight_data_x = interpolating_function_x(pts)
+        interpolated_flight_data_y = interpolating_function_y(pts)
+        interpolated_flight_data_z = interpolating_function_z(pts)
+        interpolated_flight_data = [interpolated_flight_data_x, interpolated_flight_data_y, -interpolated_flight_data_z]
+        return np.column_stack(interpolated_flight_data)

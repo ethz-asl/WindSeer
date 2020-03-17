@@ -1,7 +1,7 @@
 # Test parameters
 test:
-    test_simulated_data: True
-    test_flight_data: False
+    test_simulated_data: False
+    test_flight_data: True
 
 # CFD data
 cfd:
@@ -51,7 +51,7 @@ wind:
     }
     # Real flight wind data
     flight: {
-        predict_flight: True,
+        predict_flight: False,
         interpolation_method: 'bin',   #['bin', 'idw', 'krigging', 'gpr']
     }
 
@@ -62,10 +62,10 @@ noise:
 
 # Window split parameters
 window_split:
-  use_window_split: False
+  use_window_split: True
   #
   use_optimized_corners: False
-  use_gpr_prediction: False
+  use_gpr_prediction: True
   use_krigging_prediction: False
   rescale_prediction: True
   window_time: 100 # seconds

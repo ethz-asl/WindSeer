@@ -301,10 +301,10 @@ class WindOptimiserOutput:
 
         # skip values
         wskip = 8
-        xs_skip = np.arange(0, nx, 1)[::wskip]
-        ys_skip = np.arange(0, ny, 1)[::wskip]
-        zs_skip = np.arange(0, nz, 1)[::wskip]
-        xv_skip, yv_skip, zv_skip = np.meshgrid(xs_skip, ys_skip, zs_skip)
+        xf_skip = np.arange(0, nx, 1)[::wskip]
+        yf_skip = np.arange(0, ny, 1)[::wskip]
+        zf_skip = np.arange(0, nz, 1)[::wskip]
+        xv_skip, yv_skip, zv_skip = np.meshgrid(xf_skip, yf_skip, zf_skip)
 
         # set color map
         colormap = matplotlib.cm.inferno

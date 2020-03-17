@@ -3,7 +3,7 @@ import nn_wind_prediction.utils as utils
 import nn_wind_prediction.models as models
 from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
-from analysis_utils.interpolate_log_data import UlogInterpolation
+from analysis_utils.interpolate_log_data import FlightInterpolation
 from analysis_utils.generate_trajectory import generate_trajectory
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 import nn_wind_prediction.data as data
@@ -534,18 +534,18 @@ class WindOptimiser(object):
         grid_dimensions = {'x_min': dx[0] - ddx, 'x_max': dx[1] + ddx, 'y_min': dy[0] - ddy, 'y_max': dy[1] + ddy,
                            'z_min': dz[0] - ddz, 'z_max': dz[1] + ddz, 'n_cells': self.terrain.get_dimensions()[0]}
 
-        FlightInterpolator = UlogInterpolation(flight_data, grid_dimensions, self.terrain)
+        FlightInterpolator = FlightInterpolation(flight_data, grid_dimensions, self.terrain)
 
         # bin the data into the regular grid
         try:
             if self._wind_args.params['flight']['interpolation_method'].lower() == 'bin':
-                wind, variance = FlightInterpolator.bin_log_data()
+                wind, variance = FlightInterpolator.bin_flight_data()
             elif self._wind_args.params['flight']['interpolation_method'].lower() == 'idw':
-                wind, variance = FlightInterpolator.interpolate_log_data_idw()
+                wind, variance = FlightInterpolator.interpolate_flight_data_idw()
             elif self._wind_args.params['flight']['interpolation_method'].lower() == 'krigging':
-                wind, variance, _ = FlightInterpolator.interpolate_log_data_krigging()
+                wind, variance, _ = FlightInterpolator.interpolate_flight_data_krigging()
             elif self._wind_args.params['flight']['interpolation_method'].lower() == 'gpr':
-                wind, variance, _ = FlightInterpolator.interpolate_log_data_gpr()
+                wind, variance, _ = FlightInterpolator.interpolate_flight_data_gpr()
             else:
                 print('Specified interpolation method: {0} unknown!'
                       .format(self._flight_args.params['interpolation_method']))
@@ -924,7 +924,7 @@ class WindOptimiser(object):
             # print(' loss: ', loss_org.item())
 
             # interpolate prediction to scattered flight data locations corresponding to the labels
-            FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
+            FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                    wind_data_for_prediction=label_flight_data)
             interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(output)
             nn_output = np.column_stack(interpolated_output)
@@ -1158,12 +1158,9 @@ class WindOptimiser(object):
             # print(' loss: ', loss_org.item())
 
             # interpolate prediction to scattered flight data locations corresponding to the labels
-            FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
+            FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                    wind_data_for_prediction=label_flight_data)
-            interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(nn_output)
-            interpolated_nn_output = np.column_stack(interpolated_output)
-
-            # interpolated_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
+            interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
 
             # --- Zero wind prediction---
             interpolated_zero_wind_output = np.zeros_like(labels)
@@ -1187,24 +1184,21 @@ class WindOptimiser(object):
                                                  wind_zeros=wind_zeros, wind_mask=wind_mask,
                                                  print_steps=False, verbose=False)
                 # interpolate prediction to scattered flight data locations corresponding to the labels
-                FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain,
+                FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                        wind_data_for_prediction=label_flight_data)
-                interpolated_corners = FlightInterpolator.interpolate_log_data_from_grid(corners_output)
-                interpolated_corners_output = np.column_stack(interpolated_corners)
+                interpolated_corners_output = FlightInterpolator.interpolate_flight_data_from_grid(corners_output)
 
             # --- Interpolation (Krigging) prediction ---
             if self.flag.use_krigging_prediction:
-                FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain, predict=True,
+                FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
                                                        wind_data_for_prediction=label_flight_data)
-                _, _, predicted_output = FlightInterpolator.interpolate_log_data_krigging()
-                interpolated_krigging_output = np.column_stack(predicted_output)
+                _, _, interpolated_krigging_output = FlightInterpolator.interpolate_flight_data_krigging()
 
             # --- Interpolation (Gaussian Process Regression) prediction ---
             if self.flag.use_gpr_prediction:
-                FlightInterpolator = UlogInterpolation(input_flight_data, terrain=self.terrain, predict=True,
+                FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
                                                        wind_data_for_prediction=label_flight_data)
-                _, _, predicted_output = FlightInterpolator.interpolate_log_data_gpr()
-                interpolated_gpr_output = np.column_stack(predicted_output)
+                _, _, interpolated_gpr_output, gpr_output = FlightInterpolator.interpolate_flight_data_gpr()
 
             # losses
             nn_loss = self._loss_fn(torch.Tensor(interpolated_nn_output).to(self._device),
