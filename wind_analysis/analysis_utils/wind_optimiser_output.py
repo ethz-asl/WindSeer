@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.transforms as transforms
 from scipy.interpolate import RegularGridInterpolator
-from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates, plot_wind_3d
+from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates
 import datetime
 import torch
 

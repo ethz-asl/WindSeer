@@ -245,7 +245,7 @@ class FlightInterpolation:
                 predicted_flight_data_z, _ = OK3d_north.execute(
                     'points', np.array(pts)[:, 0], np.array(pts)[:, 1], np.array(pts)[:, 2])
                 predicted_flight_data = [predicted_flight_data_x, predicted_flight_data_y, -predicted_flight_data_z]
-                predicted_flight_data = np.column_stack(predicted_flight_data)
+                predicted_flight_data = torch.from_numpy(np.column_stack(predicted_flight_data))
 
         else:  # Bin data
             for i in range(len(self._bin_x_coord)):
@@ -327,7 +327,7 @@ class FlightInterpolation:
                 predicted_flight_data_y = gp_y.predict(np.row_stack(pts))
                 predicted_flight_data_z = gp_z.predict(np.row_stack(pts))
                 predicted_flight_data = [predicted_flight_data_x, predicted_flight_data_y, -predicted_flight_data_z]
-                predicted_flight_data = np.column_stack(predicted_flight_data)
+                predicted_flight_data = torch.from_numpy(np.column_stack(predicted_flight_data))
 
             # wind field prediction
             x_terr, y_terr, z_terr = self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr
@@ -400,4 +400,5 @@ class FlightInterpolation:
         interpolated_flight_data_y = interpolating_function_y(pts)
         interpolated_flight_data_z = interpolating_function_z(pts)
         interpolated_flight_data = [interpolated_flight_data_x, interpolated_flight_data_y, -interpolated_flight_data_z]
-        return np.column_stack(interpolated_flight_data)
+        interpolated_flight_data = torch.from_numpy(np.column_stack(interpolated_flight_data))
+        return interpolated_flight_data

@@ -3,7 +3,7 @@ import nn_wind_prediction.utils as utils
 import nn_wind_prediction.models as models
 from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
-from analysis_utils.interpolate_log_data import FlightInterpolation
+from analysis_utils.interpolate_flight_data import FlightInterpolation
 from analysis_utils.generate_trajectory import generate_trajectory
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 import nn_wind_prediction.data as data
@@ -900,16 +900,15 @@ class WindOptimiser(object):
                     valid_labels.append([label_flight_data['wn'][j], label_flight_data['we'][j],
                                          label_flight_data['wd'][j]])
             if len(valid_labels) == 0:
-                labels = []
+                # Skip this iteration
                 continue
             else:
-                labels = np.row_stack(valid_labels)
+                labels = torch.from_numpy(np.row_stack(valid_labels))
 
             # --- Network prediction ---
             # bin input flight data
             wind_blocks, var_blocks, wind_zeros, wind_mask \
                 = self.get_flight_wind_blocks(input_flight_data)
-
             # get prediction
             if self.flag.add_gaussian_noise:
                 wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
@@ -926,20 +925,20 @@ class WindOptimiser(object):
             # interpolate prediction to scattered flight data locations corresponding to the labels
             FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                    wind_data_for_prediction=label_flight_data)
-            interpolated_output = FlightInterpolator.interpolate_log_data_from_grid(output)
-            nn_output = np.column_stack(interpolated_output)
-            nn_loss = self._loss_fn(torch.Tensor(nn_output).to(self._device),
-                                    torch.Tensor(labels).to(self._device))
+            interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(output)
+            nn_loss = self._loss_fn(interpolated_nn_output.to(self._device),
+                                    labels.to(self._device))
             # print('NN loss is: ', nn_loss)
             # interpolated_output = np.resize(np.array(interpolated_output), (3, len(interpolated_output[0])))
 
             # --- Average wind prediction ---
             average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
-            average_wind_output = np.ones_like(labels) * [average_wind_input[0].mean(),
-                                                          average_wind_input[1].mean(),
-                                                          average_wind_input[2].mean()]
-            average_wind_loss = self._loss_fn(torch.Tensor(average_wind_output).to(self._device),
-                                 torch.Tensor(labels).to(self._device))
+            interpolated_average_wind_output = np.ones_like(labels) * [average_wind_input[0].mean(),
+                                                                       average_wind_input[1].mean(),
+                                                                       average_wind_input[2].mean()]
+            interpolated_average_wind_output = torch.from_numpy(interpolated_average_wind_output)
+            average_wind_loss = self._loss_fn(interpolated_average_wind_output.to(self._device),
+                                              labels.to(self._device))
 
             nn_losses += (nn_loss.item() - average_wind_loss.item())
             # nn_losses += nn_loss.item()
@@ -1131,14 +1130,13 @@ class WindOptimiser(object):
                 print(i, 'Labels outside terrain dimensions')
                 print('')
                 continue
-            labels = np.row_stack(valid_labels)
+            labels = torch.from_numpy(np.row_stack(valid_labels))
             # labels = np.array([label_flight_data['wn'], label_flight_data['we'], label_flight_data['wd']])
 
             # --- Network prediction ---
             # bin input flight data
             wind_blocks, var_blocks, wind_zeros, wind_mask \
                 = self.get_flight_wind_blocks(input_flight_data)
-
             # get prediction
             if self.flag.add_gaussian_noise:
                 wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
@@ -1154,22 +1152,22 @@ class WindOptimiser(object):
                     self.rescale_prediction(nn_output, self.labels)  # rescale labels only once
                 else:
                     self.rescale_prediction(nn_output)
-            # loss_org = self.evaluate_loss(output)
+            # loss_org = self.evaluate_loss(nn_output)
             # print(' loss: ', loss_org.item())
-
             # interpolate prediction to scattered flight data locations corresponding to the labels
             FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                    wind_data_for_prediction=label_flight_data)
             interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
 
             # --- Zero wind prediction---
-            interpolated_zero_wind_output = np.zeros_like(labels)
+            interpolated_zero_wind_output = torch.zeros_like(labels)
 
             # --- Average wind prediction ---
             average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
             interpolated_average_wind_output = np.ones_like(labels) * [average_wind_input[0].mean(),
                                                                        average_wind_input[1].mean(),
                                                                        average_wind_input[2].mean()]
+            interpolated_average_wind_output = torch.from_numpy(interpolated_average_wind_output)
             average_wind_output = torch.ones_like(nn_output)
             average_wind_output[0, :] *= average_wind_input[0].mean()
             average_wind_output[1, :] *= average_wind_input[1].mean()
@@ -1201,29 +1199,29 @@ class WindOptimiser(object):
                 _, _, interpolated_gpr_output, gpr_output = FlightInterpolator.interpolate_flight_data_gpr()
 
             # losses
-            nn_loss = self._loss_fn(torch.Tensor(interpolated_nn_output).to(self._device),
-                                 torch.Tensor(labels).to(self._device))
+            nn_loss = self._loss_fn(interpolated_nn_output.to(self._device),
+                                    labels.to(self._device))
             loss_axis = True
             if loss_axis:
-                nn_loss_x = self._loss_fn(torch.Tensor(interpolated_nn_output[:, 0]).to(self._device),
-                                        torch.Tensor(labels[:, 0]).to(self._device))
-                nn_loss_y = self._loss_fn(torch.Tensor(interpolated_nn_output[:, 1]).to(self._device),
-                                        torch.Tensor(labels[:, 1]).to(self._device))
-                nn_loss_z = self._loss_fn(torch.Tensor(interpolated_nn_output[:, 2]).to(self._device),
-                                        torch.Tensor(labels[:, 2]).to(self._device))
-            zero_wind_loss = self._loss_fn(torch.Tensor(interpolated_zero_wind_output).to(self._device),
-                                 torch.Tensor(labels).to(self._device))
-            average_wind_loss = self._loss_fn(torch.Tensor(interpolated_average_wind_output).to(self._device),
-                                 torch.Tensor(labels).to(self._device))
+                nn_loss_x = self._loss_fn(interpolated_nn_output[:, 0].to(self._device),
+                                          labels[:, 0].to(self._device))
+                nn_loss_y = self._loss_fn(interpolated_nn_output[:, 1].to(self._device),
+                                          labels[:, 1].to(self._device))
+                nn_loss_z = self._loss_fn(interpolated_nn_output[:, 2].to(self._device),
+                                          labels[:, 2].to(self._device))
+            zero_wind_loss = self._loss_fn(interpolated_zero_wind_output.to(self._device),
+                                           labels.to(self._device))
+            average_wind_loss = self._loss_fn(interpolated_average_wind_output.to(self._device),
+                                              labels.to(self._device))
             if self.flag.use_krigging_prediction:
-                krigging_wind_loss = self._loss_fn(torch.Tensor(interpolated_krigging_output).to(self._device),
-                                     torch.Tensor(labels).to(self._device))
+                krigging_wind_loss = self._loss_fn(interpolated_krigging_output.to(self._device),
+                                                   labels.to(self._device))
             if self.flag.use_gpr_prediction:
-                gpr_wind_loss = self._loss_fn(torch.Tensor(interpolated_gpr_output).to(self._device),
-                                     torch.Tensor(labels).to(self._device))
+                gpr_wind_loss = self._loss_fn(interpolated_gpr_output.to(self._device),
+                                              labels.to(self._device))
             if self.flag.use_optimized_corners:
-                optimized_corners_loss = self._loss_fn(torch.Tensor(interpolated_corners_output).to(self._device),
-                                     torch.Tensor(labels).to(self._device))
+                optimized_corners_loss = self._loss_fn(interpolated_corners_output.to(self._device),
+                                                       labels.to(self._device))
             print(i, ' NN loss is: ', nn_loss.item())
             if loss_axis:
                 print(i, ' NN loss x is: ', nn_loss_x.item())
