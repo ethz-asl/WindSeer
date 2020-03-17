@@ -23,7 +23,7 @@ cosmo:
 
 # flight data
 flight:
-    file: 'data/14_47_05.ulg' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05, 14_47_05_filtered.hdf5
+    file: 'data/14_47_05_filtered.hdf5' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05, 14_47_05_filtered.hdf5
     filtered_dir: 'data/'
     use_ekf_wind: False
 
@@ -65,12 +65,15 @@ window_split:
   use_window_split: True
   #
   use_optimized_corners: False
-  use_gpr_prediction: True
+  use_gpr_prediction: False
   use_krigging_prediction: False
   rescale_prediction: True
+  #
+  longterm_prediction: True
+  #
   window_time: 100 # seconds
-  response_time: 100 # seconds
-  step_time: 200 # seconds
+  response_time: 50 # seconds
+  step_time: 50 # seconds
 
 # Corner optimisation parameters
 optimisation:

@@ -111,6 +111,7 @@ class SelectionFlags(object):
         self.use_gpr_prediction = window_split.params['use_gpr_prediction']
         self.use_krigging_prediction = window_split.params['use_krigging_prediction']
         self.rescale_prediction = window_split.params['rescale_prediction']
+        self.longterm_prediction = window_split.params['longterm_prediction']
         self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
         self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
         self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
@@ -743,8 +744,12 @@ class WindOptimiser(object):
     def sliding_window_split(self, flight_data, window_size=1, response_size=1, step_size=1):
         input_flight, output_flight = {}, {}
         for keys, values in flight_data.items():
-            input_batch = values[step_size : step_size+window_size]
-            output_batch = values[step_size+window_size : step_size+window_size+response_size]
+            if self.flag.longterm_prediction:
+                input_batch = values[0 : window_size]
+                output_batch = values[window_size : step_size+window_size+response_size]
+            else:
+                input_batch = values[step_size : step_size+window_size]
+                output_batch = values[step_size+window_size : step_size+window_size+response_size]
             input_flight.update({keys: input_batch})
             output_flight.update({keys: output_batch})
 
@@ -1090,7 +1095,10 @@ class WindOptimiser(object):
         step_size = int(step_time/dt)
 
         # total time of flight and maximum number of windows
-        max_num_windows = int((flight_data['x'].size - (window_size + response_size)) / step_size + 1)
+        if self.flag.longterm_prediction:
+            max_num_windows = int((flight_data['x'].size - window_size) / step_size + 1)
+        else:
+            max_num_windows = int((flight_data['x'].size - (window_size + response_size)) / step_size + 1)
         # if max_num_windows < 0:
         #     raise ValueError('window time exceeds flight time')
         total_time_of_flight = (flight_data['time_microsec'][-1] - flight_data['time_microsec'][0]) / 1e6
@@ -1105,6 +1113,8 @@ class WindOptimiser(object):
         inputs, outputs = [], []
         nn_losses, zero_wind_losses, average_wind_losses = [], [], []
         gpr_wind_losses, krigging_wind_losses, optimized_corners_losses = [], [], []
+        time = []
+        longterm_losses = {}
         for i in range(max_num_windows):
             # split data into input and label based on window variables
             input_flight_data, label_flight_data = \
@@ -1284,39 +1294,46 @@ class WindOptimiser(object):
                 print('Average  wind average direction: ', average_wind_dir_cardinal.mean())
 
             # outputs
+            time.append(i*response_time)
             inputs.append(input)
             outputs.append(nn_output)
-            nn_losses.append(nn_loss)
-            zero_wind_losses.append(zero_wind_loss)
-            average_wind_losses.append(average_wind_loss)
+            nn_losses.append(nn_loss.item())
+            zero_wind_losses.append(zero_wind_loss.item())
+            average_wind_losses.append(average_wind_loss.item())
             if self.flag.use_krigging_prediction:
-                krigging_wind_losses.append(krigging_wind_loss)
+                krigging_wind_losses.append(krigging_wind_loss.item())
             if self.flag.use_gpr_prediction:
-                gpr_wind_losses.append(gpr_wind_loss)
+                gpr_wind_losses.append(gpr_wind_loss.item())
             if self.flag.use_optimized_corners:
-                optimized_corners_losses.append(optimized_corners_loss)
+                optimized_corners_losses.append(optimized_corners_loss.item())
+
+        # longterm losses
+        longterm_losses.update({'time': time})
+        longterm_losses.update({'nn losses': nn_losses})
+        longterm_losses.update({'zero wind losses': zero_wind_losses})
+        longterm_losses.update({'average wind losses': average_wind_losses})
+        if self.flag.use_krigging_prediction:
+            longterm_losses.update({'krigging losses': krigging_wind_losses})
+        if self.flag.use_gpr_prediction:
+            longterm_losses.update({'gpr losses': gpr_wind_losses})
+        if self.flag.use_optimized_corners:
+            longterm_losses.update({'optimized corners losses': optimized_corners_losses})
 
         print('')
-        losses_items = [nn_losses[i].item() for i in range(len(nn_losses))]
-        average_loss = sum(losses_items)/len(losses_items)
-        print('Average NN loss is: ', average_loss)
-        losses_items = [zero_wind_losses[i].item() for i in range(len(zero_wind_losses))]
-        average_loss = sum(losses_items)/len(losses_items)
-        print('Average zero wind loss is: ', average_loss)
-        losses_items = [average_wind_losses[i].item() for i in range(len(average_wind_losses))]
-        average_loss = sum(losses_items)/len(losses_items)
-        print('Average wind average loss is: ', average_loss)
+        nn_average_loss = sum(nn_losses)/len(nn_losses)
+        print('Average NN loss is: ', nn_average_loss)
+        zero_wind_average_loss = sum(zero_wind_losses)/len(zero_wind_losses)
+        print('Average zero wind loss is: ', zero_wind_average_loss)
+        average_wind_average_loss = sum(average_wind_losses)/len(average_wind_losses)
+        print('Average wind average loss is: ', average_wind_average_loss)
         if self.flag.use_krigging_prediction:
-            losses_items = [krigging_wind_losses[i].item() for i in range(len(krigging_wind_losses))]
-            average_loss = sum(losses_items)/len(losses_items)
-            print('Krigging wind average loss is: ', average_loss)
+            krigging_average_loss = sum(krigging_wind_losses)/len(krigging_wind_losses)
+            print('Krigging wind average loss is: ', krigging_average_loss)
         if self.flag.use_gpr_prediction:
-            losses_items = [gpr_wind_losses[i].item() for i in range(len(gpr_wind_losses))]
-            average_loss = sum(losses_items)/len(losses_items)
-            print('GPR wind average loss is: ', average_loss)
+            gpr_average_loss = sum(gpr_wind_losses)/len(gpr_wind_losses)
+            print('GPR wind average loss is: ', gpr_average_loss)
         if self.flag.use_optimized_corners:
-            losses_items = [optimized_corners_losses[i].item() for i in range(len(optimized_corners_losses))]
-            average_loss = sum(losses_items)/len(losses_items)
-            print('Optimized corners average loss is: ', average_loss)
+            corners_average_loss = sum(optimized_corners_losses)/len(optimized_corners_losses)
+            print('Optimized corners average loss is: ', corners_average_loss)
 
-        return outputs, nn_losses, inputs
+        return outputs, nn_losses, inputs, longterm_losses

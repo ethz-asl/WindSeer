@@ -73,7 +73,7 @@ class FlightInterpolation:
         return idx_x, idx_y, idx_z, wx, wy, wz
 
     def get_bin_coordinates(self):
-        x_coord = []; y_coord =[]; z_coord = []
+        x_coord, y_coord, z_coord = [], [], []
         if self._terrain is not None:
             for i in range(len(self._idx_x)):
                 x_coord.append(self._terrain.x_terr[self._idx_x[i]])

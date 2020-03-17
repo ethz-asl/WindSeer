@@ -15,7 +15,7 @@ def angle_wrap(angles):
 
 
 class WindOptimiserOutput:
-    def __init__(self, wind_opt, wind_predictions, losses, inputs):
+    def __init__(self, wind_opt, wind_predictions, losses, inputs, longterm_losses=None):
         # self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device = torch.device("cpu")
         self.wind_opt = wind_opt
@@ -23,7 +23,8 @@ class WindOptimiserOutput:
         self._wind_predictions = wind_predictions
         self._losses = losses
         self._inputs = inputs
-        self._wind_prediction, self._input, self._loss  = self.get_last_wind_estimate()
+        self._longterm_losses = longterm_losses
+        self._wind_prediction, self._input, self._loss = self.get_last_wind_estimate()
         self._masked_input = self.get_masked_input()
         # self._grads = grads
         # self._names = self.get_names()
@@ -357,6 +358,29 @@ class WindOptimiserOutput:
         else:
             plt.show()
 
+    def plot_losses_over_time(self):
+        fig, ax = plt.subplots()
+
+        longterm_losses = self._longterm_losses
+        # time
+        time = longterm_losses['time']
+        del longterm_losses['time']
+
+        for key, values in longterm_losses.items():
+            ax.plot(time, values, label=key)
+        ax.legend(loc='upper right')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Loss')
+
+        # make image full screen
+        fig_manager = plt.get_current_fig_manager()
+        fig_manager.window.maximize()
+
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
+
     def plot_best_wind_estimate(self):
         # Plot best wind estimate
         fig, ax = plot_prediction_observations(self._wind_prediction, self.wind_opt.labels.to(self.device),
@@ -380,10 +404,11 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         # self.plot_fft_analysis()
-        self.plot_trajectory_wind_vectors()
-        self.plot_wind_field()
+        # self.plot_trajectory_wind_vectors()
+        # self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        self.plot_best_wind_estimate()
+        self.plot_losses_over_time()
+        # self.plot_best_wind_estimate()
 
         if self._save_output:
             self.close()

@@ -57,10 +57,10 @@ if predict_wind:
         if wind_opt.flag.predict_flight:
             wind_predictions, losses, inputs = wind_opt.flight_prediction()
     if wind_opt.flag.use_window_split:
-        wind_predictions, losses, inputs = wind_opt.window_split_prediction()
+        wind_predictions, losses, inputs, longterm_losses = wind_opt.window_split_prediction()
 
     # Analyse optimised wind
-    wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs)
+    wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs, longterm_losses)
     # Plot graphs
     wind_opt_output.plot()
     # # Print losses
