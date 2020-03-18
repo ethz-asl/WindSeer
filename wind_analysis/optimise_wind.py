@@ -46,6 +46,7 @@ if optimise_window_split_variables:
 
 if predict_wind:
     # Wind predictions
+    wind_predictions, losses, inputs, longterm_losses = [], [], [], []
     if wind_opt.flag.test_simulated_data:
         if original_input:
             wind_predictions, losses = wind_opt.get_original_input_prediction()

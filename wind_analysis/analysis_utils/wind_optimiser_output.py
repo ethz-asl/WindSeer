@@ -16,8 +16,8 @@ def angle_wrap(angles):
 
 class WindOptimiserOutput:
     def __init__(self, wind_opt, wind_predictions, losses, inputs, longterm_losses=None):
-        # self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.device = torch.device("cpu")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cpu")
         self.wind_opt = wind_opt
         # self._optimisers = opt
         self._wind_predictions = wind_predictions
@@ -297,7 +297,7 @@ class WindOptimiserOutput:
                         linewidth=0)
 
         # wind field
-        wind_prediction = self._wind_prediction
+        wind_prediction = self._wind_prediction.detach().cpu()
         channels, nz, ny, nx = wind_prediction.shape
 
         # skip values
@@ -309,9 +309,9 @@ class WindOptimiserOutput:
 
         # set color map
         colormap = matplotlib.cm.inferno
-        colors = np.sqrt(wind_prediction[0, zv_skip, yv_skip, xv_skip]**2
-                         + wind_prediction[1, zv_skip, yv_skip, xv_skip]**2
-                         + wind_prediction[2, zv_skip, yv_skip, xv_skip]**2)
+        colors = torch.sqrt(wind_prediction[0, zv_skip, yv_skip, xv_skip]**2
+                            + wind_prediction[1, zv_skip, yv_skip, xv_skip]**2
+                            + wind_prediction[2, zv_skip, yv_skip, xv_skip]**2)
         colors = colors.view(-1)
         # normalize colors
         norm = matplotlib.colors.Normalize()
@@ -404,11 +404,11 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         # self.plot_fft_analysis()
-        # self.plot_trajectory_wind_vectors()
-        # self.plot_wind_field()
+        self.plot_trajectory_wind_vectors()
+        self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        self.plot_losses_over_time()
-        # self.plot_best_wind_estimate()
+        # self.plot_losses_over_time()
+        self.plot_best_wind_estimate()
 
         if self._save_output:
             self.close()

@@ -579,11 +579,12 @@ class WindOptimiser(object):
         _, nz, ny, nx = labels.shape
         start_x = np.random.randint(0, turb_nx - nx)
         start_y = np.random.randint(0, turb_ny - ny)
-        start_z = int(np.random.triangular(0, (turb_nz - nz), 0))  # triangle distribution
+        start_z = np.random.randint(0, turb_nz - nz)  # triangle distribution
         turbulence = \
             turbulence[:, start_z:start_z + nz, start_y:start_y + ny, start_x:start_x + nx]
         # apply scale
         turbulence /= self.scale
+        turbulence = torch.from_numpy(turbulence)
         labels += turbulence
         return labels
 
