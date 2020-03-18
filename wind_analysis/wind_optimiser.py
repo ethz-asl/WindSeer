@@ -3,6 +3,7 @@ import nn_wind_prediction.utils as utils
 import nn_wind_prediction.models as models
 from analysis_utils import extract_cosmo_data as cosmo
 from analysis_utils import ulog_utils, get_mapgeo_terrain
+from analysis_utils import generate_turbulence
 from analysis_utils.interpolate_flight_data import FlightInterpolation
 from analysis_utils.generate_trajectory import generate_trajectory
 from nn_wind_prediction.utils.interpolation import DataInterpolation
@@ -104,7 +105,7 @@ class SelectionFlags(object):
         self.use_trajectory = wind.params['trajectory']['use_trajectory_generation']
         self.use_simulated_trajectory = wind.params['trajectory']['use_simulated_trajectory']
         self.predict_flight = wind.params['flight']['predict_flight']
-        self.generate_turbulence = noise.params['generate_turbulence']
+        self.add_turbulence = noise.params['add_turbulence']
         self.add_gaussian_noise = noise.params['add_gaussian_noise']
         self.use_window_split = window_split.params['use_window_split']
         self.use_optimized_corners = window_split.params['use_optimized_corners']
@@ -123,8 +124,8 @@ class WindOptimiser(object):
 
     def __init__(self, config_yaml, resolution=64):
         # Configuration variables
-        # self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self._device = torch.device("cpu")
+        self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # self._device = torch.device("cpu")
         self._config_yaml = config_yaml
         self._test_args = utils.BasicParameters(self._config_yaml, 'test')
         self._cfd_args = utils.BasicParameters(self._config_yaml, 'cfd')
@@ -177,10 +178,10 @@ class WindOptimiser(object):
             self.labels = self._wind_zeros
 
         # Noise
-        # if self.flag.add_gaussian_noise:
-        #     self._wind_blocks, self._wind_zeros = self.add_gaussian_noise(self._wind_zeros, self._wind_blocks)
-        # if self.flag.generate_turbulence:
-        #     self._wind_blocks, self._wind_zeros = self.generate_turbulence(self._wind_zeros, self._wind_blocks)
+        if self.flag.use_simulated_trajectory and self.flag.add_gaussian_noise:
+            self.labels = self.add_gaussian_noise(self.labels)
+        if self.flag.use_simulated_trajectory and self.flag.add_turbulence:
+            self.labels = self.add_turbulence(self.labels)
 
         # Optimisation variables
         self._optimisation_variables = self.get_optimisation_variables()
@@ -520,8 +521,6 @@ class WindOptimiser(object):
         wind_mask = torch.isnan(wind)
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
-        # if self.flag.add_gaussian_noise:
-        #     wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
         return wind.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device), simulated_flight_data
 
     def get_flight_wind_blocks(self, flight_data):
@@ -564,17 +563,29 @@ class WindOptimiser(object):
 
     # --- Add noise to data ---
 
-    def add_gaussian_noise(self, wind_zeros, wind_mask):
-        wind_noise = torch.randn(wind_zeros.shape).to(self._device) / self.scale
-        wind_zeros_noise = wind_zeros + wind_noise
-        wind_zeros_noise[wind_mask] = 0
-        # wind_blocks_noise = wind_blocks + wind_noise
-        # wind_blocks_noise[wind_mask] = float('nan')
-        return wind_zeros_noise
+    def add_gaussian_noise(self, labels):
+        eps = 1
+        noise = eps * torch.rand(labels.shape)
+        # apply scale
+        noise /= self.scale
+        labels += noise
+        return labels
 
-    def generate_turbulence(self, wind_zeros, wind_blocks):
-        wind_blocks, wind_zeros = 0, 0
-        return wind_blocks, wind_zeros
+    def add_turbulence(self, labels):
+        # get turbulence field
+        turbulence, _ = generate_turbulence.generate_turbulence_spectral()
+        _, turb_nx, turb_ny, turb_nz = turbulence.shape
+        # subsample turbulent velocity field with the same shape as labels
+        _, nz, ny, nx = labels.shape
+        start_x = np.random.randint(0, turb_nx - nx)
+        start_y = np.random.randint(0, turb_ny - ny)
+        start_z = int(np.random.triangular(0, (turb_nz - nz), 0))  # triangle distribution
+        turbulence = \
+            turbulence[:, start_z:start_z + nz, start_y:start_y + ny, start_x:start_x + nx]
+        # apply scale
+        turbulence /= self.scale
+        labels += turbulence
+        return labels
 
     # --- Wind optimisation ---
 
@@ -915,8 +926,6 @@ class WindOptimiser(object):
             wind_blocks, var_blocks, wind_zeros, wind_mask \
                 = self.get_flight_wind_blocks(input_flight_data)
             # get prediction
-            if self.flag.add_gaussian_noise:
-                wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
             wind = wind_zeros.to(self._device)
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
@@ -1044,9 +1053,6 @@ class WindOptimiser(object):
             # get wind zeros
             wind_blocks = self._wind_blocks.clone()
             wind_zeros = self._wind_zeros.clone()
-            # add noise
-            # if self.flag.add_gaussian_noise:
-            #     wind_blocks, wind_zeros = self.add_gaussian_noise(wind_zeros, wind_blocks)
             # create mask
             wind_input = self.add_mask_to_wind()
             # run prediction
@@ -1148,8 +1154,6 @@ class WindOptimiser(object):
             wind_blocks, var_blocks, wind_zeros, wind_mask \
                 = self.get_flight_wind_blocks(input_flight_data)
             # get prediction
-            if self.flag.add_gaussian_noise:
-                wind_zeros = self.add_gaussian_noise(wind_zeros, wind_mask)
             wind = wind_zeros.to(self._device)
             if self.flag.add_corners:
                 interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)

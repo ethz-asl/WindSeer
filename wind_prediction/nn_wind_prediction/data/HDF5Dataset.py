@@ -366,7 +366,7 @@ class HDF5Dataset(Dataset):
             # generate 100 fields
             for i in range(100):
                 uvw, _ = generate_turbulence.generate_turbulence_spectral()
-                turbulent_velocity_field = uvw[:, :-1, :-1, :-1]
+                turbulent_velocity_field = uvw
                 turbulent_velocity_fields += [torch.from_numpy(turbulent_velocity_field.astype(np.float32)).unsqueeze(0)]
             self.__turbulent_velocity_fields = torch.cat(turbulent_velocity_fields, 0)
 
