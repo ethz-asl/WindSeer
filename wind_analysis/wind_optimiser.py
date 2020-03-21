@@ -349,6 +349,7 @@ class WindOptimiser(object):
     # --- Wind generation ---
 
     def get_sparse_wind_blocks(self, p=0):
+        time_start = time.time()
         wind = self.labels.clone()
         channels, nz, ny, nx = wind.shape
         terrain = self.original_terrain
@@ -391,12 +392,14 @@ class WindOptimiser(object):
 
         sparse_wind_mask = mask.float().unsqueeze(0)
         augmented_wind = torch.cat([wind, sparse_wind_mask])
+        # print('Time to create sparse mask: ', time.time()-time_start)
         return augmented_wind.to(self._device)
 
     def get_trajectory_wind_blocks(self):
         # type of trajectories
         spiral_trajectory = False
-        random_trajectory = True
+        random_trajectory = False
+        segment_trajectory = True
 
         # spiral trajectory
         if spiral_trajectory:
@@ -425,8 +428,109 @@ class WindOptimiser(object):
                         counter += 1
                     wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
 
+        if segment_trajectory:
+            time_start = time.time()
+            # terrain
+            terrain = self.original_terrain.clone()
+            boolean_terrain = (self.original_terrain.clone() <= 0).float()
+            # mask
+            mask = torch.zeros_like(terrain)
+            # network terrain height
+            h_terrain = boolean_terrain.sum(axis=0, keepdims=True).squeeze(0)
+            # random starting point
+            non_zero = torch.nonzero(terrain)
+            start = non_zero[random.randint(0, non_zero.shape[0])]
+            idx = start[2]
+            idy = start[1]
+            idz = start[0]
+            # number of bins along direction
+            dir_1 = 6
+            dir_2 = 3
+            dir_3_1 = 2
+            dir_3_2 = 1
+            # Random number of segments, each with a length between approximately 100 and 120 m (6 to 7 bin lengths)
+            num_of_segments = random. randint(2, 40)
+            # first axis to go along
+            direction_axis = 1
+            forward_axis = 'x'
+            for i in range(num_of_segments):
+                feasible_points = []
+                # current point
+                current_idx = idx
+                current_idy = idy
+                current_idz = idz
+                # find feasible next points
+                if 'x' in forward_axis:
+                    for m in range(dir_3_1+dir_3_2+1):
+                        for n in range(dir_2+1):
+                            if (0 <= current_idx + direction_axis*dir_1 < 64 and
+                                0 <= current_idy + n-3 < 64 and
+                                h_terrain[
+                                    current_idy + n-3, current_idx + direction_axis*dir_1] <= current_idz + m-1 < 64
+                            ):
+                                feasible_points.append(
+                                    [current_idz + m-1, current_idx + direction_axis*dir_1, current_idy + n])
+                else:
+                    for m in range(dir_3_1 + dir_3_2 + 1):
+                        for n in range(dir_2 + 1):
+                            if (0 <= current_idy + direction_axis*dir_1 < 64 and
+                                0 <= current_idx + n - 3 < 64 and
+                                h_terrain[
+                                    current_idy + direction_axis*dir_1, current_idx + n-3] <= current_idz + m - 1 < 64
+                            ):
+                                feasible_points.append(
+                                    [current_idz + m-1, current_idx + direction_axis * dir_1, current_idy + n])
+                # randomly choose next point from the feasible points
+                if len(feasible_points) == 0:
+                    # stop if no feasible point was found
+                    print('No feasible point found!')
+                    mask[current_idz, current_idy, current_idx] = 1.0
+                    break
+                else:
+                    next_feasible_point = feasible_points[random.randint(0, len(feasible_points))]
+                    next_idx = next_feasible_point[2]
+                    next_idy = next_feasible_point[1]
+                    next_idz = next_feasible_point[0]
+
+                    # bins along trajectory
+                    x_pts, y_pts, z_pts = [], [], []
+                    points_along_traj = 12
+                    n = 1
+                    for j in range(0, points_along_traj):
+                        t = n / (points_along_traj + 1)
+                        x_pts.append(current_idx + t * (next_idx - current_idx))
+                        y_pts.append(current_idy + t * (next_idx - current_idy))
+                        z_pts.append(current_idz + t * (next_idx - current_idz))
+                        n += 1
+
+                    for i in range(len(x_pts)):
+                        id_x = int(x_pts[i])
+                        id_y = int(y_pts[i])
+                        id_z = int(z_pts[i])
+                        mask[id_z, id_y, id_x] = 1.0
+
+                # prepare next iteration
+                idx = next_idx
+                idy = next_idy
+                idz = next_idz
+                if 'x' in forward_axis:
+                    forward_axis = 'y'
+                    if next_idy < current_idy:
+                        direction_axis = -direction_axis
+                    else:
+                        direction_axis = direction_axis
+                else:
+                    forward_axis = 'x'
+                    if next_idx < current_idx:
+                        direction_axis = -direction_axis
+                    else:
+                        direction_axis = direction_axis
+
+            print('Time to create traj:', time.time()-time_start)
+
         # random trajectory
         if random_trajectory:
+            time_start = time.time()
             terrain = self.original_terrain.clone()
             numel = self._wind_args.params['trajectory']['num_points_generated']
             use_region = False
@@ -485,7 +589,9 @@ class WindOptimiser(object):
 
             uav_speed = self._wind_args.params['trajectory']['uav_speed']
             dt = self._wind_args.params['trajectory']['dt']
+            time_inter = time.time()
             x_traj, y_traj, z_traj = generate_trajectory(x, y, z, uav_speed, dt, self.terrain, z_above_terrain=True)
+            time_inter2 = time.time()
 
             # generate simulated flight data
             simulated_flight_data = {}
@@ -518,6 +624,11 @@ class WindOptimiser(object):
                     id_z = (int((z_traj[i] - self.terrain.z_terr[0]) / self.grid_size[2]))
                     wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
 
+
+        # print('Time to create points:', time_inter - time_start)
+        # print('Time to generate trajectory points:', time_inter2 - time_inter)
+        # print('Time to bin points:', time.time() - time_inter)
+        # print('Time to generate trajectory:', time.time()-time_start)
         wind_mask = torch.isnan(wind)
         wind_zeros = wind.clone()
         wind_zeros[wind_mask] = 0
