@@ -401,6 +401,9 @@ class WindOptimiser(object):
         random_trajectory = False
         segment_trajectory = True
 
+        # initial simulated flight data
+        simulated_flight_data = {}
+
         # spiral trajectory
         if spiral_trajectory:
             dot = 400
@@ -432,7 +435,7 @@ class WindOptimiser(object):
             time_start = time.time()
             # terrain
             terrain = self.original_terrain.clone()
-            boolean_terrain = (self.original_terrain.clone() <= 0).float()
+            boolean_terrain = (self.original_terrain.clone() <= 0).float()  # true where there is terrain
             # mask
             mask = torch.zeros_like(terrain)
             # network terrain height
@@ -444,15 +447,15 @@ class WindOptimiser(object):
             idy = start[1]
             idz = start[0]
             # number of bins along direction
-            dir_1 = 6
-            dir_2 = 3
-            dir_3_1 = 2
-            dir_3_2 = 1
+            dir_1 = 10
+            dir_2 = 4
             # Random number of segments, each with a length between approximately 100 and 120 m (6 to 7 bin lengths)
-            num_of_segments = random. randint(2, 40)
+            num_of_segments = random.randint(2, 20)
+            # num_of_segments = 1
             # first axis to go along
             direction_axis = 1
             forward_axis = 'x'
+            wind = torch.zeros(self.labels.shape) * float('nan')
             for i in range(num_of_segments):
                 feasible_points = []
                 # current point
@@ -461,46 +464,48 @@ class WindOptimiser(object):
                 current_idz = idz
                 # find feasible next points
                 if 'x' in forward_axis:
-                    for m in range(dir_3_1+dir_3_2+1):
-                        for n in range(dir_2+1):
-                            if (0 <= current_idx + direction_axis*dir_1 < 64 and
-                                0 <= current_idy + n-3 < 64 and
-                                h_terrain[
-                                    current_idy + n-3, current_idx + direction_axis*dir_1] <= current_idz + m-1 < 64
-                            ):
-                                feasible_points.append(
-                                    [current_idz + m-1, current_idx + direction_axis*dir_1, current_idy + n])
+                    for m in range(-1, 3, 3):
+                        for n in range(0, 2, 1):
+                            for o in range(-1, 2, 2):
+                                if (0 <= current_idx + o*dir_1 < 64 and
+                                    0 <= current_idy + direction_axis*n*dir_2 < 64 and
+                                    h_terrain[current_idy + direction_axis*n*dir_2, current_idx + o*dir_1]
+                                        <= current_idz + m < 64
+                                ):
+                                    feasible_points.append(
+                                        [current_idz + m, current_idy + direction_axis*n*dir_2, current_idx + o*dir_1])
                 else:
-                    for m in range(dir_3_1 + dir_3_2 + 1):
-                        for n in range(dir_2 + 1):
-                            if (0 <= current_idy + direction_axis*dir_1 < 64 and
-                                0 <= current_idx + n - 3 < 64 and
-                                h_terrain[
-                                    current_idy + direction_axis*dir_1, current_idx + n-3] <= current_idz + m - 1 < 64
-                            ):
-                                feasible_points.append(
-                                    [current_idz + m-1, current_idx + direction_axis * dir_1, current_idy + n])
+                    for m in range(-1, 3, 3):
+                        for n in range(0, 2, 1):
+                            for o in range(-1, 2, 2):
+                                if (0 <= current_idy + o*dir_1 < 64 and
+                                    0 <= current_idx + direction_axis*n*dir_2 < 64 and
+                                    h_terrain[current_idy + o*dir_1, current_idx + direction_axis*n*dir_2]
+                                        <= current_idz + m < 64
+                                ):
+                                    feasible_points.append(
+                                        [current_idz + m, current_idy + o*dir_1, current_idx + direction_axis*n*dir_2])
                 # randomly choose next point from the feasible points
                 if len(feasible_points) == 0:
                     # stop if no feasible point was found
-                    print('No feasible point found!')
+                    print('No feasible point found at iteration: ', i)
                     mask[current_idz, current_idy, current_idx] = 1.0
                     break
                 else:
-                    next_feasible_point = feasible_points[random.randint(0, len(feasible_points))]
+                    next_feasible_point = feasible_points[random.randint(0, len(feasible_points)-1)]
                     next_idx = next_feasible_point[2]
                     next_idy = next_feasible_point[1]
                     next_idz = next_feasible_point[0]
 
                     # bins along trajectory
                     x_pts, y_pts, z_pts = [], [], []
-                    points_along_traj = 12
+                    points_along_traj = 10
                     n = 1
                     for j in range(0, points_along_traj):
                         t = n / (points_along_traj + 1)
                         x_pts.append(current_idx + t * (next_idx - current_idx))
-                        y_pts.append(current_idy + t * (next_idx - current_idy))
-                        z_pts.append(current_idz + t * (next_idx - current_idz))
+                        y_pts.append(current_idy + t * (next_idy - current_idy))
+                        z_pts.append(current_idz + t * (next_idz - current_idz))
                         n += 1
 
                     for i in range(len(x_pts)):
@@ -508,6 +513,7 @@ class WindOptimiser(object):
                         id_y = int(y_pts[i])
                         id_z = int(z_pts[i])
                         mask[id_z, id_y, id_x] = 1.0
+                        wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
 
                 # prepare next iteration
                 idx = next_idx
@@ -515,13 +521,13 @@ class WindOptimiser(object):
                 idz = next_idz
                 if 'x' in forward_axis:
                     forward_axis = 'y'
-                    if next_idy < current_idy:
+                    if next_idx < current_idx:
                         direction_axis = -direction_axis
                     else:
                         direction_axis = direction_axis
                 else:
                     forward_axis = 'x'
-                    if next_idx < current_idx:
+                    if next_idy < current_idy:
                         direction_axis = -direction_axis
                     else:
                         direction_axis = direction_axis

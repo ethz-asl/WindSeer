@@ -56,6 +56,7 @@ class HDF5Dataset(Dataset):
     __default_max_percentage_of_sparse_data = 1
     __default_terrain_percentage_correction = False
     __default_sample_terrain_region = False
+    __default_create_trajectory_mask = False
     __default_add_gaussian_noise = False
     __default_add_turbulence = False
 
@@ -244,6 +245,13 @@ class HDF5Dataset(Dataset):
             self.__sample_terrain_region = self.__default_sample_terrain_region
             if verbose:
                 print('HDF5Dataset: sample_terrain_region not present in kwargs, using default value:', self.__default_sample_terrain_region)
+
+        try:
+            self.__create_trajectory_mask = kwargs['create_trajectory_mask']
+        except KeyError:
+            self.__create_trajectory_mask = self.__default_create_trajectory_mask
+            if verbose:
+                print('HDF5Dataset: create_trajectory_mask not present in kwargs, using default value:', self.__default_create_trajectory_mask)
 
         try:
             self.__add_gaussian_noise = kwargs['add_gaussian_noise']
@@ -519,7 +527,7 @@ class HDF5Dataset(Dataset):
 
             # create and add sparse mask to input if requested
             if self.__create_sparse_mask:
-                terrain = sparse_input[0, :]
+                terrain = sparse_input[0, :].clone()
                 nz, ny, nx = terrain.shape
                 boolean_terrain = terrain > 0
                 # percentage of sparse data
@@ -553,11 +561,114 @@ class HDF5Dataset(Dataset):
                     terrain_uniform_mask = boolean_terrain.float() * uniform_dist
                 # sparsity mask
                 mask = terrain_uniform_mask > (1 - percentage)
-                # add mask to data
+                # add mask to sparse_input
+                sparse_input = torch.cat([sparse_input, mask.float().unsqueeze(0)])
+
+            # create and add sparse mask to input if requested
+            if self.__create_trajectory_mask:
+                # terrain
+                terrain = sparse_input[0, :].clone()
+                boolean_terrain = (terrain <= 0).float()  # true where there is terrain
+                # mask
+                mask = torch.zeros_like(terrain)
+                # network terrain height
+                h_terrain = boolean_terrain.sum(axis=0, keepdims=True).squeeze(0)
+                # random starting point
+                non_zero = torch.nonzero(terrain)
+                start = non_zero[random.randint(0, non_zero.shape[0])]
+                idx = start[2]
+                idy = start[1]
+                idz = start[0]
+                # number of bins along direction
+                dir_1 = 10
+                dir_2 = 4
+                # Random number of segments, each with a length between approximately 100 and 120 m (6 to 7 bin lengths)
+                num_of_segments = random.randint(2, 20)
+                # num_of_segments = 1
+                # first axis to go along
+                direction_axis = 1
+                forward_axis = 'x'
+                for i in range(num_of_segments):
+                    feasible_points = []
+                    # current point
+                    current_idx = idx
+                    current_idy = idy
+                    current_idz = idz
+                    # find feasible next points
+                    if 'x' in forward_axis:
+                        for m in range(-1, 3, 3):
+                            for n in range(0, 2, 1):
+                                for o in range(-1, 2, 2):
+                                    if (0 <= current_idx + o * dir_1 < 64 and
+                                            0 <= current_idy + direction_axis * n * dir_2 < 64 and
+                                            h_terrain[current_idy + direction_axis * n * dir_2, current_idx + o * dir_1]
+                                            <= current_idz + m < 64
+                                    ):
+                                        feasible_points.append(
+                                            [current_idz + m, current_idy + direction_axis * n * dir_2,
+                                             current_idx + o * dir_1])
+                    else:
+                        for m in range(-1, 3, 3):
+                            for n in range(0, 2, 1):
+                                for o in range(-1, 2, 2):
+                                    if (0 <= current_idy + o * dir_1 < 64 and
+                                            0 <= current_idx + direction_axis * n * dir_2 < 64 and
+                                            h_terrain[current_idy + o * dir_1, current_idx + direction_axis * n * dir_2]
+                                            <= current_idz + m < 64
+                                    ):
+                                        feasible_points.append(
+                                            [current_idz + m, current_idy + o * dir_1,
+                                             current_idx + direction_axis * n * dir_2])
+                    # randomly choose next point from the feasible points
+                    if len(feasible_points) == 0:
+                        # stop if no feasible point was found
+                        # print('No feasible point found at iteration: ', i)
+                        mask[current_idz, current_idy, current_idx] = 1.0
+                        break
+                    else:
+                        next_feasible_point = feasible_points[random.randint(0, len(feasible_points) - 1)]
+                        next_idx = next_feasible_point[2]
+                        next_idy = next_feasible_point[1]
+                        next_idz = next_feasible_point[0]
+
+                        # bins along trajectory
+                        x_pts, y_pts, z_pts = [], [], []
+                        points_along_traj = 10
+                        n = 1
+                        for j in range(0, points_along_traj):
+                            t = n / (points_along_traj + 1)
+                            x_pts.append(current_idx + t * (next_idx - current_idx))
+                            y_pts.append(current_idy + t * (next_idy - current_idy))
+                            z_pts.append(current_idz + t * (next_idz - current_idz))
+                            n += 1
+
+                        for i in range(len(x_pts)):
+                            id_x = int(x_pts[i])
+                            id_y = int(y_pts[i])
+                            id_z = int(z_pts[i])
+                            mask[id_z, id_y, id_x] = 1.0
+
+                    # prepare next iteration
+                    idx = next_idx
+                    idy = next_idy
+                    idz = next_idz
+                    if 'x' in forward_axis:
+                        forward_axis = 'y'
+                        if next_idx < current_idx:
+                            direction_axis = -direction_axis
+                        else:
+                            direction_axis = direction_axis
+                    else:
+                        forward_axis = 'x'
+                        if next_idy < current_idy:
+                            direction_axis = -direction_axis
+                        else:
+                            direction_axis = direction_axis
+                # add mask to sparse_input
                 sparse_input = torch.cat([sparse_input, mask.float().unsqueeze(0)])
 
             # generate the input channels
-            if self.__create_sparse_mask:
+            if self.__create_sparse_mask or self.__create_trajectory_mask:
                 # take modified labels with terrain and sparse mask as input data
                 input = sparse_input
             else:
