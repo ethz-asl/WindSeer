@@ -492,28 +492,23 @@ class WindOptimiser(object):
                     mask[current_idz, current_idy, current_idx] = 1.0
                     break
                 else:
+                    # time_inter = time.time()
                     next_feasible_point = feasible_points[random.randint(0, len(feasible_points)-1)]
                     next_idx = next_feasible_point[2]
                     next_idy = next_feasible_point[1]
                     next_idz = next_feasible_point[0]
 
                     # bins along trajectory
-                    x_pts, y_pts, z_pts = [], [], []
                     points_along_traj = 10
                     n = 1
                     for j in range(0, points_along_traj):
                         t = n / (points_along_traj + 1)
-                        x_pts.append(current_idx + t * (next_idx - current_idx))
-                        y_pts.append(current_idy + t * (next_idy - current_idy))
-                        z_pts.append(current_idz + t * (next_idz - current_idz))
-                        n += 1
-
-                    for i in range(len(x_pts)):
-                        id_x = int(x_pts[i])
-                        id_y = int(y_pts[i])
-                        id_z = int(z_pts[i])
+                        id_x = int(current_idx + t * (next_idx - current_idx))
+                        id_y = int(current_idy + t * (next_idy - current_idy))
+                        id_z = int(current_idz + t * (next_idz - current_idz))
                         mask[id_z, id_y, id_x] = 1.0
                         wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
+                        n += 1
 
                 # prepare next iteration
                 idx = next_idx
@@ -531,8 +526,9 @@ class WindOptimiser(object):
                         direction_axis = -direction_axis
                     else:
                         direction_axis = direction_axis
-
+            # print('Time to create feasible points:', time_inter - time_start)
             print('Time to create traj:', time.time()-time_start)
+            a = 1
 
         # random trajectory
         if random_trajectory:
