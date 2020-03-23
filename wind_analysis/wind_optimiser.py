@@ -439,13 +439,13 @@ class WindOptimiser(object):
             # mask
             mask = torch.zeros_like(terrain)
             # network terrain height
-            h_terrain = boolean_terrain.sum(axis=0, keepdims=True).squeeze(0)
+            h_terrain = boolean_terrain.sum(0, keepdim=True).squeeze(0)
             # random starting point
             non_zero = torch.nonzero(terrain)
-            start = non_zero[random.randint(0, non_zero.shape[0])]
-            idx = start[2]
-            idy = start[1]
-            idz = start[0]
+            start = non_zero[random.randint(0, non_zero.shape[0]-1)]
+            idx = start[2].detach().cpu().numpy()
+            idy = start[1].detach().cpu().numpy()
+            idz = start[0].detach().cpu().numpy()
             # number of bins along direction
             dir_1 = 10
             dir_2 = 4
@@ -528,7 +528,6 @@ class WindOptimiser(object):
                         direction_axis = direction_axis
             # print('Time to create feasible points:', time_inter - time_start)
             print('Time to create traj:', time.time()-time_start)
-            a = 1
 
         # random trajectory
         if random_trajectory:
