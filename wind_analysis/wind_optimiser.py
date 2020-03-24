@@ -96,7 +96,9 @@ class SelectionFlags(object):
         self.test_simulated_data = test.params['test_simulated_data']
         self.test_flight_data = test.params['test_flight_data']
         self.print_names = cfd.params['print_names']
+        self.cfd_batch_test = cfd.params['batch_test']
         self.use_ekf_wind = flight.params['use_ekf_wind']
+        self.flight_batch_test = flight.params['batch_test']
         self.add_wind_measurements = wind.params['add_wind_measurements']
         self.add_corners = wind.params['add_corners']
         self.use_sparse_data = wind.params['sparse_data']['use_sparse_data']
@@ -147,13 +149,13 @@ class WindOptimiser(object):
         self.net, self.params = self.load_network_model()
         self.net.freeze_model()
         self.second_net, self.second_params = self.load_network_model(second_model=True)
-        self.net.freeze_model()
+        self.second_net.freeze_model()
         self._loss_fn = self.get_loss_function()
 
         # Load data
         if self.flag.test_simulated_data:
             self.original_input, self.labels, self.scale, self.data_set_name, self.grid_size, \
-                self.binary_terrain, self.original_terrain \
+                self.original_terrain, self.test_set_length \
                 = self.load_data_set()
             self.terrain = self.get_cfd_terrain()
         if self.flag.test_flight_data:
@@ -230,14 +232,19 @@ class WindOptimiser(object):
 
     # --- Load data ---
 
-    def load_flight_data(self):
+    def load_flight_data(self, index=None):
         self._flight_args.print()
-        file_name = self._flight_args.params['file']
+        if index is not None:
+            file_index = index
+        else:
+            file_index = self._flight_args.params['index']
+        file_name = self._flight_args.params['files'][file_index]
+        file_and_dir = self._flight_args.params['flight_data_dir'] + file_name
         extension = file_name.split('.')[-1]
         if extension == 'ulg':
             print('Loading ulog flight data...', end='', flush=True)
             t_start = time.time()
-            ulog_data = ulog_utils.get_log_data(self._flight_args.params['file'])
+            ulog_data = ulog_utils.get_log_data(file_and_dir)
 
             if self.flag.use_ekf_wind:
                 ulog_data['wn'] = ulog_data['we_north']
@@ -254,7 +261,7 @@ class WindOptimiser(object):
         elif extension == 'hdf5':
             print('Loading hdf5 flight data...', end='', flush=True)
             t_start = time.time()
-            hdf5_data = ulog_utils.read_filtered_hdf5(self._flight_args.params['file'], skip_amount=10)
+            hdf5_data = ulog_utils.read_filtered_hdf5(file_and_dir, skip_amount=10)
             hdf5_data['wn'] = hdf5_data['wind_n']
             hdf5_data['we'] = hdf5_data['wind_e']
             hdf5_data['wd'] = hdf5_data['wind_d']
@@ -281,7 +288,7 @@ class WindOptimiser(object):
         else:
             # Get time of flight from file name
             try:
-                file_name = self._flight_args.params['file']
+                file_name = self._flight_args.params['files'][self._flight_args.params['index']]
                 time_of_flight = int(file_name.split('/')[-1].split('_')[0])
             except ValueError:
                 print('Cannot extract hour of flight from file name')
@@ -310,18 +317,23 @@ class WindOptimiser(object):
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return terrain
 
-    def load_data_set(self):
+    def load_data_set(self, index=None):
         # Load data set
         test_set = nn_data.HDF5Dataset(self._cfd_args.params['testset_name'],
                                        augmentation=False, return_grid_size=True,
                                        **self.params.Dataset_kwargs())
+        test_set_length = len(test_set)
         # print names of files in test_set
         if self.flag.print_names:
-            for i in range(len(test_set)):
+            for i in range(test_set_length):
                 name = test_set.get_name(i)
                 print(i, name)
         # Get data set from test set
-        data_set = test_set[self._cfd_args.params['index']]
+        if index is not None:
+            file_index = index
+        else:
+            file_index = self._cfd_args.params['index']
+        data_set = test_set[file_index]
         input = data_set[0]
         labels = data_set[1]
         name = test_set.get_name(self._cfd_args.params['index'])
@@ -330,21 +342,21 @@ class WindOptimiser(object):
             scale = data_set[3].item()
         print("Loading test set (index) with name: ", str(name))
         grid_size = data.get_grid_size(self._cfd_args.params['testset_name'])
-        # Convert distance transformed matrix back to binary matrix
-        binary_terrain = data_set[0][0, :, :, :] <= 0
         terrain = data_set[0][0, :, :, :]
-        return input, labels, scale, name, grid_size, binary_terrain, terrain
+        return input, labels, scale, name, grid_size, terrain, test_set_length
 
     def get_cfd_terrain(self):
-        nx, ny, nz = self.binary_terrain.shape
+        terrain = self.original_terrain.clone()
+        binary_terrain = terrain <= 0
+        nz, ny, nx = terrain.shape
         x_terr = np.asarray([self.grid_size[0]*i for i in range(nx)])
         y_terr = np.asarray([self.grid_size[1]*i for i in range(ny)])
         z_terr = np.asarray([self.grid_size[2]*i for i in range(nz)])
-        h_terr = (self.binary_terrain.sum(axis=0, keepdims=True)*self.grid_size[2]).squeeze(0).detach().cpu().numpy()
+        h_terr = (binary_terrain.sum(axis=0, keepdims=True)*self.grid_size[2]).squeeze(0).detach().cpu().numpy()
         h_terr = np.clip(h_terr, 0, z_terr[-1])  # make sure height is not bigger than max z_terr
         # Get terrain object
         boolean_terrain = self._model_args.params['boolean_terrain']
-        terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, self.binary_terrain,
+        terrain = TerrainBlock(x_terr, y_terr, z_terr, h_terr, binary_terrain,
                                device=self._device, boolean_terrain=boolean_terrain)
         return terrain
 
@@ -1268,277 +1280,286 @@ class WindOptimiser(object):
         return outputs, losses, inputs
 
     def window_split_prediction(self):
-        if self.flag.test_flight_data:
-            flight_data = self._flight_data
-        if self.flag.test_simulated_data:
-            flight_data = self._simulated_flight_data
+        test_set_range = 1
+        if self.flag.cfd_batch_test and self.flag.test_simulated_data:
+            test_set_range = self.test_set_length
+        elif self.flag.flight_batch_test and self.flag.test_flight_data:
+            test_set_range = len(self._flight_args.params['files'])
 
-        # sliding window variables (in seconds)
-        window_time = self._window_splits_args.params['window_time']  # seconds
-        response_time = self._window_splits_args.params['response_time']  # seconds
-        step_time = self._window_splits_args.params['step_time']  # seconds
+        for t in range(test_set_range):
+            # get flight data
+            if self.flag.test_flight_data:
+                flight_data = self.load_flight_data(t)
+            if self.flag.test_simulated_data:
+                _, self.labels, _, _, _, self.original_terrain, _ = self.load_data_set(t)
+                _, _, _, flight_data = self.get_trajectory_wind_blocks()
 
-        # time interval between two consecutive flight measurements
-        dt = ((flight_data['time_microsec'][-1]-flight_data['time_microsec'][0])/flight_data['time_microsec'].size)/1e6
+            # sliding window variables (in seconds)
+            window_time = self._window_splits_args.params['window_time']  # seconds
+            response_time = self._window_splits_args.params['response_time']  # seconds
+            step_time = self._window_splits_args.params['step_time']  # seconds
 
-        # sliding window variables
-        window_size = int(window_time/dt)
-        response_size = int(response_time/dt)
-        step_size = int(step_time/dt)
+            # time interval between two consecutive flight measurements
+            dt = ((flight_data['time_microsec'][-1]-flight_data['time_microsec'][0])/flight_data['time_microsec'].size)/1e6
 
-        # total time of flight and maximum number of windows
-        if self.flag.longterm_prediction:
-            max_num_windows = int((flight_data['x'].size - window_size) / step_size + 1)
-        else:
-            max_num_windows = int((flight_data['x'].size - (window_size + response_size)) / step_size + 1)
-        # if max_num_windows < 0:
-        #     raise ValueError('window time exceeds flight time')
-        total_time_of_flight = (flight_data['time_microsec'][-1] - flight_data['time_microsec'][0]) / 1e6
-        print('')
-        print('Number of windows: ', max_num_windows)
-        print('Number of measurements per window: ', window_size)
-        print('Number of measurements per response: ', response_size)
-        print('Number of measurements per step: ', step_size)
-        print('Total time of flight', total_time_of_flight)
-        print('Time interval between two consecutive flight measurements', dt, '\n')
+            # sliding window variables
+            window_size = int(window_time/dt)
+            response_size = int(response_time/dt)
+            step_size = int(step_time/dt)
 
-        inputs, outputs = [], []
-        nn_losses, zero_wind_losses, average_wind_losses = [], [], []
-        gpr_wind_losses, krigging_wind_losses, optimized_corners_losses = [], [], []
-        time = []
-        longterm_losses = {}
-        for i in range(max_num_windows):
-            # split data into input and label based on window variables
-            input_flight_data, label_flight_data = \
-                self.sliding_window_split(flight_data, window_size, response_size, i*step_size)
-            if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
-                label_flight_data['wn'] *= self.scale * self.params.data['ux' + '_scaling']
-                label_flight_data['we'] *= self.scale * self.params.data['uy' + '_scaling']
-                label_flight_data['wd'] *= self.scale * self.params.data['uz' + '_scaling']
+            # total time of flight and maximum number of windows
+            if self.flag.longterm_prediction:
+                max_num_windows = int((flight_data['x'].size - window_size) / step_size + 1)
+            else:
+                max_num_windows = int((flight_data['x'].size - (window_size + response_size)) / step_size + 1)
+            # if max_num_windows < 0:
+            #     raise ValueError('window time exceeds flight time')
+            total_time_of_flight = (flight_data['time_microsec'][-1] - flight_data['time_microsec'][0]) / 1e6
+            print('')
+            print('Number of windows: ', max_num_windows)
+            print('Number of measurements per window: ', window_size)
+            print('Number of measurements per response: ', response_size)
+            print('Number of measurements per step: ', step_size)
+            print('Total time of flight', total_time_of_flight)
+            print('Time interval between two consecutive flight measurements', dt, '\n')
 
-            # labels
-            # filter out points in the labels which are outside the terrain sample
-            valid_labels = []
-            for j in range(len(label_flight_data['x'])):
-                if ((label_flight_data['x'][j] > self.terrain.x_terr[0]) and
-                        (label_flight_data['x'][j] < self.terrain.x_terr[-1]) and
-                        (label_flight_data['y'][j] > self.terrain.y_terr[0]) and
-                        (label_flight_data['y'][j] < self.terrain.y_terr[-1]) and
-                        (label_flight_data['alt'][j] > self.terrain.z_terr[0]) and
-                        (label_flight_data['alt'][j] < self.terrain.z_terr[-1])):
-                    valid_labels.append([label_flight_data['wn'][j], label_flight_data['we'][j],
-                                         label_flight_data['wd'][j]])
-            if len(valid_labels) == 0:
-                print(i, 'Labels outside terrain dimensions')
-                print('')
-                continue
-            labels = torch.from_numpy(np.row_stack(valid_labels))
-            # labels = np.array([label_flight_data['wn'], label_flight_data['we'], label_flight_data['wd']])
+            inputs, outputs = [], []
+            nn_losses, zero_wind_losses, average_wind_losses = [], [], []
+            gpr_wind_losses, krigging_wind_losses, optimized_corners_losses = [], [], []
+            time = []
+            longterm_losses = {}
+            for i in range(max_num_windows):
+                # split data into input and label based on window variables
+                input_flight_data, label_flight_data = \
+                    self.sliding_window_split(flight_data, window_size, response_size, i*step_size)
+                if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
+                    label_flight_data['wn'] *= self.scale * self.params.data['ux' + '_scaling']
+                    label_flight_data['we'] *= self.scale * self.params.data['uy' + '_scaling']
+                    label_flight_data['wd'] *= self.scale * self.params.data['uz' + '_scaling']
 
-            # --- Network prediction ---
-            # bin input flight data
-            wind_blocks, var_blocks, wind_zeros, wind_mask \
-                = self.get_flight_wind_blocks(input_flight_data)
-            # get prediction
-            wind = wind_zeros.to(self._device)
-            if self.flag.add_corners:
-                interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
-                wind += interpolated_cosmo_corners
-            wind = self.add_mask_to_wind(wind, wind_mask)
-            input = torch.cat([self.terrain.network_terrain, wind])
-            nn_output = self.run_prediction(input)
-            if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
-                if i == 0:
-                    self.rescale_prediction(nn_output, self.labels)  # rescale labels only once
-                else:
-                    self.rescale_prediction(nn_output)
-            # loss_org = self.evaluate_loss(nn_output)
-            # print(' loss: ', loss_org.item())
-            # interpolate prediction to scattered flight data locations corresponding to the labels
-            FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
-                                                   wind_data_for_prediction=label_flight_data)
-            interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
+                # labels
+                # filter out points in the labels which are outside the terrain sample
+                valid_labels = []
+                for j in range(len(label_flight_data['x'])):
+                    if ((label_flight_data['x'][j] > self.terrain.x_terr[0]) and
+                            (label_flight_data['x'][j] < self.terrain.x_terr[-1]) and
+                            (label_flight_data['y'][j] > self.terrain.y_terr[0]) and
+                            (label_flight_data['y'][j] < self.terrain.y_terr[-1]) and
+                            (label_flight_data['alt'][j] > self.terrain.z_terr[0]) and
+                            (label_flight_data['alt'][j] < self.terrain.z_terr[-1])):
+                        valid_labels.append([label_flight_data['wn'][j], label_flight_data['we'][j],
+                                             label_flight_data['wd'][j]])
+                if len(valid_labels) == 0:
+                    print(i, 'Labels outside terrain dimensions')
+                    print('')
+                    continue
+                labels = torch.from_numpy(np.row_stack(valid_labels))
+                # labels = np.array([label_flight_data['wn'], label_flight_data['we'], label_flight_data['wd']])
 
-            # --- Zero wind prediction---
-            interpolated_zero_wind_output = torch.zeros_like(labels)
-
-            # --- Average wind prediction ---
-            average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
-            interpolated_average_wind_output = np.ones_like(labels) * [average_wind_input[0].mean(),
-                                                                       average_wind_input[1].mean(),
-                                                                       average_wind_input[2].mean()]
-            interpolated_average_wind_output = torch.from_numpy(interpolated_average_wind_output)
-            average_wind_output = torch.ones_like(nn_output)
-            average_wind_output[0, :] *= average_wind_input[0].mean()
-            average_wind_output[1, :] *= average_wind_input[1].mean()
-            average_wind_output[2, :] *= average_wind_input[2].mean()
-
-            # --- Optimized corner prediction ---
-            if self.flag.use_optimized_corners:
-                optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
-                n_steps = self._optimisation_args.params['num_of_optimisation_steps']
-                corners_output, _, _, _, _ \
-                    = self.optimise_wind_corners(optimiser.opt, n=n_steps, opt_kwargs=optimiser.kwargs,
-                                                 wind_zeros=wind_zeros, wind_mask=wind_mask,
-                                                 print_steps=False, verbose=False)
+                # --- Network prediction ---
+                # bin input flight data
+                wind_blocks, var_blocks, wind_zeros, wind_mask \
+                    = self.get_flight_wind_blocks(input_flight_data)
+                # get prediction
+                wind = wind_zeros.to(self._device)
+                if self.flag.add_corners:
+                    interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
+                    wind += interpolated_cosmo_corners
+                wind = self.add_mask_to_wind(wind, wind_mask)
+                input = torch.cat([self.terrain.network_terrain, wind])
+                nn_output = self.run_prediction(input)
+                if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
+                    if i == 0:
+                        self.rescale_prediction(nn_output, self.labels)  # rescale labels only once
+                    else:
+                        self.rescale_prediction(nn_output)
+                # loss_org = self.evaluate_loss(nn_output)
+                # print(' loss: ', loss_org.item())
                 # interpolate prediction to scattered flight data locations corresponding to the labels
                 FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                        wind_data_for_prediction=label_flight_data)
-                interpolated_corners_output = FlightInterpolator.interpolate_flight_data_from_grid(corners_output)
+                interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
 
-            # --- Interpolation (Krigging) prediction ---
-            if self.flag.use_krigging_prediction:
-                FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
-                                                       wind_data_for_prediction=label_flight_data)
-                _, _, interpolated_krigging_output = FlightInterpolator.interpolate_flight_data_krigging()
+                # --- Zero wind prediction---
+                interpolated_zero_wind_output = torch.zeros_like(labels)
 
-            # --- Interpolation (Gaussian Process Regression) prediction ---
-            if self.flag.use_gpr_prediction:
-                FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
-                                                       wind_data_for_prediction=label_flight_data)
-                _, _, interpolated_gpr_output, gpr_output = FlightInterpolator.interpolate_flight_data_gpr()
+                # --- Average wind prediction ---
+                average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
+                interpolated_average_wind_output = np.ones_like(labels) * [average_wind_input[0].mean(),
+                                                                           average_wind_input[1].mean(),
+                                                                           average_wind_input[2].mean()]
+                interpolated_average_wind_output = torch.from_numpy(interpolated_average_wind_output)
+                average_wind_output = torch.ones_like(nn_output)
+                average_wind_output[0, :] *= average_wind_input[0].mean()
+                average_wind_output[1, :] *= average_wind_input[1].mean()
+                average_wind_output[2, :] *= average_wind_input[2].mean()
 
-            # losses
-            nn_loss = self._loss_fn(interpolated_nn_output.to(self._device),
-                                    labels.to(self._device))
-            loss_axis = False
-            if loss_axis:
-                nn_loss_x = self._loss_fn(interpolated_nn_output[:, 0].to(self._device),
-                                          labels[:, 0].to(self._device))
-                nn_loss_y = self._loss_fn(interpolated_nn_output[:, 1].to(self._device),
-                                          labels[:, 1].to(self._device))
-                nn_loss_z = self._loss_fn(interpolated_nn_output[:, 2].to(self._device),
-                                          labels[:, 2].to(self._device))
-            zero_wind_loss = self._loss_fn(interpolated_zero_wind_output.to(self._device),
-                                           labels.to(self._device))
-            average_wind_loss = self._loss_fn(interpolated_average_wind_output.to(self._device),
-                                              labels.to(self._device))
-            if self.flag.use_krigging_prediction:
-                krigging_wind_loss = self._loss_fn(interpolated_krigging_output.to(self._device),
-                                                   labels.to(self._device))
-            if self.flag.use_gpr_prediction:
-                gpr_wind_loss = self._loss_fn(interpolated_gpr_output.to(self._device),
-                                              labels.to(self._device))
-            if self.flag.use_optimized_corners:
-                optimized_corners_loss = self._loss_fn(interpolated_corners_output.to(self._device),
+                # --- Optimized corner prediction ---
+                if self.flag.use_optimized_corners:
+                    optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
+                    n_steps = self._optimisation_args.params['num_of_optimisation_steps']
+                    corners_output, _, _, _, _ \
+                        = self.optimise_wind_corners(optimiser.opt, n=n_steps, opt_kwargs=optimiser.kwargs,
+                                                     wind_zeros=wind_zeros, wind_mask=wind_mask,
+                                                     print_steps=False, verbose=False)
+                    # interpolate prediction to scattered flight data locations corresponding to the labels
+                    FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
+                                                           wind_data_for_prediction=label_flight_data)
+                    interpolated_corners_output = FlightInterpolator.interpolate_flight_data_from_grid(corners_output)
+
+                # --- Interpolation (Krigging) prediction ---
+                if self.flag.use_krigging_prediction:
+                    FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
+                                                           wind_data_for_prediction=label_flight_data)
+                    _, _, interpolated_krigging_output = FlightInterpolator.interpolate_flight_data_krigging()
+
+                # --- Interpolation (Gaussian Process Regression) prediction ---
+                if self.flag.use_gpr_prediction:
+                    FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
+                                                           wind_data_for_prediction=label_flight_data)
+                    _, _, interpolated_gpr_output, gpr_output = FlightInterpolator.interpolate_flight_data_gpr()
+
+                # losses
+                nn_loss = self._loss_fn(interpolated_nn_output.to(self._device),
+                                        labels.to(self._device))
+                loss_axis = False
+                if loss_axis:
+                    nn_loss_x = self._loss_fn(interpolated_nn_output[:, 0].to(self._device),
+                                              labels[:, 0].to(self._device))
+                    nn_loss_y = self._loss_fn(interpolated_nn_output[:, 1].to(self._device),
+                                              labels[:, 1].to(self._device))
+                    nn_loss_z = self._loss_fn(interpolated_nn_output[:, 2].to(self._device),
+                                              labels[:, 2].to(self._device))
+                zero_wind_loss = self._loss_fn(interpolated_zero_wind_output.to(self._device),
+                                               labels.to(self._device))
+                average_wind_loss = self._loss_fn(interpolated_average_wind_output.to(self._device),
+                                                  labels.to(self._device))
+                if self.flag.use_krigging_prediction:
+                    krigging_wind_loss = self._loss_fn(interpolated_krigging_output.to(self._device),
                                                        labels.to(self._device))
+                if self.flag.use_gpr_prediction:
+                    gpr_wind_loss = self._loss_fn(interpolated_gpr_output.to(self._device),
+                                                  labels.to(self._device))
+                if self.flag.use_optimized_corners:
+                    optimized_corners_loss = self._loss_fn(interpolated_corners_output.to(self._device),
+                                                           labels.to(self._device))
 
-            print(i, ' NN loss is: ', nn_loss.item())
-            if loss_axis:
-                print(i, ' NN loss x is: ', nn_loss_x.item())
-                print(i, ' NN loss y is: ', nn_loss_y.item())
-                print(i, ' NN loss z is: ', nn_loss_z.item())
-            print(i, ' Zero wind loss is: ', zero_wind_loss.item())
-            print(i, ' Average wind loss is: ', average_wind_loss.item())
+                print(i, ' NN loss is: ', nn_loss.item())
+                if loss_axis:
+                    print(i, ' NN loss x is: ', nn_loss_x.item())
+                    print(i, ' NN loss y is: ', nn_loss_y.item())
+                    print(i, ' NN loss z is: ', nn_loss_z.item())
+                print(i, ' Zero wind loss is: ', zero_wind_loss.item())
+                print(i, ' Average wind loss is: ', average_wind_loss.item())
+                if self.flag.use_krigging_prediction:
+                    print(i, ' Krigging wind loss is: ', krigging_wind_loss.item())
+                if self.flag.use_gpr_prediction:
+                    print(i, ' GPR wind loss is: ', gpr_wind_loss.item())
+                if self.flag.use_optimized_corners:
+                    print(i, ' Optimized corners wind loss is: ', optimized_corners_loss.item())
+
+                # Average wind direction and speed
+                print_direction_and_speed = False
+                if print_direction_and_speed:
+                    # input
+                    input_wind_abs = np.sqrt(input_flight_data['wn']**2 + input_flight_data['we']**2)
+                    input_wind_abs_3d = np.sqrt(input_flight_data['wn']**2 + input_flight_data['we']**2
+                                                  + input_flight_data['wd']**2)
+                    input_wind_dir_trig_to = np.arctan2(input_flight_data['wn'] / input_wind_abs,
+                                                      input_flight_data['we'] / input_wind_abs)
+                    input_wind_dir_trig_to_degrees = input_wind_dir_trig_to * 180 / np.pi
+                    input_wind_dir_cardinal = input_wind_dir_trig_to_degrees + 180
+                    print('Average input wind speed: ', input_wind_abs_3d.mean())
+                    print('Average input wind direction: ', input_wind_dir_cardinal.mean())
+                    # label
+                    label_wind_abs = np.sqrt(label_flight_data['wn']**2 + label_flight_data['we']**2)
+                    label_wind_abs_3d = np.sqrt(label_flight_data['wn']**2 + label_flight_data['we']**2
+                                                + label_flight_data['wd']**2)
+                    label_wind_dir_trig_to = np.arctan2(label_flight_data['wn'] / label_wind_abs,
+                                                      label_flight_data['we'] / label_wind_abs)
+                    label_wind_dir_trig_to_degrees = label_wind_dir_trig_to * 180 / np.pi
+                    label_wind_dir_cardinal = label_wind_dir_trig_to_degrees + 180
+                    print('Average label wind speed: ', label_wind_abs_3d.mean())
+                    print('Average label wind direction: ', label_wind_dir_cardinal.mean())
+                    # NN
+                    nn_wind_abs = np.sqrt(interpolated_nn_output[:, 0]**2 + interpolated_nn_output[:, 1]**2)
+                    nn_wind_abs_3d = np.sqrt(interpolated_nn_output[:, 0] ** 2
+                                             + interpolated_nn_output[:, 1] ** 2
+                                             + interpolated_nn_output[:, 2] ** 2)
+                    nn_wind_dir_trig_to = np.arctan2(interpolated_nn_output[:, 0] / nn_wind_abs,
+                                                      interpolated_nn_output[:, 1] / nn_wind_abs)
+                    nn_wind_dir_trig_to_degrees = nn_wind_dir_trig_to * 180 / np.pi
+                    nn_wind_dir_cardinal = nn_wind_dir_trig_to_degrees + 180
+                    print('Average NN wind speed: ', nn_wind_abs_3d.mean())
+                    print('Average NN wind direction: ', nn_wind_dir_cardinal.mean())
+                    # Average
+                    average_wind_abs = np.sqrt(interpolated_average_wind_output[:, 0]**2
+                                               + interpolated_average_wind_output[:, 1]**2)
+                    average_wind_abs_3d = np.sqrt(interpolated_average_wind_output[:, 0] ** 2
+                                                  + interpolated_average_wind_output[:, 1] ** 2
+                                                  + interpolated_average_wind_output[:, 2] ** 2)
+                    average_wind_dir_trig_to = np.arctan2(interpolated_average_wind_output[:, 0] / average_wind_abs,
+                                                      interpolated_average_wind_output[:, 1] / average_wind_abs)
+                    average_wind_dir_trig_to_degrees = average_wind_dir_trig_to * 180 / np.pi
+                    average_wind_dir_cardinal = average_wind_dir_trig_to_degrees + 180
+                    print('Average  wind average speed: ', average_wind_abs_3d.mean())
+                    print('Average  wind average direction: ', average_wind_dir_cardinal.mean())
+
+                # absolute wind vector loss
+                absolute_value = False
+                if absolute_value:
+                    abs_nn_wind = np.sqrt(interpolated_nn_output[:, 0]**2 + interpolated_nn_output[:, 1]**2 + interpolated_nn_output[:, 2]**2)
+                    abs_average_wind = np.sqrt(interpolated_average_wind_output[:, 0]**2 + interpolated_average_wind_output[:, 1]**2 + interpolated_average_wind_output[:, 2]**2)
+                    abs_labels = np.sqrt(labels[:, 0]**2 + labels[:, 1]**2 + labels[:, 2]**2)
+                    abs_nn_loss = self._loss_fn(abs_nn_wind.to(self._device),
+                                                abs_labels.to(self._device))
+                    abs_average_wind_loss = self._loss_fn(abs_average_wind.to(self._device),
+                                                          abs_labels.to(self._device))
+                    print('Abs nn loss is: ', abs_nn_loss.item())
+                    print('Abs average wind loss is: ', abs_average_wind_loss.item())
+
+
+                # outputs
+                time.append(i*response_time)
+                inputs.append(input)
+                outputs.append(nn_output)
+                nn_losses.append(nn_loss.item())
+                zero_wind_losses.append(zero_wind_loss.item())
+                average_wind_losses.append(average_wind_loss.item())
+                if self.flag.use_krigging_prediction:
+                    krigging_wind_losses.append(krigging_wind_loss.item())
+                if self.flag.use_gpr_prediction:
+                    gpr_wind_losses.append(gpr_wind_loss.item())
+                if self.flag.use_optimized_corners:
+                    optimized_corners_losses.append(optimized_corners_loss.item())
+
+            # longterm losses
+            longterm_losses.update({'time': time})
+            longterm_losses.update({'nn losses': nn_losses})
+            longterm_losses.update({'zero wind losses': zero_wind_losses})
+            longterm_losses.update({'average wind losses': average_wind_losses})
             if self.flag.use_krigging_prediction:
-                print(i, ' Krigging wind loss is: ', krigging_wind_loss.item())
+                longterm_losses.update({'krigging losses': krigging_wind_losses})
             if self.flag.use_gpr_prediction:
-                print(i, ' GPR wind loss is: ', gpr_wind_loss.item())
+                longterm_losses.update({'gpr losses': gpr_wind_losses})
             if self.flag.use_optimized_corners:
-                print(i, ' Optimized corners wind loss is: ', optimized_corners_loss.item())
+                longterm_losses.update({'optimized corners losses': optimized_corners_losses})
 
-            # Average wind direction and speed
-            print_direction_and_speed = False
-            if print_direction_and_speed:
-                # input
-                input_wind_abs = np.sqrt(input_flight_data['wn']**2 + input_flight_data['we']**2)
-                input_wind_abs_3d = np.sqrt(input_flight_data['wn']**2 + input_flight_data['we']**2
-                                              + input_flight_data['wd']**2)
-                input_wind_dir_trig_to = np.arctan2(input_flight_data['wn'] / input_wind_abs,
-                                                  input_flight_data['we'] / input_wind_abs)
-                input_wind_dir_trig_to_degrees = input_wind_dir_trig_to * 180 / np.pi
-                input_wind_dir_cardinal = input_wind_dir_trig_to_degrees + 180
-                print('Average input wind speed: ', input_wind_abs_3d.mean())
-                print('Average input wind direction: ', input_wind_dir_cardinal.mean())
-                # label
-                label_wind_abs = np.sqrt(label_flight_data['wn']**2 + label_flight_data['we']**2)
-                label_wind_abs_3d = np.sqrt(label_flight_data['wn']**2 + label_flight_data['we']**2
-                                            + label_flight_data['wd']**2)
-                label_wind_dir_trig_to = np.arctan2(label_flight_data['wn'] / label_wind_abs,
-                                                  label_flight_data['we'] / label_wind_abs)
-                label_wind_dir_trig_to_degrees = label_wind_dir_trig_to * 180 / np.pi
-                label_wind_dir_cardinal = label_wind_dir_trig_to_degrees + 180
-                print('Average label wind speed: ', label_wind_abs_3d.mean())
-                print('Average label wind direction: ', label_wind_dir_cardinal.mean())
-                # NN
-                nn_wind_abs = np.sqrt(interpolated_nn_output[:, 0]**2 + interpolated_nn_output[:, 1]**2)
-                nn_wind_abs_3d = np.sqrt(interpolated_nn_output[:, 0] ** 2
-                                         + interpolated_nn_output[:, 1] ** 2
-                                         + interpolated_nn_output[:, 2] ** 2)
-                nn_wind_dir_trig_to = np.arctan2(interpolated_nn_output[:, 0] / nn_wind_abs,
-                                                  interpolated_nn_output[:, 1] / nn_wind_abs)
-                nn_wind_dir_trig_to_degrees = nn_wind_dir_trig_to * 180 / np.pi
-                nn_wind_dir_cardinal = nn_wind_dir_trig_to_degrees + 180
-                print('Average NN wind speed: ', nn_wind_abs_3d.mean())
-                print('Average NN wind direction: ', nn_wind_dir_cardinal.mean())
-                # Average
-                average_wind_abs = np.sqrt(interpolated_average_wind_output[:, 0]**2
-                                           + interpolated_average_wind_output[:, 1]**2)
-                average_wind_abs_3d = np.sqrt(interpolated_average_wind_output[:, 0] ** 2
-                                              + interpolated_average_wind_output[:, 1] ** 2
-                                              + interpolated_average_wind_output[:, 2] ** 2)
-                average_wind_dir_trig_to = np.arctan2(interpolated_average_wind_output[:, 0] / average_wind_abs,
-                                                  interpolated_average_wind_output[:, 1] / average_wind_abs)
-                average_wind_dir_trig_to_degrees = average_wind_dir_trig_to * 180 / np.pi
-                average_wind_dir_cardinal = average_wind_dir_trig_to_degrees + 180
-                print('Average  wind average speed: ', average_wind_abs_3d.mean())
-                print('Average  wind average direction: ', average_wind_dir_cardinal.mean())
-
-            # absolute wind vector loss
-            absolute_value = False
-            if absolute_value:
-                abs_nn_wind = np.sqrt(interpolated_nn_output[:, 0]**2 + interpolated_nn_output[:, 1]**2 + interpolated_nn_output[:, 2]**2)
-                abs_average_wind = np.sqrt(interpolated_average_wind_output[:, 0]**2 + interpolated_average_wind_output[:, 1]**2 + interpolated_average_wind_output[:, 2]**2)
-                abs_labels = np.sqrt(labels[:, 0]**2 + labels[:, 1]**2 + labels[:, 2]**2)
-                abs_nn_loss = self._loss_fn(abs_nn_wind.to(self._device),
-                                            abs_labels.to(self._device))
-                abs_average_wind_loss = self._loss_fn(abs_average_wind.to(self._device),
-                                                      abs_labels.to(self._device))
-                print('Abs nn loss is: ', abs_nn_loss.item())
-                print('Abs average wind loss is: ', abs_average_wind_loss.item())
-
-
-            # outputs
-            time.append(i*response_time)
-            inputs.append(input)
-            outputs.append(nn_output)
-            nn_losses.append(nn_loss.item())
-            zero_wind_losses.append(zero_wind_loss.item())
-            average_wind_losses.append(average_wind_loss.item())
+            print('')
+            nn_average_loss = sum(nn_losses)/len(nn_losses)
+            print('Average NN loss is: ', nn_average_loss)
+            zero_wind_average_loss = sum(zero_wind_losses)/len(zero_wind_losses)
+            print('Average zero wind loss is: ', zero_wind_average_loss)
+            average_wind_average_loss = sum(average_wind_losses)/len(average_wind_losses)
+            print('Average wind average loss is: ', average_wind_average_loss)
             if self.flag.use_krigging_prediction:
-                krigging_wind_losses.append(krigging_wind_loss.item())
+                krigging_average_loss = sum(krigging_wind_losses)/len(krigging_wind_losses)
+                print('Krigging wind average loss is: ', krigging_average_loss)
             if self.flag.use_gpr_prediction:
-                gpr_wind_losses.append(gpr_wind_loss.item())
+                gpr_average_loss = sum(gpr_wind_losses)/len(gpr_wind_losses)
+                print('GPR wind average loss is: ', gpr_average_loss)
             if self.flag.use_optimized_corners:
-                optimized_corners_losses.append(optimized_corners_loss.item())
-
-        # longterm losses
-        longterm_losses.update({'time': time})
-        longterm_losses.update({'nn losses': nn_losses})
-        longterm_losses.update({'zero wind losses': zero_wind_losses})
-        longterm_losses.update({'average wind losses': average_wind_losses})
-        if self.flag.use_krigging_prediction:
-            longterm_losses.update({'krigging losses': krigging_wind_losses})
-        if self.flag.use_gpr_prediction:
-            longterm_losses.update({'gpr losses': gpr_wind_losses})
-        if self.flag.use_optimized_corners:
-            longterm_losses.update({'optimized corners losses': optimized_corners_losses})
-
-        print('')
-        nn_average_loss = sum(nn_losses)/len(nn_losses)
-        print('Average NN loss is: ', nn_average_loss)
-        zero_wind_average_loss = sum(zero_wind_losses)/len(zero_wind_losses)
-        print('Average zero wind loss is: ', zero_wind_average_loss)
-        average_wind_average_loss = sum(average_wind_losses)/len(average_wind_losses)
-        print('Average wind average loss is: ', average_wind_average_loss)
-        if self.flag.use_krigging_prediction:
-            krigging_average_loss = sum(krigging_wind_losses)/len(krigging_wind_losses)
-            print('Krigging wind average loss is: ', krigging_average_loss)
-        if self.flag.use_gpr_prediction:
-            gpr_average_loss = sum(gpr_wind_losses)/len(gpr_wind_losses)
-            print('GPR wind average loss is: ', gpr_average_loss)
-        if self.flag.use_optimized_corners:
-            corners_average_loss = sum(optimized_corners_losses)/len(optimized_corners_losses)
-            print('Optimized corners average loss is: ', corners_average_loss)
+                corners_average_loss = sum(optimized_corners_losses)/len(optimized_corners_losses)
+                print('Optimized corners average loss is: ', corners_average_loss)
 
         return outputs, nn_losses, inputs, longterm_losses

@@ -12,6 +12,8 @@ cfd:
     print_names: False
     # Index of sample in the test set
     index: 63
+    # batch test
+    batch_test: True
 
 # COSMO data
 cosmo:
@@ -23,9 +25,14 @@ cosmo:
 
 # flight data
 flight:
-    file: 'data/14_47_05_filtered.hdf5' # 10_36_34, 11_11_57, 13_02_02, 13_33_46, 14_15_04, 14_47_05, 14_47_05_filtered.hdf5
+    flight_data_dir: 'data/'
+    files: ['13_02_02.ulg', '13_33_46.ulg', '14_15_04.ulg', '14_47_05.ulg', '14_47_05_filtered.hdf5']  # ['10_36_34.ulg', '11_11_57.ulg']
+    index: 1
+    #
     filtered_dir: 'data/'
     use_ekf_wind: False
+    #
+    batch_test: True
 
 # Wind measurements parameters
 wind:
