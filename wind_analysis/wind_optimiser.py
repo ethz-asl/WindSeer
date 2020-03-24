@@ -160,7 +160,6 @@ class WindOptimiser(object):
             self._flight_data = self.load_flight_data()
             self._cosmo_wind = self.load_wind()
             self.terrain = self.load_cosmo_terrain()
-            self.wind_vector_angles = self.get_angles_between_wind_vectors()
 
         # Wind measurements variables
         if self.flag.test_simulated_data:
@@ -182,6 +181,9 @@ class WindOptimiser(object):
             self.labels = self.add_gaussian_noise(self.labels)
         if self.flag.use_simulated_trajectory and self.flag.add_turbulence:
             self.labels = self.add_turbulence(self.labels)
+
+        # Angles
+        # self.wind_vector_angles, self.input_angles, self.output_angles = self.get_angles_between_wind_vectors()
 
         # Optimisation variables
         self._optimisation_variables = self.get_optimisation_variables()
@@ -398,8 +400,8 @@ class WindOptimiser(object):
     def get_trajectory_wind_blocks(self):
         # type of trajectories
         spiral_trajectory = False
-        random_trajectory = False
-        segment_trajectory = True
+        random_trajectory = True
+        segment_trajectory = False
 
         # initial simulated flight data
         simulated_flight_data = {}
@@ -791,14 +793,85 @@ class WindOptimiser(object):
         return augmented_wind.to(self._device)
 
     def get_angles_between_wind_vectors(self):
-        wind_e = self._flight_data['we']
-        wind_n = self._flight_data['wn']
-        wind_d = self._flight_data['wd']
-        wind_vectors = [[wind_e[i], wind_n[i], wind_d[i]] for i in range(len(wind_e))]
+        if self.flag.test_simulated_data:
+            flight_data = self._simulated_flight_data
+        elif self.flag.test_flight_data:
+            flight_data = self._flight_data
+        wind_n = flight_data['wn']
+        wind_e = flight_data['we']
+        wind_d = flight_data['wd']
+        wind_vectors = [[wind_n[i], wind_e[i], wind_d[i]] for i in range(len(wind_e))]
         angles = []
         for i in range(len(wind_e)-1):
             angles.append(angle_between_vectors(wind_vectors[i], wind_vectors[i+1]))
-        return angles
+        angles = np.array([x for x in angles if ~np.isnan(x)])
+
+        # angles between input flight and output flight
+        input_flight, output_flight = {}, {}
+        for keys, values in flight_data.items():
+            input_batch = values[0: 1000]
+            output_batch = values[0: 1000]
+            input_flight.update({keys: input_batch})
+            output_flight.update({keys: output_batch})
+
+        wind_blocks, var_blocks, wind_zeros, wind_mask \
+            = self.get_flight_wind_blocks(input_flight)
+        # get prediction
+        wind = wind_zeros.to(self._device)
+        wind = self.add_mask_to_wind(wind, wind_mask)
+        input = torch.cat([self.terrain.network_terrain, wind])
+        nn_output = self.run_prediction(input)
+        FlightInterpolator = FlightInterpolation(input_flight, terrain=self.terrain,
+                                                 wind_data_for_prediction=output_flight)
+        interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
+
+        # input
+        input_wind_n = input_flight['wn']
+        input_wind_e = input_flight['we']
+        input_wind_d = input_flight['wd']
+        wind_vectors = [[input_wind_n[i], input_wind_e[i], input_wind_d[i]] for i in range(len(input_wind_e))]
+        input_angles = []
+        for i in range(len(input_wind_n)-1):
+            input_angles.append(angle_between_vectors(wind_vectors[i], wind_vectors[i+1]))
+        input_angles = np.array([x for x in input_angles if ~np.isnan(x)])
+        # output
+        output_wind_n = interpolated_nn_output[:, 0]
+        output_wind_e = interpolated_nn_output[:, 1]
+        output_wind_d = interpolated_nn_output[:, 2]
+        wind_vectors = [[output_wind_n[i], output_wind_e[i], output_wind_d[i]] for i in range(len(output_wind_e))]
+        output_angles = []
+        for i in range(len(output_wind_n)-1):
+            output_angles.append(angle_between_vectors(wind_vectors[i], wind_vectors[i+1]))
+        output_angles = np.array([x for x in output_angles if ~np.isnan(x)])
+
+        # losses
+        # labels = torch.from_numpy(np.column_stack([output_flight['wn'], output_flight['we'], output_flight['wd']]))
+        # nn_loss = self._loss_fn(interpolated_nn_output.to(self._device),
+        #                         labels.to(self._device))
+        # print('Loss is: ', nn_loss.item())
+
+        # input
+        input_wind_abs = np.sqrt(input_flight['wn'] ** 2 + input_flight['we'] ** 2)
+        input_wind_abs_3d = np.sqrt(input_flight['wn'] ** 2 + input_flight['we'] ** 2
+                                    + input_flight['wd'] ** 2)
+        input_wind_dir_trig_to = np.arctan2(input_flight['wn'] / input_wind_abs,
+                                            input_flight['we'] / input_wind_abs)
+        input_wind_dir_trig_to_degrees = input_wind_dir_trig_to * 180 / np.pi
+        input_wind_dir_cardinal = input_wind_dir_trig_to_degrees + 180
+        print('Average input wind speed: ', input_wind_abs_3d.mean())
+        print('Average input wind direction: ', input_wind_dir_cardinal.mean())
+        # label
+        label_wind_abs = np.sqrt(output_flight['wn'] ** 2 + output_flight['we'] ** 2)
+        label_wind_abs_3d = np.sqrt(output_flight['wn'] ** 2 + output_flight['we'] ** 2
+                                    + output_flight['wd'] ** 2)
+        label_wind_dir_trig_to = np.arctan2(output_flight['wn'] / label_wind_abs,
+                                            output_flight['we'] / label_wind_abs)
+        label_wind_dir_trig_to_degrees = label_wind_dir_trig_to * 180 / np.pi
+        label_wind_dir_cardinal = label_wind_dir_trig_to_degrees + 180
+        print('Average label wind speed: ', label_wind_abs_3d.mean())
+        print('Average label wind direction: ', label_wind_dir_cardinal.mean())
+
+        return angles, input_angles, output_angles
 
     def get_rotated_wind(self):
         sr, cr = [], []
@@ -869,11 +942,11 @@ class WindOptimiser(object):
         input_flight, output_flight = {}, {}
         for keys, values in flight_data.items():
             if self.flag.longterm_prediction:
-                input_batch = values[0 : window_size]
-                output_batch = values[window_size : step_size+window_size+response_size]
+                input_batch = values[0: window_size]
+                output_batch = values[window_size: step_size+window_size+response_size]
             else:
-                input_batch = values[step_size : step_size+window_size]
-                output_batch = values[step_size+window_size : step_size+window_size+response_size]
+                input_batch = values[step_size: step_size+window_size]
+                output_batch = values[step_size+window_size: step_size+window_size+response_size]
             input_flight.update({keys: input_batch})
             output_flight.update({keys: output_batch})
 
@@ -1328,7 +1401,7 @@ class WindOptimiser(object):
             # losses
             nn_loss = self._loss_fn(interpolated_nn_output.to(self._device),
                                     labels.to(self._device))
-            loss_axis = True
+            loss_axis = False
             if loss_axis:
                 nn_loss_x = self._loss_fn(interpolated_nn_output[:, 0].to(self._device),
                                           labels[:, 0].to(self._device))
@@ -1349,6 +1422,7 @@ class WindOptimiser(object):
             if self.flag.use_optimized_corners:
                 optimized_corners_loss = self._loss_fn(interpolated_corners_output.to(self._device),
                                                        labels.to(self._device))
+
             print(i, ' NN loss is: ', nn_loss.item())
             if loss_axis:
                 print(i, ' NN loss x is: ', nn_loss_x.item())
@@ -1392,7 +1466,7 @@ class WindOptimiser(object):
                                          + interpolated_nn_output[:, 1] ** 2
                                          + interpolated_nn_output[:, 2] ** 2)
                 nn_wind_dir_trig_to = np.arctan2(interpolated_nn_output[:, 0] / nn_wind_abs,
-                                                  nn_output[:, 1] / nn_wind_abs)
+                                                  interpolated_nn_output[:, 1] / nn_wind_abs)
                 nn_wind_dir_trig_to_degrees = nn_wind_dir_trig_to * 180 / np.pi
                 nn_wind_dir_cardinal = nn_wind_dir_trig_to_degrees + 180
                 print('Average NN wind speed: ', nn_wind_abs_3d.mean())
@@ -1409,6 +1483,20 @@ class WindOptimiser(object):
                 average_wind_dir_cardinal = average_wind_dir_trig_to_degrees + 180
                 print('Average  wind average speed: ', average_wind_abs_3d.mean())
                 print('Average  wind average direction: ', average_wind_dir_cardinal.mean())
+
+            # absolute wind vector loss
+            absolute_value = False
+            if absolute_value:
+                abs_nn_wind = np.sqrt(interpolated_nn_output[:, 0]**2 + interpolated_nn_output[:, 1]**2 + interpolated_nn_output[:, 2]**2)
+                abs_average_wind = np.sqrt(interpolated_average_wind_output[:, 0]**2 + interpolated_average_wind_output[:, 1]**2 + interpolated_average_wind_output[:, 2]**2)
+                abs_labels = np.sqrt(labels[:, 0]**2 + labels[:, 1]**2 + labels[:, 2]**2)
+                abs_nn_loss = self._loss_fn(abs_nn_wind.to(self._device),
+                                            abs_labels.to(self._device))
+                abs_average_wind_loss = self._loss_fn(abs_average_wind.to(self._device),
+                                                      abs_labels.to(self._device))
+                print('Abs nn loss is: ', abs_nn_loss.item())
+                print('Abs average wind loss is: ', abs_average_wind_loss.item())
+
 
             # outputs
             time.append(i*response_time)
