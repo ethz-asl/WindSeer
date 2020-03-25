@@ -15,7 +15,7 @@ def angle_wrap(angles):
 
 
 class WindOptimiserOutput:
-    def __init__(self, wind_opt, wind_predictions, losses, inputs, longterm_losses=None):
+    def __init__(self, wind_opt, wind_predictions, losses, inputs, longterm_losses=None, batch_longterm_losses=None):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         # self.device = torch.device("cpu")
         self.wind_opt = wind_opt
@@ -24,11 +24,12 @@ class WindOptimiserOutput:
         self._losses = losses
         self._inputs = inputs
         self._longterm_losses = longterm_losses
+        self._batch_longterm_losses = batch_longterm_losses
         self._wind_prediction, self._input, self._loss = self.get_last_wind_estimate()
         self._masked_input = self.get_masked_input()
         # self._grads = grads
         # self._names = self.get_names()
-        self._save_output = False
+        self._save_output = True
         self._add_sparse_mask_row = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
@@ -415,16 +416,44 @@ class WindOptimiserOutput:
     def plot_losses_over_time(self):
         fig, ax = plt.subplots()
 
-        longterm_losses = self._longterm_losses
-        # time
-        time = longterm_losses['time']
-        del longterm_losses['time']
+        if self.wind_opt.flag.flight_batch_test or self.wind_opt.flag.cfd_batch_test:
+            batch_longterm_losses = self._batch_longterm_losses
+            average_longterm_losses = {}
+            average_nn_losses = np.zeros((10))
+            average_wind_average_losses = np.zeros((10))
+            for i in range(10):
+                for j in range(len(batch_longterm_losses)):
+                    average_nn_losses[i] += batch_longterm_losses[j]['nn losses'][i]
+                    average_wind_average_losses[i] += batch_longterm_losses[j]['average wind losses'][i]
+            # average
+            average_nn_losses /= 10
+            average_wind_average_losses /= 10
+            # create dic
+            average_longterm_losses.update({'time': batch_longterm_losses[0]['time'][0:10]})
+            average_longterm_losses.update({'average nn losses': average_nn_losses})
+            average_longterm_losses.update({'average wind average losses': average_wind_average_losses})
+            # plot
+            time = average_longterm_losses['time']
+            del average_longterm_losses['time']
 
-        for key, values in longterm_losses.items():
-            ax.plot(time, values, label=key)
-        ax.legend(loc='upper right')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Loss')
+            for key, values in average_longterm_losses.items():
+                ax.plot(time, values, label=key)
+            ax.legend(loc='upper right')
+            ax.set_xlabel('Time')
+            ax.set_ylabel('Loss')
+
+
+        else:
+            longterm_losses = self._longterm_losses
+            # time
+            time = longterm_losses['time']
+            del longterm_losses['time']
+
+            for key, values in longterm_losses.items():
+                ax.plot(time, values, label=key)
+            ax.legend(loc='upper right')
+            ax.set_xlabel('Time')
+            ax.set_ylabel('Loss')
 
         # make image full screen
         fig_manager = plt.get_current_fig_manager()
@@ -457,11 +486,11 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
-        self.plot_fft_analysis()
+        # self.plot_fft_analysis()
         # self.plot_trajectory_wind_vectors()
         # self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        # self.plot_losses_over_time()
+        self.plot_losses_over_time()
         # self.plot_best_wind_estimate()
 
         if self._save_output:

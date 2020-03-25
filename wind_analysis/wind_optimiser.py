@@ -1286,13 +1286,20 @@ class WindOptimiser(object):
         elif self.flag.flight_batch_test and self.flag.test_flight_data:
             test_set_range = len(self._flight_args.params['files'])
 
+        # batch variables
+        batch_longterm_losses = []
         for t in range(test_set_range):
             # get flight data
-            if self.flag.test_flight_data:
+            if self.flag.test_flight_data and self.flag.flight_batch_test:
                 flight_data = self.load_flight_data(t)
-            if self.flag.test_simulated_data:
+            elif self.flag.test_flight_data and not self.flag.flight_batch_test:
+                flight_data = self._flight_data
+
+            if self.flag.test_simulated_data and self.flag.cfd_batch_test:
                 _, self.labels, _, _, _, self.original_terrain, _ = self.load_data_set(t)
                 _, _, _, flight_data = self.get_trajectory_wind_blocks()
+            elif self.flag.test_simulated_data and not self.flag.cfd_batch_test:
+                flight_data = self._simulated_flight_data
 
             # sliding window variables (in seconds)
             window_time = self._window_splits_args.params['window_time']  # seconds
@@ -1444,6 +1451,18 @@ class WindOptimiser(object):
                     optimized_corners_loss = self._loss_fn(interpolated_corners_output.to(self._device),
                                                            labels.to(self._device))
 
+                normalize_losses = True
+                if normalize_losses:
+                    nn_loss /= zero_wind_loss
+                    average_wind_loss /= zero_wind_loss
+                    zero_wind_loss /= zero_wind_loss
+                    if self.flag.use_krigging_prediction:
+                        krigging_wind_loss /= zero_wind_loss
+                    if self.flag.use_gpr_prediction:
+                        gpr_wind_loss /= zero_wind_loss
+                    if self.flag.use_optimized_corners:
+                        optimized_corners_loss /= zero_wind_loss
+
                 print(i, ' NN loss is: ', nn_loss.item())
                 if loss_axis:
                     print(i, ' NN loss x is: ', nn_loss_x.item())
@@ -1518,7 +1537,6 @@ class WindOptimiser(object):
                     print('Abs nn loss is: ', abs_nn_loss.item())
                     print('Abs average wind loss is: ', abs_average_wind_loss.item())
 
-
                 # outputs
                 time.append(i*response_time)
                 inputs.append(input)
@@ -1561,5 +1579,7 @@ class WindOptimiser(object):
             if self.flag.use_optimized_corners:
                 corners_average_loss = sum(optimized_corners_losses)/len(optimized_corners_losses)
                 print('Optimized corners average loss is: ', corners_average_loss)
+            # batch variables
+            batch_longterm_losses.append(longterm_losses)
 
-        return outputs, nn_losses, inputs, longterm_losses
+        return outputs, nn_losses, inputs, longterm_losses, batch_longterm_losses
