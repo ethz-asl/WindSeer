@@ -197,36 +197,53 @@ class WindOptimiserOutput:
 
     def plot_fft_analysis(self):
         fig, ax = plt.subplots()
-        if self.wind_opt.flag.test_flight_data:
-            flight_data = self.wind_opt._flight_data
-        if self.wind_opt.flag.test_simulated_data:
-            flight_data = self.wind_opt._simulated_flight_data
 
-        # winds in each direction
-        wn = flight_data['wn']
-        we = flight_data['we']
-        wd = flight_data['wd']
+        # bach test
+        test_set_range = 1
+        if self.wind_opt.flag.flight_batch_test and self.wind_opt.flag.test_flight_data:
+            test_set_range = len(self.wind_opt._flight_args.params['files'])
 
-        # wind magnitude
-        wind_magnitude = np.sqrt(wn**2 + we**2 + wd**2)
+        for i in range(test_set_range):
+            if self.wind_opt.flag.test_flight_data and self.wind_opt.flag.flight_batch_test:
+                flight_data = self.wind_opt.load_flight_data(i)
+            elif self.wind_opt.flag.test_flight_data and not self.wind_opt.flag.flight_batch_test:
+                flight_data = self.wind_opt._flight_data
+            if self.wind_opt.flag.test_simulated_data:
+                flight_data = self.wind_opt._simulated_flight_data
 
-        # time
-        time = (flight_data['time_microsec'] - flight_data['time_microsec'][0]) / 1e6
+            # winds in each direction
+            wn = flight_data['wn']
+            we = flight_data['we']
+            wd = flight_data['wd']
 
-        T = time[1] - time[0]
-        N = time.size
+            # wind magnitude
+            wind_magnitude = np.sqrt(wn**2 + we**2 + wd**2)
 
-        f = np.linspace(0, 1/T, N)
+            # time
+            time = (flight_data['time_microsec'] - flight_data['time_microsec'][0]) / 1e6
 
-        fft = np.fft.fft(wind_magnitude - wind_magnitude.mean())
+            T = time[1] - time[0]
+            N = time.size
 
-        ax.plot(f[:N // 2], np.abs(fft)[:N // 2] * 1 / N)
-        ax.set_xlabel('Frequency [Hz]')
-        ax.set_ylabel('Amplitude')
+            f = np.linspace(0, 1/T, N)
 
-        # ax.plot(time, wn - wn.mean())
-        # ax.set_xlabel('time [s]')
-        # ax.set_ylabel('Wind speed [m/s]')
+            fft = np.fft.fft(wind_magnitude - wind_magnitude.mean())
+
+            if self.wind_opt.flag.test_flight_data and self.wind_opt.flag.flight_batch_test:
+                labels = ['13\_02\_02', '13\_33\_46', '14\_15\_04', '14\_47\_05', '14\_47\_05\_filtered']
+                # labels = ['10\_36\_34', '11\_11\_57']
+                ax.plot(f[:N // 2], np.abs(fft)[:N // 2] * 1 / N, label=labels[i])
+                ax.legend(loc='upper right')
+                ax.set_title('Riemenstalden')
+                # ax.set_title('Fluelen')
+            else:
+                ax.plot(f[:N // 2], np.abs(fft)[:N // 2] * 1 / N)
+            ax.set_xlabel('Frequency [Hz]')
+            ax.set_ylabel('Amplitude')
+
+            # ax.plot(time, wn - wn.mean())
+            # ax.set_xlabel('time [s]')
+            # ax.set_ylabel('Wind speed [m/s]')
 
         # make image full screen
         fig_manager = plt.get_current_fig_manager()
@@ -440,12 +457,12 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
-        # self.plot_fft_analysis()
+        self.plot_fft_analysis()
         # self.plot_trajectory_wind_vectors()
         # self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        self.plot_losses_over_time()
-        self.plot_best_wind_estimate()
+        # self.plot_losses_over_time()
+        # self.plot_best_wind_estimate()
 
         if self._save_output:
             self.close()
