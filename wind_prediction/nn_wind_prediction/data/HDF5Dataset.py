@@ -2,7 +2,6 @@ from __future__ import print_function
 
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 
-from interpolation.splines import UCGrid, eval_linear
 import numpy as np
 import random
 import sys
@@ -10,6 +9,12 @@ import torch
 from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
+
+numpy_interpolation = False
+if sys.version_info[0] > 2:
+    from interpolation.splines import UCGrid, eval_linear
+    numpy_interpolation = True
+
 
 class HDF5Dataset(Dataset):
     '''
@@ -403,9 +408,13 @@ class HDF5Dataset(Dataset):
                             ds = torch.tensor([ds[1], ds[0], ds[2]])
 
                 elif self.__augmentation_mode == 1:
-                    # use the numpy implementation as it is more accurate and slightly faster
-                    data = self.__augmentation_mode2_numpy(data, self.__nx) # u_x: index 1, u_y: index 2
-                    #data = self.__augmentation_mode2_torch(data, self.__nx) # u_x: index 1, u_y: index 2
+                    if numpy_interpolation:
+                        # use the numpy implementation as it is more accurate and slightly faster
+                        # and python 3 is used
+                        data = self.__augmentation_mode2_numpy(data, self.__nx) # u_x: index 1, u_y: index 2
+                    else:
+                        # use the torch version for python 2
+                        data = self.__augmentation_mode2_torch(data, self.__nx) # u_x: index 1, u_y: index 2
 
                     # flip in x-direction
                     if (self.__rand.randint(0,1)):
