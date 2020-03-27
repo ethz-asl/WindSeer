@@ -581,10 +581,10 @@ class HDF5Dataset(Dataset):
                 idz = start[0].detach().cpu().numpy()
                 # number of bins along direction
                 dir_1 = 10
-                dir_2 = 4
+                dir_2 = 2
                 # Random number of segments, each with a length between approximately 100 and 120 m (6 to 7 bin lengths)
                 num_of_segments = random.randint(2, 20)
-                # num_of_segments = 1
+                num_of_segments = 50
                 # first axis to go along
                 direction_axis = 1
                 forward_axis = 'x'
@@ -596,8 +596,8 @@ class HDF5Dataset(Dataset):
                     current_idz = idz
                     # find feasible next points
                     if 'x' in forward_axis:
-                        for m in range(-1, 3, 3):
-                            for n in range(0, 2, 1):
+                        for m in range(-2, 3, 4):
+                            for n in range(0, 3, 1):
                                 for o in range(-1, 2, 2):
                                     if (0 <= current_idx + o * dir_1 < 64 and
                                             0 <= current_idy + direction_axis * n * dir_2 < 64 and
@@ -608,8 +608,8 @@ class HDF5Dataset(Dataset):
                                             [current_idz + m, current_idy + direction_axis * n * dir_2,
                                              current_idx + o * dir_1])
                     else:
-                        for m in range(-1, 3, 3):
-                            for n in range(0, 2, 1):
+                        for m in range(-2, 4, 3):
+                            for n in range(0, 3, 1):
                                 for o in range(-1, 2, 2):
                                     if (0 <= current_idy + o * dir_1 < 64 and
                                             0 <= current_idx + direction_axis * n * dir_2 < 64 and

@@ -29,7 +29,7 @@ class WindOptimiserOutput:
         self._masked_input = self.get_masked_input()
         # self._grads = grads
         # self._names = self.get_names()
-        self._save_output = True
+        self._save_output = False
         self._add_sparse_mask_row = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
@@ -487,11 +487,11 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         # self.plot_fft_analysis()
-        # self.plot_trajectory_wind_vectors()
-        # self.plot_wind_field()
+        self.plot_trajectory_wind_vectors()
+        self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        self.plot_losses_over_time()
-        # self.plot_best_wind_estimate()
+        # self.plot_losses_over_time()
+        self.plot_best_wind_estimate()
 
         if self._save_output:
             self.close()

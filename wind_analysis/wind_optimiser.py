@@ -163,6 +163,12 @@ class WindOptimiser(object):
             self._cosmo_wind = self.load_wind()
             self.terrain = self.load_cosmo_terrain()
 
+        # Noise
+        if self.flag.use_simulated_trajectory and self.flag.add_gaussian_noise:
+            self.labels = self.add_gaussian_noise(self.labels)
+        if self.flag.use_simulated_trajectory and self.flag.add_turbulence:
+            self.labels = self.add_turbulence(self.labels)
+
         # Wind measurements variables
         if self.flag.test_simulated_data:
             if self.flag.use_sparse_data:
@@ -177,12 +183,6 @@ class WindOptimiser(object):
                 = self.get_flight_wind_blocks(input_flight_data)
             # TODO: replace if there are actual labels for flight data
             self.labels = self._wind_zeros
-
-        # Noise
-        if self.flag.use_simulated_trajectory and self.flag.add_gaussian_noise:
-            self.labels = self.add_gaussian_noise(self.labels)
-        if self.flag.use_simulated_trajectory and self.flag.add_turbulence:
-            self.labels = self.add_turbulence(self.labels)
 
         # Angles
         # self.wind_vector_angles, self.input_angles, self.output_angles = self.get_angles_between_wind_vectors()
@@ -412,8 +412,8 @@ class WindOptimiser(object):
     def get_trajectory_wind_blocks(self):
         # type of trajectories
         spiral_trajectory = False
-        random_trajectory = True
-        segment_trajectory = False
+        random_trajectory = False
+        segment_trajectory = True
 
         # initial simulated flight data
         simulated_flight_data = {}
@@ -456,16 +456,17 @@ class WindOptimiser(object):
             h_terrain = boolean_terrain.sum(0, keepdim=True).squeeze(0)
             # random starting point
             non_zero = torch.nonzero(terrain)
+            random.seed(7)
             start = non_zero[random.randint(0, non_zero.shape[0]-1)]
             idx = start[2].detach().cpu().numpy()
             idy = start[1].detach().cpu().numpy()
             idz = start[0].detach().cpu().numpy()
             # number of bins along direction
             dir_1 = 10
-            dir_2 = 4
+            dir_2 = 2
             # Random number of segments, each with a length between approximately 100 and 120 m (6 to 7 bin lengths)
             num_of_segments = random.randint(2, 20)
-            # num_of_segments = 1
+            # num_of_segments = 50
             # first axis to go along
             direction_axis = 1
             forward_axis = 'x'
@@ -478,22 +479,22 @@ class WindOptimiser(object):
                 current_idz = idz
                 # find feasible next points
                 if 'x' in forward_axis:
-                    for m in range(-1, 3, 3):
-                        for n in range(0, 2, 1):
+                    for m in range(-2, 3, 4):
+                        for n in range(0, 3, 1):
                             for o in range(-1, 2, 2):
                                 if (0 <= current_idx + o*dir_1 < 64 and
-                                    0 <= current_idy + direction_axis*n*dir_2 < 64 and
+                                    0 <= current_idy + direction_axis * n * dir_2 < 64 and
                                     h_terrain[current_idy + direction_axis*n*dir_2, current_idx + o*dir_1]
                                         <= current_idz + m < 64
                                 ):
                                     feasible_points.append(
                                         [current_idz + m, current_idy + direction_axis*n*dir_2, current_idx + o*dir_1])
                 else:
-                    for m in range(-1, 3, 3):
-                        for n in range(0, 2, 1):
+                    for m in range(-2, 3, 4):
+                        for n in range(0, 3, 1):
                             for o in range(-1, 2, 2):
                                 if (0 <= current_idy + o*dir_1 < 64 and
-                                    0 <= current_idx + direction_axis*n*dir_2 < 64 and
+                                    0 <= current_idx + direction_axis * n * dir_2 < 64 and
                                     h_terrain[current_idy + o*dir_1, current_idx + direction_axis*n*dir_2]
                                         <= current_idz + m < 64
                                 ):
@@ -507,6 +508,7 @@ class WindOptimiser(object):
                     break
                 else:
                     # time_inter = time.time()
+                    random.seed(7)
                     next_feasible_point = feasible_points[random.randint(0, len(feasible_points)-1)]
                     next_idx = next_feasible_point[2]
                     next_idy = next_feasible_point[1]
@@ -630,7 +632,6 @@ class WindOptimiser(object):
             simulated_flight_data['wd'] = -interpolated_flight_data_z.astype(float)
             simulated_flight_data['time_microsec'] = np.array([i*dt*1e6 for i in range(x_traj.size)])
 
-
             # Get the bins and wind along the trajectory
             wind = torch.zeros(self.labels.shape) * float('nan')
             for i in range(x_traj.size):
@@ -638,7 +639,6 @@ class WindOptimiser(object):
                     id_y = (int((y_traj[i] - self.terrain.y_terr[0]) / self.grid_size[1]))
                     id_z = (int((z_traj[i] - self.terrain.z_terr[0]) / self.grid_size[2]))
                     wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
-
 
         # print('Time to create points:', time_inter - time_start)
         # print('Time to generate trajectory points:', time_inter2 - time_inter)
@@ -694,7 +694,7 @@ class WindOptimiser(object):
         noise = eps * torch.rand(labels.shape)
         # apply scale
         noise /= self.scale
-        labels += noise
+        # labels += noise
         return labels
 
     def add_turbulence(self, labels):
@@ -710,7 +710,8 @@ class WindOptimiser(object):
             turbulence[:, start_z:start_z + nz, start_y:start_y + ny, start_x:start_x + nx]
         # apply scale
         turbulence /= self.scale
-        turbulence = torch.from_numpy(turbulence)
+        eps = 1
+        turbulence = eps * torch.from_numpy(turbulence)
         labels += turbulence
         return labels
 
