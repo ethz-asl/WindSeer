@@ -521,6 +521,8 @@ class HDF5Dataset(Dataset):
                 start_z = int(self.__rand.triangular(0, (turb_nz - nz), 0))  # triangle distribution
                 turbulence = \
                     turbulence[:, start_z:start_z+nz,  start_y:start_y+ny,  start_x:start_x+nx]
+                eps = 1
+                turbulence = eps * turbulence
                 if self.__autoscale:  # apply scale to turbulence if necessary
                     turbulence /= noise_scale
                 sparse_input[1:4, :] += turbulence
@@ -584,7 +586,6 @@ class HDF5Dataset(Dataset):
                 dir_2 = 2
                 # Random number of segments, each with a length between approximately 100 and 120 m (6 to 7 bin lengths)
                 num_of_segments = random.randint(2, 20)
-                num_of_segments = 50
                 # first axis to go along
                 direction_axis = 1
                 forward_axis = 'x'
