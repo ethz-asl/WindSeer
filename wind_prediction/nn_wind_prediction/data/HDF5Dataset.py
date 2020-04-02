@@ -609,7 +609,7 @@ class HDF5Dataset(Dataset):
                                             [current_idz + m, current_idy + direction_axis * n * dir_2,
                                              current_idx + o * dir_1])
                     else:
-                        for m in range(-2, 4, 3):
+                        for m in range(-2, 3, 4):
                             for n in range(0, 3, 1):
                                 for o in range(-1, 2, 2):
                                     if (0 <= current_idy + o * dir_1 < 64 and

@@ -164,9 +164,9 @@ class WindOptimiser(object):
             self.terrain = self.load_cosmo_terrain()
 
         # Noise
-        if self.flag.use_simulated_trajectory and self.flag.add_gaussian_noise:
+        if self.flag.test_simulated_data and self.flag.add_gaussian_noise:
             self.labels = self.add_gaussian_noise(self.labels)
-        if self.flag.use_simulated_trajectory and self.flag.add_turbulence:
+        if self.flag.test_simulated_data and self.flag.add_turbulence:
             self.labels = self.add_turbulence(self.labels)
 
         # Wind measurements variables
