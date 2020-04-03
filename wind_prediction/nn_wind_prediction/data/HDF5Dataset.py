@@ -228,16 +228,16 @@ class HDF5Dataset(Dataset):
             weighting_channels = []
 
         # make sure that all requested channels are possible
-        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        self.default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
         for channel in input_channels:
-            if channel not in default_channels:
+            if channel not in self.default_channels:
                 raise ValueError('HDF5Dataset: Incorrect input_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel, default_channels))
+                                 'correct channels are {}'.format(channel, self.default_channels))
 
         for channel in label_channels:
-            if channel not in default_channels:
+            if channel not in self.default_channels:
                 raise ValueError('HDF5Dataset: Incorrect label_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel, default_channels))
+                                 'correct channels are {}'.format(channel, self.default_channels))
 
         self.__channels_to_load = []
         self.__input_indices = []
@@ -245,7 +245,7 @@ class HDF5Dataset(Dataset):
 
         # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
         index = 0
-        for channel in default_channels:
+        for channel in self.default_channels:
             if channel in input_channels or channel in label_channels or channel in weighting_channels:
                 self.__channels_to_load += [channel]
                 if channel in input_channels:
@@ -323,7 +323,8 @@ class HDF5Dataset(Dataset):
         # avoids printing a warning multiple times
         self.__augmentation_warning_printed = False
 
-        print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
+        if verbose:
+            print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
     def __getitem__(self, index):
         h5_file = h5py.File(self.__filename, 'r', swmr=True)
