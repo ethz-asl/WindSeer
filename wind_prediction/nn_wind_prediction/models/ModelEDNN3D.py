@@ -338,28 +338,28 @@ class ModelEDNN3D(nn.Module):
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1, bias=use_bias)]
-                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1)]
+                    self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1)]
                 else:
                     self.__deconv1 += [nn.Conv3d(2*int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
-                                                 self.__filter_kernel_size+1, bias=use_bias)]
-
+                                                 self.__filter_kernel_size+1)]
                     self.__deconv2 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
-                                                 self.__filter_kernel_size+1, bias=use_bias)]
+                                                 self.__filter_kernel_size+1)]
+
         else:
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1, bias=use_bias)]
+                    self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1)]
                 else:
                     self.__deconv1 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
-                                                 self.__filter_kernel_size+1, bias=use_bias)]
+                                                 self.__filter_kernel_size+1)]
 
         # mapping layer
         if self.__use_mapping_layer:
-            self.__mapping_layer = nn.Conv3d(num_out,num_out,1,groups=num_out, bias=use_bias) # for each channel a separate filter
+            self.__mapping_layer = nn.Conv3d(num_out, num_out,1, groups=num_out)  # for each channel a separate filter
 
         # padding modules
         padding_required = int((self.__filter_kernel_size - 1) / 2)
