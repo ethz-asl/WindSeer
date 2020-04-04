@@ -97,6 +97,9 @@ data:
     # trajectory mask
     create_trajectory_mask: True
 
+    # sequence model
+    create_sequential_input: True
+
     # noise
     add_gaussian_noise: True
     add_turbulence: True

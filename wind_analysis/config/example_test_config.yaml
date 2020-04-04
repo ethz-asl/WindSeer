@@ -99,7 +99,7 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/trained_models/'
-  name: 'test_model_58'
+  name: 'test_model_63'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'

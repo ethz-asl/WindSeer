@@ -447,11 +447,17 @@ class WindOptimiser(object):
 
         if segment_trajectory:
             time_start = time.time()
+
+            sequence_model = False
             # terrain
             terrain = self.original_terrain.clone()
             boolean_terrain = (self.original_terrain.clone() <= 0).float()  # true where there is terrain
             # mask
             mask = torch.zeros_like(terrain)
+            if sequence_model:
+                mask1 = torch.zeros_like(terrain)
+                mask2 = torch.zeros_like(terrain)
+                mask3 = torch.zeros_like(terrain)
             # network terrain height
             h_terrain = boolean_terrain.sum(0, keepdim=True).squeeze(0)
             # random starting point
@@ -465,12 +471,13 @@ class WindOptimiser(object):
             dir_1 = 10
             dir_2 = 2
             # Random number of segments, each with a length between approximately 100 and 120 m (6 to 7 bin lengths)
-            num_of_segments = random.randint(2, 20)
-            # num_of_segments = 50
+            # num_of_segments = random.randint(2, 20)
+            num_of_segments = 2
             # first axis to go along
             direction_axis = 1
             forward_axis = 'x'
             wind = torch.zeros(self.labels.shape) * float('nan')
+            trajectory_bin_points = []
             for i in range(num_of_segments):
                 feasible_points = []
                 # current point
@@ -503,7 +510,7 @@ class WindOptimiser(object):
                 # randomly choose next point from the feasible points
                 if len(feasible_points) == 0:
                     # stop if no feasible point was found
-                    print('No feasible point found at iteration: ', i)
+                    print('No feasible next point found at iteration: ', i)
                     mask[current_idz, current_idy, current_idx] = 1.0
                     break
                 else:
@@ -522,6 +529,8 @@ class WindOptimiser(object):
                         id_x = int(current_idx + t * (next_idx - current_idx))
                         id_y = int(current_idy + t * (next_idy - current_idy))
                         id_z = int(current_idz + t * (next_idz - current_idz))
+                        if sequence_model and mask[id_z, id_y, id_x] != 1.0:
+                            trajectory_bin_points.append([id_z, id_y, id_x])
                         mask[id_z, id_y, id_x] = 1.0
                         wind[:, id_z, id_y, id_x] = self.labels[:, id_z, id_y, id_x]
                         n += 1
@@ -543,6 +552,17 @@ class WindOptimiser(object):
                     else:
                         direction_axis = direction_axis
             # print('Time to create feasible points:', time_inter - time_start)
+            if sequence_model:
+                _traj = int((len(trajectory_bin_points) / 3) + 1)
+                traj1 = torch.from_numpy(np.asarray(trajectory_bin_points[:_traj]))
+                traj2 = torch.from_numpy(np.asarray(trajectory_bin_points[_traj:2*_traj]))
+                traj3 = torch.from_numpy(np.asarray(trajectory_bin_points[2*_traj:]))
+
+                mask1[traj1.split(1, dim=1)] = 1.0
+                mask2[traj2.split(1, dim=1)] = 1.0
+                mask3[traj3.split(1, dim=1)] = 1.0
+                # for i in range(len(traj1)):
+                #     wind[:, traj1[i][0], traj1[i][1], traj1[i][2]] = self.labels[:, traj1[i][0], traj1[i][1], traj1[i][2]]
             print('Time to create traj:', time.time()-time_start)
 
         # random trajectory

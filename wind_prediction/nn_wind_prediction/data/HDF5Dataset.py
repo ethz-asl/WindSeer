@@ -57,6 +57,7 @@ class HDF5Dataset(Dataset):
     __default_terrain_percentage_correction = False
     __default_sample_terrain_region = False
     __default_create_trajectory_mask = False
+    __default_create_sequential_input = False
     __default_add_gaussian_noise = False
     __default_add_turbulence = False
 
@@ -252,6 +253,13 @@ class HDF5Dataset(Dataset):
             self.__create_trajectory_mask = self.__default_create_trajectory_mask
             if verbose:
                 print('HDF5Dataset: create_trajectory_mask not present in kwargs, using default value:', self.__default_create_trajectory_mask)
+
+        try:
+            self.__create_sequential_input = kwargs['create_sequential_input']
+        except KeyError:
+            self.__create_sequential_input = self.__default_create_sequential_input
+            if verbose:
+                print('HDF5Dataset: create_create_sequential_input not present in kwargs, using default value:', self.__default_create_sequential_input)
 
         try:
             self.__add_gaussian_noise = kwargs['add_gaussian_noise']
@@ -566,13 +574,17 @@ class HDF5Dataset(Dataset):
                 # add mask to sparse_input
                 sparse_input = torch.cat([sparse_input, mask.float().unsqueeze(0)])
 
-            # create and add sparse mask to input if requested
+            # create and add trajectory mask to input if requested
             if self.__create_trajectory_mask:
                 # terrain
                 terrain = sparse_input[0, :].clone()
                 boolean_terrain = (terrain <= 0).float()  # true where there is terrain
                 # mask
                 mask = torch.zeros_like(terrain)
+                if sequence_model:
+                    mask1 = torch.zeros_like(terrain)
+                    mask2 = torch.zeros_like(terrain)
+                    mask3 = torch.zeros_like(terrain)
                 # network terrain height
                 h_terrain = boolean_terrain.sum(0, keepdim=True).squeeze(0)
                 # random starting point
@@ -584,8 +596,10 @@ class HDF5Dataset(Dataset):
                 # number of bins along direction
                 dir_1 = 10
                 dir_2 = 2
-                # Random number of segments, each with a length between approximately 100 and 120 m (6 to 7 bin lengths)
+                # Random number of segments, each with a length between 10 and 11 bins
                 num_of_segments = random.randint(2, 20)
+                # trajectory bins
+                trajectory_bin_points = []
                 # first axis to go along
                 direction_axis = 1
                 forward_axis = 'x'
@@ -623,8 +637,9 @@ class HDF5Dataset(Dataset):
                     # randomly choose next point from the feasible points
                     if len(feasible_points) == 0:
                         # stop if no feasible point was found
-                        # print('No feasible point found at iteration: ', i)
+                        # print('No feasible next point found at iteration: ', i)
                         mask[current_idz, current_idy, current_idx] = 1.0
+                        trajectory_bin_points.append([current_idz, current_idy, current_idx])
                         break
                     else:
                         next_feasible_point = feasible_points[random.randint(0, len(feasible_points) - 1)]
@@ -633,21 +648,17 @@ class HDF5Dataset(Dataset):
                         next_idz = next_feasible_point[0]
 
                         # bins along trajectory
-                        x_pts, y_pts, z_pts = [], [], []
                         points_along_traj = 10
                         n = 1
                         for j in range(0, points_along_traj):
                             t = n / (points_along_traj + 1)
-                            x_pts.append(current_idx + t * (next_idx - current_idx))
-                            y_pts.append(current_idy + t * (next_idy - current_idy))
-                            z_pts.append(current_idz + t * (next_idz - current_idz))
-                            n += 1
-
-                        for i in range(len(x_pts)):
-                            id_x = int(x_pts[i])
-                            id_y = int(y_pts[i])
-                            id_z = int(z_pts[i])
+                            id_x = int(current_idx + t * (next_idx - current_idx))
+                            id_y = int(current_idy + t * (next_idy - current_idy))
+                            id_z = int(current_idz + t * (next_idz - current_idz))
+                            if self.__create_sequential_input and mask[id_z, id_y, id_x] != 1.0:
+                                trajectory_bin_points.append([id_z, id_y, id_x])
                             mask[id_z, id_y, id_x] = 1.0
+                            n += 1
 
                     # prepare next iteration
                     idx = next_idx
@@ -665,8 +676,32 @@ class HDF5Dataset(Dataset):
                             direction_axis = -direction_axis
                         else:
                             direction_axis = direction_axis
-                # add mask to sparse_input
-                sparse_input = torch.cat([sparse_input, mask.float().unsqueeze(0)])
+                if self.__create_sequential_input:
+                    if len(trajectory_bin_points) == 1:
+                        # in case no feasible trajectory points were found make sure there is at least one measurement
+                        # (the starting point) for each mask in each input sequence
+                        mask1[trajectory_bin_points[0], trajectory_bin_points[1], trajectory_bin_points[2]] = 1.0
+                        mask2[trajectory_bin_points[0], trajectory_bin_points[1], trajectory_bin_points[2]] = 1.0
+                        mask3[trajectory_bin_points[0], trajectory_bin_points[1], trajectory_bin_points[2]] = 1.0
+                    else:
+                        # divide trajectory into 3 equal parts
+                        _traj = int((len(trajectory_bin_points) / 3) + 1)
+                        traj1 = torch.from_numpy(np.asarray(trajectory_bin_points[:_traj]))
+                        traj2 = torch.from_numpy(np.asarray(trajectory_bin_points[_traj:2 * _traj]))
+                        traj3 = torch.from_numpy(np.asarray(trajectory_bin_points[2 * _traj:]))
+                        # masks
+                        mask1[traj1.split(1, dim=1)] = 1.0
+                        mask2[traj2.split(1, dim=1)] = 1.0
+                        mask3[traj3.split(1, dim=1)] = 1.0
+                    # add masks to sparse_input
+                    trajectory_input1 = torch.cat([sparse_input, mask1.float().unsqueeze(0)])
+                    trajectory_input2 = torch.cat([sparse_input, mask2.float().unsqueeze(0)])
+                    trajectory_input3 = torch.cat([sparse_input, mask3.float().unsqueeze(0)])
+                    sparse_input = torch.cat([trajectory_input1.unsqueeze(0), trajectory_input2.unsqueeze(0),
+                                              trajectory_input3.unsqueeze(0)])
+                else:
+                    # add mask to sparse_input
+                    sparse_input = torch.cat([sparse_input, mask.float().unsqueeze(0)])
 
             # generate the input channels
             if self.__create_sparse_mask or self.__create_trajectory_mask:
@@ -693,6 +728,8 @@ class HDF5Dataset(Dataset):
 
             # generate the input channels
             label = torch.index_select(data, 0, self.__label_indices)
+            if self.__create_sequential_input:
+                label = torch.cat([label.unsqueeze(0), label.unsqueeze(0), label.unsqueeze(0)])
 
             # generate the loss weighting matrix
             loss_weighting_matrix = self.__compute_loss_weighting(data, ds, self.__loss_weighting_fn)
