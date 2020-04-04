@@ -278,6 +278,7 @@ class ModelEDNN3D(nn.Module):
             pass
 
         if self.__use_sparse_convolution:
+            # Bias needs to be defined separately in case of sparse convolution
             use_bias = False
         else:
             use_bias = True
@@ -324,14 +325,11 @@ class ModelEDNN3D(nn.Module):
                                   self.__filter_kernel_size, bias=use_bias)
             if self.__use_sparse_convolution:
                 self.__bias_c1 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels * (self.__channel_multiplier ** self.__n_downsample_layers)), 1, 1, 1).float().cuda(), requires_grad=True)
-                self.__bias_c2 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))), 1, 1, 1).float().cuda(), requires_grad=True)
+                self.__bias_c2 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels * (self.__channel_multiplier**(self.__n_downsample_layers-1))), 1, 1, 1).float().cuda(), requires_grad=True)
 
         # up-convolution layers
         self.__deconv1 = nn.ModuleList()
         self.__deconv2 = nn.ModuleList()
-
-        self.__bias_deconv1 = nn.ParameterList()
-        self.__bias_deconv2 = nn.ParameterList()
 
         num_out = self.__num_outputs
         if self.__predict_uncertainty:
@@ -342,9 +340,6 @@ class ModelEDNN3D(nn.Module):
                 if i == 0:
                     self.__deconv1 += [nn.Conv3d(2*self.__n_first_conv_channels, self.__n_first_conv_channels, self.__filter_kernel_size+1, bias=use_bias)]
                     self.__deconv2 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1, bias=use_bias)]
-                    if self.__use_sparse_convolution:
-                        self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, self.__n_first_conv_channels, 1, 1, 1).float().cuda(), requires_grad=True)]
-                        self.__bias_deconv2 += [nn.Parameter(torch.zeros(1, num_out, 1, 1, 1).float().cuda(), requires_grad=True)]
                 else:
                     self.__deconv1 += [nn.Conv3d(2*int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
@@ -353,25 +348,14 @@ class ModelEDNN3D(nn.Module):
                     self.__deconv2 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
                                                  self.__filter_kernel_size+1, bias=use_bias)]
-                    if self.__use_sparse_convolution:
-                        self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels * (self.__channel_multiplier ** i)), 1, 1, 1).float().cuda(), requires_grad=True)]
-                        self.__bias_deconv2 += [nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))), 1, 1, 1).float().cuda(), requires_grad=True)]
-
         else:
             for i in range(self.__n_downsample_layers):
                 if i == 0:
                     self.__deconv1 += [nn.Conv3d(self.__n_first_conv_channels, num_out, self.__filter_kernel_size+1, bias=use_bias)]
-                    if self.__use_sparse_convolution:
-                        self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, num_out, 1, 1, 1).float().cuda(), requires_grad=True)]
                 else:
                     self.__deconv1 += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
                                                  self.__filter_kernel_size+1, bias=use_bias)]
-                    if self.__use_sparse_convolution:
-                        self.__bias_deconv1 += [nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))), 1, 1, 1).float().cuda(), requires_grad=True)]
-
-        # bias for sparse convolution
-        # self.__bias = nn.Parameter(torch.zeros(1, self.__num_inputs, 1, 1, 1).float(), requires_grad=True)
 
         # mapping layer
         if self.__use_mapping_layer:
@@ -460,7 +444,6 @@ class ModelEDNN3D(nn.Module):
         output = {}
         x_skip = []
         sparse_mask_skip = []
-        use_up_sparse_convolution = False
         # down-convolution
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
@@ -551,8 +534,8 @@ class ModelEDNN3D(nn.Module):
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
         else:
-            if self.__use_sparse_convolution and use_up_sparse_convolution:  # sparse convolution operation
-                # C1
+            if self.__use_sparse_convolution:  # sparse convolution operation
+                # Convolution 1
                 # elementwise multiplication
                 sparse_mask_expanded = sparse_mask.expand_as(x)
                 x = sparse_mask_expanded * x
@@ -576,7 +559,7 @@ class ModelEDNN3D(nn.Module):
                 # activation
                 x = self.__activation(x)
 
-                # C2
+                # Convolution 2
                 # elementwise multiplication
                 sparse_mask_expanded = sparse_mask.expand_as(x)
                 x = sparse_mask_expanded * x
@@ -606,222 +589,24 @@ class ModelEDNN3D(nn.Module):
         # up-convolution
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                if self.__use_sparse_convolution and use_up_sparse_convolution:  # sparse convolution operation
-                    if (i == 0):
-                        # Deconv 1
-                        # elementwise multiplication
-                        sparse_mask_expanded = sparse_mask.expand_as(x)
-                        x = sparse_mask_expanded * x
-
-                        # convolution
-                        x = self.__deconv1[i](self.__pad_deconv(torch.cat([
-                            F.interpolate(x, scale_factor=2,
-                                          mode=self.__interpolation_mode,
-                                          align_corners=self.__align_corners),
-                            x_skip[i]], 1)))
-
-                        # normalization
-                        weights = torch.ones_like(self.__deconv1[i].weight)
-                        sparse_mask_expanded_interp = F.interpolate(sparse_mask_expanded, scale_factor=2,
-                                                                    mode=self.__interpolation_mode,
-                                                                    align_corners=self.__align_corners)
-                        sparse_mask_expanded_interp = torch.gt(sparse_mask_expanded_interp, 0).float()
-                        norm = F.conv3d(self.__pad_deconv(torch.cat([sparse_mask_expanded_interp, sparse_mask_skip[i]], 1)),
-                                        weights, bias=None, stride=self.__deconv1[i].stride,
-                                        padding=self.__deconv1[i].padding, dilation=self.__deconv1[i].dilation)
-                        norm = torch.clamp(norm, min=1e-5)
-                        norm = 1. / norm
-                        x = norm * x
-
-                        # add bias
-                        bias = self.__bias_deconv1[i].expand_as(x)
-                        x = x + bias
-
-                        # activation
-                        x = self.__activation(x)
-
-                        # mask upsampling
-                        sparse_mask_interpolated = F.interpolate(sparse_mask, scale_factor=2,
-                                                                 mode=self.__interpolation_mode,
-                                                                 align_corners=self.__align_corners)
-                        sparse_mask = torch.gt(sparse_mask_interpolated, 0).float()
-
-                        # Deconv 2
-                        # elementwise multiplication
-                        sparse_mask_expanded = sparse_mask.expand_as(x)
-                        x = sparse_mask_expanded * x
-
-                        # convolution
-                        x = self.__deconv2[i](self.__pad_deconv(x))
-
-                        # normalization
-                        weights = torch.ones_like(self.__deconv2[i].weight)
-                        norm = F.conv3d(self.__pad_deconv(sparse_mask_expanded), weights, bias=None,
-                                        stride=self.__deconv2[i].stride, padding=self.__deconv2[i].padding,
-                                        dilation=self.__deconv2[i].dilation)
-                        norm = torch.clamp(norm, min=1e-5)
-                        norm = 1. / norm
-                        x = norm * x
-
-                        # add bias
-                        bias = self.__bias_deconv2[i].expand_as(x)
-                        x = x + bias
-                    else:
-                        # Deconv 1
-                        # elementwise multiplication
-                        sparse_mask_expanded = sparse_mask.expand_as(x)
-                        x = sparse_mask_expanded * x
-
-                        # convolution
-                        x = self.__deconv1[i](self.__pad_deconv(torch.cat([
-                            F.interpolate(x, scale_factor=2,
-                                          mode=self.__interpolation_mode,
-                                          align_corners=self.__align_corners),
-                            x_skip[i]], 1)))
-
-                        # normalization
-                        weights = torch.ones_like(self.__deconv1[i].weight)
-                        sparse_mask_expanded_interp = F.interpolate(sparse_mask_expanded, scale_factor=2,
-                                                                    mode=self.__interpolation_mode,
-                                                                    align_corners=self.__align_corners)
-                        sparse_mask_expanded_interp = torch.gt(sparse_mask_expanded_interp, 0).float()
-                        norm = F.conv3d(self.__pad_deconv(torch.cat([sparse_mask_expanded_interp, sparse_mask_skip[i]], 1)),
-                                        weights, bias=None, stride=self.__deconv1[i].stride,
-                                        padding=self.__deconv1[i].padding, dilation=self.__deconv1[i].dilation)
-                        norm = torch.clamp(norm, min=1e-5)
-                        norm = 1. / norm
-                        x = norm * x
-
-                        # add bias
-                        bias = self.__bias_deconv1[i].expand_as(x)
-                        x = x + bias
-
-                        # activation
-                        x = self.__activation(x)
-
-                        # mask upsampling
-                        sparse_mask_interpolated = F.interpolate(sparse_mask, scale_factor=2,
-                                                                 mode=self.__interpolation_mode,
-                                                                 align_corners=self.__align_corners)
-                        sparse_mask = torch.gt(sparse_mask_interpolated, 0).float()
-
-                        # Deconv 2
-                        # elementwise multiplication
-                        sparse_mask_expanded = sparse_mask.expand_as(x)
-                        x = sparse_mask_expanded * x
-
-                        # convolution
-                        x = self.__deconv2[i](self.__pad_deconv(x))
-
-                        # normalization
-                        weights = torch.ones_like(self.__deconv2[i].weight)
-                        norm = F.conv3d(self.__pad_deconv(sparse_mask_expanded), weights, bias=None,
-                                        stride=self.__deconv2[i].stride, padding=self.__deconv2[i].padding,
-                                        dilation=self.__deconv2[i].dilation)
-                        norm = torch.clamp(norm, min=1e-5)
-                        norm = 1. / norm
-                        x = norm * x
-
-                        # add bias
-                        bias = self.__bias_deconv2[i].expand_as(x)
-                        x = x + bias
-
-                        # activation
-                        x = self.__activation(x)
-
+                if (i == 0):
+                    # no nonlinearity in the output layer
+                    x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1))))))
                 else:
-                    if (i == 0):
-                        # no nonlinearity in the output layer
-                        x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
-                            torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
-                                       x_skip[i]], 1))))))
-                    else:
-                        x = self.__activation(self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
-                            torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
-                                       x_skip[i]], 1)))))))
+                    x = self.__activation(self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                   x_skip[i]], 1)))))))
         else:
             for i in range(self.__n_downsample_layers-1, -1, -1):
-                if self.__use_sparse_convolution and use_up_sparse_convolution:  # sparse convolution operation
-                    if (i  == 0):
-                        # Deconv 1
-                        # elementwise multiplication
-                        sparse_mask_expanded = sparse_mask.expand_as(x)
-                        x = sparse_mask_expanded * x
-
-                        # convolution
-                        x = self.__deconv1[i](self.__pad_deconv(F.interpolate(x, scale_factor=2,
-                                                                           mode=self.__interpolation_mode,
-                                                                           align_corners=self.__align_corners)))
-
-                        # normalization
-                        weights = torch.ones_like(self.__deconv1[i].weight)
-                        sparse_mask_expanded_interp = F.interpolate(sparse_mask_expanded, scale_factor=2,
-                                                                    mode=self.__interpolation_mode,
-                                                                    align_corners=self.__align_corners)
-                        sparse_mask_expanded_interp = torch.gt(sparse_mask_expanded_interp, 0).float()
-                        norm = F.conv3d(self.__pad_conv(sparse_mask_expanded_interp),
-                                        weights, bias=None,
-                                        stride=self.__deconv1[i].stride, padding=self.__deconv1[i].padding,
-                                        dilation=self.__deconv1[i].dilation)
-                        norm = torch.clamp(norm, min=1e-5)
-                        norm = 1. / norm
-                        x = norm * x
-
-                        # add bias
-                        bias = self.__bias_deconv1[i].expand_as(x)
-                        x = x + bias
-
-                        # mask upsampling
-                        sparse_mask_interpolated = F.interpolate(sparse_mask, scale_factor=2,
-                                                                 mode=self.__interpolation_mode,
-                                                                 align_corners=self.__align_corners)
-                        sparse_mask = torch.gt(sparse_mask_interpolated, 0).float()
-                    else:
-                        # Deconv 1
-                        # elementwise multiplication
-                        sparse_mask_expanded = sparse_mask.expand_as(x)
-                        x = sparse_mask_expanded * x
-
-                        # convolution
-                        x = self.__deconv1[i](self.__pad_deconv(F.interpolate(x, scale_factor=2,
-                                                                           mode=self.__interpolation_mode,
-                                                                           align_corners=self.__align_corners)))
-
-                        # normalization
-                        weights = torch.ones_like(self.__deconv1[i].weight)
-                        sparse_mask_expanded_interp = F.interpolate(sparse_mask_expanded, scale_factor=2,
-                                                                    mode=self.__interpolation_mode,
-                                                                    align_corners=self.__align_corners)
-                        sparse_mask_expanded_interp = torch.gt(sparse_mask_expanded_interp, 0).float()
-                        norm = F.conv3d(self.__pad_conv(sparse_mask_expanded_interp),
-                                        weights, bias=None,
-                                        stride=self.__deconv1[i].stride, padding=self.__deconv1[i].padding,
-                                        dilation=self.__deconv1[i].dilation)
-                        norm = torch.clamp(norm, min=1e-5)
-                        norm = 1. / norm
-                        x = norm * x
-
-                        # add bias
-                        bias = self.__bias_deconv1[i].expand_as(x)
-                        x = x + bias
-
-                        # activation
-                        x = self.__activation(x)
-
-                        # mask upsampling
-                        sparse_mask_interpolated = F.interpolate(sparse_mask, scale_factor=2,
-                                                                 mode=self.__interpolation_mode,
-                                                                 align_corners=self.__align_corners)
-                        sparse_mask = torch.gt(sparse_mask_interpolated, 0).float()
-
+                if (i == 0):
+                    # no nonlinearity in the output layer
+                    x = self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
                 else:
-                    if (i == 0):
-                        # no nonlinearity in the output layer
-                        x = self.__deconv1[i](self.__pad_deconv(
-                            F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
-                    else:
-                        x = self.__activation(self.__deconv1[i](self.__pad_deconv(
-                            F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners))))
+                    x = self.__activation(self.__deconv1[i](self.__pad_deconv(
+                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners))))
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)
