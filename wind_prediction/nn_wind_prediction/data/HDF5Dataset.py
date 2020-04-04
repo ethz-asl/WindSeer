@@ -581,7 +581,7 @@ class HDF5Dataset(Dataset):
                 boolean_terrain = (terrain <= 0).float()  # true where there is terrain
                 # mask
                 mask = torch.zeros_like(terrain)
-                if sequence_model:
+                if self.__create_sequential_input:
                     mask1 = torch.zeros_like(terrain)
                     mask2 = torch.zeros_like(terrain)
                     mask3 = torch.zeros_like(terrain)
@@ -704,7 +704,7 @@ class HDF5Dataset(Dataset):
                     sparse_input = torch.cat([sparse_input, mask.float().unsqueeze(0)])
 
             # generate the input channels
-            if self.__create_sparse_mask or self.__create_trajectory_mask:
+            if self.__create_sparse_mask or self.__create_trajectory_mask or self.__create_sequential_input:
                 # take modified labels with terrain and sparse/terrain mask as input data
                 input = sparse_input
             else:
@@ -728,8 +728,8 @@ class HDF5Dataset(Dataset):
 
             # generate the input channels
             label = torch.index_select(data, 0, self.__label_indices)
-            if self.__create_sequential_input:
-                label = torch.cat([label.unsqueeze(0), label.unsqueeze(0), label.unsqueeze(0)])
+            # if self.__create_sequential_input:
+            #     label = torch.cat([label.unsqueeze(0), label.unsqueeze(0), label.unsqueeze(0)])
 
             # generate the loss weighting matrix
             loss_weighting_matrix = self.__compute_loss_weighting(data, ds, self.__loss_weighting_fn)

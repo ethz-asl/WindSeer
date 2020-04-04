@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import nn_wind_prediction.utils as utils
+from nn_wind_prediction.models.ConvLSTMLayer import ConvLSTM3d
 
 '''
 Encoder/Decoder Neural Network
@@ -38,11 +39,12 @@ class ModelEDNN3D(nn.Module):
     __default_use_epsilon = False
     __default_use_nut = False
     __default_grid_size = [1, 1, 1]
-    __default_use_sparse_mask = False
-    __default_use_sparse_convolution = False
     __default_vae = False
     __default_logvar_scaling = 10
     __default_predict_uncertainty = False
+    __default_use_sparse_mask = False
+    __default_use_sparse_convolution = False
+    __default_use_hybrid_model = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -174,20 +176,6 @@ class ModelEDNN3D(nn.Module):
                 print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
 
         try:
-            self.__use_sparse_mask = kwargs['use_sparse_mask']
-        except KeyError:
-            self.__use_sparse_mask = self.__default_use_sparse_mask
-            if verbose:
-                print('EDNN3D: use_sparse_mask not present in kwargs, using default value:', self.__default_use_sparse_mask)
-
-        try:
-            self.__use_sparse_convolution = kwargs['use_sparse_convolution']
-        except KeyError:
-            self.__use_sparse_convolution = self.__default_use_sparse_convolution
-            if verbose:
-                print('EDNN3D: use_sparse_convolution not present in kwargs, using default value:', self.__default_use_sparse_convolution)
-
-        try:
             self.__use_turbulence = kwargs['use_turbulence']
         except KeyError:
             self.__use_turbulence = self.__default_use_turbulence
@@ -235,6 +223,27 @@ class ModelEDNN3D(nn.Module):
             self.__predict_uncertainty = self.__default_predict_uncertainty
             if verbose:
                 print('EDNN3D: predict_uncertainty not present in kwargs, using default value:', self.__default_predict_uncertainty)
+
+        try:
+            self.__use_sparse_mask = kwargs['use_sparse_mask']
+        except KeyError:
+            self.__use_sparse_mask = self.__default_use_sparse_mask
+            if verbose:
+                print('EDNN3D: use_sparse_mask not present in kwargs, using default value:', self.__default_use_sparse_mask)
+
+        try:
+            self.__use_sparse_convolution = kwargs['use_sparse_convolution']
+        except KeyError:
+            self.__use_sparse_convolution = self.__default_use_sparse_convolution
+            if verbose:
+                print('EDNN3D: use_sparse_convolution not present in kwargs, using default value:', self.__default_use_sparse_convolution)
+
+        try:
+            self.__use_hybrid_model = kwargs['use_hybrid_model']
+        except KeyError:
+            self.__use_hybrid_model = self.__default_use_hybrid_model
+            if verbose:
+                print('EDNN3D: use_hybrid_model not present in kwargs, using default value:', self.__default_use_hybrid_model)
 
         if self.__vae and not self.__use_fc_layers:
             print('EDNN3D: Error, to use the vae mode the fc layers need to be enabled.')
@@ -316,16 +325,21 @@ class ModelEDNN3D(nn.Module):
                 self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
             self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
         else:
-            self.__c1 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
-                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
-                                  self.__filter_kernel_size, bias=use_bias)
+            if self.__use_hybrid_model:
+                self.__convLSTM = ConvLSTM3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
+                                             int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
+                                             self.__filter_kernel_size, num_layers=1, batch_first=True, bias=True, return_all_layers=False)
+            else:
+                self.__c1 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
+                                      int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
+                                      self.__filter_kernel_size, bias=use_bias)
 
-            self.__c2 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
-                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
-                                  self.__filter_kernel_size, bias=use_bias)
-            if self.__use_sparse_convolution:
-                self.__bias_c1 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels * (self.__channel_multiplier ** self.__n_downsample_layers)), 1, 1, 1).float().cuda(), requires_grad=True)
-                self.__bias_c2 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels * (self.__channel_multiplier**(self.__n_downsample_layers-1))), 1, 1, 1).float().cuda(), requires_grad=True)
+                self.__c2 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
+                                      int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
+                                      self.__filter_kernel_size, bias=use_bias)
+                if self.__use_sparse_convolution:
+                    self.__bias_c1 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels * (self.__channel_multiplier ** self.__n_downsample_layers)), 1, 1, 1).float().cuda(), requires_grad=True)
+                    self.__bias_c2 = nn.Parameter(torch.zeros(1, int(self.__n_first_conv_channels * (self.__channel_multiplier**(self.__n_downsample_layers-1))), 1, 1, 1).float().cuda(), requires_grad=True)
 
         # up-convolution layers
         self.__deconv1 = nn.ModuleList()
@@ -427,9 +441,14 @@ class ModelEDNN3D(nn.Module):
 
     def forward(self, x):
         if self.__use_sparse_mask:
-            # apply sparse mask
-            sparse_mask = x[:, -1, :].unsqueeze(1).clone()
-            x[:, 1:-1, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:-1, :].clone()
+            if self.__use_hybrid_model:
+                batch, timestampes, channels, nz, ny, nx = x.shape
+                for i in range(timestampes):
+                    sparse_mask = x[:, i, -1, :].unsqueeze(1).clone()
+                    x[:, i, 1:-1, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, i, 1:-1, :].clone()
+            else:
+                sparse_mask = x[:, -1, :].unsqueeze(1).clone()
+                x[:, 1:-1, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, 1:-1, :].clone()
 
         if self.__use_sparse_convolution:
             # separate mask from inputs and treat it separately
@@ -438,80 +457,97 @@ class ModelEDNN3D(nn.Module):
 
         if self.__use_terrain_mask:
             # store the terrain data
-            is_wind = x[:, 0, :].unsqueeze(1).clone()
-            is_wind.sign_()
+            if self.__use_hybrid_model:
+                is_wind = x[:, 0, 0, :].clone()
+                is_wind.sign_()
+            else:
+                is_wind = x[:, 0, :].unsqueeze(1).clone()
+                is_wind.sign_()
 
         output = {}
         x_skip = []
         sparse_mask_skip = []
         # down-convolution
-        if (self.__skipping):
-            for i in range(self.__n_downsample_layers):
-                if self.__use_sparse_convolution:  # sparse convolution operation
-                    # elementwise multiplication
-                    sparse_mask_expanded = sparse_mask.expand_as(x)
-                    x = sparse_mask_expanded * x
-
-                    # convolution
-                    x = self.__conv[i](self.__pad_conv(x))
-
-                    # normalization
-                    weights = torch.ones_like(self.__conv[i].weight)
-                    norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
-                                    stride=self.__conv[i].stride, padding=self.__conv[i].padding,
-                                    dilation=self.__conv[i].dilation)
-                    norm = torch.clamp(norm, min=1e-5)
-                    norm = 1. / norm
-                    x = norm * x
-
-                    # add bias
-                    bias = self.__bias_conv[i].expand_as(x)
-                    x = x + bias
-
-                    # activation
-                    x = self.__activation(x)
-                    x_skip.append(x.clone())
-                    sparse_mask_skip.append(sparse_mask.expand_as(x).clone())
-
-                    # pooling
-                    x = self.__pooling(x)
-                    sparse_mask = self.__mask_pooling(sparse_mask)
-                else:
-                    x = self.__activation(self.__conv[i](self.__pad_conv(x)))
-                    x_skip.append(x.clone())
-                    x = self.__pooling(x)
-
+        if self.__use_hybrid_model:
+            batch, timestampes, channels, nz, ny, nx = x.shape
+            x_timestamp = []
+            x_original = x.clone()
+            for i in range(timestampes):
+                for j in range(self.__n_downsample_layers):
+                    if j == 0:
+                        x = self.__pooling(self.__activation(self.__conv[j](self.__pad_conv(x_original[:, i, :]))))
+                    else:
+                        x = self.__pooling(self.__activation(self.__conv[j](self.__pad_conv(x))))
+                x_timestamp.append(x)
+            x = torch.stack(x_timestamp, dim=1)
         else:
-            for i in range(self.__n_downsample_layers):
-                if self.__use_sparse_convolution:  # sparse convolution operation
-                    # elementwise multiplication
-                    sparse_mask_expanded = sparse_mask.expand_as(x)
-                    x = sparse_mask_expanded * x
+            if (self.__skipping):
+                for i in range(self.__n_downsample_layers):
+                    if self.__use_sparse_convolution:  # sparse convolution operation
+                        # elementwise multiplication
+                        sparse_mask_expanded = sparse_mask.expand_as(x)
+                        x = sparse_mask_expanded * x
 
-                    # convolution
-                    x = self.__conv[i](self.__pad_conv(x))
+                        # convolution
+                        x = self.__conv[i](self.__pad_conv(x))
 
-                    # normalization
-                    weights = torch.ones_like(self.__conv[i].weight)
-                    norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
-                                    stride=self.__conv[i].stride, padding=self.__conv[i].padding,
-                                    dilation=self.__conv[i].dilation)
-                    norm = torch.clamp(norm, min=1e-5)
-                    norm = 1. / norm
-                    x = norm * x
+                        # normalization
+                        weights = torch.ones_like(self.__conv[i].weight)
+                        norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
+                                        stride=self.__conv[i].stride, padding=self.__conv[i].padding,
+                                        dilation=self.__conv[i].dilation)
+                        norm = torch.clamp(norm, min=1e-5)
+                        norm = 1. / norm
+                        x = norm * x
 
-                    # add bias
-                    bias = self.__bias_conv[i].expand_as(x)
-                    x = x + bias
+                        # add bias
+                        bias = self.__bias_conv[i].expand_as(x)
+                        x = x + bias
 
-                    # activation
-                    x = self.__activation(x)
+                        # activation
+                        x = self.__activation(x)
+                        x_skip.append(x.clone())
+                        sparse_mask_skip.append(sparse_mask.expand_as(x).clone())
 
-                    # pooling
-                    x = self.__pooling(x)
-                    sparse_mask = self.__mask_pooling(sparse_mask)
-                else:
-                    x = self.__pooling(self.__activation(self.__conv[i](self.__pad_conv(x))))
+                        # pooling
+                        x = self.__pooling(x)
+                        sparse_mask = self.__mask_pooling(sparse_mask)
+                    else:
+                        x = self.__activation(self.__conv[i](self.__pad_conv(x)))
+                        x_skip.append(x.clone())
+                        x = self.__pooling(x)
+
+            else:
+                for i in range(self.__n_downsample_layers):
+                    if self.__use_sparse_convolution:  # sparse convolution operation
+                        # elementwise multiplication
+                        sparse_mask_expanded = sparse_mask.expand_as(x)
+                        x = sparse_mask_expanded * x
+
+                        # convolution
+                        x = self.__conv[i](self.__pad_conv(x))
+
+                        # normalization
+                        weights = torch.ones_like(self.__conv[i].weight)
+                        norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
+                                        stride=self.__conv[i].stride, padding=self.__conv[i].padding,
+                                        dilation=self.__conv[i].dilation)
+                        norm = torch.clamp(norm, min=1e-5)
+                        norm = 1. / norm
+                        x = norm * x
+
+                        # add bias
+                        bias = self.__bias_conv[i].expand_as(x)
+                        x = x + bias
+
+                        # activation
+                        x = self.__activation(x)
+
+                        # pooling
+                        x = self.__pooling(x)
+                        sparse_mask = self.__mask_pooling(sparse_mask)
+                    else:
+                        x = self.__pooling(self.__activation(self.__conv[i](self.__pad_conv(x))))
 
         # fully connected layers
         if self.__use_fc_layers:
@@ -582,6 +618,9 @@ class ModelEDNN3D(nn.Module):
 
                 # activation
                 x = self.__activation(x)
+            elif self.__use_hybrid_model:
+                _, last_states = self.__convLSTM(x)
+                x = last_states[0][0]  # last hidden state
             else:
                 x = self.__activation(self.__c1(self.__pad_conv(x)))
                 x = self.__activation(self.__c2(self.__pad_conv(x)))

@@ -57,7 +57,7 @@ class ConvLSTMCell(nn.Module):
                 torch.zeros(batch_size, self.hidden_dim, height, width, length, device=self.conv.weight.device))
 
 
-class ConvLSTM(nn.Module):
+class ConvLSTM3d(nn.Module):
 
     """
     Parameters:
@@ -78,7 +78,7 @@ class ConvLSTM(nn.Module):
                     each element of the list is a tuple (h, c) for hidden state and memory
     Example:
          x = torch.rand((12, 3, 32, 16, 16, 16))
-         convlstm = ConvLSTM(32, 32, 3, 1, True, True, False)
+         convlstm = ConvLSTM3d(32, 32, 3, 1, True, True, False)
          out, last_states = convlstm(x)
          h = last_states[0][0]  # 0 for layer index, 0 for h index
          x_new = out[0]
@@ -86,7 +86,7 @@ class ConvLSTM(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, kernel_size, num_layers,
                  batch_first=False, bias=True, return_all_layers=False):
-        super(ConvLSTM, self).__init__()
+        super(ConvLSTM3d, self).__init__()
 
         # Make 3d tuple from kernel_size
         kernel_size = (kernel_size, kernel_size, kernel_size)
