@@ -142,5 +142,8 @@ model:
 
         # sparse input params
         use_sparse_mask: True,
-        use_sparse_convolution: False
+        use_sparse_convolution: False,
+
+        # hybrid model
+        use_hybrid_model: True
     }
