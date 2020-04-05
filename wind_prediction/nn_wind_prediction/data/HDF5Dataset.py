@@ -680,9 +680,9 @@ class HDF5Dataset(Dataset):
                     if len(trajectory_bin_points) == 1:
                         # in case no feasible trajectory points were found make sure there is at least one measurement
                         # (the starting point) for each mask in each input sequence
-                        mask1[trajectory_bin_points[0], trajectory_bin_points[1], trajectory_bin_points[2]] = 1.0
-                        mask2[trajectory_bin_points[0], trajectory_bin_points[1], trajectory_bin_points[2]] = 1.0
-                        mask3[trajectory_bin_points[0], trajectory_bin_points[1], trajectory_bin_points[2]] = 1.0
+                        mask1[trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
+                        mask2[trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
+                        mask3[trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
                     else:
                         # divide trajectory into 3 equal parts
                         _traj = int((len(trajectory_bin_points) / 3) + 1)

@@ -442,8 +442,8 @@ class ModelEDNN3D(nn.Module):
     def forward(self, x):
         if self.__use_sparse_mask:
             if self.__use_hybrid_model:
-                batch, timestampes, channels, nz, ny, nx = x.shape
-                for i in range(timestampes):
+                batch, timesteps, channels, nz, ny, nx = x.shape
+                for i in range(timesteps):
                     sparse_mask = x[:, i, -1, :].unsqueeze(1).clone()
                     x[:, i, 1:-1, :] = sparse_mask.repeat(1, self.__num_outputs, 1, 1, 1) * x[:, i, 1:-1, :].clone()
             else:
@@ -458,7 +458,7 @@ class ModelEDNN3D(nn.Module):
         if self.__use_terrain_mask:
             # store the terrain data
             if self.__use_hybrid_model:
-                is_wind = x[:, 0, 0, :].clone()
+                is_wind = x[:, 0, 0, :].unsqueeze(1).clone()
                 is_wind.sign_()
             else:
                 is_wind = x[:, 0, :].unsqueeze(1).clone()
@@ -469,17 +469,17 @@ class ModelEDNN3D(nn.Module):
         sparse_mask_skip = []
         # down-convolution
         if self.__use_hybrid_model:
-            batch, timestampes, channels, nz, ny, nx = x.shape
-            x_timestamp = []
+            batch, timesteps, channels, nz, ny, nx = x.shape
+            x_timesteps = []
             x_original = x.clone()
-            for i in range(timestampes):
+            for i in range(timesteps):
                 for j in range(self.__n_downsample_layers):
                     if j == 0:
                         x = self.__pooling(self.__activation(self.__conv[j](self.__pad_conv(x_original[:, i, :]))))
                     else:
                         x = self.__pooling(self.__activation(self.__conv[j](self.__pad_conv(x))))
-                x_timestamp.append(x)
-            x = torch.stack(x_timestamp, dim=1)
+                x_timesteps.append(x)
+            x = torch.stack(x_timesteps, dim=1)
         else:
             if (self.__skipping):
                 for i in range(self.__n_downsample_layers):
