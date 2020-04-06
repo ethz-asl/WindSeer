@@ -26,7 +26,10 @@ cosmo:
 # flight data
 flight:
     flight_data_dir: 'data/'
-    files: ['13_02_02.ulg', '13_33_46.ulg', '14_15_04.ulg', '14_47_05.ulg', '14_47_05_filtered.hdf5']  # ['10_36_34.ulg', '11_11_57.ulg']
+    files: ['13_02_02.ulg', '13_33_46.ulg', '14_15_04.ulg', '14_47_05.ulg', '14_47_05_filtered.hdf5']
+    # ['13_02_02.ulg', '13_33_46.ulg', '14_15_04.ulg', '14_47_05.ulg', '14_47_05_filtered.hdf5']
+    # ['10_36_34.ulg', '11_11_57.ulg']
+    # ['20190726_flight01_fpr.mat', '20190726_flight02_fpr.mat', '20190726_flight03_fpr.mat', '20190726_flight04_fpr.mat', '20190726_flight05_fpr.mat', '20190809_flight01_fpr.mat', '20190809_flight02_fpr.mat', '20190809_flight03_fpr.mat', '20190809_flight04_fpr.mat']
     index: 3
     #
     filtered_dir: 'data/'

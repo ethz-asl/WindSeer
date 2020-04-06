@@ -360,7 +360,7 @@ class WindOptimiser(object):
                                device=self._device, boolean_terrain=boolean_terrain)
         return terrain
 
-    # --- Wind generation ---
+    # --- Wind data ---
 
     def get_sparse_wind_blocks(self, p=0):
         time_start = time.time()
