@@ -21,6 +21,7 @@ import os
 import time
 import copy
 import math
+import warnings
 
 
 def angle_between_vectors(v1, v2, deg_rad=0):
@@ -195,7 +196,8 @@ class WindOptimiser(object):
             self._base_cfd_corners = self.get_cfd_corners()
             # self._optimized_corners = self.get_optimized_corners()
         if self.flag.test_flight_data:
-            self._base_cosmo_corners = self.get_cosmo_corners()
+            if len(self._cosmo_wind) > 1:
+                self._base_cosmo_corners = self.get_cosmo_corners()
         self._interpolator = DataInterpolation(self._device, 3, *self.terrain.get_dimensions())
 
     # --- Network and loss function ---
@@ -309,12 +311,31 @@ class WindOptimiser(object):
         # x_terr, y_terr and z_terr are the (regular, monotonic) index arrays for the h_terr and full_block arrays
         # h_terr is the terrain height
         boolean_terrain = self._model_args.params['boolean_terrain']
+        if len(self._cosmo_wind) == 1:
+            # print warning since we are creating predefined terrain limits
+            # warnings.warn('Warning!: no cosmo data for selected flight. Creating user defined limits for the terrain!')
+            warnings.warn('Warning!: no cosmo data for selected flight')
 
-        terrain = TerrainBlock(
-            *get_mapgeo_terrain.get_terrain(self._cosmo_args.params['terrain_tiff'], self._cosmo_wind['x'][[0, 1], [0, 1]],
-                               self._cosmo_wind['y'][[0, 1], [0, 1]],
-                               block_height, (self._resolution, self._resolution, self._resolution)),
-            device=self._device, boolean_terrain=boolean_terrain)
+            x_max_distance = self._flight_data['x'].max() - self._flight_data['x'].min()
+            if x_max_distance > 1100:
+                x = [self._flight_data['x'].min(), self._flight_data['x'].min()]
+            else:
+                x = [self._flight_data['x'].min() - 200, self._flight_data['x'].min() + 900]
+            y_max_distance = self._flight_data['y'].max() - self._flight_data['y'].min()
+            if y_max_distance > 1100:
+                y = [self._flight_data['y'].min(), self._flight_data['y'].min()]
+            else:
+                y = [self._flight_data['y'].min() - 300, self._flight_data['y'].min() + 800]
+            terrain = TerrainBlock(
+                *get_mapgeo_terrain.get_terrain(self._cosmo_args.params['terrain_tiff'], x, y,
+                                   block_height, (self._resolution, self._resolution, self._resolution)),
+                device=self._device, boolean_terrain=boolean_terrain)
+        else:
+            terrain = TerrainBlock(
+                *get_mapgeo_terrain.get_terrain(self._cosmo_args.params['terrain_tiff'], self._cosmo_wind['x'][[0, 1], [0, 1]],
+                                   self._cosmo_wind['y'][[0, 1], [0, 1]],
+                                   block_height, (self._resolution, self._resolution, self._resolution)),
+                device=self._device, boolean_terrain=boolean_terrain)
         print(' done [{:.2f} s]'.format(time.time() - t_start))
         return terrain
 
