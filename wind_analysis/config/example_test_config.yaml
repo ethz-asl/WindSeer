@@ -106,6 +106,10 @@ model:
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'
+  hybrid_model: {
+      use_hybrid_model: False,
+      sequence_length: 10
+  }
 
 second_model:
   use_second_model: True

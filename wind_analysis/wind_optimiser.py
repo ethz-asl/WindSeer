@@ -92,7 +92,7 @@ class OptTest(object):
 
 
 class SelectionFlags(object):
-    def __init__(self, test, cfd, flight, wind, noise, window_split, optimisation):
+    def __init__(self, test, cfd, flight, wind, noise, window_split, optimisation, model):
         self.test_simulated_data = test.params['test_simulated_data']
         self.test_flight_data = test.params['test_flight_data']
         self.print_names = cfd.params['print_names']
@@ -118,6 +118,7 @@ class SelectionFlags(object):
         self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
         self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
         self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
+        self.use_hybrid_model = model.params['hybrid_model']['use_hybrid_model']
 
 
 class WindOptimiser(object):
@@ -143,7 +144,8 @@ class WindOptimiser(object):
 
         # Selection flags
         self.flag = SelectionFlags(self._test_args, self._cfd_args, self._flight_args, self._wind_args,
-                                   self._noise_args, self._window_splits_args, self._optimisation_args)
+                                   self._noise_args, self._window_splits_args, self._optimisation_args,
+                                   self._model_args)
 
         # Network model and loss function
         self.net, self.params = self.load_network_model()
@@ -422,7 +424,10 @@ class WindOptimiser(object):
         # define validity mask (1s where there is wind data 0s everwhere else)
         mask = torch.zeros_like(terrain)
 
-        # initial simulated flight data
+        # initialize trajectory list
+        sequential_input = []
+
+        # initialize simulated flight data
         simulated_flight_data = {}
 
         # spiral trajectory
@@ -546,13 +551,8 @@ class WindOptimiser(object):
 
         if segment_trajectory:
             time_start = time.time()
-            sequence_model = False
             # boolean terrain
             boolean_terrain = (self.original_terrain.clone() <= 0).float()  # true where there is terrain
-            if sequence_model:
-                mask1 = torch.zeros_like(terrain)
-                mask2 = torch.zeros_like(terrain)
-                mask3 = torch.zeros_like(terrain)
             # network terrain height
             h_terrain = boolean_terrain.sum(0, keepdim=True).squeeze(0)
             # random starting point
@@ -567,7 +567,7 @@ class WindOptimiser(object):
             dir_2 = 2
             # Random number of segments, each with a length between 10 and 11 bins
             # num_of_segments = random.randint(2, 20)
-            num_of_segments = 2
+            num_of_segments = 10
             # first axis to go along
             direction_axis = 1
             forward_axis = 'x'
@@ -607,6 +607,12 @@ class WindOptimiser(object):
                     # stop if no feasible point was found
                     print('No feasible next point found at iteration: ', i)
                     mask[current_idz, current_idy, current_idx] = 1.0
+                    if self.flag.use_hybrid_model:
+                        sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                        for i in range(sequence_length):
+                            mask_segment = torch.zeros_like(terrain)
+                            mask_segment[trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
+                            sequential_input.append(torch.cat([wind, mask_segment.float().unsqueeze(0)]))
                     break
                 else:
                     # time_inter = time.time()
@@ -624,7 +630,7 @@ class WindOptimiser(object):
                         id_x = int(current_idx + t * (next_idx - current_idx))
                         id_y = int(current_idy + t * (next_idy - current_idy))
                         id_z = int(current_idz + t * (next_idz - current_idz))
-                        if sequence_model and mask[id_z, id_y, id_x] != 1.0:
+                        if self.flag.use_hybrid_model and mask[id_z, id_y, id_x] != 1.0:
                             trajectory_bin_points.append([id_z, id_y, id_x])
                         mask[id_z, id_y, id_x] = 1.0
                         n += 1
@@ -646,24 +652,29 @@ class WindOptimiser(object):
                     else:
                         direction_axis = direction_axis
             # print('Time to create feasible points:', time_inter - time_start)
-            if sequence_model:
-                _traj = int((len(trajectory_bin_points) / 3) + 1)
-                traj1 = torch.from_numpy(np.asarray(trajectory_bin_points[:_traj]))
-                traj2 = torch.from_numpy(np.asarray(trajectory_bin_points[_traj:2*_traj]))
-                traj3 = torch.from_numpy(np.asarray(trajectory_bin_points[2*_traj:]))
-
-                mask1[traj1.split(1, dim=1)] = 1.0
-                mask2[traj2.split(1, dim=1)] = 1.0
-                mask3[traj3.split(1, dim=1)] = 1.0
-                # for i in range(len(traj1)):
-                #     wind[:, traj1[i][0], traj1[i][1], traj1[i][2]] = self.labels[:, traj1[i][0], traj1[i][1], traj1[i][2]]
+            if self.flag.use_hybrid_model:
+                sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                traj_seg_len = int((len(trajectory_bin_points) / sequence_length) + 1)
+                for i in range(sequence_length):
+                    if i == 0:
+                        trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[:traj_seg_len]))
+                    elif i == sequence_length-1:
+                        trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[((sequence_length-1)*traj_seg_len):]))
+                    else:
+                        trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[((i-1)*traj_seg_len):(i*traj_seg_len)]))
+                    mask_segment = torch.zeros_like(terrain)
+                    mask_segment[trajectory_segment.split(1, dim=1)] = 1.0
+                    sequential_input.append(torch.cat([wind, mask_segment.float().unsqueeze(0)]))
             print('Time to create traj:', time.time()-time_start)
 
         # print('Time to create points:', time_inter - time_start)
         # print('Time to generate trajectory points:', time_inter2 - time_inter)
         # print('Time to bin points:', time.time() - time_inter)
         # print('Time to generate trajectory:', time.time()-time_start)
-        augmented_wind = torch.cat([wind, mask.float().unsqueeze(0)])
+        if self.flag.use_hybrid_model:
+            augmented_wind = torch.stack(sequential_input, dim=0)
+        else:
+            augmented_wind = torch.cat([wind, mask.float().unsqueeze(0)])
         return augmented_wind.to(self._device), simulated_flight_data
 
     def get_flight_wind_blocks(self, flight_data):
@@ -1264,35 +1275,69 @@ class WindOptimiser(object):
             # self.rescale_prediction(output, self.labels)
             loss = self.evaluate_loss(output)
         else:
-            # get wind zeros
-            wind_blocks = self._wind_blocks.clone()
-            wind_zeros = self._wind_zeros.clone()
-            # create mask
-            wind_input = self.add_mask_to_wind()
+            wind_input = self._wind_input.clone()
             # run prediction
-            input = torch.cat([self.terrain.network_terrain, wind_input])
+            if self.flag.use_hybrid_model:
+                augmented_terrain = self.terrain.network_terrain.repeat(wind_input.shape[0], 1, 1, 1).unsqueeze(1)
+                input = torch.cat([augmented_terrain, wind_input], dim=1)
+            else:
+                input = torch.cat([self.terrain.network_terrain, wind_input])
             output = self.run_prediction(input)
             # self.rescale_prediction(output, self.labels)
             loss = self.evaluate_loss(output)
         outputs.append(output)
         losses.append(loss)
-        inputs.append(input)
+        if self.flag.use_hybrid_model:
+            inputs.append(input[0, :])
+        else:
+            inputs.append(input)
         print(' loss: ', loss.item())
         return outputs, losses, inputs
 
     def flight_prediction(self):
         outputs, losses, inputs = [], [], []
 
-        # add mask to input
-        wind_input = self.add_mask_to_wind()
+        if self.flag.use_hybrid_model:
+            sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+            trajectory_length = int((self._flight_data['x'].size/sequence_length) + 1)
+            trajectory_input = []
+            flight_data = self._flight_data
+            for i in range(sequence_length):
+                input_flight, output_flight = {}, {}
+                for keys, values in flight_data.items():
+                    if i == 0:
+                        input_batch = values[:trajectory_length]
+                        input_flight.update({keys: input_batch})
+                    elif i == sequence_length-1:
+                        input_batch = values[i*trajectory_length:]
+                        input_flight.update({keys: input_batch})
+                    else:
+                        input_batch = values[((i-1)*trajectory_length):(i*trajectory_length)]
+                        input_flight.update({keys: input_batch})
+                wind_blocks, var_blocks, wind_zeros, wind_mask \
+                    = self.get_flight_wind_blocks(input_flight)
+                traj_wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
+                trajectory_wind_input = torch.cat([self.terrain.network_terrain, traj_wind_input])
+                trajectory_input.append(trajectory_wind_input)
+            wind_input = torch.stack(trajectory_input, dim=0)
+            output = self.run_prediction(wind_input)
+            # self.rescale_prediction(output, self.labels)
+            loss = self.evaluate_loss(output)
+            outputs.append(output)
+            losses.append(loss)
+            inputs.append(wind_input[0, :])
+            print(' loss: ', loss.item())
+        else:
+            # add mask to input
+            wind_input = self.add_mask_to_wind()
 
-        # run prediction
-        input = torch.cat([self.terrain.network_terrain, wind_input])
-        output = self.run_prediction(input)
-        loss = 1
-        outputs.append(output)
-        losses.append(loss)
-        inputs.append(input)
+            # run prediction
+            input = torch.cat([self.terrain.network_terrain, wind_input])
+            output = self.run_prediction(input)
+            loss = 1
+            outputs.append(output)
+            losses.append(loss)
+            inputs.append(input)
         return outputs, losses, inputs
 
     def window_split_prediction(self):
