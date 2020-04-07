@@ -698,6 +698,9 @@ class WindOptimiser(object):
             # generate simulated trajectory
             dt = self._wind_args.params['trajectory']['dt']
             trajectory_points = np.asarray(trajectory_points)
+            trajectory_points[:, 0] = trajectory_points[:, 0] * self.grid_size[2]
+            trajectory_points[:, 1] = trajectory_points[:, 1] * self.grid_size[1]
+            trajectory_points[:, 2] = trajectory_points[:, 2] * self.grid_size[0]
             interpolating_function_x = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
                                            self.labels[0, :].detach().cpu().numpy(), method='nearest')
             interpolating_function_y = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
@@ -708,9 +711,9 @@ class WindOptimiser(object):
             interpolated_flight_data_x = interpolating_function_x(trajectory_points)
             interpolated_flight_data_y = interpolating_function_y(trajectory_points)
             interpolated_flight_data_z = interpolating_function_z(trajectory_points)
-            simulated_flight_data['x'] = trajectory_points[:, 2]
-            simulated_flight_data['y'] = trajectory_points[:, 1]
-            simulated_flight_data['alt'] = trajectory_points[:, 0]
+            simulated_flight_data['x'] = trajectory_points[:, 2] - 0.5*self.grid_size[0]
+            simulated_flight_data['y'] = trajectory_points[:, 1] - 0.5*self.grid_size[1]
+            simulated_flight_data['alt'] = trajectory_points[:, 0] - 0.5*self.grid_size[2]
             simulated_flight_data['wn'] = interpolated_flight_data_x.astype(float)
             simulated_flight_data['we'] = interpolated_flight_data_y.astype(float)
             simulated_flight_data['wd'] = -interpolated_flight_data_z.astype(float)
@@ -1310,30 +1313,54 @@ class WindOptimiser(object):
     def cfd_trajectory_prediction(self):
         outputs, losses, inputs = [], [], []
         if self.flag.use_simulated_trajectory:
-            # bin trajectory points
-            input_flight_data = self._simulated_flight_data
-            wind_blocks, var_blocks, wind_zeros, wind_mask \
-                = self.get_flight_wind_blocks(input_flight_data)
-            # get prediction
-            if self.flag.add_corners:
-                interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
-                wind_zeros += interpolated_cosmo_corners
-            wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
-            input = torch.cat([self.terrain.network_terrain, wind_input])
-            output = self.run_prediction(input)
-            # self.rescale_prediction(output, self.labels)
-            loss = self.evaluate_loss(output)
+            if self.flag.use_hybrid_model:
+                sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                trajectory_length = int((self._simulated_flight_data['x'].size/sequence_length) + 1)
+                trajectory_input = []
+                flight_data = self._simulated_flight_data
+                for i in range(sequence_length):
+                    trajectory_sequence = {}
+                    for keys, values in flight_data.items():
+                        if i == 0:
+                            trajectory_batch = values[:trajectory_length]
+                            trajectory_sequence.update({keys: trajectory_batch})
+                        elif i == sequence_length-1:
+                            trajectory_batch = values[i*trajectory_length:]
+                            trajectory_sequence.update({keys: trajectory_batch})
+                        else:
+                            trajectory_batch = values[((i-1)*trajectory_length):(i*trajectory_length)]
+                            trajectory_sequence.update({keys: trajectory_batch})
+                    wind_blocks, var_blocks, wind_zeros, wind_mask \
+                        = self.get_flight_wind_blocks(trajectory_sequence)
+                    traj_wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
+                    trajectory_wind_input = torch.cat([self.terrain.network_terrain, traj_wind_input])
+                    trajectory_input.append(trajectory_wind_input)
+                input = torch.stack(trajectory_input, dim=0)
+                output = self.run_prediction(input)
+                # self.rescale_prediction(output, self.labels)
+            else:
+                # bin trajectory points
+                input_flight_data = self._simulated_flight_data
+                wind_blocks, var_blocks, wind_zeros, wind_mask = self.get_flight_wind_blocks(input_flight_data)
+                # get prediction
+                if self.flag.add_corners:
+                    interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
+                    wind_zeros += interpolated_cosmo_corners
+                wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
+                input = torch.cat([self.terrain.network_terrain, wind_input])
+                output = self.run_prediction(input)
         else:
             wind_input = self._wind_input.clone()
             # run prediction
             if self.flag.use_hybrid_model:
-                augmented_terrain = self.terrain.network_terrain.repeat(wind_input.shape[0], 1, 1, 1).unsqueeze(1)
-                input = torch.cat([augmented_terrain, wind_input], dim=1)
+                terrain_for_sequence = self.terrain.network_terrain.repeat(wind_input.shape[0], 1, 1, 1).unsqueeze(1)
+                input = torch.cat([terrain_for_sequence, wind_input], dim=1)
             else:
                 input = torch.cat([self.terrain.network_terrain, wind_input])
             output = self.run_prediction(input)
             # self.rescale_prediction(output, self.labels)
-            loss = self.evaluate_loss(output)
+
+        loss = self.evaluate_loss(output)
         outputs.append(output)
         losses.append(loss)
         if self.flag.use_hybrid_model:
@@ -1341,6 +1368,7 @@ class WindOptimiser(object):
         else:
             inputs.append(input)
         print(' loss: ', loss.item())
+
         return outputs, losses, inputs
 
     def flight_prediction(self):
@@ -1352,19 +1380,19 @@ class WindOptimiser(object):
             trajectory_input = []
             flight_data = self._flight_data
             for i in range(sequence_length):
-                input_flight, output_flight = {}, {}
+                trajectory_sequence = {}
                 for keys, values in flight_data.items():
                     if i == 0:
-                        input_batch = values[:trajectory_length]
-                        input_flight.update({keys: input_batch})
+                        trajectory_batch = values[:trajectory_length]
+                        trajectory_sequence.update({keys: trajectory_batch})
                     elif i == sequence_length-1:
-                        input_batch = values[i*trajectory_length:]
-                        input_flight.update({keys: input_batch})
+                        trajectory_batch = values[i*trajectory_length:]
+                        trajectory_sequence.update({keys: trajectory_batch})
                     else:
-                        input_batch = values[((i-1)*trajectory_length):(i*trajectory_length)]
-                        input_flight.update({keys: input_batch})
+                        trajectory_batch = values[((i-1)*trajectory_length):(i*trajectory_length)]
+                        trajectory_sequence.update({keys: trajectory_batch})
                 wind_blocks, var_blocks, wind_zeros, wind_mask \
-                    = self.get_flight_wind_blocks(input_flight)
+                    = self.get_flight_wind_blocks(trajectory_sequence)
                 traj_wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
                 trajectory_wind_input = torch.cat([self.terrain.network_terrain, traj_wind_input])
                 trajectory_input.append(trajectory_wind_input)
@@ -1475,14 +1503,37 @@ class WindOptimiser(object):
 
                 # --- Network prediction ---
                 # bin input flight data
-                wind_blocks, var_blocks, wind_zeros, wind_mask \
-                    = self.get_flight_wind_blocks(input_flight_data)
-                # get prediction
-                if self.flag.add_corners:
-                    interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
-                    wind_zeros += interpolated_cosmo_corners
-                wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
-                input = torch.cat([self.terrain.network_terrain, wind_input])
+                if self.flag.use_hybrid_model:
+                    sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                    trajectory_length = int((flight_data['x'].size / sequence_length) + 1)
+                    trajectory_input = []
+                    for k in range(sequence_length):
+                        trajectory_sequence = {}
+                        for keys, values in flight_data.items():
+                            if k == 0:
+                                trajectory_batch = values[:trajectory_length]
+                                trajectory_sequence.update({keys: trajectory_batch})
+                            elif k == sequence_length - 1:
+                                trajectory_batch = values[k * trajectory_length:]
+                                trajectory_sequence.update({keys: trajectory_batch})
+                            else:
+                                trajectory_batch = values[((k - 1) * trajectory_length):(k * trajectory_length)]
+                                trajectory_sequence.update({keys: trajectory_batch})
+                        wind_blocks, var_blocks, wind_zeros, wind_mask \
+                            = self.get_flight_wind_blocks(trajectory_sequence)
+                        traj_wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
+                        trajectory_wind_input = torch.cat([self.terrain.network_terrain, traj_wind_input])
+                        trajectory_input.append(trajectory_wind_input)
+                    input = torch.stack(trajectory_input, dim=0)
+                else:
+                    wind_blocks, var_blocks, wind_zeros, wind_mask \
+                        = self.get_flight_wind_blocks(input_flight_data)
+                    # get prediction
+                    if self.flag.add_corners:
+                        interpolated_cosmo_corners = self._interpolator.edge_interpolation(self._base_cosmo_corners)
+                        wind_zeros += interpolated_cosmo_corners
+                    wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
+                    input = torch.cat([self.terrain.network_terrain, wind_input])
                 nn_output = self.run_prediction(input)
                 if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
                     if i == 0:
@@ -1648,7 +1699,10 @@ class WindOptimiser(object):
 
                 # outputs
                 time.append(i*response_time)
-                inputs.append(input)
+                if self.flag.use_hybrid_model:
+                    inputs.append(input[0, :])
+                else:
+                    inputs.append(input)
                 outputs.append(nn_output)
                 nn_losses.append(nn_loss.item())
                 zero_wind_losses.append(zero_wind_loss.item())
