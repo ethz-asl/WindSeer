@@ -38,6 +38,7 @@ def angle_between_vectors(v1, v2, deg_rad=0):
     else:
         return angle_rad
 
+
 class TerrainBlock(object):
     def __init__(self, x_terr, y_terr, z_terr, h_terr, full_block, device=None, boolean_terrain=False):
         self.x_terr = x_terr
@@ -431,11 +432,6 @@ class WindOptimiser(object):
         return augmented_wind.to(self._device)
 
     def get_trajectory_wind_blocks(self):
-        # type of trajectories
-        spiral_trajectory = False
-        random_trajectory = False
-        segment_trajectory = True
-
         # copy labels
         wind = self.labels.clone()
 
@@ -452,7 +448,7 @@ class WindOptimiser(object):
         simulated_flight_data = {}
 
         # spiral trajectory
-        if spiral_trajectory:
+        if 'spiral' in self._wind_args.params['trajectory']['trajectory_type']:
             dot = 400
             d = dot * 0.1
             x = []
@@ -478,7 +474,7 @@ class WindOptimiser(object):
                     mask[id_z, id_y, id_x] = 1.0
 
         # random trajectory
-        if random_trajectory:
+        if 'random' in self._wind_args.params['trajectory']['trajectory_type']:
             time_start = time.time()
             numel = self._wind_args.params['trajectory']['num_points_generated']
             use_region = False
@@ -541,8 +537,14 @@ class WindOptimiser(object):
             x_traj, y_traj, z_traj = generate_trajectory(x, y, z, uav_speed, dt, self.terrain, z_above_terrain=True)
             time_inter2 = time.time()
 
+            # Get the bins and wind along the trajectory
+            for i in range(x_traj.size):
+                    id_x = (int((x_traj[i] - self.terrain.x_terr[0]) / self.grid_size[0]))
+                    id_y = (int((y_traj[i] - self.terrain.y_terr[0]) / self.grid_size[1]))
+                    id_z = (int((z_traj[i] - self.terrain.z_terr[0]) / self.grid_size[2]))
+                    mask[id_z, id_y, id_x] = 1.0
+
             # generate simulated flight data
-            simulated_flight_data = {}
             interpolating_function_x = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
                                            self.labels[0, :].detach().cpu().numpy(), method='nearest')
             interpolating_function_y = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
@@ -563,14 +565,8 @@ class WindOptimiser(object):
             simulated_flight_data['wd'] = -interpolated_flight_data_z.astype(float)
             simulated_flight_data['time_microsec'] = np.array([i*dt*1e6 for i in range(x_traj.size)])
 
-            # Get the bins and wind along the trajectory
-            for i in range(x_traj.size):
-                    id_x = (int((x_traj[i] - self.terrain.x_terr[0]) / self.grid_size[0]))
-                    id_y = (int((y_traj[i] - self.terrain.y_terr[0]) / self.grid_size[1]))
-                    id_z = (int((z_traj[i] - self.terrain.z_terr[0]) / self.grid_size[2]))
-                    mask[id_z, id_y, id_x] = 1.0
-
-        if segment_trajectory:
+        # segments trajectory
+        if 'segments' in self._wind_args.params['trajectory']['trajectory_type']:
             time_start = time.time()
             # boolean terrain
             boolean_terrain = (self.original_terrain.clone() <= 0).float()  # true where there is terrain
@@ -580,9 +576,9 @@ class WindOptimiser(object):
             non_zero = torch.nonzero(terrain)
             random.seed(7)
             start = non_zero[random.randint(0, non_zero.shape[0]-1)]
-            idx = start[2].detach().cpu().numpy()
-            idy = start[1].detach().cpu().numpy()
-            idz = start[0].detach().cpu().numpy()
+            idx_start = start[2].detach().cpu().numpy()
+            idy_start = start[1].detach().cpu().numpy()
+            idz_start = start[0].detach().cpu().numpy()
             # number of bins along direction
             dir_1 = 10
             dir_2 = 2
@@ -594,12 +590,14 @@ class WindOptimiser(object):
             forward_axis = 'x'
             # trajectory bin points
             trajectory_bin_points = []
+            # trajectory points
+            trajectory_points = []
             for i in range(num_of_segments):
                 feasible_points = []
                 # current point
-                current_idx = idx
-                current_idy = idy
-                current_idz = idz
+                current_idx = idx_start
+                current_idy = idy_start
+                current_idz = idz_start
                 # find feasible next points
                 if 'x' in forward_axis:
                     for m in range(-2, 3, 4):
@@ -608,8 +606,7 @@ class WindOptimiser(object):
                                 if (0 <= current_idx + o*dir_1 < 64 and
                                     0 <= current_idy + direction_axis * n * dir_2 < 64 and
                                     h_terrain[current_idy + direction_axis*n*dir_2, current_idx + o*dir_1]
-                                        <= current_idz + m < 64
-                                ):
+                                        <= current_idz + m < 64):
                                     feasible_points.append(
                                         [current_idz + m, current_idy + direction_axis*n*dir_2, current_idx + o*dir_1])
                 else:
@@ -619,8 +616,7 @@ class WindOptimiser(object):
                                 if (0 <= current_idy + o*dir_1 < 64 and
                                     0 <= current_idx + direction_axis * n * dir_2 < 64 and
                                     h_terrain[current_idy + o*dir_1, current_idx + direction_axis*n*dir_2]
-                                        <= current_idz + m < 64
-                                ):
+                                        <= current_idz + m < 64):
                                     feasible_points.append(
                                         [current_idz + m, current_idy + o*dir_1, current_idx + direction_axis*n*dir_2])
                 # randomly choose next point from the feasible points
@@ -628,12 +624,7 @@ class WindOptimiser(object):
                     # stop if no feasible point was found
                     print('No feasible next point found at iteration: ', i)
                     mask[current_idz, current_idy, current_idx] = 1.0
-                    if self.flag.use_hybrid_model:
-                        sequence_length = self._model_args.params['hybrid_model']['sequence_length']
-                        for i in range(sequence_length):
-                            mask_segment = torch.zeros_like(terrain)
-                            mask_segment[trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
-                            sequential_input.append(torch.cat([wind, mask_segment.float().unsqueeze(0)]))
+                    trajectory_bin_points.append([current_idz, current_idy, current_idx])
                     break
                 else:
                     # time_inter = time.time()
@@ -644,22 +635,27 @@ class WindOptimiser(object):
                     next_idz = next_feasible_point[0]
 
                     # bins along trajectory
-                    points_along_traj = 10
+                    points_along_traj = 12
                     n = 1
                     for j in range(0, points_along_traj):
                         t = n / (points_along_traj + 1)
-                        id_x = int(current_idx + t * (next_idx - current_idx))
-                        id_y = int(current_idy + t * (next_idy - current_idy))
-                        id_z = int(current_idz + t * (next_idz - current_idz))
+                        traj_x = current_idx + t * (next_idx - current_idx)
+                        traj_y = current_idy + t * (next_idy - current_idy)
+                        traj_z = current_idz + t * (next_idz - current_idz)
+                        trajectory_points.append([traj_z, traj_y, traj_x])
+                        id_x = int(traj_x)
+                        id_y = int(traj_y)
+                        id_z = int(traj_z)
                         if self.flag.use_hybrid_model and mask[id_z, id_y, id_x] != 1.0:
+                            # append bin points only once
                             trajectory_bin_points.append([id_z, id_y, id_x])
                         mask[id_z, id_y, id_x] = 1.0
                         n += 1
 
                 # prepare next iteration
-                idx = next_idx
-                idy = next_idy
-                idz = next_idz
+                idx_start = next_idx
+                idy_start = next_idy
+                idz_start = next_idz
                 if 'x' in forward_axis:
                     forward_axis = 'y'
                     if next_idx < current_idx:
@@ -674,19 +670,51 @@ class WindOptimiser(object):
                         direction_axis = direction_axis
             # print('Time to create feasible points:', time_inter - time_start)
             if self.flag.use_hybrid_model:
-                sequence_length = self._model_args.params['hybrid_model']['sequence_length']
-                traj_seg_len = int((len(trajectory_bin_points) / sequence_length) + 1)
-                for i in range(sequence_length):
-                    if i == 0:
-                        trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[:traj_seg_len]))
-                    elif i == sequence_length-1:
-                        trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[((sequence_length-1)*traj_seg_len):]))
-                    else:
-                        trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[((i-1)*traj_seg_len):(i*traj_seg_len)]))
-                    mask_segment = torch.zeros_like(terrain)
-                    mask_segment[trajectory_segment.split(1, dim=1)] = 1.0
-                    sequential_input.append(torch.cat([wind, mask_segment.float().unsqueeze(0)]))
+                if len(trajectory_bin_points) == 1:
+                    # in case no feasible trajectory points were found make sure there is at least one measurement
+                    # (the starting point) for each mask in each input sequence
+                    sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                    for i in range(sequence_length):
+                        mask_segment = torch.zeros_like(terrain)
+                        mask_segment[
+                            trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
+                        sequential_input.append(torch.cat([wind, mask_segment.float().unsqueeze(0)]))
+                else:
+                    # divide trajectory into sequences
+                    sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                    traj_seg_len = int((len(trajectory_bin_points) / sequence_length) + 1)
+                    for i in range(sequence_length):
+                        if i == 0:
+                            trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[:traj_seg_len]))
+                        elif i == sequence_length-1:
+                            trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[((sequence_length-1)*traj_seg_len):]))
+                        else:
+                            trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[((i-1)*traj_seg_len):(i*traj_seg_len)]))
+                        mask_segment = torch.zeros_like(terrain)
+                        mask_segment[trajectory_segment.split(1, dim=1)] = 1.0
+                        sequential_input.append(torch.cat([wind, mask_segment.float().unsqueeze(0)]))
             print('Time to create traj:', time.time()-time_start)
+
+            # generate simulated trajectory
+            dt = self._wind_args.params['trajectory']['dt']
+            trajectory_points = np.asarray(trajectory_points)
+            interpolating_function_x = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
+                                           self.labels[0, :].detach().cpu().numpy(), method='nearest')
+            interpolating_function_y = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
+                                           self.labels[1, :].detach().cpu().numpy(), method='nearest')
+            interpolating_function_z = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
+                                           self.labels[2, :].detach().cpu().numpy(), method='nearest')
+
+            interpolated_flight_data_x = interpolating_function_x(trajectory_points)
+            interpolated_flight_data_y = interpolating_function_y(trajectory_points)
+            interpolated_flight_data_z = interpolating_function_z(trajectory_points)
+            simulated_flight_data['x'] = trajectory_points[:, 2]
+            simulated_flight_data['y'] = trajectory_points[:, 1]
+            simulated_flight_data['alt'] = trajectory_points[:, 0]
+            simulated_flight_data['wn'] = interpolated_flight_data_x.astype(float)
+            simulated_flight_data['we'] = interpolated_flight_data_y.astype(float)
+            simulated_flight_data['wd'] = -interpolated_flight_data_z.astype(float)
+            simulated_flight_data['time_microsec'] = np.array([i*dt*1e6 for i in range(trajectory_points.shape[0])])
 
         # print('Time to create points:', time_inter - time_start)
         # print('Time to generate trajectory points:', time_inter2 - time_inter)

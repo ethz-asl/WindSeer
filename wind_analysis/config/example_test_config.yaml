@@ -1,7 +1,7 @@
 # Test parameters
 test:
-    test_simulated_data: False
-    test_flight_data: True
+    test_simulated_data: True
+    test_flight_data: False
 
 # CFD data
 cfd:
@@ -84,15 +84,17 @@ wind:
     trajectory: {
         use_trajectory_generation: True,
         #
+        trajectory_type: 'segments',  # spiral, random, segments
+        #
         use_simulated_trajectory: False,
         num_points_generated: 10,
         uav_speed: 15,
-        dt: 0.1 # seconds
+        dt: 1 # seconds
     }
     # Real flight wind data
     flight: {
         predict_flight: True,
-        interpolation_method: 'bin',   #['bin', 'idw', 'krigging', 'gpr']
+        interpolation_method: 'bin',   #'bin', 'idw', 'krigging', 'gpr'
     }
 
 # Noise parameters

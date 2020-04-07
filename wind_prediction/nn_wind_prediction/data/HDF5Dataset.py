@@ -581,10 +581,6 @@ class HDF5Dataset(Dataset):
                 boolean_terrain = (terrain <= 0).float()  # true where there is terrain
                 # mask
                 mask = torch.zeros_like(terrain)
-                if self.__create_sequential_input:
-                    mask1 = torch.zeros_like(terrain)
-                    mask2 = torch.zeros_like(terrain)
-                    mask3 = torch.zeros_like(terrain)
                 # network terrain height
                 h_terrain = boolean_terrain.sum(0, keepdim=True).squeeze(0)
                 # random starting point
@@ -598,6 +594,9 @@ class HDF5Dataset(Dataset):
                 dir_2 = 2
                 # Random number of segments, each with a length between 10 and 11 bins
                 num_of_segments = random.randint(2, 20)
+                # sequential input if requested
+                sequential_input = []
+                sequence_length = 3
                 # trajectory bins
                 trajectory_bin_points = []
                 # first axis to go along
@@ -617,8 +616,7 @@ class HDF5Dataset(Dataset):
                                     if (0 <= current_idx + o * dir_1 < 64 and
                                             0 <= current_idy + direction_axis * n * dir_2 < 64 and
                                             h_terrain[current_idy + direction_axis * n * dir_2, current_idx + o * dir_1]
-                                            <= current_idz + m < 64
-                                    ):
+                                            <= current_idz + m < 64):
                                         feasible_points.append(
                                             [current_idz + m, current_idy + direction_axis * n * dir_2,
                                              current_idx + o * dir_1])
@@ -629,8 +627,7 @@ class HDF5Dataset(Dataset):
                                     if (0 <= current_idy + o * dir_1 < 64 and
                                             0 <= current_idx + direction_axis * n * dir_2 < 64 and
                                             h_terrain[current_idy + o * dir_1, current_idx + direction_axis * n * dir_2]
-                                            <= current_idz + m < 64
-                                    ):
+                                            <= current_idz + m < 64):
                                         feasible_points.append(
                                             [current_idz + m, current_idy + o * dir_1,
                                              current_idx + direction_axis * n * dir_2])
@@ -680,25 +677,28 @@ class HDF5Dataset(Dataset):
                     if len(trajectory_bin_points) == 1:
                         # in case no feasible trajectory points were found make sure there is at least one measurement
                         # (the starting point) for each mask in each input sequence
-                        mask1[trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
-                        mask2[trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
-                        mask3[trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][2]] = 1.0
+                        for i in range(sequence_length):
+                            mask_segment = torch.zeros_like(terrain)
+                            mask_segment[
+                                trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][
+                                    2]] = 1.0
+                            sequential_input.append(torch.cat([sparse_input, mask_segment.float().unsqueeze(0)]))
                     else:
-                        # divide trajectory into 3 equal parts
-                        _traj = int((len(trajectory_bin_points) / 3) + 1)
-                        traj1 = torch.from_numpy(np.asarray(trajectory_bin_points[:_traj]))
-                        traj2 = torch.from_numpy(np.asarray(trajectory_bin_points[_traj:2 * _traj]))
-                        traj3 = torch.from_numpy(np.asarray(trajectory_bin_points[2 * _traj:]))
-                        # masks
-                        mask1[traj1.split(1, dim=1)] = 1.0
-                        mask2[traj2.split(1, dim=1)] = 1.0
-                        mask3[traj3.split(1, dim=1)] = 1.0
-                    # add masks to sparse_input
-                    trajectory_input1 = torch.cat([sparse_input, mask1.float().unsqueeze(0)])
-                    trajectory_input2 = torch.cat([sparse_input, mask2.float().unsqueeze(0)])
-                    trajectory_input3 = torch.cat([sparse_input, mask3.float().unsqueeze(0)])
-                    sparse_input = torch.cat([trajectory_input1.unsqueeze(0), trajectory_input2.unsqueeze(0),
-                                              trajectory_input3.unsqueeze(0)])
+                        # divide trajectory into sequences
+                        traj_seg_len = int((len(trajectory_bin_points) / sequence_length) + 1)
+                        for i in range(sequence_length):
+                            if i == 0:
+                                trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[:traj_seg_len]))
+                            elif i == sequence_length - 1:
+                                trajectory_segment = torch.from_numpy(
+                                    np.asarray(trajectory_bin_points[((sequence_length - 1) * traj_seg_len):]))
+                            else:
+                                trajectory_segment = torch.from_numpy(
+                                    np.asarray(trajectory_bin_points[((i - 1) * traj_seg_len):(i * traj_seg_len)]))
+                            mask_segment = torch.zeros_like(terrain)
+                            mask_segment[trajectory_segment.split(1, dim=1)] = 1.0
+                            sequential_input.append(torch.cat([sparse_input, mask_segment.float().unsqueeze(0)]))
+                    sparse_input = torch.stack(sequential_input, dim=0)
                 else:
                     # add mask to sparse_input
                     sparse_input = torch.cat([sparse_input, mask.float().unsqueeze(0)])
