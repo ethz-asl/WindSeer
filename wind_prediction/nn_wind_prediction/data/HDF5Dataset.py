@@ -58,6 +58,7 @@ class HDF5Dataset(Dataset):
     __default_sample_terrain_region = False
     __default_create_trajectory_mask = False
     __default_create_sequential_input = False
+    __default_max_sequence_length = 5
     __default_add_gaussian_noise = False
     __default_add_turbulence = False
 
@@ -262,6 +263,13 @@ class HDF5Dataset(Dataset):
                 print('HDF5Dataset: create_create_sequential_input not present in kwargs, using default value:', self.__default_create_sequential_input)
 
         try:
+            self.__max_sequence_length = kwargs['max_sequence_length']
+        except KeyError:
+            self.__max_sequence_length = self.__default_max_sequence_length
+            if verbose:
+                print('HDF5Dataset: max_sequence_length not present in kwargs, using default value:', self.__default_max_sequence_length)
+
+        try:
             self.__add_gaussian_noise = kwargs['add_gaussian_noise']
         except KeyError:
             self.__add_gaussian_noise = self.__default_add_gaussian_noise
@@ -379,7 +387,7 @@ class HDF5Dataset(Dataset):
         is_train_set = 'train' in self.__filename
         if self.__add_turbulence and is_train_set:
             turbulent_velocity_fields = []
-            # generate 100 fields
+            # generate 100 fields of dimension (91, 91, 91)
             for i in range(100):
                 uvw, _ = generate_turbulence.generate_turbulence_spectral()
                 turbulent_velocity_field = uvw
@@ -509,8 +517,9 @@ class HDF5Dataset(Dataset):
             # add noise to wind velocities in train set if requested
             is_train_set = 'train' in self.__filename
             if self.__add_gaussian_noise and is_train_set:
+                noise = torch.rand(sparse_input[1:4, :].shape)
                 eps = 1
-                noise = eps * torch.rand(sparse_input[1:4, :].shape)
+                noise *= eps
                 if self.__autoscale:  # apply scale to noise if necessary
                     noise /= noise_scale
                 sparse_input[1:4, :] += noise
@@ -530,7 +539,7 @@ class HDF5Dataset(Dataset):
                 turbulence = \
                     turbulence[:, start_z:start_z+nz,  start_y:start_y+ny,  start_x:start_x+nx]
                 eps = 1
-                turbulence = eps * turbulence
+                turbulence *= eps
                 if self.__autoscale:  # apply scale to turbulence if necessary
                     turbulence /= noise_scale
                 sparse_input[1:4, :] += turbulence
@@ -593,10 +602,10 @@ class HDF5Dataset(Dataset):
                 dir_1 = 10
                 dir_2 = 2
                 # Random number of segments, each with a length between 10 and 11 bins
-                num_of_segments = random.randint(2, 20)
+                num_of_segments = random.randint(3, 25)
                 # sequential input if requested
                 sequential_input = []
-                sequence_length = 3
+                sequence_length = random.randint(1, self.__max_sequence_length)
                 # trajectory bins
                 trajectory_bin_points = []
                 # first axis to go along
@@ -645,7 +654,7 @@ class HDF5Dataset(Dataset):
                         next_idz = next_feasible_point[0]
 
                         # bins along trajectory
-                        points_along_traj = 10
+                        points_along_traj = 20
                         n = 1
                         for j in range(0, points_along_traj):
                             t = n / (points_along_traj + 1)
@@ -685,7 +694,9 @@ class HDF5Dataset(Dataset):
                             sequential_input.append(torch.cat([sparse_input, mask_segment.float().unsqueeze(0)]))
                     else:
                         # divide trajectory into sequences
-                        traj_seg_len = int((len(trajectory_bin_points) / sequence_length) + 1)
+                        traj_seg_len = int((len(trajectory_bin_points) / sequence_length))
+                        if traj_seg_len < 1:
+                            traj_seg_len = 1
                         for i in range(sequence_length):
                             if i == 0:
                                 trajectory_segment = torch.from_numpy(np.asarray(trajectory_bin_points[:traj_seg_len]))

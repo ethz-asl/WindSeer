@@ -121,10 +121,10 @@ class ConvLSTM3d(nn.Module):
         """
         Parameters
         ----------
-        input_tensor: todo
+        input_tensor
             6-D Tensor either of shape (t, b, c, h, w, l) or (b, t, c, h, w, l)
-        hidden_state: todo
-            None. todo implement stateful
+        hidden_state:
+            5-D Tensor of shape (b, c, h, w, l)
         Returns
         -------
         last_state_list, layer_output

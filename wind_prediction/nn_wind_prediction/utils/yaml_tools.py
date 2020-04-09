@@ -88,6 +88,7 @@ class EDNNParameters(object):
                 'terrain_percentage_correction': self.data['terrain_percentage_correction'],
                 'create_trajectory_mask': self.data['create_trajectory_mask'],
                 'create_sequential_input': self.data['create_sequential_input'],
+                'max_sequence_length': self.data['max_sequence_length'],
                 'sample_terrain_region': self.data['sample_terrain_region'],
                 'add_gaussian_noise': self.data['add_gaussian_noise'],
                 'add_turbulence': self.data['add_turbulence']}
