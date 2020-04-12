@@ -137,7 +137,7 @@ model:
   name: 'test_model_63'
   version: 'latest'
   boolean_terrain: False
-  loss: 'MSE'
+  loss: 'MSE'  # L1, MSE, SoftMargin
   hybrid_model: {
       use_hybrid_model: False,
       sequence_length: 10

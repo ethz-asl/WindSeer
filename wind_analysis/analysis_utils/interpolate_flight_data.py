@@ -10,6 +10,7 @@ import time
 
 class FlightInterpolation:
     def __init__(self, wind_data, grid_dimensions=None, terrain=None, predict=False, wind_data_for_prediction=None):
+        self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self._wind_data = wind_data
         self._grid_dimensions = grid_dimensions
         self._terrain = terrain
@@ -345,7 +346,7 @@ class FlightInterpolation:
             # Use terrain mask on gpr predicted wind field
             is_wind = self._terrain.network_terrain.sign_()
             predicted_wind_field = is_wind.repeat(predicted_wind_field.shape[0], 1, 1, 1) \
-                                   * torch.from_numpy(predicted_wind_field)
+                                   * torch.from_numpy(predicted_wind_field).to(self._device)
 
         else:  # bin data
             for i in range(len(self._bin_x_coord)):

@@ -227,6 +227,8 @@ class WindOptimiser(object):
                 loss_fn = torch.nn.L1Loss()
             elif self._model_args.params['loss'].lower() == 'mse':
                 loss_fn = torch.nn.MSELoss()
+            elif self._model_args.params['loss'].lower() == 'softmargin':
+                loss_fn = torch.nn.SoftMarginLoss()
             else:
                 print('Specified loss function: {0} unknown!'.format(self._model_args.params['loss']))
                 raise ValueError
@@ -1038,8 +1040,8 @@ class WindOptimiser(object):
                 input_batch = values[0: window_size]
                 output_batch = values[window_size: step_size+window_size+response_size]
             else:
-                input_batch = values[step_size: step_size+window_size]
-                output_batch = values[step_size+window_size: step_size+window_size+response_size]
+                input_batch = values[:step_size+window_size]
+                output_batch = values[step_size+window_size:]
             input_flight.update({keys: input_batch})
             output_flight.update({keys: output_batch})
 
@@ -1503,8 +1505,15 @@ class WindOptimiser(object):
 
                 # --- Network prediction ---
                 # bin input flight data
+                if self.flag.test_flight_data and self.flag.rescale_prediction:
+                    input_flight_wind_vectors = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
+                    scale = np.linalg.norm(input_flight_wind_vectors, axis=0).mean()
+                    input_flight_data['wn'] /= scale
+                    input_flight_data['we'] /= scale
+                    input_flight_data['wd'] /= scale
                 if self.flag.use_hybrid_model:
                     sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                    # sequence_length = i+1
                     trajectory_length = int((flight_data['x'].size / sequence_length) + 1)
                     trajectory_input = []
                     for k in range(sequence_length):
@@ -1540,13 +1549,17 @@ class WindOptimiser(object):
                         self.rescale_prediction(nn_output, self.labels)  # rescale labels only once
                     else:
                         self.rescale_prediction(nn_output)
+                if self.flag.test_flight_data and self.flag.rescale_prediction:
+                    nn_output *= scale
+                    input_flight_data['wn'] *= scale
+                    input_flight_data['we'] *= scale
+                    input_flight_data['wd'] *= scale
                 # loss_org = self.evaluate_loss(nn_output)
                 # print(' loss: ', loss_org.item())
                 # interpolate prediction to scattered flight data locations corresponding to the labels
                 FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                        wind_data_for_prediction=label_flight_data)
                 interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
-
                 # --- Zero wind prediction---
                 interpolated_zero_wind_output = torch.zeros_like(labels)
 
