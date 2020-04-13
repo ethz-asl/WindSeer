@@ -1,7 +1,7 @@
 # Test parameters
 test:
-    test_simulated_data: True
-    test_flight_data: False
+    test_simulated_data: False
+    test_flight_data: True
 
 # CFD data
 cfd:
@@ -12,8 +12,6 @@ cfd:
     print_names: False
     # Index of sample in the test set
     index: 63
-    # batch test
-    batch_test: False
 
 # COSMO data
 cosmo:
@@ -25,8 +23,10 @@ cosmo:
 
 # flight data
 flight:
-    flight_data_dir: 'data/'
-    files: ['13_02_02.ulg', '13_33_46.ulg', '14_15_04.ulg', '14_47_05.ulg', '14_47_05_filtered.hdf5']
+    flight_data_dir: 'data/riemenstalden/'
+    files: ['13_02_02.ulg', '13_33_46.ulg', '14_15_04.ulg', '14_47_05.ulg', '14_47_05_filtered.hdf5',
+    '10_36_34.ulg', '11_11_57.ulg',
+    '20190411_flight01_fpr_wind.hdf5', '20190411_flight01_fpr_wind_hn.hdf5']
     # ['13_02_02.ulg', '13_33_46.ulg', '14_15_04.ulg', '14_47_05.ulg', '14_47_05_filtered.hdf5']
     # ['10_36_34.ulg', '11_11_57.ulg']
 #  ['20190719_flight01_fpr_wind.hdf5',
@@ -64,14 +64,9 @@ flight:
     #
     filtered_dir: 'data/'
     use_ekf_wind: False
-    #
-    batch_test: False
 
 # Wind measurements parameters
 wind:
-    add_wind_measurements: True
-    add_corners: False
-
     # Sparse points: generate random wind data by randomly sampling from the CFD labels
     sparse_data: {
         use_sparse_data: False,
@@ -93,7 +88,7 @@ wind:
     }
     # Real flight wind data
     flight: {
-        predict_flight: True,
+        predict_flight: False,
         interpolation_method: 'bin',   #'bin', 'idw', 'krigging', 'gpr'
     }
 
@@ -104,14 +99,17 @@ noise:
 
 # Window split parameters
 window_split:
-  use_window_split: False
+  use_window_split: True
+  #
+  batch_test: True
+  incremental_input_prediction: True
+  longterm_prediction: True
   #
   use_optimized_corners: False
   use_gpr_prediction: False
   use_krigging_prediction: False
-  rescale_prediction: True
   #
-  longterm_prediction: True
+  rescale_prediction: True
   #
   window_time: 100 # seconds
   response_time: 100 # seconds
@@ -134,12 +132,12 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/trained_models/'
-  name: 'test_model_63'
+  name: 'test_model_68'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'  # L1, MSE, SoftMargin
   hybrid_model: {
-      use_hybrid_model: False,
+      use_hybrid_model: True,
       sequence_length: 10
   }
 

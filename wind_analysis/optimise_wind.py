@@ -25,7 +25,6 @@ wind_opt = WindOptimiser(args.input_yaml)
 # TODO: hardcoded flags to be put in config file
 original_input = False
 optimise_corners = False
-optimise_window_split_variables = False
 predict_wind = True
 
 
@@ -38,11 +37,6 @@ if optimise_corners:
         all_ov.append(ov)
         losses.append(loss)
         grads.append(grad)
-
-# Optimise sliding window variables
-if optimise_window_split_variables:
-    nn_loss = wind_opt.window_split_optimisation(n=50)
-
 
 if predict_wind:
     # Wind predictions

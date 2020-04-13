@@ -416,20 +416,20 @@ class WindOptimiserOutput:
     def plot_losses_over_time(self):
         fig, ax = plt.subplots()
 
-        if self.wind_opt.flag.flight_batch_test or self.wind_opt.flag.cfd_batch_test:
+        if self.wind_opt.flag.use_window_split and self.wind_opt.flag.batch_test:
             batch_longterm_losses = self._batch_longterm_losses
             average_longterm_losses = {}
-            average_nn_losses = np.zeros((10))
-            average_wind_average_losses = np.zeros((10))
-            for i in range(10):
+            average_nn_losses = np.zeros((4))
+            average_wind_average_losses = np.zeros((4))
+            for i in range(4):
                 for j in range(len(batch_longterm_losses)):
                     average_nn_losses[i] += batch_longterm_losses[j]['nn losses'][i]
                     average_wind_average_losses[i] += batch_longterm_losses[j]['average wind losses'][i]
             # average
-            average_nn_losses /= 10
-            average_wind_average_losses /= 10
+            average_nn_losses /= 4
+            average_wind_average_losses /= 4
             # create dic
-            average_longterm_losses.update({'time': batch_longterm_losses[0]['time'][0:10]})
+            average_longterm_losses.update({'time': batch_longterm_losses[0]['time'][0:4]})
             average_longterm_losses.update({'average nn losses': average_nn_losses})
             average_longterm_losses.update({'average wind average losses': average_wind_average_losses})
             # plot
@@ -441,7 +441,6 @@ class WindOptimiserOutput:
             ax.legend(loc='upper right')
             ax.set_xlabel('Time')
             ax.set_ylabel('Loss')
-
 
         else:
             longterm_losses = self._longterm_losses
@@ -490,7 +489,7 @@ class WindOptimiserOutput:
         self.plot_trajectory_wind_vectors()
         self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        # self.plot_losses_over_time()
+        self.plot_losses_over_time()
         self.plot_best_wind_estimate()
 
         if self._save_output:
