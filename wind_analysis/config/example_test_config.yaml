@@ -103,7 +103,7 @@ window_split:
   #
   batch_test: True
   incremental_input_prediction: True
-  longterm_prediction: True
+  longterm_prediction: False
   #
   use_optimized_corners: False
   use_gpr_prediction: False
@@ -111,14 +111,14 @@ window_split:
   #
   rescale_prediction: True
   #
-  window_time: 100 # seconds
-  response_time: 100 # seconds
-  step_time: 100 # seconds
+  window_time: 60 # seconds
+  response_time: 120 # seconds
+  step_time: 60 # seconds
 
 # Corner optimisation parameters
 optimisation:
     optimise_corners_individually: True
-    num_of_optimisation_steps: 10
+    num_of_optimisation_steps: 20
     # Rotation
     rotation: 0.0
     # Scale
@@ -132,12 +132,12 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/trained_models/'
-  name: 'test_model_68'
+  name: 'test_model_65'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'  # L1, MSE, SoftMargin
   hybrid_model: {
-      use_hybrid_model: True,
+      use_hybrid_model: False,
       sequence_length: 10
   }
 
