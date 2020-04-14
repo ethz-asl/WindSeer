@@ -445,13 +445,13 @@ class WindOptimiserOutput:
         else:
             longterm_losses = self._longterm_losses
             # time
-            time = longterm_losses['time']
-            del longterm_losses['time']
+            time = longterm_losses['steps']
+            del longterm_losses['steps']
 
             for key, values in longterm_losses.items():
                 ax.plot(time, values, label=key)
             ax.legend(loc='upper right')
-            ax.set_xlabel('Time')
+            ax.set_xlabel('Steps')
             ax.set_ylabel('Loss')
 
         # make image full screen

@@ -1346,15 +1346,15 @@ class WindOptimiser(object):
                     self._base_cfd_corners = self.get_cfd_corners()
                 if self.flag.test_flight_data:
                     # get flight data
-                    if 0 <= t < 5:
+                    if 0 <= t < 4:
                         cosmo_file = 'data/cosmo-1_ethz_fcst_2018112312.nc'
                         terrain_tiff_file = 'data/riemenstalden_full.tif'
                         flight_data_dir = 'data/riemenstalden/'
-                    elif 5 <= t < 7:
+                    elif 4 <= t < 6:
                         cosmo_file = 'data/cosmo-1_ethz_fcst_2018112309.nc'
                         terrain_tiff_file = 'data/fluelen_full.tif'
                         flight_data_dir = 'data/fluelen/'
-                    elif 7 <= t < 9:
+                    elif 6 <= t < 7:
                         terrain_tiff_file = 'data/tobelhof.tif'
                         flight_data_dir = 'data/tobelhof/'
                     else:
@@ -1445,9 +1445,9 @@ class WindOptimiser(object):
                         # scale_x = input_flight_data['wn'].mean()
                         # scale_y = input_flight_data['we'].mean()
                         # scale_z = input_flight_data['wd'].mean()
-                        input_flight_data['wn'] /= (scale*0.5)
-                        input_flight_data['we'] /= (scale*0.5)
-                        input_flight_data['wd'] /= (scale*0.1)
+                        input_flight_data['wn'] /= (scale * 0.5)
+                        input_flight_data['we'] /= (scale * 0.5)
+                        input_flight_data['wd'] /= (scale * 0.1)
                     if self.flag.use_hybrid_model:
                         # sequence_length = self._model_args.params['hybrid_model']['sequence_length']
                         sequence_length = i+1
@@ -1484,6 +1484,9 @@ class WindOptimiser(object):
                         else:
                             self.rescale_prediction(nn_output)
                     if self.flag.test_flight_data and self.flag.rescale_prediction:
+                        input[:, 0, :] *= scale * 0.5
+                        input[:, 1, :] *= scale * 0.5
+                        input[:, 2, :] *= scale * 0.1
                         nn_output[0, :] *= scale * 0.5
                         nn_output[1, :] *= scale * 0.5
                         nn_output[2, :] *= scale * 0.1
@@ -1602,8 +1605,12 @@ class WindOptimiser(object):
                         optimized_corners_losses.append(optimized_corners_loss.item())
 
                     # trajectory longterm losses
-                    time.append(j*response_time)
-                    longterm_losses.update({'time': time})
+                    if self.flag.batch_test:
+                        time.append(j*response_time)
+                        longterm_losses.update({'time': time})
+                    else:
+                        time.append(i)
+                        longterm_losses.update({'steps': time})
                     longterm_losses.update({'nn losses': nn_losses})
                     longterm_losses.update({'zero wind losses': zero_wind_losses})
                     longterm_losses.update({'average wind losses': average_wind_losses})
