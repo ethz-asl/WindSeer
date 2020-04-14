@@ -281,7 +281,7 @@ class WindOptimiser(object):
 
         return flight_data
 
-    def load_wind(self, cosmo_file=None):
+    def load_wind(self, cosmo_file=None, index=None):
         if cosmo_file is not None:
             cosmo_file = cosmo_file
         else:
@@ -305,6 +305,24 @@ class WindOptimiser(object):
             except ValueError:
                 print('Cannot extract hour of flight from file name')
         # Get cosmo wind
+        # TODO: temporrary due to lack of utc data in filtered flight logs
+        if index is not None:
+            index = index
+        else:
+            index = self._flight_args.params['index']
+        if '20181123_flight01' in self._flight_args.params['files'][index]:
+            time_of_flight = 10
+        elif '20181123_flight02' in self._flight_args.params['files'][index]:
+            time_of_flight = 11
+        elif '20181123_flight03' in self._flight_args.params['files'][index]:
+            time_of_flight = 13
+        elif '20181123_flight04' in self._flight_args.params['files'][index]:
+            time_of_flight = 13
+        elif '20181123_flight05' in self._flight_args.params['files'][index]:
+            time_of_flight = 14
+        elif '20181123_flight06' in self._flight_args.params['files'][index]:
+            time_of_flight = 14
+
         offset_cosmo_time = self._cosmo_args.get_cosmo_time(time_of_flight)
         cosmo_wind = cosmo.extract_cosmo_data(cosmo_file, lat0, lon0, offset_cosmo_time,
                                               terrain_file=self._cosmo_args.params['terrain_file'])
@@ -1363,7 +1381,7 @@ class WindOptimiser(object):
 
                     self._flight_data = self.load_flight_data(index=t, flight_dir=flight_data_dir)
                     flight_data = self._flight_data
-                    self._cosmo_wind = self.load_wind(cosmo_file=cosmo_file)
+                    self._cosmo_wind = self.load_wind(cosmo_file=cosmo_file, index=t)
                     self.terrain = self.load_cosmo_terrain(terrain_tiff=terrain_tiff_file)
                     if len(self._cosmo_wind) > 1:
                         self._base_cosmo_corners = self.get_cosmo_corners()
