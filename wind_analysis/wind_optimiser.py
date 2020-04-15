@@ -1623,21 +1623,18 @@ class WindOptimiser(object):
                         optimized_corners_losses.append(optimized_corners_loss.item())
 
                     # trajectory longterm losses
-                    if self.flag.batch_test:
-                        time.append(j*response_time)
-                        longterm_losses.update({'time': time})
-                    else:
+                    if i <= 10:
                         time.append(i)
                         longterm_losses.update({'steps': time})
-                    longterm_losses.update({'nn losses': nn_losses})
-                    longterm_losses.update({'zero wind losses': zero_wind_losses})
-                    longterm_losses.update({'average wind losses': average_wind_losses})
-                    if self.flag.use_krigging_prediction:
-                        longterm_losses.update({'krigging losses': krigging_wind_losses})
-                    if self.flag.use_gpr_prediction:
-                        longterm_losses.update({'gpr losses': gpr_wind_losses})
-                    if self.flag.use_optimized_corners:
-                        longterm_losses.update({'optimized corners losses': optimized_corners_losses})
+                        longterm_losses.update({'nn losses': nn_losses})
+                        longterm_losses.update({'zero wind losses': zero_wind_losses})
+                        longterm_losses.update({'average wind losses': average_wind_losses})
+                        if self.flag.use_krigging_prediction:
+                            longterm_losses.update({'krigging losses': krigging_wind_losses})
+                        if self.flag.use_gpr_prediction:
+                            longterm_losses.update({'gpr losses': gpr_wind_losses})
+                        if self.flag.use_optimized_corners:
+                            longterm_losses.update({'optimized corners losses': optimized_corners_losses})
 
                     # outputs
                     if i == max_num_windows-1 and j == longterm_timesteps-1:

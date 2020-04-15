@@ -419,27 +419,27 @@ class WindOptimiserOutput:
         if self.wind_opt.flag.use_window_split and self.wind_opt.flag.batch_test:
             batch_longterm_losses = self._batch_longterm_losses
             average_longterm_losses = {}
-            average_nn_losses = np.zeros((4))
-            average_wind_average_losses = np.zeros((4))
-            for i in range(4):
+            average_nn_losses = np.zeros((10))
+            average_wind_average_losses = np.zeros((10))
+            for i in range(10):
                 for j in range(len(batch_longterm_losses)):
                     average_nn_losses[i] += batch_longterm_losses[j]['nn losses'][i]
                     average_wind_average_losses[i] += batch_longterm_losses[j]['average wind losses'][i]
             # average
-            average_nn_losses /= 4
-            average_wind_average_losses /= 4
-            # create dic
-            average_longterm_losses.update({'time': batch_longterm_losses[0]['time'][0:4]})
+            # average_nn_losses /= 10
+            # average_wind_average_losses /= 10
+            # create dictionary
+            average_longterm_losses.update({'steps': batch_longterm_losses[0]['steps'][0:10]})
             average_longterm_losses.update({'average nn losses': average_nn_losses})
             average_longterm_losses.update({'average wind average losses': average_wind_average_losses})
             # plot
-            time = average_longterm_losses['time']
-            del average_longterm_losses['time']
+            time = average_longterm_losses['steps']
+            del average_longterm_losses['steps']
 
             for key, values in average_longterm_losses.items():
                 ax.plot(time, values, label=key)
             ax.legend(loc='upper right')
-            ax.set_xlabel('Time')
+            ax.set_xlabel('Steps')
             ax.set_ylabel('Loss')
 
         else:
