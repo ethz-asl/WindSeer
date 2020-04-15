@@ -171,10 +171,11 @@ class WindOptimiser(object):
                 self._base_cosmo_corners = self.get_cosmo_corners()
 
         # Noise
+        self.noisy_labels = self.labels.clone()
         if self.flag.test_simulated_data and self.flag.add_gaussian_noise:
-            self.labels = self.add_gaussian_noise(self.labels)
+            self.noisy_labels = self.add_gaussian_noise(self.noisy_labels)
         if self.flag.test_simulated_data and self.flag.add_turbulence:
-            self.labels = self.add_turbulence(self.labels)
+            self.noisy_labels = self.add_turbulence(self.noisy_labels)
 
         # Wind data variables
         if self.flag.test_simulated_data:
@@ -418,7 +419,7 @@ class WindOptimiser(object):
 
     def get_sparse_wind_blocks(self, p=0):
         time_start = time.time()
-        wind = self.labels.clone()
+        wind = self.noisy_labels.clone()
         channels, nz, ny, nx = wind.shape
         terrain = self.original_terrain
         boolean_terrain = terrain > 0
@@ -464,7 +465,7 @@ class WindOptimiser(object):
 
     def get_trajectory_wind_blocks(self):
         # copy labels
-        wind = self.labels.clone()
+        wind = self.noisy_labels.clone()
 
         # copy terrain
         terrain = self.original_terrain.clone()
@@ -577,11 +578,11 @@ class WindOptimiser(object):
 
             # generate simulated flight data
             interpolating_function_x = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
-                                           self.labels[0, :].detach().cpu().numpy(), method='nearest')
+                                           wind[0, :].detach().cpu().numpy(), method='nearest')
             interpolating_function_y = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
-                                           self.labels[1, :].detach().cpu().numpy(), method='nearest')
+                                           wind[1, :].detach().cpu().numpy(), method='nearest')
             interpolating_function_z = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
-                                           self.labels[2, :].detach().cpu().numpy(), method='nearest')
+                                           wind[2, :].detach().cpu().numpy(), method='nearest')
             pts = np.column_stack((z_traj, y_traj, x_traj))
             # distances = np.sqrt(np.sum(np.diff(pts, axis=0)**2, 1))
 
@@ -615,7 +616,7 @@ class WindOptimiser(object):
             dir_2 = 2
             # Random number of segments, each with a length between 10 and 11 bins
             # num_of_segments = random.randint(2, 20)
-            num_of_segments = 10
+            num_of_segments = 60
             # first axis to go along
             direction_axis = 1
             forward_axis = 'x'
@@ -733,11 +734,11 @@ class WindOptimiser(object):
             trajectory_points[:, 1] = trajectory_points[:, 1] * self.grid_size[1]
             trajectory_points[:, 2] = trajectory_points[:, 2] * self.grid_size[0]
             interpolating_function_x = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
-                                           self.labels[0, :].detach().cpu().numpy(), method='nearest')
+                                           wind[0, :].detach().cpu().numpy(), method='nearest')
             interpolating_function_y = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
-                                           self.labels[1, :].detach().cpu().numpy(), method='nearest')
+                                           wind[1, :].detach().cpu().numpy(), method='nearest')
             interpolating_function_z = RGI((self.terrain.z_terr, self.terrain.y_terr, self.terrain.x_terr),
-                                           self.labels[2, :].detach().cpu().numpy(), method='nearest')
+                                           wind[2, :].detach().cpu().numpy(), method='nearest')
 
             interpolated_flight_data_x = interpolating_function_x(trajectory_points)
             interpolated_flight_data_y = interpolating_function_y(trajectory_points)
@@ -805,7 +806,7 @@ class WindOptimiser(object):
         noise = eps * torch.rand(labels.shape)
         # apply scale
         noise /= self.scale
-        # labels += noise
+        labels += noise
         return labels
 
     def add_turbulence(self, labels):
@@ -1575,19 +1576,19 @@ class WindOptimiser(object):
                                                                labels.to(self._device))
 
                     # wind field losses
-                    if self.flag.test_simulated_data:
-                        nn_loss = self._loss_fn(nn_output.to(self._device),
-                                                self.labels.to(self._device))
-                        zero_wind_loss = self._loss_fn(interpolated_zero_wind_output.to(self._device),
-                                                       self.labels.to(self._device))
-                        average_wind_loss = self._loss_fn(average_wind_output.to(self._device),
-                                                          labels.to(self._device))
-                        if self.flag.use_gpr_prediction:
-                            gpr_wind_loss = self._loss_fn(gpr_output.to(self._device),
-                                                          self.labels.to(self._device))
-                        if self.flag.use_optimized_corners:
-                            optimized_corners_loss = self._loss_fn(corners_output.to(self._device),
-                                                                   self.labels.to(self._device))
+                    # if self.flag.test_simulated_data:
+                    #     nn_loss = self._loss_fn(nn_output.to(self._device),
+                    #                             self.labels.to(self._device))
+                    #     zero_wind_loss = self._loss_fn(zero_wind_output.to(self._device),
+                    #                                    self.labels.to(self._device))
+                    #     average_wind_loss = self._loss_fn(average_wind_output.to(self._device),
+                    #                                       labels.to(self._device))
+                    #     if self.flag.use_gpr_prediction:
+                    #         gpr_wind_loss = self._loss_fn(gpr_output.to(self._device),
+                    #                                       self.labels.to(self._device))
+                    #     if self.flag.use_optimized_corners:
+                    #         optimized_corners_loss = self._loss_fn(corners_output.to(self._device),
+                    #                                                self.labels.to(self._device))
 
                     normalize_losses = True
                     if normalize_losses:
@@ -1637,12 +1638,11 @@ class WindOptimiser(object):
                             longterm_losses.update({'optimized corners losses': optimized_corners_losses})
 
                     # outputs
-                    if i == max_num_windows-1 and j == longterm_timesteps-1:
-                        if self.flag.use_hybrid_model:
-                            inputs.append(input[0, :])
-                        else:
-                            inputs.append(input)
-                        outputs.append(nn_output)
+                    if self.flag.use_hybrid_model:
+                        inputs.append(input[0, :])
+                    else:
+                        inputs.append(input)
+                    outputs.append(nn_output)
 
         print('')
         nn_average_loss = sum(nn_losses)/len(nn_losses)
