@@ -1,7 +1,7 @@
 # Test parameters
 test:
-    test_simulated_data: False
-    test_flight_data: True
+    test_simulated_data: True
+    test_flight_data: False
 
 # CFD data
 cfd:
@@ -11,7 +11,7 @@ cfd:
     label_channels: ['ux', 'uy', 'uz']  # velocities
     print_names: False
     # Index of sample in the test set
-    index: 63
+    index: 41
 
 # COSMO data
 cosmo:
@@ -101,14 +101,14 @@ wind:
 
 # Noise parameters
 noise:
-  add_turbulence: False
-  add_gaussian_noise: False
+  add_turbulence: True
+  add_gaussian_noise: True
 
 # Window split parameters
 window_split:
   use_window_split: True
   #
-  batch_test: True
+  batch_test: False
   incremental_input_prediction: True
   longterm_prediction: False
   #
@@ -117,6 +117,8 @@ window_split:
   use_krigging_prediction: False
   #
   rescale_prediction: True
+  #
+  use_second_nn_model: True
   #
   window_time: 60 # seconds
   response_time: 120 # seconds
@@ -139,12 +141,12 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/trained_models/'
-  name: 'test_model_65'
+  name: 'test_model_68'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'  # L1, MSE, SoftMargin
   hybrid_model: {
-      use_hybrid_model: False,
+      use_hybrid_model: True,
       sequence_length: 10
   }
 
@@ -154,4 +156,15 @@ second_model:
   name: 'ednn3d_best'
   version: 'latest'
   boolean_terrain: False
-  loss: 'MSE'
+  loss: 'MSE'  # L1, MSE, SoftMargin
+
+third_model:
+  location: 'data/trained_models/'
+  name: 'test_model_65'
+  version: 'latest'
+  boolean_terrain: False
+  loss: 'MSE'  # L1, MSE, SoftMargin
+  hybrid_model: {
+      use_hybrid_model: False,
+      sequence_length: 10
+  }

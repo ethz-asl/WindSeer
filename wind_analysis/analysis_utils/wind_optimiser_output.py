@@ -29,7 +29,7 @@ class WindOptimiserOutput:
         self._masked_input = self.get_masked_input()
         # self._grads = grads
         # self._names = self.get_names()
-        self._save_output = False
+        self._save_output = True
         self._add_sparse_mask_row = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
@@ -420,10 +420,13 @@ class WindOptimiserOutput:
             batch_longterm_losses = self._batch_longterm_losses
             average_longterm_losses = {}
             average_nn_losses = np.zeros((10))
+            average_second_nn_losses = np.zeros((10))
             average_wind_average_losses = np.zeros((10))
             for i in range(10):
                 for j in range(len(batch_longterm_losses)):
                     average_nn_losses[i] += batch_longterm_losses[j]['nn losses'][i]
+                    if self.wind_opt.flag.use_second_nn_model:
+                        average_second_nn_losses[i] += batch_longterm_losses[j]['nn losses'][i]
                     average_wind_average_losses[i] += batch_longterm_losses[j]['average wind losses'][i]
             # average
             # average_nn_losses /= 10
@@ -431,6 +434,8 @@ class WindOptimiserOutput:
             # create dictionary
             average_longterm_losses.update({'steps': batch_longterm_losses[0]['steps'][0:10]})
             average_longterm_losses.update({'average nn losses': average_nn_losses})
+            if self.wind_opt.flag.use_second_nn_model:
+                average_longterm_losses.update({'average second nn losses': average_second_nn_losses})
             average_longterm_losses.update({'average wind average losses': average_wind_average_losses})
             # plot
             time = average_longterm_losses['steps']

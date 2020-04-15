@@ -115,7 +115,7 @@ class SelectionFlags(object):
         self.use_gpr_prediction = window_split.params['use_gpr_prediction']
         self.use_krigging_prediction = window_split.params['use_krigging_prediction']
         self.rescale_prediction = window_split.params['rescale_prediction']
-        self.longterm_prediction = window_split.params['longterm_prediction']
+        self.use_second_nn_model = window_split.params['use_second_nn_model']
         self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
         self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
         self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
@@ -141,6 +141,7 @@ class WindOptimiser(object):
         self._optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._second_model_args = utils.BasicParameters(self._config_yaml, 'second_model')
+        self._third_model_args = utils.BasicParameters(self._config_yaml, 'third_model')
         self._resolution = resolution
 
         # Selection flags
@@ -153,6 +154,8 @@ class WindOptimiser(object):
         self.net.freeze_model()
         self.second_net, self.second_params = self.load_network_model(second_model=True)
         self.second_net.freeze_model()
+        self.third_net, self.second_params = self.load_network_model(third_model=True)
+        self.third_net.freeze_model()
         self._loss_fn = self.get_loss_function()
 
         # Load data
@@ -201,9 +204,11 @@ class WindOptimiser(object):
 
     # --- Network and loss function ---
 
-    def load_network_model(self, second_model=False):
+    def load_network_model(self, second_model=False, third_model=False):
         if second_model:
             model_args = self._second_model_args
+        elif third_model:
+            model_args = self._third_model_args
         else:
             model_args = self._model_args
         print('Loading network model...', end='', flush=True)
@@ -1044,9 +1049,11 @@ class WindOptimiser(object):
         output = self.run_prediction(input, second_model=True)      # Run network prediction with input csv
         return input, output
 
-    def run_prediction(self, input, second_model=False):
+    def run_prediction(self, input, second_model=False, third_model=False):
         if second_model:
             return self.second_net(input.unsqueeze(0))['pred'].squeeze(0)
+        elif third_model:
+            return self.third_net(input.unsqueeze(0))['pred'].squeeze(0)
         else:
             return self.net(input.unsqueeze(0))['pred'].squeeze(0)
 
@@ -1348,7 +1355,7 @@ class WindOptimiser(object):
         # batch variables
         batch_longterm_losses = []
         inputs, outputs = [], []
-        nn_losses, zero_wind_losses, average_wind_losses = [], [], []
+        nn_losses, second_nn_losses, zero_wind_losses, average_wind_losses = [], [], [], []
         gpr_wind_losses, krigging_wind_losses, optimized_corners_losses = [], [], []
         time = []
         longterm_losses = {}
@@ -1496,7 +1503,16 @@ class WindOptimiser(object):
                         # get prediction
                         wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
                         input = torch.cat([self.terrain.network_terrain, wind_input])
+                    if self.flag.use_second_nn_model:
+                        wind_blocks, var_blocks, wind_zeros, wind_mask \
+                            = self.get_flight_wind_blocks(input_flight_data)
+                        # get prediction
+                        wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
+                        input2 = torch.cat([self.terrain.network_terrain, wind_input])
+
                     nn_output = self.run_prediction(input)
+                    if self.flag.use_second_nn_model:
+                        nn_output2 = self.run_prediction(input2, third_model=True)
                     if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
                         if i == 0:
                             self.rescale_prediction(nn_output, self.labels)  # rescale labels only once
@@ -1518,6 +1534,8 @@ class WindOptimiser(object):
                     FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                            wind_data_for_prediction=label_flight_data)
                     interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
+                    if self.flag.use_second_nn_model:
+                        interpolated_nn_output2 = FlightInterpolator.interpolate_flight_data_from_grid(nn_output2)
 
                     # --- Zero wind prediction ---
                     interpolated_zero_wind_output = torch.zeros_like(labels)
@@ -1561,6 +1579,9 @@ class WindOptimiser(object):
                     # trajectory losses
                     nn_loss = self._loss_fn(interpolated_nn_output.to(self._device),
                                             labels.to(self._device))
+                    if self.flag.use_second_nn_model:
+                        second_nn_loss = self._loss_fn(interpolated_nn_output2.to(self._device),
+                                            labels.to(self._device))
                     zero_wind_loss = self._loss_fn(interpolated_zero_wind_output.to(self._device),
                                                    labels.to(self._device))
                     average_wind_loss = self._loss_fn(interpolated_average_wind_output.to(self._device),
@@ -1594,6 +1615,8 @@ class WindOptimiser(object):
                     if normalize_losses:
                         nn_loss /= zero_wind_loss
                         average_wind_loss /= zero_wind_loss
+                        if self.flag.use_second_nn_model:
+                            second_nn_loss /= zero_wind_loss
                         if self.flag.use_krigging_prediction:
                             krigging_wind_loss /= zero_wind_loss
                         if self.flag.use_gpr_prediction:
@@ -1603,6 +1626,8 @@ class WindOptimiser(object):
                         zero_wind_loss /= zero_wind_loss
 
                     print(i, ' Trajectory NN loss is: ', nn_loss.item())
+                    if self.flag.use_second_nn_model:
+                        print(i, ' Trajectory second NN loss is: ', second_nn_loss.item())
                     print(i, ' Trajectory Zero wind loss is: ', zero_wind_loss.item())
                     print(i, ' Trajectory Average wind loss is: ', average_wind_loss.item())
                     if self.flag.use_krigging_prediction:
@@ -1614,6 +1639,8 @@ class WindOptimiser(object):
 
                     # trajectory losses
                     nn_losses.append(nn_loss.item())
+                    if self.flag.use_second_nn_model:
+                        second_nn_losses.append(second_nn_loss.item())
                     zero_wind_losses.append(zero_wind_loss.item())
                     average_wind_losses.append(average_wind_loss.item())
                     if self.flag.use_krigging_prediction:
@@ -1628,6 +1655,8 @@ class WindOptimiser(object):
                         time.append(i)
                         longterm_losses.update({'steps': time})
                         longterm_losses.update({'nn losses': nn_losses})
+                        if self.flag.use_second_nn_model:
+                            longterm_losses.update({'second nn losses': second_nn_losses})
                         longterm_losses.update({'zero wind losses': zero_wind_losses})
                         longterm_losses.update({'average wind losses': average_wind_losses})
                         if self.flag.use_krigging_prediction:
@@ -1647,6 +1676,9 @@ class WindOptimiser(object):
         print('')
         nn_average_loss = sum(nn_losses)/len(nn_losses)
         print('Average NN loss is: ', nn_average_loss)
+        if self.flag.use_second_nn_model:
+            second_nn_average_loss = sum(second_nn_losses) / len(second_nn_losses)
+            print('Average NN loss is: ', second_nn_average_loss)
         zero_wind_average_loss = sum(zero_wind_losses)/len(zero_wind_losses)
         print('Average zero wind loss is: ', zero_wind_average_loss)
         average_wind_average_loss = sum(average_wind_losses)/len(average_wind_losses)
