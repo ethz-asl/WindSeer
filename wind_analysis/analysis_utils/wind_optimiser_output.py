@@ -426,7 +426,7 @@ class WindOptimiserOutput:
                 for j in range(len(batch_longterm_losses)):
                     average_nn_losses[i] += batch_longterm_losses[j]['nn losses'][i]
                     if self.wind_opt.flag.use_second_nn_model:
-                        average_second_nn_losses[i] += batch_longterm_losses[j]['nn losses'][i]
+                        average_second_nn_losses[i] += batch_longterm_losses[j]['second nn losses'][i]
                     average_wind_average_losses[i] += batch_longterm_losses[j]['average wind losses'][i]
             # average
             # average_nn_losses /= 10

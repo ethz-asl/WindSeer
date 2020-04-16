@@ -11,19 +11,19 @@ cfd:
     label_channels: ['ux', 'uy', 'uz']  # velocities
     print_names: False
     # Index of sample in the test set
-    index: 41
+    index: 63
 
 # COSMO data
 cosmo:
     file: 'data/cosmo-1_ethz_fcst_2018112312.nc'        #09, 12
     time: 'auto'
     terrain_file: 'data/cosmo-1_ethz_ana_const.nc'
-    terrain_tiff: 'data/riemenstalden_full.tif'        # riemenstalden_full, fluelen_full, hinwil, tobelhof
+    terrain_tiff: 'data/tobelhof.tif'        # riemenstalden_full, fluelen_full, hinwil, tobelhof
     prediction_prefix: ''  # rotated_
 
 # flight data
 flight:
-    flight_data_dir: 'data/riemenstalden/'
+    flight_data_dir: 'data/tobelhof/'
     files: ['20181123_flight03_fpr_wind.hdf5', '20181123_flight04_fpr_wind.hdf5', '20181123_flight05_fpr_wind.hdf5', '20181123_flight06_fpr_wind.hdf5',
     '20181123_flight01_fpr_wind.hdf5', '20181123_flight02_fpr_wind.hdf5',
     '20190411_flight01_fpr_wind.hdf5']
@@ -67,7 +67,7 @@ flight:
 
     # ['20190411_flight01_fpr_wind.hdf5',
     #  '20190411_flight01_fpr_wind_hn.hdf5']
-    index: 0
+    index: 6
     #
     filtered_dir: 'data/'
     use_ekf_wind: False
@@ -141,7 +141,7 @@ optimisation:
 # NN model parameters
 model:
   location: 'data/trained_models/'
-  name: 'test_model_68'
+  name: 'test_model_72'
   version: 'latest'
   boolean_terrain: False
   loss: 'MSE'  # L1, MSE, SoftMargin

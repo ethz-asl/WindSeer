@@ -174,7 +174,8 @@ class WindOptimiser(object):
                 self._base_cosmo_corners = self.get_cosmo_corners()
 
         # Noise
-        self.noisy_labels = self.labels.clone()
+        if self.flag.test_simulated_data:
+            self.noisy_labels = self.labels.clone()
         if self.flag.test_simulated_data and self.flag.add_gaussian_noise:
             self.noisy_labels = self.add_gaussian_noise(self.noisy_labels)
         if self.flag.test_simulated_data and self.flag.add_turbulence:
@@ -1515,9 +1516,13 @@ class WindOptimiser(object):
                         nn_output2 = self.run_prediction(input2, third_model=True)
                     if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
                         if i == 0:
-                            self.rescale_prediction(nn_output, self.labels)  # rescale labels only once
+                            self.rescale_prediction(nn_output, self.labels)
+                            if self.flag.use_second_nn_model:
+                                self.rescale_prediction(nn_output2, self.labels)# rescale labels only once
                         else:
                             self.rescale_prediction(nn_output)
+                            if self.flag.use_second_nn_model:
+                                self.rescale_prediction(nn_output2)
                     if self.flag.test_flight_data and self.flag.rescale_prediction:
                         input[:, 0, :] *= scale * 0.5
                         input[:, 1, :] *= scale * 0.5
@@ -1525,6 +1530,10 @@ class WindOptimiser(object):
                         nn_output[0, :] *= scale * 0.5
                         nn_output[1, :] *= scale * 0.5
                         nn_output[2, :] *= scale * 0.1
+                        if self.flag.use_second_nn_model:
+                            nn_output2[0, :] *= scale * 0.5
+                            nn_output2[1, :] *= scale * 0.5
+                            nn_output2[2, :] *= scale * 0.1
                         input_flight_data['wn'] *= scale * 0.5
                         input_flight_data['we'] *= scale * 0.5
                         input_flight_data['wd'] *= scale * 0.1
@@ -1651,27 +1660,27 @@ class WindOptimiser(object):
                         optimized_corners_losses.append(optimized_corners_loss.item())
 
                     # trajectory longterm losses
-                    if i <= 10:
-                        time.append(i)
-                        longterm_losses.update({'steps': time})
-                        longterm_losses.update({'nn losses': nn_losses})
-                        if self.flag.use_second_nn_model:
-                            longterm_losses.update({'second nn losses': second_nn_losses})
-                        longterm_losses.update({'zero wind losses': zero_wind_losses})
-                        longterm_losses.update({'average wind losses': average_wind_losses})
-                        if self.flag.use_krigging_prediction:
-                            longterm_losses.update({'krigging losses': krigging_wind_losses})
-                        if self.flag.use_gpr_prediction:
-                            longterm_losses.update({'gpr losses': gpr_wind_losses})
-                        if self.flag.use_optimized_corners:
-                            longterm_losses.update({'optimized corners losses': optimized_corners_losses})
+                    time.append(i)
+                    longterm_losses.update({'steps': time})
+                    longterm_losses.update({'nn losses': nn_losses})
+                    if self.flag.use_second_nn_model:
+                        longterm_losses.update({'second nn losses': second_nn_losses})
+                    longterm_losses.update({'zero wind losses': zero_wind_losses})
+                    longterm_losses.update({'average wind losses': average_wind_losses})
+                    if self.flag.use_krigging_prediction:
+                        longterm_losses.update({'krigging losses': krigging_wind_losses})
+                    if self.flag.use_gpr_prediction:
+                        longterm_losses.update({'gpr losses': gpr_wind_losses})
+                    if self.flag.use_optimized_corners:
+                        longterm_losses.update({'optimized corners losses': optimized_corners_losses})
 
                     # outputs
-                    if self.flag.use_hybrid_model:
-                        inputs.append(input[0, :])
-                    else:
-                        inputs.append(input)
-                    outputs.append(nn_output)
+                    if i == max_num_windows-1:
+                        if self.flag.use_hybrid_model:
+                            inputs.append(input[0, :])
+                        else:
+                            inputs.append(input)
+                        outputs.append(nn_output)
 
         print('')
         nn_average_loss = sum(nn_losses)/len(nn_losses)
