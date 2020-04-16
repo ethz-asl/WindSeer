@@ -61,6 +61,7 @@ class HDF5Dataset(Dataset):
     __default_max_sequence_length = 5
     __default_add_gaussian_noise = False
     __default_add_turbulence = False
+    __default_add_bias = False
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -282,6 +283,13 @@ class HDF5Dataset(Dataset):
             self.__add_turbulence = self.__default_add_turbulence
             if verbose:
                 print('HDF5Dataset: add_turbulence not present in kwargs, using default value:', self.__default_add_turbulence)
+
+        try:
+            self.__add_bias = kwargs['add_bias']
+        except KeyError:
+            self.__add_bias = self.__default_add_bias
+            if verbose:
+                print('HDF5Dataset: add_bias not present in kwargs, using default value:', self.__default_add_bias)
 
         # --------------------------------------- initializing class params --------------------------------------------
         if len(input_channels) == 0 or len(label_channels) == 0:
@@ -528,7 +536,7 @@ class HDF5Dataset(Dataset):
             is_train_set = 'train' in self.__filename
             if self.__add_turbulence and is_train_set:
                 # randomly select one of the turbulent velocity fields
-                rand_num = np.random.randint(0, 99)
+                rand_num = self.__rand.randint(0, 99)
                 turbulence = self.__turbulent_velocity_fields[rand_num]
                 _, turb_nx, turb_ny, turb_nz = turbulence.shape
                 # subsample turbulent velocity field with the same shape as data
@@ -544,13 +552,23 @@ class HDF5Dataset(Dataset):
                     turbulence /= noise_scale
                 sparse_input[1:4, :] += turbulence
 
+            is_train_set = 'train' in self.__filename
+            if self.__add_bias and is_train_set:
+                # bias wind velocity (up to 2m/s) to add to one of the velocity channels
+                wind_bias = 2 * self.__rand.random()
+                if self.__autoscale:  # apply scale to turbulence if necessary
+                    wind_bias /= noise_scale  # apply scale to bias if necessary
+                # channel for which bias is added
+                bias_channel = self.__rand.randint(1, 3)
+                data[bias_channel, :] += wind_bias
+
             # create and add sparse mask to input if requested
             if self.__create_sparse_mask:
                 terrain = sparse_input[0, :].clone()
                 nz, ny, nx = terrain.shape
                 boolean_terrain = terrain > 0
                 # percentage of sparse data
-                p = random.random() * self.__max_percentage_of_sparse_data
+                p = self.__rand.random() * self.__max_percentage_of_sparse_data
                 if p < 1e-6:
                     p = 1e-6
                 # terrain correction
@@ -563,13 +581,13 @@ class HDF5Dataset(Dataset):
 
                 if self.__sample_terrain_region:
                     # sample terrain region
-                    p_sample = 0.2 + random.random() * 0.3  # sample between 0.2 and 0.5
+                    p_sample = 0.2 + self.__rand.random() * 0.3  # sample between 0.2 and 0.5
                     unifrom_dist_region = torch.zeros((nz, ny, nx)).float()
                     l = int(np.sqrt(nx * ny * p_sample))
                     x0 = int(l / 2) + 1
                     x1 = nx - (int(l / 2) + 1)
-                    rx = random.randint(x0, x1)
-                    ry = random.randint(x0, x1)
+                    rx = self.__rand.randint(x0, x1)
+                    ry = self.__rand.randint(x0, x1)
                     unifrom_dist_region[:, ry - int((l + 1) / 2):ry + int(l / 2), rx - int((l + 1) / 2):rx + int(l / 2)] \
                         = torch.FloatTensor(nz, l, l).uniform_()
                     terrain_uniform_mask = boolean_terrain.float() * unifrom_dist_region
@@ -594,7 +612,7 @@ class HDF5Dataset(Dataset):
                 h_terrain = boolean_terrain.sum(0, keepdim=True).squeeze(0)
                 # random starting point
                 non_zero = torch.nonzero(terrain)
-                start = non_zero[random.randint(0, non_zero.shape[0]-1)]
+                start = non_zero[self.__rand.randint(0, non_zero.shape[0]-1)]
                 idx = start[2].detach().cpu().numpy()
                 idy = start[1].detach().cpu().numpy()
                 idz = start[0].detach().cpu().numpy()
@@ -602,10 +620,11 @@ class HDF5Dataset(Dataset):
                 dir_1 = 10
                 dir_2 = 2
                 # Random number of segments, each with a length between 10 and 11 bins
-                num_of_segments = random.randint(3, 25)
+                num_of_segments = self.__rand.randint(3, 25)
                 # sequential input if requested
                 sequential_input = []
-                sequence_length = random.randint(1, self.__max_sequence_length)
+                sequence_length = self.__max_sequence_length
+                # sequence_length = self.__rand.randint(1, self.__max_sequence_length)
                 # trajectory bins
                 trajectory_bin_points = []
                 # first axis to go along
@@ -648,7 +667,7 @@ class HDF5Dataset(Dataset):
                         trajectory_bin_points.append([current_idz, current_idy, current_idx])
                         break
                     else:
-                        next_feasible_point = feasible_points[random.randint(0, len(feasible_points) - 1)]
+                        next_feasible_point = feasible_points[self.__rand.randint(0, len(feasible_points) - 1)]
                         next_idx = next_feasible_point[2]
                         next_idy = next_feasible_point[1]
                         next_idz = next_feasible_point[0]
@@ -692,6 +711,10 @@ class HDF5Dataset(Dataset):
                                 trajectory_bin_points[0][0], trajectory_bin_points[0][1], trajectory_bin_points[0][
                                     2]] = 1.0
                             sequential_input.append(torch.cat([sparse_input, mask_segment.float().unsqueeze(0)]))
+                        # # pad the rest of the time steps with zeros until max sequence length is reached
+                        # for j in range(self.__max_sequence_length-sequence_length):
+                        #     mask_segment = torch.zeros_like(terrain)
+                        #     sequential_input.append(torch.cat([sparse_input, mask_segment.float().unsqueeze(0)]))
                     else:
                         # divide trajectory into sequences
                         traj_seg_len = int((len(trajectory_bin_points) / sequence_length))
@@ -709,6 +732,10 @@ class HDF5Dataset(Dataset):
                             mask_segment = torch.zeros_like(terrain)
                             mask_segment[trajectory_segment.split(1, dim=1)] = 1.0
                             sequential_input.append(torch.cat([sparse_input, mask_segment.float().unsqueeze(0)]))
+                            # # pad the rest of the time steps with zeros until max sequence length is reached
+                            # for j in range(self.__max_sequence_length - sequence_length):
+                            #     mask_segment = torch.zeros_like(terrain)
+                            #     sequential_input.append(torch.cat([sparse_input, mask_segment.float().unsqueeze(0)]))
                     sparse_input = torch.stack(sequential_input, dim=0)
                 else:
                     # add mask to sparse_input

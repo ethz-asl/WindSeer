@@ -91,7 +91,8 @@ class EDNNParameters(object):
                 'max_sequence_length': self.data['max_sequence_length'],
                 'sample_terrain_region': self.data['sample_terrain_region'],
                 'add_gaussian_noise': self.data['add_gaussian_noise'],
-                'add_turbulence': self.data['add_turbulence']}
+                'add_turbulence': self.data['add_turbulence'],
+                'add_bias': self.data['add_bias']}
 
     def model_kwargs(self):
         return self.model['model_args']
