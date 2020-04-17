@@ -45,6 +45,7 @@ class ModelEDNN3D(nn.Module):
     __default_use_sparse_mask = False
     __default_use_sparse_convolution = False
     __default_use_hybrid_model = False
+    __default_use_hybrid_model_ext = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -245,6 +246,13 @@ class ModelEDNN3D(nn.Module):
             if verbose:
                 print('EDNN3D: use_hybrid_model not present in kwargs, using default value:', self.__default_use_hybrid_model)
 
+        try:
+            self.__use_hybrid_model_ext = kwargs['use_hybrid_model_ext']
+        except KeyError:
+            self.__use_hybrid_model_ext = self.__default_use_hybrid_model_ext
+            if verbose:
+                print('EDNN3D: use_hybrid_model_ext not present in kwargs, using default value:', self.__default_use_hybrid_model_ext)
+
         if self.__vae and not self.__use_fc_layers:
             print('EDNN3D: Error, to use the vae mode the fc layers need to be enabled.')
             sys.exit()
@@ -380,6 +388,11 @@ class ModelEDNN3D(nn.Module):
                                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
                                                  self.__filter_kernel_size+1)]
 
+        if self.__use_hybrid_model_ext:
+            self.__ConvLSTM_ext = ConvLSTM3d(self.__num_outputs, self.__num_outputs,
+                                             self.__filter_kernel_size, num_layers=1,
+                                             batch_first=True, bias=True, return_all_layers=False)
+
         # mapping layer
         if self.__use_mapping_layer:
             self.__mapping_layer = nn.Conv3d(num_out, num_out,1, groups=num_out)  # for each channel a separate filter
@@ -450,7 +463,7 @@ class ModelEDNN3D(nn.Module):
 
     def forward(self, x):
         if self.__use_sparse_mask:
-            if self.__use_hybrid_model:
+            if self.__use_hybrid_model or self.__use_hybrid_model_ext:
                 batch, timesteps, channels, nz, ny, nx = x.shape
                 for i in range(timesteps):
                     sparse_mask = x[:, i, -1, :].unsqueeze(1).clone()
@@ -466,224 +479,242 @@ class ModelEDNN3D(nn.Module):
 
         if self.__use_terrain_mask:
             # store the terrain data
-            if self.__use_hybrid_model:
+            if self.__use_hybrid_model or self.__use_hybrid_model_ext:
                 is_wind = x[:, 0, 0, :].unsqueeze(1).clone()
                 is_wind.sign_()
             else:
                 is_wind = x[:, 0, :].unsqueeze(1).clone()
                 is_wind.sign_()
 
+        x = torch.randn((6, 3, 5, 64, 64, 64)).float().cuda()
         output = {}
         x_skip = []
         sparse_mask_skip = []
-        # down-convolution
-        if self.__use_hybrid_model:
-            batch, timesteps, channels, nz, ny, nx = x.shape
-            x_timesteps = []
+        x_time_steps = []
+        if self.__use_hybrid_model_ext:
+            time_steps = x.shape[1]
             x_original = x.clone()
-            for i in range(timesteps):
-                for j in range(self.__n_downsample_layers):
-                    if j == 0:
-                        x = self.__pooling(self.__activation(self.__conv[j](self.__pad_conv(x_original[:, i, :]))))
-                    else:
-                        x = self.__pooling(self.__activation(self.__conv[j](self.__pad_conv(x))))
-                x_timesteps.append(x)
-            x = torch.stack(x_timesteps, dim=1)
         else:
-            if (self.__skipping):
-                for i in range(self.__n_downsample_layers):
-                    if self.__use_sparse_convolution:  # sparse convolution operation
-                        # elementwise multiplication
-                        sparse_mask_expanded = sparse_mask.expand_as(x)
-                        x = sparse_mask_expanded * x
-
-                        # convolution
-                        x = self.__conv[i](self.__pad_conv(x))
-
-                        # normalization
-                        weights = torch.ones_like(self.__conv[i].weight)
-                        norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
-                                        stride=self.__conv[i].stride, padding=self.__conv[i].padding,
-                                        dilation=self.__conv[i].dilation)
-                        norm = torch.clamp(norm, min=1e-5)
-                        norm = 1. / norm
-                        x = norm * x
-
-                        # add bias
-                        bias = self.__bias_conv[i].expand_as(x)
-                        x = x + bias
-
-                        # activation
-                        x = self.__activation(x)
-                        x_skip.append(x.clone())
-                        sparse_mask_skip.append(sparse_mask.expand_as(x).clone())
-
-                        # pooling
-                        x = self.__pooling(x)
-                        sparse_mask = self.__mask_pooling(sparse_mask)
-                    else:
-                        x = self.__activation(self.__conv[i](self.__pad_conv(x)))
-                        x_skip.append(x.clone())
-                        x = self.__pooling(x)
-
-            else:
-                for i in range(self.__n_downsample_layers):
-                    if self.__use_sparse_convolution:  # sparse convolution operation
-                        # elementwise multiplication
-                        sparse_mask_expanded = sparse_mask.expand_as(x)
-                        x = sparse_mask_expanded * x
-
-                        # convolution
-                        x = self.__conv[i](self.__pad_conv(x))
-
-                        # normalization
-                        weights = torch.ones_like(self.__conv[i].weight)
-                        norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
-                                        stride=self.__conv[i].stride, padding=self.__conv[i].padding,
-                                        dilation=self.__conv[i].dilation)
-                        norm = torch.clamp(norm, min=1e-5)
-                        norm = 1. / norm
-                        x = norm * x
-
-                        # add bias
-                        bias = self.__bias_conv[i].expand_as(x)
-                        x = x + bias
-
-                        # activation
-                        x = self.__activation(x)
-
-                        # pooling
-                        x = self.__pooling(x)
-                        sparse_mask = self.__mask_pooling(sparse_mask)
-                    else:
-                        x = self.__pooling(self.__activation(self.__conv[i](self.__pad_conv(x))))
-
-        # fully connected layers
-        if self.__use_fc_layers:
+            time_steps = 1
+        for t in range(time_steps):
+            if self.__use_hybrid_model_ext:
+                x = x_original[:, t, :].clone()
+            # down-convolution
             if self.__use_hybrid_model:
-                shape = x[:, 0, :].size()
-                x = x.view(x.size()[0], x.size()[1], self.num_flat_features(x))
-                # hidden = (torch.randn(1, x.size()[0], int(x.size()[-1] / 2)).cuda(),
-                #           torch.randn(1, x.size()[0], int(x.size()[-1] / 2)).cuda())
-                out, hidden = self.__lstm1(x)
-                x = self.__activation(hidden[0].squeeze(0))
-                if self.__vae:
-                    x_mean = x[:, :self.__vae_dim]
-                    x_logvar = x[:, self.__vae_dim:]
-                    output['distribution_mean'] = x_mean.clone()
-                    output['distribution_logvar'] = x_logvar.clone()
-
-                    # during training sample from the distribution, during inference take values with the maximum probability
-                    if self.training:
-                        std = torch.torch.exp(0.5 * x_logvar)
-                        x = x_mean + std * torch.randn_like(std)
-                    else:
-                        x = x_mean
-                out, hidden = self.__lstm2(x.unsqueeze(1))
-                x = self.__activation(out[0].squeeze(0))
-                x = x.view(shape)
+                batch, timesteps, channels, nz, ny, nx = x.shape
+                x_timesteps = []
+                x_original = x.clone()
+                for i in range(timesteps):
+                    for j in range(self.__n_downsample_layers):
+                        if j == 0:
+                            x = self.__pooling(self.__activation(self.__conv[j](self.__pad_conv(x_original[:, i, :]))))
+                        else:
+                            x = self.__pooling(self.__activation(self.__conv[j](self.__pad_conv(x))))
+                    x_timesteps.append(x)
+                x = torch.stack(x_timesteps, dim=1)
             else:
-                shape = x.size()
-                x = x.view(-1, self.num_flat_features(x))
-                x = self.__activation(self.__fc1(x))
-                if self.__vae:
-                    x_mean = x[:,:self.__vae_dim]
-                    x_logvar = x[:,self.__vae_dim:]
-                    output['distribution_mean'] = x_mean.clone()
-                    output['distribution_logvar'] = x_logvar.clone()
+                if (self.__skipping):
+                    for i in range(self.__n_downsample_layers):
+                        if self.__use_sparse_convolution:  # sparse convolution operation
+                            # elementwise multiplication
+                            sparse_mask_expanded = sparse_mask.expand_as(x)
+                            x = sparse_mask_expanded * x
 
-                    # during training sample from the distribution, during inference take values with the maximum probability
-                    if self.training:
-                        std = torch.torch.exp(0.5 * x_logvar)
-                        x = x_mean + std * torch.randn_like(std)
-                    else:
-                        x = x_mean
+                            # convolution
+                            x = self.__conv[i](self.__pad_conv(x))
 
-                x = self.__activation(self.__fc2(x))
-                x = x.view(shape)
-        else:
-            if self.__use_sparse_convolution:  # sparse convolution operation
-                # Convolution 1
-                # elementwise multiplication
-                sparse_mask_expanded = sparse_mask.expand_as(x)
-                x = sparse_mask_expanded * x
+                            # normalization
+                            weights = torch.ones_like(self.__conv[i].weight)
+                            norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
+                                            stride=self.__conv[i].stride, padding=self.__conv[i].padding,
+                                            dilation=self.__conv[i].dilation)
+                            norm = torch.clamp(norm, min=1e-5)
+                            norm = 1. / norm
+                            x = norm * x
 
-                # convolution
-                x = self.__c1(self.__pad_conv(x))
+                            # add bias
+                            bias = self.__bias_conv[i].expand_as(x)
+                            x = x + bias
 
-                # normalization
-                weights = torch.ones_like(self.__c1.weight)
-                norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
-                                stride=self.__c1.stride, padding=self.__c1.padding,
-                                dilation=self.__c1.dilation)
-                norm = torch.clamp(norm, min=1e-5)
-                norm = 1. / norm
-                x = norm * x
+                            # activation
+                            x = self.__activation(x)
+                            x_skip.append(x.clone())
+                            sparse_mask_skip.append(sparse_mask.expand_as(x).clone())
 
-                # add bias
-                bias = self.__bias_c1.expand_as(x)
-                x = x + bias
+                            # pooling
+                            x = self.__pooling(x)
+                            sparse_mask = self.__mask_pooling(sparse_mask)
+                        else:
+                            x = self.__activation(self.__conv[i](self.__pad_conv(x)))
+                            x_skip.append(x.clone())
+                            x = self.__pooling(x)
 
-                # activation
-                x = self.__activation(x)
+                else:
+                    for i in range(self.__n_downsample_layers):
+                        if self.__use_sparse_convolution:  # sparse convolution operation
+                            # elementwise multiplication
+                            sparse_mask_expanded = sparse_mask.expand_as(x)
+                            x = sparse_mask_expanded * x
 
-                # Convolution 2
-                # elementwise multiplication
-                sparse_mask_expanded = sparse_mask.expand_as(x)
-                x = sparse_mask_expanded * x
+                            # convolution
+                            x = self.__conv[i](self.__pad_conv(x))
 
-                # convolution
-                x = self.__c2(self.__pad_conv(x))
+                            # normalization
+                            weights = torch.ones_like(self.__conv[i].weight)
+                            norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
+                                            stride=self.__conv[i].stride, padding=self.__conv[i].padding,
+                                            dilation=self.__conv[i].dilation)
+                            norm = torch.clamp(norm, min=1e-5)
+                            norm = 1. / norm
+                            x = norm * x
 
-                # normalization
-                weights = torch.ones_like(self.__c2.weight)
-                norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
-                                stride=self.__c2.stride, padding=self.__c2.padding,
-                                dilation=self.__c2.dilation)
-                norm = torch.clamp(norm, min=1e-5)
-                norm = 1. / norm
-                x = norm * x
+                            # add bias
+                            bias = self.__bias_conv[i].expand_as(x)
+                            x = x + bias
 
-                # add bias
-                bias = self.__bias_c2.expand_as(x)
-                x = x + bias
+                            # activation
+                            x = self.__activation(x)
 
-                # activation
-                x = self.__activation(x)
-            elif self.__use_hybrid_model:
-                # ConvLSTM1
-                out, _ = self.__convLSTM1(x)
-                x = out[0]  # output
-                x = self.__activation(x)
-                # ConvLSTM2
-                _, last_states = self.__convLSTM2(x)
-                x = last_states[0][0]  # last hidden state
-                x = self.__activation(x)
+                            # pooling
+                            x = self.__pooling(x)
+                            sparse_mask = self.__mask_pooling(sparse_mask)
+                        else:
+                            x = self.__pooling(self.__activation(self.__conv[i](self.__pad_conv(x))))
+
+            # fully connected layers
+            if self.__use_fc_layers:
+                if self.__use_hybrid_model:
+                    shape = x[:, 0, :].size()
+                    x = x.view(x.size()[0], x.size()[1], self.num_flat_features(x))
+                    # hidden = (torch.randn(1, x.size()[0], int(x.size()[-1] / 2)).cuda(),
+                    #           torch.randn(1, x.size()[0], int(x.size()[-1] / 2)).cuda())
+                    out, hidden = self.__lstm1(x)
+                    x = self.__activation(hidden[0].squeeze(0))
+                    if self.__vae:
+                        x_mean = x[:, :self.__vae_dim]
+                        x_logvar = x[:, self.__vae_dim:]
+                        output['distribution_mean'] = x_mean.clone()
+                        output['distribution_logvar'] = x_logvar.clone()
+
+                        # during training sample from the distribution, during inference take values with the maximum probability
+                        if self.training:
+                            std = torch.torch.exp(0.5 * x_logvar)
+                            x = x_mean + std * torch.randn_like(std)
+                        else:
+                            x = x_mean
+                    out, hidden = self.__lstm2(x.unsqueeze(1))
+                    x = self.__activation(out.squeeze(1))
+                    x = x.view(shape)
+                else:
+                    shape = x.size()
+                    x = x.view(-1, self.num_flat_features(x))
+                    x = self.__activation(self.__fc1(x))
+                    if self.__vae:
+                        x_mean = x[:,:self.__vae_dim]
+                        x_logvar = x[:,self.__vae_dim:]
+                        output['distribution_mean'] = x_mean.clone()
+                        output['distribution_logvar'] = x_logvar.clone()
+
+                        # during training sample from the distribution, during inference take values with the maximum probability
+                        if self.training:
+                            std = torch.torch.exp(0.5 * x_logvar)
+                            x = x_mean + std * torch.randn_like(std)
+                        else:
+                            x = x_mean
+
+                    x = self.__activation(self.__fc2(x))
+                    x = x.view(shape)
             else:
-                x = self.__activation(self.__c1(self.__pad_conv(x)))
-                x = self.__activation(self.__c2(self.__pad_conv(x)))
+                if self.__use_sparse_convolution:  # sparse convolution operation
+                    # Convolution 1
+                    # elementwise multiplication
+                    sparse_mask_expanded = sparse_mask.expand_as(x)
+                    x = sparse_mask_expanded * x
 
-        # up-convolution
-        if (self.__skipping):
-            for i in range(self.__n_downsample_layers-1, -1, -1):
-                if (i == 0):
-                    # no nonlinearity in the output layer
-                    x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
-                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
-                                   x_skip[i]], 1))))))
+                    # convolution
+                    x = self.__c1(self.__pad_conv(x))
+
+                    # normalization
+                    weights = torch.ones_like(self.__c1.weight)
+                    norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
+                                    stride=self.__c1.stride, padding=self.__c1.padding,
+                                    dilation=self.__c1.dilation)
+                    norm = torch.clamp(norm, min=1e-5)
+                    norm = 1. / norm
+                    x = norm * x
+
+                    # add bias
+                    bias = self.__bias_c1.expand_as(x)
+                    x = x + bias
+
+                    # activation
+                    x = self.__activation(x)
+
+                    # Convolution 2
+                    # elementwise multiplication
+                    sparse_mask_expanded = sparse_mask.expand_as(x)
+                    x = sparse_mask_expanded * x
+
+                    # convolution
+                    x = self.__c2(self.__pad_conv(x))
+
+                    # normalization
+                    weights = torch.ones_like(self.__c2.weight)
+                    norm = F.conv3d(self.__pad_conv(sparse_mask_expanded), weights, bias=None,
+                                    stride=self.__c2.stride, padding=self.__c2.padding,
+                                    dilation=self.__c2.dilation)
+                    norm = torch.clamp(norm, min=1e-5)
+                    norm = 1. / norm
+                    x = norm * x
+
+                    # add bias
+                    bias = self.__bias_c2.expand_as(x)
+                    x = x + bias
+
+                    # activation
+                    x = self.__activation(x)
+                elif self.__use_hybrid_model:
+                    # ConvLSTM1
+                    out, _ = self.__convLSTM1(x)
+                    x = out[0]  # output
+                    x = self.__activation(x)
+                    # ConvLSTM2
+                    _, last_states = self.__convLSTM2(x)
+                    x = last_states[0][0]  # last hidden state
+                    x = self.__activation(x)
                 else:
-                    x = self.__activation(self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
-                        torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
-                                   x_skip[i]], 1)))))))
-        else:
-            for i in range(self.__n_downsample_layers-1, -1, -1):
-                if (i == 0):
-                    # no nonlinearity in the output layer
-                    x = self.__deconv1[i](self.__pad_deconv(
-                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
-                else:
-                    x = self.__activation(self.__deconv1[i](self.__pad_deconv(
-                        F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners))))
+                    x = self.__activation(self.__c1(self.__pad_conv(x)))
+                    x = self.__activation(self.__c2(self.__pad_conv(x)))
+
+            # up-convolution
+            if (self.__skipping):
+                for i in range(self.__n_downsample_layers-1, -1, -1):
+                    if (i == 0):
+                        # no nonlinearity in the output layer
+                        x = self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                            torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                       x_skip[i]], 1))))))
+                    else:
+                        x = self.__activation(self.__deconv2[i](self.__pad_deconv(self.__activation(self.__deconv1[i](self.__pad_deconv(
+                            torch.cat([F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners),
+                                       x_skip[i]], 1)))))))
+            else:
+                for i in range(self.__n_downsample_layers-1, -1, -1):
+                    if (i == 0):
+                        # no nonlinearity in the output layer
+                        x = self.__deconv1[i](self.__pad_deconv(
+                            F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners)))
+                    else:
+                        x = self.__activation(self.__deconv1[i](self.__pad_deconv(
+                            F.interpolate(x, scale_factor=2, mode=self.__interpolation_mode, align_corners=self.__align_corners))))
+
+            if self.__use_hybrid_model_ext:
+                # stack output from each timesptes
+                x_time_steps.append(x)
+        if self.__use_hybrid_model_ext:
+            x = torch.stack(x_time_steps, dim=1)
+            _, last_states = self.__ConvLSTM_ext(x)
+            x = self.__activation(last_states[0][0])
 
         if self.__use_mapping_layer:
             x = self.__mapping_layer(x)

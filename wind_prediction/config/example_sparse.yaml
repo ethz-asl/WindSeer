@@ -147,5 +147,6 @@ model:
         use_sparse_convolution: False,
 
         # hybrid model
-        use_hybrid_model: True
+        use_hybrid_model: False,
+        use_hybrid_model_ext: True
     }
