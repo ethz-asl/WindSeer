@@ -319,14 +319,23 @@ class ModelEDNN3D(nn.Module):
 
             if self.__vae:
                 self.__vae_dim = int(n_features/self.__fc_scaling)
-                self.__fc1 = nn.Linear(n_features, 2 * int(n_features/self.__fc_scaling))
+                if self.__use_hybrid_model:
+                    self.__lstm1 = nn.LSTM(n_features, 2 * int(n_features/self.__fc_scaling), num_layers=1, batch_first=True)
+                else:
+                    self.__fc1 = nn.Linear(n_features, 2 * int(n_features/self.__fc_scaling))
                 print("EDNN3D: VAE state space is {} dimensional".format(self.__vae_dim))
             else:
                 self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
-            self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
+            if self.__use_hybrid_model:
+                self.__lstm2 = nn.LSTM(int(n_features/self.__fc_scaling), n_features, num_layers=1, batch_first=True)
+            else:
+                self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
         else:
             if self.__use_hybrid_model:
-                self.__convLSTM = ConvLSTM3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
+                self.__convLSTM1 = ConvLSTM3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
+                                             int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
+                                             self.__filter_kernel_size, num_layers=1, batch_first=True, bias=True, return_all_layers=False)
+                self.__convLSTM2 = ConvLSTM3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
                                              int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
                                              self.__filter_kernel_size, num_layers=1, batch_first=True, bias=True, return_all_layers=False)
             else:
@@ -551,24 +560,47 @@ class ModelEDNN3D(nn.Module):
 
         # fully connected layers
         if self.__use_fc_layers:
-            shape = x.size()
-            x = x.view(-1, self.num_flat_features(x))
-            x = self.__activation(self.__fc1(x))
-            if self.__vae:
-                x_mean = x[:,:self.__vae_dim]
-                x_logvar = x[:,self.__vae_dim:]
-                output['distribution_mean'] = x_mean.clone()
-                output['distribution_logvar'] = x_logvar.clone()
+            if self.__use_hybrid_model:
+                shape = x[:, 0, :].size()
+                x = x.view(x.size()[0], x.size()[1], self.num_flat_features(x))
+                # hidden = (torch.randn(1, x.size()[0], int(x.size()[-1] / 2)).cuda(),
+                #           torch.randn(1, x.size()[0], int(x.size()[-1] / 2)).cuda())
+                out, hidden = self.__lstm1(x)
+                x = self.__activation(hidden[0].squeeze(0))
+                if self.__vae:
+                    x_mean = x[:, :self.__vae_dim]
+                    x_logvar = x[:, self.__vae_dim:]
+                    output['distribution_mean'] = x_mean.clone()
+                    output['distribution_logvar'] = x_logvar.clone()
 
-                # during training sample from the distribution, during inference take values with the maximum probability
-                if self.training:
-                    std = torch.torch.exp(0.5 * x_logvar)
-                    x = x_mean + std * torch.randn_like(std)
-                else:
-                    x = x_mean
+                    # during training sample from the distribution, during inference take values with the maximum probability
+                    if self.training:
+                        std = torch.torch.exp(0.5 * x_logvar)
+                        x = x_mean + std * torch.randn_like(std)
+                    else:
+                        x = x_mean
+                out, hidden = self.__lstm2(x.unsqueeze(1))
+                x = self.__activation(out[0].squeeze(0))
+                x = x.view(shape)
+            else:
+                shape = x.size()
+                x = x.view(-1, self.num_flat_features(x))
+                x = self.__activation(self.__fc1(x))
+                if self.__vae:
+                    x_mean = x[:,:self.__vae_dim]
+                    x_logvar = x[:,self.__vae_dim:]
+                    output['distribution_mean'] = x_mean.clone()
+                    output['distribution_logvar'] = x_logvar.clone()
 
-            x = self.__activation(self.__fc2(x))
-            x = x.view(shape)
+                    # during training sample from the distribution, during inference take values with the maximum probability
+                    if self.training:
+                        std = torch.torch.exp(0.5 * x_logvar)
+                        x = x_mean + std * torch.randn_like(std)
+                    else:
+                        x = x_mean
+
+                x = self.__activation(self.__fc2(x))
+                x = x.view(shape)
         else:
             if self.__use_sparse_convolution:  # sparse convolution operation
                 # Convolution 1
@@ -619,8 +651,14 @@ class ModelEDNN3D(nn.Module):
                 # activation
                 x = self.__activation(x)
             elif self.__use_hybrid_model:
-                _, last_states = self.__convLSTM(x)
+                # ConvLSTM1
+                out, _ = self.__convLSTM1(x)
+                x = out[0]  # output
+                x = self.__activation(x)
+                # ConvLSTM2
+                _, last_states = self.__convLSTM2(x)
                 x = last_states[0][0]  # last hidden state
+                x = self.__activation(x)
             else:
                 x = self.__activation(self.__c1(self.__pad_conv(x)))
                 x = self.__activation(self.__c2(self.__pad_conv(x)))
@@ -665,7 +703,10 @@ class ModelEDNN3D(nn.Module):
         return output
 
     def num_flat_features(self, x):
-        size = x.size()[1:]  # all dimensions except the batch dimension
+        if self.__use_hybrid_model:
+            size = x.size()[2:]  # all dimensions except the batch dimension and timesteps dimension
+        else:
+            size = x.size()[1:]  # all dimensions except the batch dimension
         num_features = 1
         for s in size:
             num_features *= s

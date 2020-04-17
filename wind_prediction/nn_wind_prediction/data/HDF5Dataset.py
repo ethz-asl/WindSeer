@@ -673,7 +673,7 @@ class HDF5Dataset(Dataset):
                         next_idz = next_feasible_point[0]
 
                         # bins along trajectory
-                        points_along_traj = 20
+                        points_along_traj = 15
                         n = 1
                         for j in range(0, points_along_traj):
                             t = n / (points_along_traj + 1)

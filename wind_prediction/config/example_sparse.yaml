@@ -99,12 +99,12 @@ data:
 
     # sequence model
     create_sequential_input: True
-    max_sequence_length: 10
+    max_sequence_length: 3
 
     # noise
     add_gaussian_noise: True
     add_turbulence: True
-    add_bias: True
+    add_bias: False
 
 # model parameters
 model:
