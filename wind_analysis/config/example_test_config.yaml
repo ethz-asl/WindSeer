@@ -118,8 +118,6 @@ window_split:
   #
   rescale_prediction: True
   #
-  use_second_nn_model: True
-  #
   window_time: 60 # seconds
   response_time: 120 # seconds
   step_time: 60 # seconds
@@ -131,40 +129,21 @@ optimisation:
     # Rotation
     rotation: 0.0
     # Scale
-    use_scale_optimisation: False
+    use_scale_optimisation: True
     scale: 1.0
     # Spline
     use_spline_optimisation: False
     polynomial_law_num_points: 8  #approximate wind profile using a power law
     init_wind_speed: 1.0
 
-# NN model parameters
+# NN models parameters
 model:
   location: 'data/trained_models/'
-  name: 'test_model_72'
-  version: 'latest'
+  name: ['test_model_68', 'test_model_65', 'ednn3d_best']
+  version: ['latest', 'latest', 'latest']
   boolean_terrain: False
   loss: 'MSE'  # L1, MSE, SoftMargin
   hybrid_model: {
-      use_hybrid_model: True,
-      sequence_length: 10
-  }
-
-second_model:
-  use_second_model: True
-  location: 'data/trained_models/'
-  name: 'ednn3d_best'
-  version: 'latest'
-  boolean_terrain: False
-  loss: 'MSE'  # L1, MSE, SoftMargin
-
-third_model:
-  location: 'data/trained_models/'
-  name: 'test_model_65'
-  version: 'latest'
-  boolean_terrain: False
-  loss: 'MSE'  # L1, MSE, SoftMargin
-  hybrid_model: {
-      use_hybrid_model: False,
+      use_hybrid_model: [True, False, False],
       sequence_length: 10
   }

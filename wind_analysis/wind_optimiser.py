@@ -11,7 +11,6 @@ import nn_wind_prediction.data as data
 import nn_wind_prediction.data as nn_data
 from datetime import datetime
 from scipy import ndimage
-import mlrose
 from scipy.interpolate import CubicSpline
 from scipy.spatial import distance
 from scipy.interpolate import RegularGridInterpolator as RGI
@@ -140,8 +139,6 @@ class WindOptimiser(object):
         self._window_splits_args = utils.BasicParameters(self._config_yaml, 'window_split')
         self._optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
-        self._second_model_args = utils.BasicParameters(self._config_yaml, 'second_model')
-        self._third_model_args = utils.BasicParameters(self._config_yaml, 'third_model')
         self._resolution = resolution
 
         # Selection flags
@@ -151,11 +148,6 @@ class WindOptimiser(object):
 
         # Network model and loss function
         self.net, self.params = self.load_network_model()
-        self.net.freeze_model()
-        self.second_net, self.second_params = self.load_network_model(second_model=True)
-        self.second_net.freeze_model()
-        self.third_net, self.second_params = self.load_network_model(third_model=True)
-        self.third_net.freeze_model()
         self._loss_fn = self.get_loss_function()
 
         # Load data
@@ -205,25 +197,24 @@ class WindOptimiser(object):
 
     # --- Network and loss function ---
 
-    def load_network_model(self, second_model=False, third_model=False):
-        if second_model:
-            model_args = self._second_model_args
-        elif third_model:
-            model_args = self._third_model_args
-        else:
+    def load_network_model(self):
+        networks, parameters = [], []
+        for i in range(len(self._model_args.params['name'])):
             model_args = self._model_args
-        print('Loading network model...', end='', flush=True)
-        t_start = time.time()
-        yaml_loc = os.path.join(model_args.params['location'], model_args.params['name'], 'params.yaml')
-        params = utils.EDNNParameters(yaml_loc)  # load the model config
-        NetworkType = getattr(models, params.model['model_type'])  # load the model
-        net = NetworkType(**params.model_kwargs())  # load learnt parameters
-        model_loc = os.path.join(model_args.params['location'], model_args.params['name'],
-                                 model_args.params['version'] + '.model')
-        net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
-        net = net.to(self._device)
-        print(' done [{:.2f} s]'.format(time.time() - t_start))
-        return net, params
+            print('Loading network model...', end='', flush=True)
+            t_start = time.time()
+            yaml_loc = os.path.join(model_args.params['location'], model_args.params['name'][i], 'params.yaml')
+            params = utils.EDNNParameters(yaml_loc)  # load the model config
+            NetworkType = getattr(models, params.model['model_type'])  # load the model
+            net = NetworkType(**params.model_kwargs())  # load learnt parameters
+            model_loc = os.path.join(model_args.params['location'], model_args.params['name'][i],
+                                     model_args.params['version'][i] + '.model')
+            net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
+            net = net.to(self._device)
+            print(' done [{:.2f} s]'.format(time.time() - t_start))
+            networks.append(net)
+            parameters.append(params)
+        return networks, parameters
 
     def get_loss_function(self):
         try:
@@ -312,7 +303,7 @@ class WindOptimiser(object):
             except ValueError:
                 print('Cannot extract hour of flight from file name')
         # Get cosmo wind
-        # TODO: temporrary due to lack of utc data in filtered flight logs
+        # TODO: temporary due to lack of utc data in filtered flight logs
         if index is not None:
             index = index
         else:
@@ -352,7 +343,6 @@ class WindOptimiser(object):
         boolean_terrain = self._model_args.params['boolean_terrain']
         if len(self._cosmo_wind) == 1:
             # print warning since we are creating predefined terrain limits
-            # warnings.warn('Warning!: no cosmo data for selected flight. Creating user defined limits for the terrain!')
             warnings.warn('Warning!: no cosmo data for selected flight')
 
             x_max_distance = self._flight_data['x'].max() - self._flight_data['x'].min()
@@ -382,7 +372,7 @@ class WindOptimiser(object):
         # Load data set
         test_set = nn_data.HDF5Dataset(self._cfd_args.params['testset_name'],
                                        augmentation=False, return_grid_size=True,
-                                       **self.params.Dataset_kwargs())
+                                       **self.params[0].Dataset_kwargs())
         test_set_length = len(test_set)
         # print names of files in test_set
         if self.flag.print_names:
@@ -399,7 +389,7 @@ class WindOptimiser(object):
         labels = data_set[1]
         name = test_set.get_name(self._cfd_args.params['index'])
         scale = 1.0
-        if self.params.data['autoscale']:
+        if self.params[0].data['autoscale']:
             scale = data_set[3].item()
         print("Loading test set (index) with name: ", str(name))
         grid_size = data.get_grid_size(self._cfd_args.params['testset_name'])
@@ -476,7 +466,7 @@ class WindOptimiser(object):
         # copy terrain
         terrain = self.original_terrain.clone()
 
-        # define validity mask (1s where there is wind data 0s everwhere else)
+        # define validity mask (1s where there is wind data 0s everywhere else)
         mask = torch.zeros_like(terrain)
 
         # initialize trajectory list
@@ -684,7 +674,7 @@ class WindOptimiser(object):
                         id_x = int(traj_x)
                         id_y = int(traj_y)
                         id_z = int(traj_z)
-                        if self.flag.use_hybrid_model and mask[id_z, id_y, id_x] != 1.0:
+                        if any(self.flag.use_hybrid_model) and mask[id_z, id_y, id_x] != 1.0:
                             # append bin points only once
                             trajectory_bin_points.append([id_z, id_y, id_x])
                         mask[id_z, id_y, id_x] = 1.0
@@ -707,7 +697,7 @@ class WindOptimiser(object):
                     else:
                         direction_axis = direction_axis
             # print('Time to create feasible points:', time_inter - time_start)
-            if self.flag.use_hybrid_model:
+            if any(self.flag.use_hybrid_model):
                 if len(trajectory_bin_points) == 1:
                     # in case no feasible trajectory points were found make sure there is at least one measurement
                     # (the starting point) for each mask in each input sequence
@@ -749,9 +739,9 @@ class WindOptimiser(object):
             interpolated_flight_data_x = interpolating_function_x(trajectory_points)
             interpolated_flight_data_y = interpolating_function_y(trajectory_points)
             interpolated_flight_data_z = interpolating_function_z(trajectory_points)
-            simulated_flight_data['x'] = trajectory_points[:, 2] - 0.5*self.grid_size[0]
-            simulated_flight_data['y'] = trajectory_points[:, 1] - 0.5*self.grid_size[1]
-            simulated_flight_data['alt'] = trajectory_points[:, 0] - 0.5*self.grid_size[2]
+            simulated_flight_data['x'] = trajectory_points[:, 2] - 0.5 * self.grid_size[0]
+            simulated_flight_data['y'] = trajectory_points[:, 1] - 0.5 * self.grid_size[1]
+            simulated_flight_data['alt'] = trajectory_points[:, 0] - 0.5 * self.grid_size[2]
             simulated_flight_data['wn'] = interpolated_flight_data_x.astype(float)
             simulated_flight_data['we'] = interpolated_flight_data_y.astype(float)
             simulated_flight_data['wd'] = -interpolated_flight_data_z.astype(float)
@@ -761,7 +751,7 @@ class WindOptimiser(object):
         # print('Time to generate trajectory points:', time_inter2 - time_inter)
         # print('Time to bin points:', time.time() - time_inter)
         # print('Time to generate trajectory:', time.time()-time_start)
-        if self.flag.use_hybrid_model:
+        if self.flag.use_hybrid_model[0]:
             augmented_wind = torch.stack(sequential_input, dim=0)
         else:
             augmented_wind = torch.cat([wind, mask.float().unsqueeze(0)])
@@ -981,27 +971,6 @@ class WindOptimiser(object):
         #                         labels.to(self._device))
         # print('Loss is: ', nn_loss.item())
 
-        # input
-        input_wind_abs = np.sqrt(input_flight['wn'] ** 2 + input_flight['we'] ** 2)
-        input_wind_abs_3d = np.sqrt(input_flight['wn'] ** 2 + input_flight['we'] ** 2
-                                    + input_flight['wd'] ** 2)
-        input_wind_dir_trig_to = np.arctan2(input_flight['wn'] / input_wind_abs,
-                                            input_flight['we'] / input_wind_abs)
-        input_wind_dir_trig_to_degrees = input_wind_dir_trig_to * 180 / np.pi
-        input_wind_dir_cardinal = input_wind_dir_trig_to_degrees + 180
-        print('Average input wind speed: ', input_wind_abs_3d.mean())
-        print('Average input wind direction: ', input_wind_dir_cardinal.mean())
-        # label
-        label_wind_abs = np.sqrt(output_flight['wn'] ** 2 + output_flight['we'] ** 2)
-        label_wind_abs_3d = np.sqrt(output_flight['wn'] ** 2 + output_flight['we'] ** 2
-                                    + output_flight['wd'] ** 2)
-        label_wind_dir_trig_to = np.arctan2(output_flight['wn'] / label_wind_abs,
-                                            output_flight['we'] / label_wind_abs)
-        label_wind_dir_trig_to_degrees = label_wind_dir_trig_to * 180 / np.pi
-        label_wind_dir_cardinal = label_wind_dir_trig_to_degrees + 180
-        print('Average label wind speed: ', label_wind_abs_3d.mean())
-        print('Average label wind direction: ', label_wind_dir_cardinal.mean())
-
         return angles, input_angles, output_angles
 
     def get_rotated_wind(self):
@@ -1028,11 +997,9 @@ class WindOptimiser(object):
             wind_corners = []
         return wind_corners
 
-    def generate_wind_input(self):
+    def generate_corners_wind_input(self):
         wind_corners = self.get_rotated_wind()
         interpolated_wind = self._interpolator.edge_interpolation(wind_corners)
-        # wind_mask = self.terrain.network_terrain <= 0
-        # wind = self.add_mask_to_wind(interpolated_wind, wind_mask)
         input = torch.cat([self.terrain.network_terrain, interpolated_wind])
         return input
 
@@ -1046,17 +1013,12 @@ class WindOptimiser(object):
             print('CSV filename parameter (csv:file) not found in {0}, csv not saved'.format(self._config_yaml))
 
     def get_prediction(self):
-        input = self.generate_wind_input()       # Set new rotation
-        output = self.run_prediction(input, second_model=True)      # Run network prediction with input csv
+        input = self.generate_corners_wind_input()       # Set new rotation
+        output = self.run_prediction(input, index=-1)      # Run network prediction with input csv
         return input, output
 
-    def run_prediction(self, input, second_model=False, third_model=False):
-        if second_model:
-            return self.second_net(input.unsqueeze(0))['pred'].squeeze(0)
-        elif third_model:
-            return self.third_net(input.unsqueeze(0))['pred'].squeeze(0)
-        else:
-            return self.net(input.unsqueeze(0))['pred'].squeeze(0)
+    def run_prediction(self, input, index=0):
+        return self.net[index](input.unsqueeze(0))['pred'].squeeze(0)
 
     def evaluate_loss(self, output):
         # input = is_wind.repeat(1, self.__num_outputs, 1, 1, 1) * x
@@ -1089,8 +1051,8 @@ class WindOptimiser(object):
     def rescale_prediction(self, output=None, label=None):
         if output is not None:
             output = output.squeeze()
-        channels_to_predict = self.params.data['label_channels']
-        # make sure the channels to predict exist and are properly ordered
+        channels_to_predict = self.params[0].data['label_channels']
+        # make sure the channels to predict exist a[0]nd are properly ordered
         default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
         for channel in channels_to_predict:
             if channel not in default_channels:
@@ -1102,24 +1064,24 @@ class WindOptimiser(object):
         for i, channel in enumerate(channels_to_predict):
             if channel == 'terrain':
                 if output is not None:
-                    output[i] *= self.params.data[channel + '_scaling']
+                    output[i] *= self.params[0].data[channel + '_scaling']
                 if label is not None:
-                    label[i] *= self.params.data[channel + '_scaling']
+                    label[i] *= self.params[0].data[channel + '_scaling']
             elif channel.startswith('u') or channel == 'nut':
                 if output is not None:
-                    output[i] *= self.scale * self.params.data[channel + '_scaling']
+                    output[i] *= self.scale * self.params[0].data[channel + '_scaling']
                 if label is not None:
-                    label[i] *= self.scale * self.params.data[channel + '_scaling']
+                    label[i] *= self.scale * self.params[0].data[channel + '_scaling']
             elif channel == 'p' or channel == 'turb':
                 if output is not None:
-                    output[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']
+                    output[i] *= self.scale * self.scale * self.params[0].data[channel + '_scaling']
                 if label is not None:
-                    label[i] *= self.scale * self.scale * self.params.data[channel + '_scaling']
+                    label[i] *= self.scale * self.scale * self.params[0].data[channel + '_scaling']
             elif channel == 'epsilon':
                 if output is not None:
-                    output[i] *= self.scale * self.scale * self.scale * self.params.data[channel + '_scaling']
+                    output[i] *= self.scale * self.scale * self.scale * self.params[0].data[channel + '_scaling']
                 if label is not None:
-                    label[i] *= self.scale * self.scale * self.scale * self.params.data[channel + '_scaling']
+                    label[i] *= self.scale * self.scale * self.scale * self.params[0].data[channel + '_scaling']
 
     # --- Optimisation functions ---
 
@@ -1276,7 +1238,7 @@ class WindOptimiser(object):
         else:
             wind_input = self._wind_input.clone()
             # run prediction
-            if self.flag.use_hybrid_model:
+            if self.flag.use_hybrid_model[0]:
                 terrain_for_sequence = self.terrain.network_terrain.repeat(wind_input.shape[0], 1, 1, 1).unsqueeze(1)
                 input = torch.cat([terrain_for_sequence, wind_input], dim=1)
             else:
@@ -1287,7 +1249,7 @@ class WindOptimiser(object):
         loss = self.evaluate_loss(output)
         outputs.append(output)
         losses.append(loss)
-        if self.flag.use_hybrid_model:
+        if self.flag.use_hybrid_model[0]:
             inputs.append(input[0, :])
         else:
             inputs.append(input)
@@ -1298,7 +1260,7 @@ class WindOptimiser(object):
     def flight_prediction(self):
         outputs, losses, inputs = [], [], []
 
-        if self.flag.use_hybrid_model:
+        if self.flag.use_hybrid_model[0]:
             sequence_length = self._model_args.params['hybrid_model']['sequence_length']
             trajectory_length = int((self._flight_data['x'].size/sequence_length) + 1)
             trajectory_input = []
@@ -1349,24 +1311,31 @@ class WindOptimiser(object):
             test_set_range = len(self._flight_args.params['files'])
 
         if self.flag.longterm_prediction:
-            longterm_timesteps = 4
+            longterm_timesteps = 1
         else:
             longterm_timesteps = 1
 
         # batch variables
         batch_longterm_losses = []
         inputs, outputs = [], []
-        nn_losses, second_nn_losses, zero_wind_losses, average_wind_losses = [], [], [], []
+        nn_losses, zero_wind_losses, average_wind_losses = [], [], []
         gpr_wind_losses, krigging_wind_losses, optimized_corners_losses = [], [], []
         time = []
         longterm_losses = {}
+        interpolated_nn_outputs = []
 
+        # load data for each sample
         for t in range(test_set_range):
-            # get data
             if self.flag.batch_test:
                 if self.flag.test_simulated_data:
                     # get flight data
                     _, self.labels, _, _, _, self.original_terrain, _ = self.load_data_set(t)
+                    # Noise
+                    self.noisy_labels = self.labels.clone()
+                    if self.flag.add_gaussian_noise:
+                        self.noisy_labels = self.add_gaussian_noise(self.noisy_labels)
+                    if self.flag.add_turbulence:
+                        self.noisy_labels = self.add_turbulence(self.noisy_labels)
                     _, self._simulated_flight_data = self.get_trajectory_wind_blocks()
                     flight_data = self._simulated_flight_data
                     self.terrain = self.get_cfd_terrain()
@@ -1439,13 +1408,13 @@ class WindOptimiser(object):
                     # split data into input and label based on window variables
                     input_flight_data, label_flight_data = \
                         self.sliding_window_split(flight_data, window_size, (j+1)*response_size, i*step_size)
-                    # scale labels if requested
-                    if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
-                        label_flight_data['wn'] *= self.scale * self.params.data['ux' + '_scaling']
-                        label_flight_data['we'] *= self.scale * self.params.data['uy' + '_scaling']
-                        label_flight_data['wd'] *= self.scale * self.params.data['uz' + '_scaling']
 
                     # labels
+                    # scale labels if requested
+                    if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
+                        label_flight_data['wn'] *= self.scale * self.params[0].data['ux' + '_scaling']
+                        label_flight_data['we'] *= self.scale * self.params[0].data['uy' + '_scaling']
+                        label_flight_data['wd'] *= self.scale * self.params[0].data['uz' + '_scaling']
                     # filter out points in the labels which are outside the terrain sample
                     valid_labels = []
                     for k in range(len(label_flight_data['x'])):
@@ -1462,9 +1431,8 @@ class WindOptimiser(object):
                         print('')
                         continue
                     labels = torch.from_numpy(np.row_stack(valid_labels))
-                    # labels = np.array([label_flight_data['wn'], label_flight_data['we'], label_flight_data['wd']])
 
-                    # --- Network prediction ---
+                    # --- Networks prediction ---
                     # scale real flight data if requested
                     if self.flag.test_flight_data and self.flag.rescale_prediction:
                         input_flight_wind_vectors = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
@@ -1475,76 +1443,61 @@ class WindOptimiser(object):
                         input_flight_data['wn'] /= (scale * 0.5)
                         input_flight_data['we'] /= (scale * 0.5)
                         input_flight_data['wd'] /= (scale * 0.1)
-                    if self.flag.use_hybrid_model:
-                        # sequence_length = self._model_args.params['hybrid_model']['sequence_length']
-                        sequence_length = i+1
-                        trajectory_length = int((input_flight_data['x'].size / sequence_length) + 1)
-                        trajectory_input = []
-                        for k in range(sequence_length):
-                            trajectory_sequence = {}
-                            for keys, values in input_flight_data.items():
-                                if k == 0:
-                                    trajectory_batch = values[:trajectory_length]
-                                    trajectory_sequence.update({keys: trajectory_batch})
-                                elif k == sequence_length - 1:
-                                    trajectory_batch = values[k * trajectory_length:]
-                                    trajectory_sequence.update({keys: trajectory_batch})
-                                else:
-                                    trajectory_batch = values[((k - 1) * trajectory_length):(k * trajectory_length)]
-                                    trajectory_sequence.update({keys: trajectory_batch})
-                            wind_blocks, var_blocks, wind_zeros, wind_mask \
-                                = self.get_flight_wind_blocks(trajectory_sequence)
-                            traj_wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
-                            trajectory_wind_input = torch.cat([self.terrain.network_terrain, traj_wind_input])
-                            trajectory_input.append(trajectory_wind_input)
-                        input = torch.stack(trajectory_input, dim=0)
-                    else:
-                        wind_blocks, var_blocks, wind_zeros, wind_mask \
-                            = self.get_flight_wind_blocks(input_flight_data)
-                        # get prediction
-                        wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
-                        input = torch.cat([self.terrain.network_terrain, wind_input])
-                    if self.flag.use_second_nn_model:
-                        wind_blocks, var_blocks, wind_zeros, wind_mask \
-                            = self.get_flight_wind_blocks(input_flight_data)
-                        # get prediction
-                        wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
-                        input2 = torch.cat([self.terrain.network_terrain, wind_input])
-
-                    nn_output = self.run_prediction(input)
-                    if self.flag.use_second_nn_model:
-                        nn_output2 = self.run_prediction(input2, third_model=True)
-                    if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
-                        if i == 0:
-                            self.rescale_prediction(nn_output, self.labels)
-                            if self.flag.use_second_nn_model:
-                                self.rescale_prediction(nn_output2, self.labels)# rescale labels only once
+                    # iterate over loaded networks
+                    for m in range(len(self._model_args.params['name'])-1):  # last network is for corner optimization
+                        if self.flag.use_hybrid_model[m]:
+                            sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                            # sequence_length = i+1
+                            trajectory_length = int((input_flight_data['x'].size / sequence_length) + 1)
+                            trajectory_input = []
+                            for k in range(sequence_length):
+                                trajectory_sequence = {}
+                                for keys, values in input_flight_data.items():
+                                    if k == 0:
+                                        trajectory_batch = values[:trajectory_length]
+                                        trajectory_sequence.update({keys: trajectory_batch})
+                                    elif k == sequence_length - 1:
+                                        trajectory_batch = values[k * trajectory_length:]
+                                        trajectory_sequence.update({keys: trajectory_batch})
+                                    else:
+                                        trajectory_batch = values[((k - 1) * trajectory_length):(k * trajectory_length)]
+                                        trajectory_sequence.update({keys: trajectory_batch})
+                                wind_blocks, var_blocks, wind_zeros, wind_mask \
+                                    = self.get_flight_wind_blocks(trajectory_sequence)
+                                traj_wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
+                                trajectory_wind_input = torch.cat([self.terrain.network_terrain, traj_wind_input])
+                                trajectory_input.append(trajectory_wind_input)
+                            input = torch.stack(trajectory_input, dim=0)
                         else:
-                            self.rescale_prediction(nn_output)
-                            if self.flag.use_second_nn_model:
-                                self.rescale_prediction(nn_output2)
-                    if self.flag.test_flight_data and self.flag.rescale_prediction:
-                        input[:, 0, :] *= scale * 0.5
-                        input[:, 1, :] *= scale * 0.5
-                        input[:, 2, :] *= scale * 0.1
-                        nn_output[0, :] *= scale * 0.5
-                        nn_output[1, :] *= scale * 0.5
-                        nn_output[2, :] *= scale * 0.1
-                        if self.flag.use_second_nn_model:
-                            nn_output2[0, :] *= scale * 0.5
-                            nn_output2[1, :] *= scale * 0.5
-                            nn_output2[2, :] *= scale * 0.1
-                        input_flight_data['wn'] *= scale * 0.5
-                        input_flight_data['we'] *= scale * 0.5
-                        input_flight_data['wd'] *= scale * 0.1
-                    # loss_org = self.evaluate_loss(nn_output)
-                    # print(' loss: ', loss_org.item())
-                    # interpolate prediction to scattered flight data locations corresponding to the labels
-                    FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
-                                                           wind_data_for_prediction=label_flight_data)
-                    interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
-                    if self.flag.use_second_nn_model:
-                        interpolated_nn_output2 = FlightInterpolator.interpolate_flight_data_from_grid(nn_output2)
+                            wind_blocks, var_blocks, wind_zeros, wind_mask \
+                                = self.get_flight_wind_blocks(input_flight_data)
+                            # get prediction
+                            wind_input = self.add_mask_to_wind(wind_zeros, wind_mask)
+                            input = torch.cat([self.terrain.network_terrain, wind_input])
+
+                        nn_output = self.run_prediction(input, index=m)
+                        if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
+                            if i == 0:
+                                self.rescale_prediction(nn_output, self.labels)
+                            else:
+                                self.rescale_prediction(nn_output)
+                        if self.flag.test_flight_data and self.flag.rescale_prediction:
+                            input[:, 0, :] *= scale * 0.5
+                            input[:, 1, :] *= scale * 0.5
+                            input[:, 2, :] *= scale * 0.1
+                            nn_output[0, :] *= scale * 0.5
+                            nn_output[1, :] *= scale * 0.5
+                            nn_output[2, :] *= scale * 0.1
+                            input_flight_data['wn'] *= scale * 0.5
+                            input_flight_data['we'] *= scale * 0.5
+                            input_flight_data['wd'] *= scale * 0.1
+                        # loss_org = self.evaluate_loss(nn_output)
+                        # print(' loss: ', loss_org.item())
+                        # interpolate prediction to scattered flight data locations corresponding to the labels
+                        FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
+                                                               wind_data_for_prediction=label_flight_data)
+                        interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
+                        interpolated_nn_outputs.append(interpolated_nn_output)
 
                     # --- Zero wind prediction ---
                     interpolated_zero_wind_output = torch.zeros_like(labels)
@@ -1588,9 +1541,6 @@ class WindOptimiser(object):
                     # trajectory losses
                     nn_loss = self._loss_fn(interpolated_nn_output.to(self._device),
                                             labels.to(self._device))
-                    if self.flag.use_second_nn_model:
-                        second_nn_loss = self._loss_fn(interpolated_nn_output2.to(self._device),
-                                            labels.to(self._device))
                     zero_wind_loss = self._loss_fn(interpolated_zero_wind_output.to(self._device),
                                                    labels.to(self._device))
                     average_wind_loss = self._loss_fn(interpolated_average_wind_output.to(self._device),
@@ -1624,8 +1574,6 @@ class WindOptimiser(object):
                     if normalize_losses:
                         nn_loss /= zero_wind_loss
                         average_wind_loss /= zero_wind_loss
-                        if self.flag.use_second_nn_model:
-                            second_nn_loss /= zero_wind_loss
                         if self.flag.use_krigging_prediction:
                             krigging_wind_loss /= zero_wind_loss
                         if self.flag.use_gpr_prediction:
@@ -1635,8 +1583,6 @@ class WindOptimiser(object):
                         zero_wind_loss /= zero_wind_loss
 
                     print(i, ' Trajectory NN loss is: ', nn_loss.item())
-                    if self.flag.use_second_nn_model:
-                        print(i, ' Trajectory second NN loss is: ', second_nn_loss.item())
                     print(i, ' Trajectory Zero wind loss is: ', zero_wind_loss.item())
                     print(i, ' Trajectory Average wind loss is: ', average_wind_loss.item())
                     if self.flag.use_krigging_prediction:
@@ -1648,8 +1594,6 @@ class WindOptimiser(object):
 
                     # trajectory losses
                     nn_losses.append(nn_loss.item())
-                    if self.flag.use_second_nn_model:
-                        second_nn_losses.append(second_nn_loss.item())
                     zero_wind_losses.append(zero_wind_loss.item())
                     average_wind_losses.append(average_wind_loss.item())
                     if self.flag.use_krigging_prediction:
@@ -1663,8 +1607,6 @@ class WindOptimiser(object):
                     time.append(i)
                     longterm_losses.update({'steps': time})
                     longterm_losses.update({'nn losses': nn_losses})
-                    if self.flag.use_second_nn_model:
-                        longterm_losses.update({'second nn losses': second_nn_losses})
                     longterm_losses.update({'zero wind losses': zero_wind_losses})
                     longterm_losses.update({'average wind losses': average_wind_losses})
                     if self.flag.use_krigging_prediction:
@@ -1685,9 +1627,6 @@ class WindOptimiser(object):
         print('')
         nn_average_loss = sum(nn_losses)/len(nn_losses)
         print('Average NN loss is: ', nn_average_loss)
-        if self.flag.use_second_nn_model:
-            second_nn_average_loss = sum(second_nn_losses) / len(second_nn_losses)
-            print('Average NN loss is: ', second_nn_average_loss)
         zero_wind_average_loss = sum(zero_wind_losses)/len(zero_wind_losses)
         print('Average zero wind loss is: ', zero_wind_average_loss)
         average_wind_average_loss = sum(average_wind_losses)/len(average_wind_losses)
