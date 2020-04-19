@@ -110,13 +110,13 @@ window_split:
   #
   batch_test: False
   incremental_input_prediction: True
-  longterm_prediction: False
+  sliding_input_prediction: False
   #
   use_optimized_corners: False
   use_gpr_prediction: False
   use_krigging_prediction: False
   #
-  rescale_prediction: True
+  rescale_prediction: False
   #
   window_time: 60 # seconds
   response_time: 120 # seconds

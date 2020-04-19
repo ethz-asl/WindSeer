@@ -15,7 +15,7 @@ def angle_wrap(angles):
 
 
 class WindOptimiserOutput:
-    def __init__(self, wind_opt, wind_predictions, losses, inputs, longterm_losses=None, batch_longterm_losses=None):
+    def __init__(self, wind_opt, wind_predictions, losses, inputs, losses_dict=None):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         # self.device = torch.device("cpu")
         self.wind_opt = wind_opt
@@ -23,8 +23,7 @@ class WindOptimiserOutput:
         self._wind_predictions = wind_predictions
         self._losses = losses
         self._inputs = inputs
-        self._longterm_losses = longterm_losses
-        self._batch_longterm_losses = batch_longterm_losses
+        self._losses_dict = losses_dict
         self._wind_prediction, self._input, self._loss = self.get_last_wind_estimate()
         self._masked_input = self.get_masked_input()
         # self._grads = grads

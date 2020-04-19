@@ -266,7 +266,7 @@ class FlightInterpolation:
         print('Krigging interpolation is done [{:.2f} s]'.format(time.time() - t_start))
         return wind, variance, predicted_flight_data
 
-    def interpolate_flight_data_gpr(self):
+    def interpolate_flight_data_gpr(self, predict_wind_field=False):
         '''
         Create a wind map from the wind measurements using Gaussian Process Regression
         for interpolation.
@@ -331,22 +331,23 @@ class FlightInterpolation:
                 predicted_flight_data = torch.from_numpy(np.column_stack(predicted_flight_data))
 
             # wind field prediction
-            x_terr, y_terr, z_terr = self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr
-            nx, ny, nz = x_terr.size, y_terr.size, z_terr.size
-            xv_terr, yv_terr, zv_terr = np.meshgrid(x_terr, y_terr, z_terr)
-            pts_wind_field = np.column_stack([xv_terr.flatten(), xv_terr.flatten(), xv_terr.flatten()])
-            predicted_wind_field_x = (gp_x.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
-            predicted_wind_field_y = (gp_y.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
-            predicted_wind_field_z = (gp_z.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
-            predicted_wind_field_x = np.expand_dims(predicted_wind_field_x, axis=0)
-            predicted_wind_field_y = np.expand_dims(predicted_wind_field_y, axis=0)
-            predicted_wind_field_z = np.expand_dims(predicted_wind_field_z, axis=0)
-            predicted_wind_field = np.concatenate(
-                (predicted_wind_field_x, predicted_wind_field_y, predicted_wind_field_z), axis=0)
-            # Use terrain mask on gpr predicted wind field
-            is_wind = self._terrain.network_terrain.sign_()
-            predicted_wind_field = is_wind.repeat(predicted_wind_field.shape[0], 1, 1, 1) \
-                                   * torch.from_numpy(predicted_wind_field).to(self._device)
+            if predict_wind_field:
+                x_terr, y_terr, z_terr = self._terrain.x_terr, self._terrain.y_terr, self._terrain.z_terr
+                nx, ny, nz = x_terr.size, y_terr.size, z_terr.size
+                xv_terr, yv_terr, zv_terr = np.meshgrid(x_terr, y_terr, z_terr)
+                pts_wind_field = np.column_stack([xv_terr.flatten(), xv_terr.flatten(), xv_terr.flatten()])
+                predicted_wind_field_x = (gp_x.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
+                predicted_wind_field_y = (gp_y.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
+                predicted_wind_field_z = (gp_z.predict(np.row_stack(pts_wind_field))).reshape((nz, ny, nx))
+                predicted_wind_field_x = np.expand_dims(predicted_wind_field_x, axis=0)
+                predicted_wind_field_y = np.expand_dims(predicted_wind_field_y, axis=0)
+                predicted_wind_field_z = np.expand_dims(predicted_wind_field_z, axis=0)
+                predicted_wind_field = np.concatenate(
+                    (predicted_wind_field_x, predicted_wind_field_y, predicted_wind_field_z), axis=0)
+                # Use terrain mask on gpr predicted wind field
+                is_wind = self._terrain.network_terrain.sign_()
+                predicted_wind_field = is_wind.repeat(predicted_wind_field.shape[0], 1, 1, 1) \
+                                       * torch.from_numpy(predicted_wind_field).to(self._device)
 
         else:  # bin data
             for i in range(len(self._bin_x_coord)):

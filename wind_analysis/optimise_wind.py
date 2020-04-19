@@ -2,6 +2,7 @@ import torch
 import argparse
 from wind_optimiser import WindOptimiser, OptTest, SimpleStepOptimiser
 from analysis_utils.wind_optimiser_output import WindOptimiserOutput
+import pickle
 
 
 parser = argparse.ArgumentParser(description='Optimise wind speed and direction from COSMO data using observations')
@@ -27,6 +28,9 @@ original_input = False
 optimise_corners = False
 predict_wind = True
 
+# save and load variables from file
+filename = 'optimisation_output.pickle'
+
 
 # Optimise wind variables using each optimisation method
 if optimise_corners:
@@ -40,9 +44,9 @@ if optimise_corners:
 
 if predict_wind:
     # Wind predictions
-    wind_predictions, losses, inputs, longterm_losses, batch_longterm_losses = [], [], [], [], []
+    wind_predictions, losses, inputs, losses_dict = [], [], [], []
     if wind_opt.flag.use_window_split:
-        wind_predictions, losses, inputs, longterm_losses, batch_longterm_losses = wind_opt.window_split_prediction()
+        wind_predictions, losses, inputs, losses_dict = wind_opt.window_split_prediction()
     else:
         if wind_opt.flag.test_simulated_data:
             if original_input:
@@ -55,8 +59,11 @@ if predict_wind:
             if wind_opt.flag.predict_flight:
                 wind_predictions, losses, inputs = wind_opt.flight_prediction()
 
+    with open(filename, 'wb') as f:
+        pickle.dump(losses_dict, f, protocol=-1)
+
     # Analyse optimised wind
-    wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs, longterm_losses, batch_longterm_losses)
+    wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs, losses_dict)
     # Plot graphs
     wind_opt_output.plot()
     # # Print losses
