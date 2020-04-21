@@ -30,7 +30,7 @@ predict_wind = True
 
 # save and load variables from file
 save_file = False
-load_file = True
+load_file = False
 filename = 'optimisation_output.pickle'
 
 

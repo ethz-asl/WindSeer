@@ -1,7 +1,7 @@
 # Test parameters
 test:
-    test_simulated_data: True
-    test_flight_data: False
+    test_simulated_data: False
+    test_flight_data: True
 
 # CFD data
 cfd:
@@ -18,12 +18,12 @@ cosmo:
     file: 'data/cosmo-1_ethz_fcst_2018112312.nc'        #09, 12
     time: 'auto'
     terrain_file: 'data/cosmo-1_ethz_ana_const.nc'
-    terrain_tiff: 'data/tobelhof.tif'        # riemenstalden_full, fluelen_full, hinwil, tobelhof
+    terrain_tiff: 'data/riemenstalden_full.tif'        # riemenstalden_full, fluelen_full, hinwil, tobelhof
     prediction_prefix: ''  # rotated_
 
 # flight data
 flight:
-    flight_data_dir: 'data/tobelhof/'
+    flight_data_dir: 'data/riemenstalden/'
     files: ['20181123_flight03_fpr_wind.hdf5', '20181123_flight04_fpr_wind.hdf5', '20181123_flight05_fpr_wind.hdf5', '20181123_flight06_fpr_wind.hdf5',
     '20181123_flight01_fpr_wind.hdf5', '20181123_flight02_fpr_wind.hdf5',
     '20190411_flight01_fpr_wind.hdf5']
@@ -67,7 +67,7 @@ flight:
 
     # ['20190411_flight01_fpr_wind.hdf5',
     #  '20190411_flight01_fpr_wind_hn.hdf5']
-    index: 6
+    index: 0
     #
     filtered_dir: 'data/'
     use_ekf_wind: False
@@ -101,8 +101,8 @@ wind:
 
 # Noise parameters
 noise:
-  add_turbulence: True
-  add_gaussian_noise: True
+  add_turbulence: False
+  add_gaussian_noise: False
 
 # Window split parameters
 window_split:
@@ -111,8 +111,11 @@ window_split:
   batch_test: False
   incremental_input_prediction: True
   sliding_input_prediction: False
+  # normalize losses with zero wind loss
+  normalize_losses: True
   #
-  use_optimized_corners: False
+  use_optimized_corners: True
+  use_optimized_corners_polynomial: True
   use_gpr_prediction: False
   use_krigging_prediction: False
   #
@@ -123,27 +126,25 @@ window_split:
   step_time: 60 # seconds
 
 # Corner optimisation parameters
-optimisation:
+corner_optimisation:
     optimise_corners_individually: True
     num_of_optimisation_steps: 20
     # Rotation
     rotation: 0.0
     # Scale
-    use_scale_optimisation: True
     scale: 1.0
     # Spline
-    use_spline_optimisation: False
-    polynomial_law_num_points: 8  #approximate wind profile using a power law
+    polynomial_law_num_points: 6  #approximate wind profile using a power law
     init_wind_speed: 1.0
 
 # NN models parameters
 model:
   location: 'data/trained_models/'
-  name: ['test_model_68', 'test_model_65', 'ednn3d_best']
+  name: ['test_model_63', 'test_model_65', 'ednn3d_best']
   version: ['latest', 'latest', 'latest']
   boolean_terrain: False
   loss: 'MSE'  # L1, MSE, SoftMargin
   hybrid_model: {
-      use_hybrid_model: [True, False, False],
+      use_hybrid_model: [False, False, False],
       sequence_length: 10
   }

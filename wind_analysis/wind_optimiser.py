@@ -6,12 +6,12 @@ from analysis_utils import ulog_utils, get_mapgeo_terrain
 from analysis_utils import generate_turbulence
 from analysis_utils.interpolate_flight_data import FlightInterpolation
 from analysis_utils.generate_trajectory import generate_trajectory
+from analysis_utils.interpolate_wind_profile import interpolate_wind_profile
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 import nn_wind_prediction.data as data
 import nn_wind_prediction.data as nn_data
 from datetime import datetime
 from scipy import ndimage
-from scipy.interpolate import CubicSpline
 from scipy.spatial import distance
 from scipy.interpolate import RegularGridInterpolator as RGI
 import random
@@ -110,19 +110,17 @@ class SelectionFlags(object):
         self.batch_test = window_split.params['batch_test']
         self.incremental_input_prediction = window_split.params['incremental_input_prediction']
         self.sliding_input_prediction = window_split.params['sliding_input_prediction']
+        self.normalize_losses = window_split.params['normalize_losses']
         self.use_optimized_corners = window_split.params['use_optimized_corners']
+        self.use_optimized_corners_polynomial = window_split.params['use_optimized_corners_polynomial']
         self.use_gpr_prediction = window_split.params['use_gpr_prediction']
         self.use_krigging_prediction = window_split.params['use_krigging_prediction']
         self.rescale_prediction = window_split.params['rescale_prediction']
         self.optimise_corners_individually = optimisation.params['optimise_corners_individually']
-        self.use_scale_optimisation = optimisation.params['use_scale_optimisation']
-        self.use_spline_optimisation = optimisation.params['use_spline_optimisation']
         self.use_hybrid_model = model.params['hybrid_model']['use_hybrid_model']
 
 
 class WindOptimiser(object):
-    _loss_fn = torch.nn.MSELoss()
-    _optimisation_variables = None
 
     def __init__(self, config_yaml, resolution=64):
         # Configuration variables
@@ -136,13 +134,13 @@ class WindOptimiser(object):
         self._wind_args = utils.BasicParameters(self._config_yaml, 'wind')
         self._noise_args = utils.BasicParameters(self._config_yaml, 'noise')
         self._window_splits_args = utils.BasicParameters(self._config_yaml, 'window_split')
-        self._optimisation_args = utils.BasicParameters(self._config_yaml, 'optimisation')
+        self._corner_optimisation_args = utils.BasicParameters(self._config_yaml, 'corner_optimisation')
         self._model_args = utils.BasicParameters(self._config_yaml, 'model')
         self._resolution = resolution
 
         # Selection flags
         self.flag = SelectionFlags(self._test_args, self._cfd_args, self._flight_args, self._wind_args,
-                                   self._noise_args, self._window_splits_args, self._optimisation_args,
+                                   self._noise_args, self._window_splits_args, self._corner_optimisation_args,
                                    self._model_args)
 
         # Network model and loss function
@@ -795,7 +793,7 @@ class WindOptimiser(object):
         # print(' done [{:.2f} s]'.format(time.time() - t_start))
         return wind.to(self._device), variance.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device)
 
-    # --- Add noise to data ---
+    # --- Add noise to wind data ---
 
     def add_gaussian_noise(self, labels):
         eps = 1
@@ -823,19 +821,18 @@ class WindOptimiser(object):
         labels += turbulence
         return labels
 
-    # --- Wind optimisation ---
+    # --- Corner optimisation variables ---
 
-    def get_optimisation_variables(self):
-        rotation = self._optimisation_args.params['rotation']
-        if self.flag.use_scale_optimisation:
-            scale = self._optimisation_args.params['scale']
+    def get_optimisation_variables(self, use_average_wind_norm=False, average_wind_norm=None):
+        rotation = self._corner_optimisation_args.params['rotation']
+        scale = self._corner_optimisation_args.params['scale']
+        if use_average_wind_norm:
+            spline = [average_wind_norm for i in range(self._corner_optimisation_args.params['polynomial_law_num_points'])]
         else:
-            scale = []
-        if self.flag.use_spline_optimisation:
-            spline = 1
-        else:
-            spline = []
-        opt_var = [rotation, scale, spline]
+            spline = [self._corner_optimisation_args.params['init_wind_speed']
+                      for i in range(self._corner_optimisation_args.params['polynomial_law_num_points'])]
+        opt_var = [rotation, scale]
+        opt_var.extend(spline)
         optimisation_variables = [var for var in opt_var if var != []]
         # Replicate optimisation variables for each corner
         if self.flag.optimise_corners_individually:
@@ -849,42 +846,67 @@ class WindOptimiser(object):
 
         self._optimisation_variables = torch.Tensor(optimisation_variables).to(self._device).requires_grad_()
 
-    def get_optimized_corners(self):
-        corner_winds = np.zeros((3, 64, 2, 2), dtype='float')
+    def get_rotated_polynomial_corners(self):
+        sr, cr = [], []
+        for xi in range(2):
+            for yi in range(2):
+                sr.append(torch.sin(self._optimisation_variables[xi*2+yi][0]))
+                cr.append(torch.cos(self._optimisation_variables[xi*2+yi][0]))
+        corner_winds = torch.zeros((3, 64, 2, 2)).to(self._device)
         wind_z = []
-        num_points = self.optimisation_args.params['wind_profile']['polynomial_law_num_points']
+        num_points = self._corner_optimisation_args.params['polynomial_law_num_points']
         for yi in range(2):
             for xi in range(2):
                 # wind_speed = self._optimisation_variables[i][0:num_points]
-                wind_height_increment = ((self.terrain.z_terr[-1] + self.grid_size[2])
-                                         - self.terrain.terrain_corners[yi, xi]) / num_points
+                wind_height_increment = (self.terrain.z_terr[-1] - self.terrain.terrain_corners[yi, xi]) / num_points
                 wind_z.append([self.terrain.terrain_corners[yi, xi] + j * wind_height_increment for j in range(num_points)])
 
-        if self.optimisation_args.params['wind_profile']['optimized_corners'] > 0:
+        if self.flag.optimise_corners_individually:
             for yi in range(2):
                 for xi in range(2):
-                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.terrain_corners[yi, xi])
+                    valid_z = (self.terrain.z_terr > self.terrain.terrain_corners[yi, xi])
                     if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
-                        corner_winds[0, valid_z, yi, xi] = \
-                            CubicSpline(wind_z[xi*2+yi], self._optimisation_variables[xi*2+yi][0:num_points])(self.terrain.z_terr[valid_z])\
-                            * 1/(np.sqrt(1+torch.tan(self._optimisation_variables[xi*2+yi][-1]**2)))
-                        corner_winds[1, valid_z, yi, xi] = \
-                            CubicSpline(wind_z[xi*2+yi], self._optimisation_variables[xi*2+yi][0:num_points])(self.terrain.z_terr[valid_z])\
-                            * torch.tan(self._optimisation_variables[xi*2+yi][-1])/(np.sqrt(1+torch.tan(self._optimisation_variables[xi*2+yi][-1]**2)))
+                        interpolated_corners = interpolate_wind_profile(
+                            wind_z[xi * 2 + yi],
+                            self._optimisation_variables[xi * 2 + yi][-num_points:],
+                            self.terrain.z_terr[valid_z], self._device)
+                        corner_winds[0, valid_z, yi, xi] = interpolated_corners * cr[xi*2+yi] - \
+                                                           interpolated_corners * sr[xi*2+yi]
+                        corner_winds[1, valid_z, yi, xi] = interpolated_corners * sr[xi*2+yi] + \
+                                                           interpolated_corners * cr[xi*2+yi]
 
         else:
-            for yi in range(2):
-                for xi in range(2):
-                    valid_z = ((self.terrain.z_terr+self.grid_size[2]) > self.terrain.h_terr[xi+yi])
-                    if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
-                        corner_winds[0, valid_z, yi, xi] = \
-                            CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
-                            * 1/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
-                        corner_winds[1, valid_z, yi, xi] = \
-                            CubicSpline(wind_z[xi+yi], self._optimisation_variables[0:num_points])(self.terrain.z_terr[valid_z])\
-                            * np.tan(self._optimisation_variables[-1])/(np.sqrt(1+np.tan(self._optimisation_variables[-1]**2)))
+            valid_z = (self.terrain.z_terr > self.terrain.terrain_corners)
+            if wind_z[1] > wind_z[0]:
+                interpolated_corners = interpolate_wind_profile(
+                    wind_z,
+                    self._optimisation_variables[-num_points:],
+                    self.terrain.z_terr[valid_z], self._device)
+                corner_winds[0, valid_z, :] = interpolated_corners * cr - interpolated_corners * sr
+                corner_winds[1, valid_z, :] = interpolated_corners * sr + interpolated_corners * cr
 
-        return torch.Tensor(corner_winds).to(self._device).requires_grad_()
+        return corner_winds
+
+    def get_rotated_corners(self):
+        sr, cr = [], []
+        for i in range(self._optimisation_variables.shape[0]):
+            sr.append(torch.sin(self._optimisation_variables[i][0]))
+            cr.append(torch.cos(self._optimisation_variables[i][0]))
+        # Get corner winds for model inference, offset to actual terrain heights
+        if self.flag.test_simulated_data:
+            wind_corners = self._base_cfd_corners.clone()
+            corners = self._base_cfd_corners
+        if self.flag.test_flight_data:
+            wind_corners = self._base_cosmo_corners.clone()
+            corners = self._base_cosmo_corners
+        for i in range(self._optimisation_variables.shape[0]):
+            wind_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
+                    corners[0, :, i//2, (i+2)%2]*cr[i]
+                    - corners[1, :, i//2, (i+2)%2]*sr[i])
+            wind_corners[1, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
+                    corners[0, :, i//2, (i+2)%2]*sr[i]
+                    + corners[1, :, i//2, (i+2)%2]*cr[i])
+        return wind_corners
 
     def get_cfd_corners(self):
         channels, nx, ny, nz = self.labels.shape
@@ -973,36 +995,6 @@ class WindOptimiser(object):
 
         return angles, input_angles, output_angles
 
-    def get_rotated_wind(self):
-        sr, cr = [], []
-        for i in range(self._optimisation_variables.shape[0]):
-            sr.append(torch.sin(self._optimisation_variables[i][0]))
-            cr.append(torch.cos(self._optimisation_variables[i][0]))
-        # Get corner winds for model inference, offset to actual terrain heights
-        if self.flag.test_simulated_data:
-            wind_corners = self._base_cfd_corners.clone()
-            corners = self._base_cfd_corners
-        if self.flag.test_flight_data:
-            wind_corners = self._base_cosmo_corners.clone()
-            corners = self._base_cosmo_corners
-        if self.flag.use_scale_optimisation:
-            for i in range(self._optimisation_variables.shape[0]):
-                wind_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
-                        corners[0, :, i//2, (i+2)%2]*cr[i]
-                        - corners[1, :, i//2, (i+2)%2]*sr[i])
-                wind_corners[1, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
-                        corners[0, :, i//2, (i+2)%2]*sr[i]
-                        + corners[1, :, i//2, (i+2)%2]*cr[i])
-        if self.flag.use_spline_optimisation:
-            wind_corners = []
-        return wind_corners
-
-    def generate_corners_wind_input(self):
-        wind_corners = self.get_rotated_wind()
-        interpolated_wind = self._interpolator.edge_interpolation(wind_corners)
-        input = torch.cat([self.terrain.network_terrain, interpolated_wind])
-        return input
-
     def build_csv(self):
         try:
             csv_args = utils.BasicParameters(self._config_yaml, 'csv')
@@ -1011,11 +1003,6 @@ class WindOptimiser(object):
                             self.terrain.cosmo_corners, csv_args.params['file'])
         except:
             print('CSV filename parameter (csv:file) not found in {0}, csv not saved'.format(self._config_yaml))
-
-    def get_prediction(self):
-        input = self.generate_corners_wind_input()       # Set new rotation
-        output = self.run_prediction(input, index=-1)      # Run network prediction with input csv
-        return input, output
 
     def run_prediction(self, input, index=0):
         return self.net[index](input.unsqueeze(0))['pred'].squeeze(0)
@@ -1084,7 +1071,10 @@ class WindOptimiser(object):
 
     def optimise_wind_corners(self, opt, n=1000, min_gradient=1e-5, opt_kwargs={'learning_rate':1e-5},
                               wind_zeros=None, wind_mask=None,
+                              corners_polynomial=False, use_average_wind_norm=False, wind_norm=None,
                               print_steps=False, verbose=False):
+        self._optimisation_variables = self.get_optimisation_variables()
+        self.reset_optimisation_variables()
         optimizer = opt([self._optimisation_variables], **opt_kwargs)
         if print_steps:
             print(optimizer)
@@ -1114,7 +1104,15 @@ class WindOptimiser(object):
             opt_var.append(self._optimisation_variables.clone().detach().cpu().numpy())
             optimizer.zero_grad()
             t1 = time.time()
-            input, output = self.get_prediction()
+            # get prediction
+            if corners_polynomial:
+                wind_corners = self.get_rotated_polynomial_corners()
+            else:
+                wind_corners = self.get_rotated_corners()
+            interpolated_wind = self._interpolator.edge_interpolation(wind_corners)
+            input = torch.cat([self.terrain.network_terrain, interpolated_wind])
+            output = self.run_prediction(input, index=-1)  # Run network prediction with input csv
+
             output_copy = output.detach().clone()
             # outputs.append(output)
             # inputs.append(input)
@@ -1310,7 +1308,6 @@ class WindOptimiser(object):
         # batch variables
         inputs, outputs = [], []
         losses_dict = []
-        normalize = True
 
         # load data for each sample
         for t in range(test_set_range):
@@ -1408,10 +1405,6 @@ class WindOptimiser(object):
                     file_name = self._flight_args.params['files'][self._flight_args.params['index']]
             loss_dict.update({'File name': file_name})
             loss_dict.update({'Number of windows': max_num_windows})
-            print('')
-            print('Test set number: ', t)
-            print('Test set file name: ', file_name)
-            print('')
             # nn losses
             for m in range(len(self._model_args.params['name']) - 1):
                 loss_dict.update({'NN wind loss mae '+str(m): []})
@@ -1421,9 +1414,17 @@ class WindOptimiser(object):
             if self.flag.use_optimized_corners:
                 loss_dict.update({'Optimized corners wind loss mae': []})
                 loss_dict.update({'Optimized corners wind loss mse': []})
+            if self.flag.use_optimized_corners_polynomial:
+                loss_dict.update({'Optimized corners polynomial wind loss mae': []})
+                loss_dict.update({'Optimized corners polynomial wind loss mse': []})
             if self.flag.use_gpr_prediction:
                 loss_dict.update({'GPR loss mae': []})
                 loss_dict.update({'GPR loss mse': []})
+
+            print('')
+            print('Test set number: ', t)
+            print('Test set file name: ', file_name)
+            print('')
 
             for i in range(max_num_windows):
                 # split data into input and label based on window variables
@@ -1455,6 +1456,7 @@ class WindOptimiser(object):
                                                            self.labels.to(self._device))
                     zero_wind_loss_mse = self._loss_fn_mse(zero_wind_output.to(self._device),
                                                            self.labels.to(self._device))
+                    not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
                     # loss_dict.update({'zero wind loss mae': zero_wind_loss_mae.item()})
                     # loss_dict.update({'zero wind loss mse': zero_wind_loss_mse.item()})
                 if self.flag.test_flight_data:
@@ -1463,6 +1465,7 @@ class WindOptimiser(object):
                                                            trajectory_labels.to(self._device))
                     zero_wind_loss_mse = self._loss_fn_mse(interpolated_zero_wind_output.to(self._device),
                                                            trajectory_labels.to(self._device))
+                    not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
                     # loss_dict.update({'trajectory zero wind loss': zero_wind_loss_mse})
 
                 # --- Networks prediction ---
@@ -1537,7 +1540,7 @@ class WindOptimiser(object):
                     if self.flag.test_simulated_data:
                         nn_loss_mae = self._loss_fn_mae(nn_output.to(self._device), self.labels.to(self._device))
                         nn_loss_mse = self._loss_fn_mse(nn_output.to(self._device), self.labels.to(self._device))
-                        if normalize:
+                        if self.flag.normalize_losses and not_zero_labels:
                             nn_loss_mae /= zero_wind_loss_mae
                             nn_loss_mse /= zero_wind_loss_mse
                         loss_dict['NN wind loss mae '+str(m)].append(nn_loss_mae.item())
@@ -1551,7 +1554,7 @@ class WindOptimiser(object):
                                                         trajectory_labels.to(self._device))
                         nn_loss_mse = self._loss_fn_mse(interpolated_nn_output.to(self._device),
                                                         trajectory_labels.to(self._device))
-                        if normalize:
+                        if self.flag.normalize_losses and not_zero_labels:
                             nn_loss_mae /= zero_wind_loss_mae
                             nn_loss_mse /= zero_wind_loss_mse
                         loss_dict['NN wind loss mae '+str(m)].append(nn_loss_mae.item())
@@ -1569,7 +1572,7 @@ class WindOptimiser(object):
                                                               self.labels.to(self._device))
                     average_wind_loss_mse = self._loss_fn_mse(average_wind_output.to(self._device),
                                                               self.labels.to(self._device))
-                    if normalize:
+                    if self.flag.normalize_losses and not_zero_labels:
                         average_wind_loss_mae /= zero_wind_loss_mae
                         average_wind_loss_mse /= zero_wind_loss_mse
                     loss_dict['Average wind loss mae'].append(average_wind_loss_mae.item())
@@ -1584,7 +1587,7 @@ class WindOptimiser(object):
                                                               trajectory_labels.to(self._device))
                     average_wind_loss_mse = self._loss_fn_mse(interpolated_average_wind_output.to(self._device),
                                                               trajectory_labels.to(self._device))
-                    if normalize:
+                    if self.flag.normalize_losses and not_zero_labels:
                         average_wind_loss_mae /= zero_wind_loss_mae
                         average_wind_loss_mse /= zero_wind_loss_mse
                     loss_dict['Average wind loss mae'].append(average_wind_loss_mae.item())
@@ -1594,17 +1597,16 @@ class WindOptimiser(object):
                 # --- Optimized corner prediction ---
                 if self.flag.use_optimized_corners:
                     optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
-                    n_steps = self._optimisation_args.params['num_of_optimisation_steps']
+                    n_steps = self._corner_optimisation_args.params['num_of_optimisation_steps']
                     corners_output, _, _, _, _ \
                         = self.optimise_wind_corners(optimiser.opt, n=n_steps, opt_kwargs=optimiser.kwargs,
-                                                     wind_zeros=wind_zeros, wind_mask=wind_mask,
-                                                     print_steps=False, verbose=False)
+                                                     wind_zeros=wind_zeros, wind_mask=wind_mask)
                     if self.flag.test_simulated_data:
                         corners_loss_mae = self._loss_fn_mae(corners_output.to(self._device),
                                                              self.labels.to(self._device))
                         corners_loss_mse = self._loss_fn_mse(corners_output.to(self._device),
                                                              self.labels.to(self._device))
-                        if normalize:
+                        if self.flag.normalize_losses and not_zero_labels:
                             corners_loss_mae /= zero_wind_loss_mae
                             corners_loss_mse /= zero_wind_loss_mse
                         loss_dict['Optimized corners wind loss mae'].append(corners_loss_mae.item())
@@ -1619,12 +1621,48 @@ class WindOptimiser(object):
                                                              trajectory_labels.to(self._device))
                         corners_loss_mse = self._loss_fn_mse(interpolated_corners_output.to(self._device),
                                                              trajectory_labels.to(self._device))
-                        if normalize:
+                        if self.flag.normalize_losses and not_zero_labels:
                             corners_loss_mae /= zero_wind_loss_mae
                             corners_loss_mse /= zero_wind_loss_mse
                         loss_dict['Optimized corners wind loss mae'].append(corners_loss_mae.item())
                         loss_dict['Optimized corners wind loss mse'].append(corners_loss_mse.item())
-                        print(i, ' Trajectoru optimized corners loss is: ', corners_loss_mse.item())
+                        print(i, ' Trajectory optimized corners loss is: ', corners_loss_mse.item())
+
+                # --- Optimized corner polynomial prediction ---
+                if self.flag.use_optimized_corners_polynomial:
+                    optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
+                    n_steps = self._corner_optimisation_args.params['num_of_optimisation_steps']
+                    average_wind_norm = np.linalg.norm(average_wind_input)
+                    corners_output, _, _, _, _ \
+                        = self.optimise_wind_corners(optimiser.opt, n=n_steps, opt_kwargs=optimiser.kwargs,
+                                                     wind_zeros=wind_zeros, wind_mask=wind_mask,
+                                                     corners_polynomial=True, use_average_wind_norm=True, wind_norm=average_wind_norm)
+                    if self.flag.test_simulated_data:
+                        corners_loss_mae = self._loss_fn_mae(corners_output.to(self._device),
+                                                             self.labels.to(self._device))
+                        corners_loss_mse = self._loss_fn_mse(corners_output.to(self._device),
+                                                             self.labels.to(self._device))
+                        if self.flag.normalize_losses and not_zero_labels:
+                            corners_loss_mae /= zero_wind_loss_mae
+                            corners_loss_mse /= zero_wind_loss_mse
+                        loss_dict['Optimized corners polynomial wind loss mae'].append(corners_loss_mae.item())
+                        loss_dict['Optimized corners polynomial wind loss mse'].append(corners_loss_mse.item())
+                        print(i, ' optimized corners polynomial loss is: ', corners_loss_mse.item())
+                    if self.flag.test_flight_data:
+                        # interpolate prediction to scattered flight data locations corresponding to the labels
+                        FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
+                                                               wind_data_for_prediction=label_flight_data)
+                        interpolated_corners_output = FlightInterpolator.interpolate_flight_data_from_grid(corners_output)
+                        corners_loss_mae = self._loss_fn_mae(interpolated_corners_output.to(self._device),
+                                                             trajectory_labels.to(self._device))
+                        corners_loss_mse = self._loss_fn_mse(interpolated_corners_output.to(self._device),
+                                                             trajectory_labels.to(self._device))
+                        if self.flag.normalize_losses and not_zero_labels:
+                            corners_loss_mae /= zero_wind_loss_mae
+                            corners_loss_mse /= zero_wind_loss_mse
+                        loss_dict['Optimized corners polynomial wind loss mae'].append(corners_loss_mae.item())
+                        loss_dict['Optimized corners polynomial wind loss mse'].append(corners_loss_mse.item())
+                        print(i, ' Trajectory optimized polynomial corners loss is: ', corners_loss_mse.item())
 
                 # --- Interpolation (Krigging) prediction ---
                 if self.flag.use_krigging_prediction:
@@ -1642,7 +1680,7 @@ class WindOptimiser(object):
                                                      trajectory_labels.to(self._device))
                         gpr_loss_mse = self._loss_fn_mse(interpolated_gpr_output.to(self._device),
                                                      trajectory_labels.to(self._device))
-                        if normalize:
+                        if self.flag.normalize_losses and not_zero_labels:
                             gpr_loss_mae /= zero_wind_loss_mae
                             gpr_loss_mse /= zero_wind_loss_mse
                         loss_dict['GPR wind loss mae'].append(gpr_loss_mae.item())
