@@ -389,7 +389,7 @@ class VelocityGradientLoss(Module):
         # return batchwise mean of loss
         return loss.mean()
 
-#------------------------------------------- Velocity Gradient Loss  ---------------------------------------------------
+#-------------------------------------- Kullback–Leibler Divergence Loss -----------------------------------------------
 class KLDivLoss(Module):
     '''
     Kullback-Leibler Divergence Loss according to https://arxiv.org/pdf/1312.6114.pdf

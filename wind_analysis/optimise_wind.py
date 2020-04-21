@@ -29,6 +29,8 @@ optimise_corners = False
 predict_wind = True
 
 # save and load variables from file
+save_file = False
+load_file = True
 filename = 'optimisation_output.pickle'
 
 
@@ -46,7 +48,7 @@ if predict_wind:
     # Wind predictions
     wind_predictions, losses, inputs, losses_dict = [], [], [], []
     if wind_opt.flag.use_window_split:
-        wind_predictions, losses, inputs, losses_dict = wind_opt.window_split_prediction()
+        wind_predictions, losses_dict, inputs = wind_opt.window_split_prediction()
     else:
         if wind_opt.flag.test_simulated_data:
             if original_input:
@@ -59,8 +61,12 @@ if predict_wind:
             if wind_opt.flag.predict_flight:
                 wind_predictions, losses, inputs = wind_opt.flight_prediction()
 
-    with open(filename, 'wb') as f:
-        pickle.dump(losses_dict, f, protocol=-1)
+    if save_file:
+        with open(filename, 'wb') as f:
+            pickle.dump(losses_dict, f, protocol=-1)
+    if load_file:
+        with open(filename, 'rb') as f:
+            losses_dict = pickle.load(f)
 
     # Analyse optimised wind
     wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs, losses_dict)

@@ -39,10 +39,19 @@ class WindOptimiserOutput:
         return names
 
     def get_last_wind_estimate(self):
-        # # Extract last wind estimate
-        wind_prediction = self._wind_predictions[-1]
-        input = self._inputs[-1]
-        loss = self._losses[-1]
+        # Extract last wind estimate
+        if not self._wind_predictions:
+            wind_prediction = []
+        else:
+            wind_prediction = self._wind_predictions[-1]
+        if not self._inputs:
+            input = []
+        else:
+            input = self._inputs[-1]
+        if not self._losses:
+            loss = []
+        else:
+            loss = self._losses[-1]
         return wind_prediction, input, loss
 
     def get_masked_input(self):
@@ -412,52 +421,31 @@ class WindOptimiserOutput:
         else:
             plt.show()
 
-    def plot_losses_over_time(self):
+    def plot_losses(self):
         fig, ax = plt.subplots()
 
-        if self.wind_opt.flag.use_window_split and self.wind_opt.flag.batch_test:
-            batch_longterm_losses = self._batch_longterm_losses
-            average_longterm_losses = {}
-            average_nn_losses = np.zeros((10))
-            average_second_nn_losses = np.zeros((10))
-            average_wind_average_losses = np.zeros((10))
-            for i in range(10):
-                for j in range(len(batch_longterm_losses)):
-                    average_nn_losses[i] += batch_longterm_losses[j]['nn losses'][i]
-                    if self.wind_opt.flag.use_second_nn_model:
-                        average_second_nn_losses[i] += batch_longterm_losses[j]['second nn losses'][i]
-                    average_wind_average_losses[i] += batch_longterm_losses[j]['average wind losses'][i]
-            # average
-            # average_nn_losses /= 10
-            # average_wind_average_losses /= 10
-            # create dictionary
-            average_longterm_losses.update({'steps': batch_longterm_losses[0]['steps'][0:10]})
-            average_longterm_losses.update({'average nn losses': average_nn_losses})
-            if self.wind_opt.flag.use_second_nn_model:
-                average_longterm_losses.update({'average second nn losses': average_second_nn_losses})
-            average_longterm_losses.update({'average wind average losses': average_wind_average_losses})
-            # plot
-            time = average_longterm_losses['steps']
-            del average_longterm_losses['steps']
+        samples_number_of_windows = []
+        for i in range(len(self._losses_dict)):
+            samples_number_of_windows.append(self._losses_dict[i]['Number of windows'])
 
-            for key, values in average_longterm_losses.items():
-                ax.plot(time, values, label=key)
-            ax.legend(loc='upper right')
-            ax.set_xlabel('Steps')
-            ax.set_ylabel('Loss')
+        # create matrix of losses
+        num_of_timesteps = max(samples_number_of_windows)
+        num_of_losses = int((len(self._losses_dict[0])-5)/2)
+        num_of_samples = len(self._losses_dict)
 
-        else:
-            longterm_losses = self._longterm_losses
-            # time
-            time = longterm_losses['steps']
-            del longterm_losses['steps']
+        mae_matrix = np.empty((num_of_timesteps, num_of_losses, num_of_samples))
+        mae_matrix[:] = np.nan
+        mse_matrix = np.empty((num_of_timesteps, num_of_losses, num_of_samples))
+        mse_matrix[:] = np.nan
+        for j in range(num_of_losses):
+            for k in range(num_of_samples):
+                for i in range(self._losses_dict[k]['Number of windows']):
+                    mae_matrix[i][j][k] = list(self._losses_dict[k].values())[5 + j*2][i]
+                    mse_matrix[i][j][k] = list(self._losses_dict[k].values())[5 + j*2+1][i]
 
-            for key, values in longterm_losses.items():
-                ax.plot(time, values, label=key)
-            ax.legend(loc='upper right')
-            ax.set_xlabel('Steps')
-            ax.set_ylabel('Loss')
-
+        # Average across time
+        # for i in range(num_of_losses):
+        # Average across samples
         # make image full screen
         fig_manager = plt.get_current_fig_manager()
         fig_manager.window.maximize()
@@ -493,7 +481,7 @@ class WindOptimiserOutput:
         self.plot_trajectory_wind_vectors()
         self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        self.plot_losses_over_time()
+        self.plot_losses()
         self.plot_best_wind_estimate()
 
         if self._save_output:
