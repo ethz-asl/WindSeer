@@ -5,6 +5,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.transforms as transforms
 from scipy.interpolate import RegularGridInterpolator
 from analysis_utils.plotting_analysis import plot_prediction_observations, plot_wind_estimates
+import pandas as pd
 import datetime
 import torch
 
@@ -423,6 +424,8 @@ class WindOptimiserOutput:
 
     def plot_losses(self):
         fig, ax = plt.subplots()
+        fig2, ax2 = plt.subplots()
+        fig3, ax3 = plt.subplots()
 
         samples_number_of_windows = []
         for i in range(len(self._losses_dict)):
@@ -443,15 +446,61 @@ class WindOptimiserOutput:
                     mae_matrix[i][j][k] = list(self._losses_dict[k].values())[5 + j*2][i]
                     mse_matrix[i][j][k] = list(self._losses_dict[k].values())[5 + j*2+1][i]
 
-        # Average across time
-        # for i in range(num_of_losses):
-        # Average across samples
+        # --- Plots ---
+        colors = ["#f15a24", "#feb306", "#0071bc", "#03a99d", "#8b5ca4", "#f15a24", "#feb306", "#0071bc", "#03a99d",
+                  "#8b5ca4"]
+        # --- Average across time across losses ---
+        mean_across_time_mae = np.nanmean(mae_matrix, axis=2)
+        mean_across_time_mse = np.nanmean(mse_matrix, axis=2)
+        var_across_time_mae = np.nanvar(mae_matrix, axis=2)
+        var_across_time_mse = np.nanvar(mse_matrix, axis=2)
+        std_across_time_mae = np.sqrt(var_across_time_mae)
+        std_across_time_mse = np.sqrt(var_across_time_mae)
+        time = [60*i for i in range(mean_across_time_mae.shape[0])]
+        for i in range(mean_across_time_mae.shape[1]):
+            ax.plot(time, mean_across_time_mae[:, i], color=colors[i])
+            ax.fill_between(time, mean_across_time_mae[:, i] + std_across_time_mae[:, i], mean_across_time_mae[:, i] - std_across_time_mae[:, i], facecolor=colors[i], alpha=0.5)
+            # ax.boxplot(mean_across_time_mae[:, i], showmeans=True)
+            # ax.errorbar(time, mean_across_time_mae[:, i], std_across_time_mae[:, i])
+        ax.set_xlabel('Time')
+        ax.set_ylabel('MAE')
+        ax.legend(('AE', 'VAE', 'Average wind', 'Optimized corners spline'))
+
+        # for i in range(mean_across_time_mse.shape[1]):
+        #     ax2.plot(time, mean_across_time_mse[:, i])
+        # ax2.set_xlabel('Time')
+        # ax2.set_ylabel('MSE')
+        # ax2.legend(('AE', 'VAE', 'Average wind', 'Optimized corners spline'))
+
+        # --- Average across samples across losses ---
+        mean_across_samples_mae = np.nanmean(mae_matrix, axis=(0, 2))
+        print('Mean across samples mae', mean_across_samples_mae)
+        mean_across_samples_mse = np.nanmean(mse_matrix, axis=(0, 2))
+        print('Mean across samples mse', mean_across_samples_mse)
+        reshaped_mae = mae_matrix.swapaxes(1,2).reshape(-1,mae_matrix.shape[1])
+        # filtered_reshaped_mae = reshaped_mae[~np.isnan(reshaped_mae)]
+        # filter nans
+        mask = ~np.isnan(reshaped_mae)
+        filtered_data = [d[m] for d, m in zip(reshaped_mae.T, mask.T)]
+        ax2.boxplot(filtered_data, positions=np.arange(mae_matrix.shape[1])+1, showmeans=True)
+        ax3.violinplot(filtered_data, positions=np.arange(mae_matrix.shape[1]) + 1, showmeans=True)
+        ax2.set_xticks(np.arange(mae_matrix.shape[1]) + 1)
+        ax2.set_xticklabels(['AE', 'VAE', 'Average wind', 'Optimized corners spline'])
+        ax3.set_xticks(np.arange(mae_matrix.shape[1]) + 1)
+        ax3.set_xticklabels(['AE', 'VAE', 'Average wind', 'Optimized corners spline'])
+        # data_to_plot = np.random.rand(100, 5)
+        # positions = np.arange(5) + 1
+        # # matplotlib > 1.4
+        # ax2.violinplot(data_to_plot, positions=positions, showmeans=True)
+
         # make image full screen
         fig_manager = plt.get_current_fig_manager()
         fig_manager.window.maximize()
 
         if self._save_output:
             self.pp.savefig(fig)
+            self.pp.savefig(fig2)
+            self.pp.savefig(fig3)
         else:
             plt.show()
 
@@ -478,11 +527,11 @@ class WindOptimiserOutput:
         # self.plot_final_values()
         # self.plot_wind_over_time()
         # self.plot_fft_analysis()
-        self.plot_trajectory_wind_vectors()
-        self.plot_wind_field()
+        # self.plot_trajectory_wind_vectors()
+        # self.plot_wind_field()
         # self.plot_wind_vectors_angles()
         self.plot_losses()
-        self.plot_best_wind_estimate()
+        # self.plot_best_wind_estimate()
 
         if self._save_output:
             self.close()
