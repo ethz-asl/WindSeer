@@ -486,7 +486,6 @@ class ModelEDNN3D(nn.Module):
                 is_wind = x[:, 0, :].unsqueeze(1).clone()
                 is_wind.sign_()
 
-        x = torch.randn((6, 3, 5, 64, 64, 64)).float().cuda()
         output = {}
         x_skip = []
         sparse_mask_skip = []
