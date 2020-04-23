@@ -111,6 +111,7 @@ class SelectionFlags(object):
         self.incremental_input_prediction = window_split.params['incremental_input_prediction']
         self.sliding_input_prediction = window_split.params['sliding_input_prediction']
         self.normalize_losses = window_split.params['normalize_losses']
+        self.use_average_wind = window_split.params['use_average_wind']
         self.use_optimized_corners = window_split.params['use_optimized_corners']
         self.use_optimized_corners_polynomial = window_split.params['use_optimized_corners_polynomial']
         self.use_gpr_prediction = window_split.params['use_gpr_prediction']
@@ -319,7 +320,15 @@ class WindOptimiser(object):
         elif '20181123_flight06' in self._flight_args.params['files'][index]:
             time_of_flight = 14
 
-        offset_cosmo_time = self._cosmo_args.get_cosmo_time(time_of_flight)
+        if self.flag.batch_test:
+            # TODO: workaround to enable batch test
+            if 'cosmo-1_ethz_fcst_2018112309' in cosmo_file:
+                offset_cosmo_time = time_of_flight - 9
+            elif 'cosmo-1_ethz_fcst_2018112312' in cosmo_file:
+                offset_cosmo_time = time_of_flight - 12
+        else:
+            offset_cosmo_time = self._cosmo_args.get_cosmo_time(time_of_flight)
+
         cosmo_wind = cosmo.extract_cosmo_data(cosmo_file, lat0, lon0, offset_cosmo_time,
                                               terrain_file=self._cosmo_args.params['terrain_file'])
         print(' done [{:.2f} s]'.format(time.time() - t_start))
@@ -1363,7 +1372,8 @@ class WindOptimiser(object):
             step_time = self._window_splits_args.params['step_time']  # seconds
 
             # time interval between two consecutive flight measurements
-            dt = ((flight_data['time_microsec'][-1]-flight_data['time_microsec'][0])/flight_data['time_microsec'].size)/1e6
+            dt = ((flight_data['time_microsec'][-1]-flight_data['time_microsec'][0])/
+                  flight_data['time_microsec'].size)/1e6
 
             # sliding window variables
             window_size = int(window_time/dt)
@@ -1407,10 +1417,11 @@ class WindOptimiser(object):
             loss_dict.update({'Number of windows': max_num_windows})
             # nn losses
             for m in range(len(self._model_args.params['name']) - 1):
-                loss_dict.update({'NN wind loss mae '+str(m): []})
+                loss_dict.update({'NN wind loss mae ' + str(m): []})
                 loss_dict.update({'NN wind loss mse ' + str(m): []})
-            loss_dict.update({'Average wind loss mae': []})
-            loss_dict.update({'Average wind loss mse': []})
+            if self.flag.use_average_wind:
+                loss_dict.update({'Average wind loss mae': []})
+                loss_dict.update({'Average wind loss mse': []})
             if self.flag.use_optimized_corners:
                 loss_dict.update({'Optimized corners wind loss mae': []})
                 loss_dict.update({'Optimized corners wind loss mse': []})
@@ -1456,6 +1467,7 @@ class WindOptimiser(object):
                                                            self.labels.to(self._device))
                     zero_wind_loss_mse = self._loss_fn_mse(zero_wind_output.to(self._device),
                                                            self.labels.to(self._device))
+                    # check that error is not zero to avoid division by 0 when normalizing the other losses
                     not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
                     # loss_dict.update({'zero wind loss mae': zero_wind_loss_mae.item()})
                     # loss_dict.update({'zero wind loss mse': zero_wind_loss_mse.item()})
@@ -1465,6 +1477,7 @@ class WindOptimiser(object):
                                                            trajectory_labels.to(self._device))
                     zero_wind_loss_mse = self._loss_fn_mse(interpolated_zero_wind_output.to(self._device),
                                                            trajectory_labels.to(self._device))
+                    # check that error is not zero to avoid division by 0 when normalizing the other losses
                     not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
                     # loss_dict.update({'trajectory zero wind loss': zero_wind_loss_mse})
 
@@ -1472,7 +1485,7 @@ class WindOptimiser(object):
                 # scale real flight data if requested
                 if self.flag.test_flight_data and self.flag.rescale_prediction:
                     input_flight_wind_vectors = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
-                    scale = np.linalg.norm(input_flight_wind_vectors, axis=0).max()
+                    scale = np.linalg.norm(input_flight_wind_vectors, axis=0).mean()
                     # scale = 1
                     scale_x = 0.5
                     scale_y = 0.5
@@ -1506,7 +1519,7 @@ class WindOptimiser(object):
                         trajectory_wind_input = torch.cat([self.terrain.network_terrain, traj_wind_input])
                         trajectory_input.append(trajectory_wind_input)
                     input_sequential = torch.stack(trajectory_input, dim=0)
-                # input
+                # normal input
                 wind_blocks, var_blocks, wind_zeros, wind_mask \
                     = self.get_flight_wind_blocks(input_flight_data)
                 # get prediction
@@ -1514,7 +1527,7 @@ class WindOptimiser(object):
                 input = torch.cat([self.terrain.network_terrain, wind_input])
 
                 # iterate over loaded networks
-                for m in range(len(self._model_args.params['name']) - 1):  # last network is for corner optimization
+                for m in range(len(self._model_args.params['name']) - 1):  # last network is used for corner optimization
                     if self.flag.use_hybrid_model[m]:
                         nn_input = input_sequential
                     else:
@@ -1522,21 +1535,22 @@ class WindOptimiser(object):
                     nn_output = self.run_prediction(nn_input, index=m)
                     if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
                         if i == 0 and m == 0:
-                            self.rescale_prediction(nn_output, self.labels)
+                            self.rescale_prediction(nn_output, self.labels)  # rescale labels only once
                         else:
                             self.rescale_prediction(nn_output)
                     if self.flag.test_flight_data and self.flag.rescale_prediction:
                         if m == 0:
+                            # rescale nn input and input flight data only once
                             input[:, 0, :] *= scale * scale_x
                             input[:, 1, :] *= scale * scale_y
                             input[:, 2, :] *= scale * scale_z
-                        nn_output[0, :] *= scale * scale_x
-                        nn_output[1, :] *= scale * scale_y
-                        nn_output[2, :] *= scale * scale_z
-                        if m == 0:
                             input_flight_data['wn'] *= scale * scale_x
                             input_flight_data['we'] *= scale * scale_y
                             input_flight_data['wd'] *= scale * scale_z
+                        nn_output[0, :] *= scale * scale_x
+                        nn_output[1, :] *= scale * scale_y
+                        nn_output[2, :] *= scale * scale_z
+
                     # losses
                     if self.flag.test_simulated_data:
                         nn_loss_mae = self._loss_fn_mae(nn_output.to(self._device), self.labels.to(self._device))
@@ -1544,14 +1558,16 @@ class WindOptimiser(object):
                         if self.flag.normalize_losses and not_zero_labels:
                             nn_loss_mae /= zero_wind_loss_mae
                             nn_loss_mse /= zero_wind_loss_mse
-                        loss_dict['NN wind loss mae '+str(m)].append(nn_loss_mae.item())
+                        loss_dict['NN wind loss mae ' + str(m)].append(nn_loss_mae.item())
                         loss_dict['NN wind loss mse ' + str(m)].append(nn_loss_mse.item())
-                        print(i, ' NN loss '+str(m)+' is: ', nn_loss_mse.item())
+                        print(i, ' NN loss ' + str(m) + ' is: ', nn_loss_mse.item())
                     if self.flag.test_flight_data:
                         FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
                                                                wind_data_for_prediction=label_flight_data)
                         interpolated_nn_output = FlightInterpolator.interpolate_flight_data_from_grid(nn_output)
                         nn_loss_mae = self._loss_fn_mae(interpolated_nn_output.to(self._device),
+                                                        trajectory_labels.to(self._device))
+                        nn_loss_mse = self._loss_fn_mse(interpolated_nn_output.to(self._device),
                                                         trajectory_labels.to(self._device))
                         loss_axis = False
                         if loss_axis:
@@ -1561,63 +1577,62 @@ class WindOptimiser(object):
                                                             trajectory_labels[:,1].to(self._device))
                             nn_loss_mse_z = self._loss_fn_mse(interpolated_nn_output[:,2].to(self._device),
                                                             trajectory_labels[:,2].to(self._device))
-                        nn_loss_mse = self._loss_fn_mse(interpolated_nn_output.to(self._device),
-                                                        trajectory_labels.to(self._device))
                         if self.flag.normalize_losses and not_zero_labels:
                             nn_loss_mae /= zero_wind_loss_mae
                             nn_loss_mse /= zero_wind_loss_mse
-                        loss_dict['NN wind loss mae '+str(m)].append(nn_loss_mae.item())
+                        loss_dict['NN wind loss mae ' + str(m)].append(nn_loss_mae.item())
                         loss_dict['NN wind loss mse ' + str(m)].append(nn_loss_mse.item())
-                        print(i, ' Trajectory NN loss '+str(m)+' is: ', nn_loss_mse.item())
+                        print(i, ' Trajectory NN loss ' + str(m) + ' is: ', nn_loss_mse.item())
                         if loss_axis:
                             print(i, ' Trajectory NN loss x' + str(m) + ' is: ', nn_loss_mse_x.item())
                             print(i, ' Trajectory NN loss y' + str(m) + ' is: ', nn_loss_mse_y.item())
                             print(i, ' Trajectory NN loss z' + str(m) + ' is: ', nn_loss_mse_z.item())
 
                 # --- Average wind prediction ---
-                average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
-                if self.flag.test_simulated_data:
-                    average_wind_output = torch.ones_like(self.labels)
-                    average_wind_output[0, :] *= average_wind_input[0].mean()
-                    average_wind_output[1, :] *= average_wind_input[1].mean()
-                    average_wind_output[2, :] *= average_wind_input[2].mean()
-                    average_wind_loss_mae = self._loss_fn_mae(average_wind_output.to(self._device),
-                                                              self.labels.to(self._device))
-                    average_wind_loss_mse = self._loss_fn_mse(average_wind_output.to(self._device),
-                                                              self.labels.to(self._device))
-                    if self.flag.normalize_losses and not_zero_labels:
-                        average_wind_loss_mae /= zero_wind_loss_mae
-                        average_wind_loss_mse /= zero_wind_loss_mse
-                    loss_dict['Average wind loss mae'].append(average_wind_loss_mae.item())
-                    loss_dict['Average wind loss mse'].append(average_wind_loss_mse.item())
-                    print(i, ' Average wind loss is: ', average_wind_loss_mse.item())
-                if self.flag.test_flight_data:
-                    interpolated_average_wind_output = np.ones_like(trajectory_labels) * [average_wind_input[0].mean(),
-                                                                                          average_wind_input[1].mean(),
-                                                                                          average_wind_input[2].mean()]
-                    interpolated_average_wind_output = torch.from_numpy(interpolated_average_wind_output)
-                    average_wind_loss_mae = self._loss_fn_mae(interpolated_average_wind_output.to(self._device),
-                                                              trajectory_labels.to(self._device))
-                    average_wind_loss_mse = self._loss_fn_mse(interpolated_average_wind_output.to(self._device),
-                                                              trajectory_labels.to(self._device))
-                    loss_axis = False
-                    if loss_axis:
-                        average_wind_loss_mse_x = self._loss_fn_mse(interpolated_average_wind_output[:, 0].to(self._device),
-                                                                  trajectory_labels[:, 0].to(self._device))
-                        average_wind_loss_mse_y = self._loss_fn_mse(interpolated_average_wind_output[:, 1].to(self._device),
-                                                                  trajectory_labels[:, 1].to(self._device))
-                        average_wind_loss_mse_z = self._loss_fn_mse(interpolated_average_wind_output[:, 2].to(self._device),
-                                                                  trajectory_labels[:, 2].to(self._device))
-                    if self.flag.normalize_losses and not_zero_labels:
-                        average_wind_loss_mae /= zero_wind_loss_mae
-                        average_wind_loss_mse /= zero_wind_loss_mse
-                    loss_dict['Average wind loss mae'].append(average_wind_loss_mae.item())
-                    loss_dict['Average wind loss mse'].append(average_wind_loss_mse.item())
-                    print(i, ' Trajectory average wind loss is: ', average_wind_loss_mse.item())
-                    if loss_axis:
-                        print(i, ' Trajectory average wind loss is x: ', average_wind_loss_mse_x.item())
-                        print(i, ' Trajectory average wind loss is x: ', average_wind_loss_mse_y.item())
-                        print(i, ' Trajectory average wind loss is x: ', average_wind_loss_mse_z.item())
+                if self.flag.use_average_wind:
+                    average_wind_input = np.array([input_flight_data['wn'], input_flight_data['we'], input_flight_data['wd']])
+                    if self.flag.test_simulated_data:
+                        average_wind_output = torch.ones_like(self.labels)
+                        average_wind_output[0, :] *= average_wind_input[0].mean()
+                        average_wind_output[1, :] *= average_wind_input[1].mean()
+                        average_wind_output[2, :] *= average_wind_input[2].mean()
+                        average_wind_loss_mae = self._loss_fn_mae(average_wind_output.to(self._device),
+                                                                  self.labels.to(self._device))
+                        average_wind_loss_mse = self._loss_fn_mse(average_wind_output.to(self._device),
+                                                                  self.labels.to(self._device))
+                        if self.flag.normalize_losses and not_zero_labels:
+                            average_wind_loss_mae /= zero_wind_loss_mae
+                            average_wind_loss_mse /= zero_wind_loss_mse
+                        loss_dict['Average wind loss mae'].append(average_wind_loss_mae.item())
+                        loss_dict['Average wind loss mse'].append(average_wind_loss_mse.item())
+                        print(i, ' Average wind loss is: ', average_wind_loss_mse.item())
+                    if self.flag.test_flight_data:
+                        interpolated_average_wind_output = np.ones_like(trajectory_labels) * [average_wind_input[0].mean(),
+                                                                                              average_wind_input[1].mean(),
+                                                                                              average_wind_input[2].mean()]
+                        interpolated_average_wind_output = torch.from_numpy(interpolated_average_wind_output)
+                        average_wind_loss_mae = self._loss_fn_mae(interpolated_average_wind_output.to(self._device),
+                                                                  trajectory_labels.to(self._device))
+                        average_wind_loss_mse = self._loss_fn_mse(interpolated_average_wind_output.to(self._device),
+                                                                  trajectory_labels.to(self._device))
+                        loss_axis = False
+                        if loss_axis:
+                            average_wind_loss_mse_x = self._loss_fn_mse(interpolated_average_wind_output[:, 0].to(self._device),
+                                                                      trajectory_labels[:, 0].to(self._device))
+                            average_wind_loss_mse_y = self._loss_fn_mse(interpolated_average_wind_output[:, 1].to(self._device),
+                                                                      trajectory_labels[:, 1].to(self._device))
+                            average_wind_loss_mse_z = self._loss_fn_mse(interpolated_average_wind_output[:, 2].to(self._device),
+                                                                      trajectory_labels[:, 2].to(self._device))
+                        if self.flag.normalize_losses and not_zero_labels:
+                            average_wind_loss_mae /= zero_wind_loss_mae
+                            average_wind_loss_mse /= zero_wind_loss_mse
+                        loss_dict['Average wind loss mae'].append(average_wind_loss_mae.item())
+                        loss_dict['Average wind loss mse'].append(average_wind_loss_mse.item())
+                        print(i, ' Trajectory average wind loss is: ', average_wind_loss_mse.item())
+                        if loss_axis:
+                            print(i, ' Trajectory average wind loss is x: ', average_wind_loss_mse_x.item())
+                            print(i, ' Trajectory average wind loss is x: ', average_wind_loss_mse_y.item())
+                            print(i, ' Trajectory average wind loss is x: ', average_wind_loss_mse_z.item())
 
                 # --- Optimized corner prediction ---
                 if self.flag.use_optimized_corners:
@@ -1657,11 +1672,13 @@ class WindOptimiser(object):
                 if self.flag.use_optimized_corners_polynomial:
                     optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
                     n_steps = self._corner_optimisation_args.params['num_of_optimisation_steps']
+                    # value used to initalize the polynomial function at each point
                     average_wind_norm = np.linalg.norm(average_wind_input)
                     corners_output, _, _, _, _ \
                         = self.optimise_wind_corners(optimiser.opt, n=n_steps, opt_kwargs=optimiser.kwargs,
                                                      wind_zeros=wind_zeros, wind_mask=wind_mask,
-                                                     corners_polynomial=True, use_average_wind_norm=True, wind_norm=average_wind_norm)
+                                                     corners_polynomial=True, use_average_wind_norm=True,
+                                                     wind_norm=average_wind_norm)
                     if self.flag.test_simulated_data:
                         corners_loss_mae = self._loss_fn_mae(corners_output.to(self._device),
                                                              self.labels.to(self._device))
@@ -1691,6 +1708,7 @@ class WindOptimiser(object):
 
                 # --- Interpolation (Krigging) prediction ---
                 if self.flag.use_krigging_prediction:
+                    # method too slow and should not be used
                     FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
                                                            wind_data_for_prediction=label_flight_data)
                     _, _, interpolated_krigging_output = FlightInterpolator.interpolate_flight_data_krigging()
@@ -1712,6 +1730,7 @@ class WindOptimiser(object):
                         loss_dict['GPR wind loss mse'].append(gpr_loss_mse.item())
                         print(i, ' Trajectoru GPR loss is: ', gpr_loss_mse.item())
 
+                # outputs
                 if i == 0:
                     outputs.append(nn_output)
                     inputs.append(input)

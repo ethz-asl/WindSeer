@@ -114,8 +114,9 @@ window_split:
   # normalize losses with zero wind loss
   normalize_losses: True
   #
-  use_optimized_corners: True
-  use_optimized_corners_polynomial: True
+  use_average_wind: True
+  use_optimized_corners: False
+  use_optimized_corners_polynomial: False
   use_gpr_prediction: False
   use_krigging_prediction: False
   #
@@ -140,7 +141,7 @@ corner_optimisation:
 # NN models parameters
 model:
   location: 'data/trained_models/'
-  name: ['test_model_63', 'test_model_65', 'ednn3d_best']
+  name: ['test_model_65', 'test_model_63', 'ednn3d_best']
   version: ['latest', 'latest', 'latest']
   boolean_terrain: False
   loss: 'MSE'  # L1, MSE, SoftMargin
