@@ -210,8 +210,10 @@ class WindOptimiser(object):
             net = NetworkType(**params.model_kwargs())  # load learnt parameters
             model_loc = os.path.join(model_args.params['location'], model_args.params['name'][i],
                                      model_args.params['version'][i] + '.model')
+            # load params
             net.load_state_dict(torch.load(model_loc, map_location=lambda storage, loc: storage))
             net = net.to(self._device)
+            net.eval()
             print(' done [{:.2f} s]'.format(time.time() - t_start))
             networks.append(net)
             parameters.append(params)
@@ -836,16 +838,18 @@ class WindOptimiser(object):
         rotation = self._corner_optimisation_args.params['rotation']
         scale = self._corner_optimisation_args.params['scale']
         if use_average_wind_norm:
-            spline = [average_wind_norm for i in range(self._corner_optimisation_args.params['polynomial_law_num_points'])]
+            alpha = 1/7
+            spline = [average_wind_norm * (i/self._corner_optimisation_args.params['polynomial_law_num_points'])**alpha
+                      for i in range(self._corner_optimisation_args.params['polynomial_law_num_points'])]
         else:
             spline = [self._corner_optimisation_args.params['init_wind_speed']
                       for i in range(self._corner_optimisation_args.params['polynomial_law_num_points'])]
         opt_var = [rotation, scale]
         opt_var.extend(spline)
-        optimisation_variables = [var for var in opt_var if var != []]
+        # optimisation_variables = [var for var in opt_var if var != []]
         # Replicate optimisation variables for each corner
         if self.flag.optimise_corners_individually:
-            optimisation_variables = [optimisation_variables[:] for i in range(4)]
+            optimisation_variables = [opt_var[:] for i in range(4)]
 
         return optimisation_variables
 
@@ -1082,7 +1086,8 @@ class WindOptimiser(object):
                               wind_zeros=None, wind_mask=None,
                               corners_polynomial=False, use_average_wind_norm=False, wind_norm=None,
                               print_steps=False, verbose=False):
-        self._optimisation_variables = self.get_optimisation_variables()
+        self._optimisation_variables = self.get_optimisation_variables(use_average_wind_norm=use_average_wind_norm,
+                                                                       average_wind_norm=wind_norm)
         self.reset_optimisation_variables()
         optimizer = opt([self._optimisation_variables], **opt_kwargs)
         if print_steps:
