@@ -1,4 +1,6 @@
 import numpy as np
+import sys
+sys.path.append('../wind_prediction/')
 import nn_wind_prediction.utils as utils
 import nn_wind_prediction.models as models
 from analysis_utils import extract_cosmo_data as cosmo
@@ -156,6 +158,12 @@ class WindOptimiser(object):
             self.original_input, self.labels, self.scale, self.data_set_file_name, self.grid_size, \
                 self.original_terrain, self.test_set_length \
                 = self.load_data_set()
+            # Noise
+            self.noisy_labels = self.labels.clone()
+            if self.flag.add_gaussian_noise:
+                self.noisy_labels = self.add_gaussian_noise(self.noisy_labels)
+            if self.flag.add_turbulence:
+                self.noisy_labels = self.add_turbulence(self.noisy_labels)
             # self._optimized_corners = self.get_optimized_corners()
             self.terrain = self.get_cfd_terrain()
             self._base_cfd_corners = self.get_cfd_corners()
@@ -396,7 +404,7 @@ class WindOptimiser(object):
         data_set = test_set[file_index]
         input = data_set[0]
         labels = data_set[1]
-        name = test_set.get_name(self._cfd_args.params['index'])
+        name = test_set.get_name(file_index)
         scale = 1.0
         if self.params[0].data['autoscale']:
             scale = data_set[3].item()
@@ -412,7 +420,7 @@ class WindOptimiser(object):
         x_terr = np.asarray([self.grid_size[0]*i for i in range(nx)])
         y_terr = np.asarray([self.grid_size[1]*i for i in range(ny)])
         z_terr = np.asarray([self.grid_size[2]*i for i in range(nz)])
-        h_terr = (binary_terrain.sum(axis=0, keepdims=True)*self.grid_size[2]).squeeze(0).detach().cpu().numpy()
+        h_terr = (binary_terrain.sum(0, keepdim=True)*self.grid_size[2]).squeeze(0).detach().cpu().numpy()
         h_terr = np.clip(h_terr, 0, z_terr[-1])  # make sure height is not bigger than max z_terr
         # Get terrain object
         boolean_terrain = self._model_args.params['boolean_terrain']
@@ -420,7 +428,35 @@ class WindOptimiser(object):
                                device=self._device, boolean_terrain=boolean_terrain)
         return terrain
 
-    # --- Wind data ---
+    # --- Add noise to data ---
+
+    def add_gaussian_noise(self, labels):
+        eps = 1
+        noise = eps * torch.rand(labels.shape)
+        # apply scale
+        noise /= self.scale
+        labels += noise
+        return labels
+
+    def add_turbulence(self, labels):
+        # get turbulence field
+        turbulence, _ = generate_turbulence.generate_turbulence_spectral()
+        _, turb_nx, turb_ny, turb_nz = turbulence.shape
+        # subsample turbulent velocity field with the same shape as labels
+        _, nz, ny, nx = labels.shape
+        start_x = np.random.randint(0, turb_nx - nx)
+        start_y = np.random.randint(0, turb_ny - ny)
+        start_z = np.random.randint(0, turb_nz - nz)  # triangle distribution
+        turbulence = \
+            turbulence[:, start_z:start_z + nz, start_y:start_y + ny, start_x:start_x + nx]
+        # apply scale
+        turbulence /= self.scale
+        eps = 1
+        turbulence = eps * torch.from_numpy(turbulence).float()
+        labels += turbulence
+        return labels
+
+    # --- Create wind data ---
 
     def get_sparse_wind_blocks(self, p=0):
         time_start = time.time()
@@ -804,34 +840,6 @@ class WindOptimiser(object):
         # print(' done [{:.2f} s]'.format(time.time() - t_start))
         return wind.to(self._device), variance.to(self._device), wind_zeros.to(self._device), wind_mask.to(self._device)
 
-    # --- Add noise to wind data ---
-
-    def add_gaussian_noise(self, labels):
-        eps = 1
-        noise = eps * torch.rand(labels.shape)
-        # apply scale
-        noise /= self.scale
-        labels += noise
-        return labels
-
-    def add_turbulence(self, labels):
-        # get turbulence field
-        turbulence, _ = generate_turbulence.generate_turbulence_spectral()
-        _, turb_nx, turb_ny, turb_nz = turbulence.shape
-        # subsample turbulent velocity field with the same shape as labels
-        _, nz, ny, nx = labels.shape
-        start_x = np.random.randint(0, turb_nx - nx)
-        start_y = np.random.randint(0, turb_ny - ny)
-        start_z = np.random.randint(0, turb_nz - nz)  # triangle distribution
-        turbulence = \
-            turbulence[:, start_z:start_z + nz, start_y:start_y + ny, start_x:start_x + nx]
-        # apply scale
-        turbulence /= self.scale
-        eps = 1
-        turbulence = eps * torch.from_numpy(turbulence)
-        labels += turbulence
-        return labels
-
     # --- Corner optimisation variables ---
 
     def get_optimisation_variables(self, use_average_wind_norm=False, average_wind_norm=None):
@@ -872,31 +880,32 @@ class WindOptimiser(object):
             for xi in range(2):
                 # wind_speed = self._optimisation_variables[i][0:num_points]
                 wind_height_increment = (self.terrain.z_terr[-1] - self.terrain.terrain_corners[yi, xi]) / num_points
-                wind_z.append([self.terrain.terrain_corners[yi, xi] + j * wind_height_increment for j in range(num_points)])
+                wind_z.append([self.terrain.terrain_corners[yi, xi] + j * wind_height_increment
+                               for j in range(num_points)])
 
         if self.flag.optimise_corners_individually:
             for yi in range(2):
                 for xi in range(2):
-                    valid_z = (self.terrain.z_terr > self.terrain.terrain_corners[yi, xi])
+                    valid_z = self.terrain.z_terr > self.terrain.terrain_corners[yi, xi]
                     if wind_z[xi*2+yi][1] > wind_z[xi*2+yi][0]:
                         interpolated_corners = interpolate_wind_profile(
                             wind_z[xi * 2 + yi],
                             self._optimisation_variables[xi * 2 + yi][-num_points:],
                             self.terrain.z_terr[valid_z], self._device)
-                        corner_winds[0, valid_z, yi, xi] = interpolated_corners * cr[xi*2+yi] - \
-                                                           interpolated_corners * sr[xi*2+yi]
-                        corner_winds[1, valid_z, yi, xi] = interpolated_corners * sr[xi*2+yi] + \
-                                                           interpolated_corners * cr[xi*2+yi]
+                        corner_winds[0, -(valid_z.sum()):, yi, xi] = interpolated_corners * cr[xi*2+yi] - \
+                                                     interpolated_corners * sr[xi*2+yi]
+                        corner_winds[1, -(valid_z.sum()):, yi, xi] = interpolated_corners * sr[xi*2+yi] + \
+                                                     interpolated_corners * cr[xi*2+yi]
 
         else:
-            valid_z = (self.terrain.z_terr > self.terrain.terrain_corners)
+            valid_z = torch.from_numpy((self.terrain.z_terr > self.terrain.terrain_corners[0, 0]).astype(np.uint8))
             if wind_z[1] > wind_z[0]:
                 interpolated_corners = interpolate_wind_profile(
                     wind_z,
                     self._optimisation_variables[-num_points:],
                     self.terrain.z_terr[valid_z], self._device)
-                corner_winds[0, valid_z, :] = interpolated_corners * cr - interpolated_corners * sr
-                corner_winds[1, valid_z, :] = interpolated_corners * sr + interpolated_corners * cr
+                corner_winds[0, -(valid_z.sum()):, :] = interpolated_corners * cr - interpolated_corners * sr
+                corner_winds[1, -(valid_z.sum()):, :] = interpolated_corners * sr + interpolated_corners * cr
 
         return corner_winds
 
@@ -908,10 +917,10 @@ class WindOptimiser(object):
         # Get corner winds for model inference, offset to actual terrain heights
         if self.flag.test_simulated_data:
             wind_corners = self._base_cfd_corners.clone()
-            corners = self._base_cfd_corners
+            corners = self._base_cfd_corners.clone()
         if self.flag.test_flight_data:
             wind_corners = self._base_cosmo_corners.clone()
-            corners = self._base_cosmo_corners
+            corners = self._base_cosmo_corners.clone()
         for i in range(self._optimisation_variables.shape[0]):
             wind_corners[0, :, i//2, (i+2)%2] = self._optimisation_variables[i][1]*(
                     corners[0, :, i//2, (i+2)%2]*cr[i]
@@ -923,9 +932,8 @@ class WindOptimiser(object):
 
     def get_cfd_corners(self):
         channels, nx, ny, nz = self.labels.shape
-        input_ = copy.deepcopy(self.original_input)
-        # input_ = copy.deepcopy(self.labels)
-        corners = input_[1:4, ::nx-1, ::ny-1, :]
+        input = self.noisy_labels.clone()
+        corners = input[:, ::nx-1, ::ny-1, :]
         cfd_corners = np.transpose(corners, (0, 3, 1, 2))
         return cfd_corners.to(self._device)
 
@@ -1328,7 +1336,9 @@ class WindOptimiser(object):
             if self.flag.batch_test:
                 if self.flag.test_simulated_data:
                     # get flight data
-                    _, self.labels, _, self.data_set_file_name, _, self.original_terrain, _ = self.load_data_set(t)
+                    self.original_input, self.labels, self.scale, self.data_set_file_name, self.grid_size, \
+                        self.original_terrain, self.test_set_length \
+                        = self.load_data_set(t)
                     # Noise
                     self.noisy_labels = self.labels.clone()
                     if self.flag.add_gaussian_noise:
@@ -1447,6 +1457,11 @@ class WindOptimiser(object):
                 input_flight_data, label_flight_data = \
                     self.sliding_window_split(flight_data, window_size, response_size, i*step_size)
 
+                # wind field labels
+                if self.flag.test_simulated_data and self.flag.rescale_prediction:
+                    if i == 0:
+                        self.rescale_prediction(label=self.labels)
+
                 # trajectory labels
                 # filter out points in the labels which are outside the terrain sample
                 valid_labels = []
@@ -1502,8 +1517,8 @@ class WindOptimiser(object):
                 # Create network input
                 # sequential input
                 if any(self.flag.use_hybrid_model):
-                    # sequence_length = self._model_args.params['hybrid_model']['sequence_length']
-                    sequence_length = i+1
+                    sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                    #sequence_length = i+1
                     trajectory_length = int((input_flight_data['x'].size / sequence_length) + 1)
                     trajectory_input = []
                     for k in range(sequence_length):
@@ -1539,10 +1554,7 @@ class WindOptimiser(object):
                         nn_input = input
                     nn_output = self.run_prediction(nn_input, index=m)
                     if self.flag.test_simulated_data and self.flag.rescale_prediction:  # only for simulated trajectory
-                        if i == 0 and m == 0:
-                            self.rescale_prediction(nn_output, self.labels)  # rescale labels only once
-                        else:
-                            self.rescale_prediction(nn_output)
+                        self.rescale_prediction(output=nn_output)
                     if self.flag.test_flight_data and self.flag.rescale_prediction:
                         if m == 0:
                             # rescale nn input and input flight data only once
@@ -1736,9 +1748,10 @@ class WindOptimiser(object):
                         print(i, ' Trajectoru GPR loss is: ', gpr_loss_mse.item())
 
                 # outputs
-                if i == 0:
-                    outputs.append(nn_output)
-                    inputs.append(input)
+                # if i == 0:
+                #     outputs.append(nn_output)
+                #     inputs.append(input)
             losses_dict.append(loss_dict)
 
         return outputs, losses_dict, inputs
+
