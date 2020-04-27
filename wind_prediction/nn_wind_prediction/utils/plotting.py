@@ -125,7 +125,7 @@ class PlotUtils():
             label = input
 
             # set the number of figures to plot
-            self.__n_figures = 1
+            self.__n_figures = int(1)
 
         else:
             # reduce the input and label to what is plotted
@@ -133,7 +133,7 @@ class PlotUtils():
             label = torch.index_select(label,0, self.__indices_to_plot)
 
             # get the number of figures to plot
-            self.__n_figures = math.ceil(self.__n_channels / 4.0)
+            self.__n_figures = int(math.ceil(self.__n_channels / 4.0))
 
         # create list of buttons and sliders for each figure
         self.__ax_sliders = []
@@ -142,7 +142,7 @@ class PlotUtils():
         self.__n_slices = []
 
         # prealocate lists to the correct size
-        for j in range(int(self.__n_figures)):
+        for j in range(self.__n_figures):
             self.__ax_sliders += [None]
             self.__sliders += [None]
             self.__buttons += [None]
@@ -312,15 +312,15 @@ class PlotUtils():
         # 3D data
         if (len(list(self.__input.shape)) > 3):
 
-            n_rows = math.ceil(self.__n_channels/4.0)
+            n_rows = int(math.ceil(self.__n_channels/4.0))
             n_columns = min(self.__n_channels, 4)
 
             fig_in, ah_in = plt.subplots(n_rows, n_columns, figsize=(16,13), squeeze=False)
             fig_in.patch.set_facecolor('white')
             data_index = 0
-            for j in range(int(n_rows)):
-                n_columns = min(self.__n_channels - 4 * (j), 4)
-                for i in range(int(n_columns)):
+            for j in range(n_rows):
+                n_columns = int(min(self.__n_channels - 4 * (j), 4))
+                for i in range(n_columns):
                     self.__out_images.append(
                         ah_in[j][i].imshow(self.__input[data_index, :, self.__n_slices[0], :], origin='lower',
                                            vmin=self.__input[data_index, :, :, :].min(),
@@ -338,7 +338,7 @@ class PlotUtils():
 
                 # remove the extra empty figures
                 if n_columns<4 and n_rows>1:
-                    for i in range(int(n_columns), 4):
+                    for i in range(n_columns, 4):
                         fig_in.delaxes(ah_in[j][i])
 
             plt.tight_layout()
@@ -372,9 +372,9 @@ class PlotUtils():
         if (len(list(self.__input.shape)) > 3):
 
             # loop over the channels to plot in each figure
-            for j in range(int(self.__n_figures)):
+            for j in range(self.__n_figures):
                 # get the number of columns for this figure
-                n_columns = min(self.__n_channels-4*(j), 4)
+                n_columns = int(min(self.__n_channels-4*(j), 4))
 
                 column_size = 5
 
@@ -387,7 +387,7 @@ class PlotUtils():
                 fig_in.patch.set_facecolor('white')
                 slice = self.__n_slices[j]
 
-                for i in range(int(n_columns)):
+                for i in range(n_columns):
                     data_index = i+j*4
                     self.__out_images.append(ah_in[0][i].imshow(
                         self.__label[data_index,:,slice,:], origin='lower',
