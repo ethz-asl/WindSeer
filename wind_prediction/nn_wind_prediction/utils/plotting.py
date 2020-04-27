@@ -125,7 +125,7 @@ class PlotUtils():
             label = input
 
             # set the number of figures to plot
-            self.__n_figures = 1
+            self.__n_figures = int(1)
 
         else:
             # reduce the input and label to what is plotted
@@ -133,7 +133,7 @@ class PlotUtils():
             label = torch.index_select(label,0, self.__indices_to_plot)
 
             # get the number of figures to plot
-            self.__n_figures = math.ceil(math.ceil(self.__n_channels / 4))
+            self.__n_figures = int(math.ceil(self.__n_channels / 4.0))
 
         # create list of buttons and sliders for each figure
         self.__ax_sliders = []
@@ -312,14 +312,14 @@ class PlotUtils():
         # 3D data
         if (len(list(self.__input.shape)) > 3):
 
-            n_rows = math.ceil(self.__n_channels/4)
+            n_rows = int(math.ceil(self.__n_channels/4.0))
             n_columns = min(self.__n_channels, 4)
 
             fig_in, ah_in = plt.subplots(n_rows, n_columns, figsize=(16,13), squeeze=False)
             fig_in.patch.set_facecolor('white')
             data_index = 0
             for j in range(n_rows):
-                n_columns = min(self.__n_channels - 4 * (j), 4)
+                n_columns = int(min(self.__n_channels - 4 * (j), 4))
                 for i in range(n_columns):
                     self.__out_images.append(
                         ah_in[j][i].imshow(self.__input[data_index, :, self.__n_slices[0], :], origin='lower',
@@ -373,9 +373,8 @@ class PlotUtils():
 
             # loop over the channels to plot in each figure
             for j in range(self.__n_figures):
-
                 # get the number of columns for this figure
-                n_columns = min(self.__n_channels-4*(j), 4)
+                n_columns = int(min(self.__n_channels-4*(j), 4))
 
                 column_size = 5
 

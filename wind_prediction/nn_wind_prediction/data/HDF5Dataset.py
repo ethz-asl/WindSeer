@@ -2,7 +2,6 @@ from __future__ import print_function
 
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 
-from interpolation.splines import UCGrid, eval_linear
 import numpy as np
 import random
 import sys
@@ -10,6 +9,12 @@ import torch
 from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
+
+numpy_interpolation = False
+if sys.version_info[0] > 2:
+    from interpolation.splines import UCGrid, eval_linear
+    numpy_interpolation = True
+
 
 class HDF5Dataset(Dataset):
     '''
@@ -223,16 +228,16 @@ class HDF5Dataset(Dataset):
             weighting_channels = []
 
         # make sure that all requested channels are possible
-        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        self.default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
         for channel in input_channels:
-            if channel not in default_channels:
+            if channel not in self.default_channels:
                 raise ValueError('HDF5Dataset: Incorrect input_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel, default_channels))
+                                 'correct channels are {}'.format(channel, self.default_channels))
 
         for channel in label_channels:
-            if channel not in default_channels:
+            if channel not in self.default_channels:
                 raise ValueError('HDF5Dataset: Incorrect label_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel, default_channels))
+                                 'correct channels are {}'.format(channel, self.default_channels))
 
         self.__channels_to_load = []
         self.__input_indices = []
@@ -240,7 +245,7 @@ class HDF5Dataset(Dataset):
 
         # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
         index = 0
-        for channel in default_channels:
+        for channel in self.default_channels:
             if channel in input_channels or channel in label_channels or channel in weighting_channels:
                 self.__channels_to_load += [channel]
                 if channel in input_channels:
@@ -318,7 +323,8 @@ class HDF5Dataset(Dataset):
         # avoids printing a warning multiple times
         self.__augmentation_warning_printed = False
 
-        print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
+        if verbose:
+            print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
     def __getitem__(self, index):
         h5_file = h5py.File(self.__filename, 'r', swmr=True)
@@ -403,9 +409,13 @@ class HDF5Dataset(Dataset):
                             ds = torch.tensor([ds[1], ds[0], ds[2]])
 
                 elif self.__augmentation_mode == 1:
-                    # use the numpy implementation as it is more accurate and slightly faster
-                    data = self.__augmentation_mode2_numpy(data, self.__nx) # u_x: index 1, u_y: index 2
-                    #data = self.__augmentation_mode2_torch(data, self.__nx) # u_x: index 1, u_y: index 2
+                    if numpy_interpolation:
+                        # use the numpy implementation as it is more accurate and slightly faster
+                        # and python 3 is used
+                        data = self.__augmentation_mode2_numpy(data, self.__nx) # u_x: index 1, u_y: index 2
+                    else:
+                        # use the torch version for python 2
+                        data = self.__augmentation_mode2_torch(data, self.__nx) # u_x: index 1, u_y: index 2
 
                     # flip in x-direction
                     if (self.__rand.randint(0,1)):
