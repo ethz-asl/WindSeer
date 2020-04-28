@@ -892,20 +892,20 @@ class WindOptimiser(object):
                             wind_z[xi * 2 + yi],
                             self._optimisation_variables[xi * 2 + yi][-num_points:],
                             self.terrain.z_terr[valid_z], self._device)
-                        corner_winds[0, -(valid_z.sum()):, yi, xi] = interpolated_corners * cr[xi*2+yi] - \
+                        corner_winds[0, valid_z, yi, xi] = interpolated_corners * cr[xi*2+yi] - \
                                                      interpolated_corners * sr[xi*2+yi]
-                        corner_winds[1, -(valid_z.sum()):, yi, xi] = interpolated_corners * sr[xi*2+yi] + \
+                        corner_winds[1, valid_z, yi, xi] = interpolated_corners * sr[xi*2+yi] + \
                                                      interpolated_corners * cr[xi*2+yi]
 
         else:
-            valid_z = torch.from_numpy((self.terrain.z_terr > self.terrain.terrain_corners[0, 0]).astype(np.uint8))
+            valid_z = (self.terrain.z_terr > self.terrain.terrain_corners[0, 0])
             if wind_z[1] > wind_z[0]:
                 interpolated_corners = interpolate_wind_profile(
                     wind_z,
                     self._optimisation_variables[-num_points:],
                     self.terrain.z_terr[valid_z], self._device)
-                corner_winds[0, -(valid_z.sum()):, :] = interpolated_corners * cr - interpolated_corners * sr
-                corner_winds[1, -(valid_z.sum()):, :] = interpolated_corners * sr + interpolated_corners * cr
+                corner_winds[0, valid_z, :] = interpolated_corners * cr - interpolated_corners * sr
+                corner_winds[1, valid_z, :] = interpolated_corners * sr + interpolated_corners * cr
 
         return corner_winds
 
@@ -1352,16 +1352,19 @@ class WindOptimiser(object):
                 if self.flag.test_flight_data:
                     # get flight data
                     if 0 <= t < 4:
-                        cosmo_file = 'data/cosmo-1_ethz_fcst_2018112312.nc'
-                        terrain_tiff_file = 'data/riemenstalden_full.tif'
-                        flight_data_dir = 'data/riemenstalden/'
+                        cosmo_file = '/home/bogdan/Desktop/data/cosmo-1_ethz_fcst_2018112312.nc'
+                        terrain_tiff_file = '/home/bogdan/Desktop/data/riemenstalden_full.tif'
+                        flight_data_dir = '/home/bogdan/Desktop/data/riemenstalden/'
                     elif 4 <= t < 6:
-                        cosmo_file = 'data/cosmo-1_ethz_fcst_2018112309.nc'
-                        terrain_tiff_file = 'data/fluelen_full.tif'
-                        flight_data_dir = 'data/fluelen/'
+                        cosmo_file = '/home/bogdan/Desktop/data/cosmo-1_ethz_fcst_2018112309.nc'
+                        terrain_tiff_file = '/home/bogdan/Desktop/danciub/data/fluelen_full.tif'
+                        flight_data_dir = '/home/bogdan/Desktop/data/fluelen/'
                     elif 6 <= t < 7:
-                        terrain_tiff_file = 'data/tobelhof.tif'
-                        flight_data_dir = 'data/tobelhof/'
+                        terrain_tiff_file = '/home/bogdan/Desktop/data/tobelhof.tif'
+                        flight_data_dir = '/home/bogdan/Desktop/data/tobelhof/'
+                    elif 7 <= t < 9:
+                        terrain_tiff_file = '/home/bogdan/Desktop/data/hinwil.tif'
+                        flight_data_dir = '/home/bogdan/Desktop/data/hinwil/'
                     else:
                         print('Too many flight files in the config file!')
                         raise ValueError
@@ -1381,7 +1384,6 @@ class WindOptimiser(object):
                     index = self._flight_args.params['index']
                     flight_data = self.load_flight_data(index=index)
 
-            print('The scale is: ', self.scale)
             # sliding window variables (in seconds)
             window_time = self._window_splits_args.params['window_time']  # seconds
             response_time = self._window_splits_args.params['response_time']  # seconds
@@ -1679,20 +1681,25 @@ class WindOptimiser(object):
                         loss_dict['Optimized corners wind loss mse'].append(corners_loss_mse.item())
                         print(i, ' optimized corners loss is: ', corners_loss_mse.item())
                     if self.flag.test_flight_data:
-                        # interpolate prediction to scattered flight data locations corresponding to the labels
-                        FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
-                                                               wind_data_for_prediction=label_flight_data)
-                        interpolated_corners_output = FlightInterpolator.interpolate_flight_data_from_grid(corners_output)
-                        corners_loss_mae = self._loss_fn_mae(interpolated_corners_output.to(self._device),
-                                                             trajectory_labels.to(self._device))
-                        corners_loss_mse = self._loss_fn_mse(interpolated_corners_output.to(self._device),
-                                                             trajectory_labels.to(self._device))
-                        if self.flag.normalize_losses and not_zero_labels:
-                            corners_loss_mae /= zero_wind_loss_mae
-                            corners_loss_mse /= zero_wind_loss_mse
-                        loss_dict['Optimized corners wind loss mae'].append(corners_loss_mae.item())
-                        loss_dict['Optimized corners wind loss mse'].append(corners_loss_mse.item())
-                        print(i, ' Trajectory optimized corners loss is: ', corners_loss_mse.item())
+                        if len(self._cosmo_wind) > 1:
+                            # interpolate prediction to scattered flight data locations corresponding to the labels
+                            FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
+                                                                   wind_data_for_prediction=label_flight_data)
+                            interpolated_corners_output = FlightInterpolator.interpolate_flight_data_from_grid(corners_output)
+                            corners_loss_mae = self._loss_fn_mae(interpolated_corners_output.to(self._device),
+                                                                 trajectory_labels.to(self._device))
+                            corners_loss_mse = self._loss_fn_mse(interpolated_corners_output.to(self._device),
+                                                                 trajectory_labels.to(self._device))
+                            if self.flag.normalize_losses and not_zero_labels:
+                                corners_loss_mae /= zero_wind_loss_mae
+                                corners_loss_mse /= zero_wind_loss_mse
+                            loss_dict['Optimized corners wind loss mae'].append(corners_loss_mae.item())
+                            loss_dict['Optimized corners wind loss mse'].append(corners_loss_mse.item())
+                            print(i, ' Trajectory optimized corners loss is: ', corners_loss_mse.item())
+                        else:
+                            loss_dict['Optimized corners wind loss mae'].append(np.nan)
+                            loss_dict['Optimized corners wind loss mse'].append(np.nan)
+                            print(i, ' Trajectory optimized corners loss is: ', np.nan)
 
                 # --- Optimized corner polynomial prediction ---
                 if self.flag.use_optimized_corners_polynomial:

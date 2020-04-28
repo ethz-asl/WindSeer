@@ -5,7 +5,7 @@ test:
 
 # CFD data
 cfd:
-    testset_name: 'data/wind_test/test_planning.hdf5'
+    testset_name: '/media/bogdan/Elements/MyLaptop/eth master/Master thesis/test.hdf5'
     # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
     input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
     label_channels: ['ux', 'uy', 'uz']  # velocities
@@ -15,18 +15,19 @@ cfd:
 
 # COSMO data
 cosmo:
-    file: 'data/cosmo-1_ethz_fcst_2018112312.nc'        #09, 12
+    file: '/home/bogdan/Desktop/data/cosmo-1_ethz_fcst_2018112309.nc'        #09, 12
     time: 'auto'
-    terrain_file: 'data/cosmo-1_ethz_ana_const.nc'
-    terrain_tiff: 'data/riemenstalden_full.tif'        # riemenstalden_full, fluelen_full, hinwil, tobelhof
+    terrain_file: '/home/bogdan/Desktop/data/cosmo-1_ethz_ana_const.nc'
+    terrain_tiff: '/home/bogdan/Desktop/data/fluelen_full.tif'        # riemenstalden_full, fluelen_full, hinwil, tobelhof
     prediction_prefix: ''  # rotated_
 
 # flight data
 flight:
-    flight_data_dir: 'data/riemenstalden/'
+    flight_data_dir: '/cluster/scratch/danciub/data/fluelen/'
     files: ['20181123_flight03_fpr_wind.hdf5', '20181123_flight04_fpr_wind.hdf5', '20181123_flight05_fpr_wind.hdf5', '20181123_flight06_fpr_wind.hdf5',
     '20181123_flight01_fpr_wind.hdf5', '20181123_flight02_fpr_wind.hdf5',
-    '20190411_flight01_fpr_wind.hdf5']
+    '20190411_flight01_fpr_wind.hdf5',
+    '20190719_flight01_fpr_wind.hdf5', '20190719_flight02_fpr_wind.hdf5']
 
     # ['20181123_flight03_fpr_wind.hdf5', '20181123_flight04_fpr_wind.hdf5', '20181123_flight05_fpr_wind.hdf5', '20181123_flight06_fpr_wind.hdf5',
     #  '20181123_flight03_fpr_wind_hn.hdf5', '20181123_flight04_fpr_wind_hn.hdf5', '20181123_flight05_fpr_wind_hn.hdf5', '20181123_flight06_fpr_wind_hn.hdf5']
@@ -67,9 +68,9 @@ flight:
 
     # ['20190411_flight01_fpr_wind.hdf5',
     #  '20190411_flight01_fpr_wind_hn.hdf5']
-    index: 0
+    index: 4
     #
-    filtered_dir: 'data/'
+    filtered_dir: '/home/bogdan/Desktop/data/'
     use_ekf_wind: False
 
 # Wind measurements parameters
@@ -95,32 +96,32 @@ wind:
     }
     # Real flight wind data
     flight: {
-        predict_flight: False,
+        predict_flight: True,
         interpolation_method: 'bin',   #'bin', 'idw', 'krigging', 'gpr'
     }
 
 # Noise parameters
 noise:
-  add_turbulence: False
-  add_gaussian_noise: False
+  add_turbulence: True
+  add_gaussian_noise: True
 
 # Window split parameters
 window_split:
   use_window_split: True
   #
-  batch_test: False
-  incremental_input_prediction: True
-  sliding_input_prediction: False
+  batch_test: True
+  incremental_input_prediction: False
+  sliding_input_prediction: True
   # normalize losses with zero wind loss
   normalize_losses: True
   #
   use_average_wind: True
-  use_optimized_corners: False
-  use_optimized_corners_polynomial: False
-  use_gpr_prediction: False
+  use_optimized_corners: True
+  use_optimized_corners_polynomial: True
+  use_gpr_prediction: True
   use_krigging_prediction: False
   #
-  rescale_prediction: False
+  rescale_prediction: True
   #
   window_time: 60 # seconds
   response_time: 120 # seconds
@@ -129,7 +130,7 @@ window_split:
 # Corner optimisation parameters
 corner_optimisation:
     optimise_corners_individually: True
-    num_of_optimisation_steps: 20
+    num_of_optimisation_steps: 15
     # Rotation
     rotation: 0.0
     # Scale
@@ -140,12 +141,12 @@ corner_optimisation:
 
 # NN models parameters
 model:
-  location: 'data/trained_models/'
-  name: ['test_model_65', 'test_model_63', 'ednn3d_best']
-  version: ['latest', 'latest', 'latest']
+  location: '/home/bogdan/Desktop/data/trained_models/'
+  name: ['test_model_63', 'test_model_65', 'test_model_67', 'test_model_68', 'test_model_75', 'test_model_77', 'ednn3d_best']
+  version: ['latest', 'latest', 'latest', 'latest', 'latest', 'latest', 'latest']
   boolean_terrain: False
   loss: 'MSE'  # L1, MSE, SoftMargin
   hybrid_model: {
-      use_hybrid_model: [False, False, False],
-      sequence_length: 10
+      use_hybrid_model: [False, False, False, True, True, True, False],
+      sequence_length: 5
   }
