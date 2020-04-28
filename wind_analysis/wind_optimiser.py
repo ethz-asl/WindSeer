@@ -1381,6 +1381,7 @@ class WindOptimiser(object):
                     index = self._flight_args.params['index']
                     flight_data = self.load_flight_data(index=index)
 
+            print('The scale is: ', self.scale)
             # sliding window variables (in seconds)
             window_time = self._window_splits_args.params['window_time']  # seconds
             response_time = self._window_splits_args.params['response_time']  # seconds
@@ -1523,8 +1524,10 @@ class WindOptimiser(object):
                 # Create network input
                 # sequential input
                 if any(self.flag.use_hybrid_model):
-                    # sequence_length = self._model_args.params['hybrid_model']['sequence_length']
-                    sequence_length = i+1
+                    if self.flag.sliding_input_prediction:
+                        sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                    else:
+                        sequence_length = i+1
                     trajectory_length = int((input_flight_data['x'].size / sequence_length) + 1)
                     trajectory_input = []
                     for k in range(sequence_length):

@@ -29,7 +29,7 @@ optimise_corners = False
 predict_wind = True
 
 # save and load variables from file
-save_file = False
+save_file = True
 load_file = False
 filename = 'optimisation_output.pickle'
 
