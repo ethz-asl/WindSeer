@@ -68,6 +68,8 @@ if predict_wind:
         with open(filename, 'rb') as f:
             losses_dict = pickle.load(f)
 
+    print('Job done. No errors!')
+
     # Analyse optimised wind
     wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs, losses_dict)
     # Plot graphs

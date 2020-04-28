@@ -1431,6 +1431,8 @@ class WindOptimiser(object):
             loss_dict.update({'File name': file_name})
             loss_dict.update({'Number of windows': max_num_windows})
             # nn losses
+            loss_dict.update({'Zero wind loss mae': []})
+            loss_dict.update({'Zero wind loss mse': []})
             for m in range(len(self._model_args.params['name']) - 1):
                 loss_dict.update({'NN wind loss mae ' + str(m): []})
                 loss_dict.update({'NN wind loss mse ' + str(m): []})
@@ -1489,8 +1491,9 @@ class WindOptimiser(object):
                                                            self.labels.to(self._device))
                     # check that error is not zero to avoid division by 0 when normalizing the other losses
                     not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
-                    # loss_dict.update({'zero wind loss mae': zero_wind_loss_mae.item()})
-                    # loss_dict.update({'zero wind loss mse': zero_wind_loss_mse.item()})
+                    loss_dict.update({'Zero wind loss mae': zero_wind_loss_mae.item()})
+                    loss_dict.update({'Zero wind loss mse': zero_wind_loss_mse.item()})
+                    print(i, ' Zero wind loss is: ', zero_wind_loss_mse.item())
                 if self.flag.test_flight_data:
                     interpolated_zero_wind_output = torch.zeros_like(trajectory_labels)
                     zero_wind_loss_mae = self._loss_fn_mae(interpolated_zero_wind_output.to(self._device),
@@ -1499,7 +1502,10 @@ class WindOptimiser(object):
                                                            trajectory_labels.to(self._device))
                     # check that error is not zero to avoid division by 0 when normalizing the other losses
                     not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
-                    # loss_dict.update({'trajectory zero wind loss': zero_wind_loss_mse})
+                    loss_dict.update({'Trajectory zero wind loss': zero_wind_loss_mae})
+                    loss_dict.update({'Trajectory zero wind loss': zero_wind_loss_mse})
+                    print(i, ' Zero wind loss is: ', zero_wind_loss_mse.item())
+
 
                 # --- Networks prediction ---
                 # scale real flight data if requested
@@ -1517,8 +1523,8 @@ class WindOptimiser(object):
                 # Create network input
                 # sequential input
                 if any(self.flag.use_hybrid_model):
-                    sequence_length = self._model_args.params['hybrid_model']['sequence_length']
-                    #sequence_length = i+1
+                    # sequence_length = self._model_args.params['hybrid_model']['sequence_length']
+                    sequence_length = i+1
                     trajectory_length = int((input_flight_data['x'].size / sequence_length) + 1)
                     trajectory_input = []
                     for k in range(sequence_length):

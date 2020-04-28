@@ -29,7 +29,7 @@ class WindOptimiserOutput:
         self._masked_input = self.get_masked_input()
         # self._grads = grads
         # self._names = self.get_names()
-        self._save_output = True
+        self._save_output = False
         self._add_sparse_mask_row = True
         self._base_path = "analysis_output/"
         self._current_time = str(datetime.datetime.now().time())
@@ -204,6 +204,30 @@ class WindOptimiserOutput:
                 if o == self._optimisers[-1]:
                     print("Best optimization method: {0}".format(
                         self._names[self._best_method_index]))
+
+    def plot_vertical_wind_profile(self):
+        fig, ax = plt.subplots()
+
+        if ax is None or fig is None:
+            fig, ax = plt.subplots()
+        vv = np.sqrt((self.wind_opt._base_cosmo_corners[0, :, 0, 0] ** 2 + self.wind_opt._base_cosmo_corners[1, :, 0, 0] ** 2).detach().cpu().numpy())
+        ht, = ax.plot(vv[:], self.wind_opt.terrain.z_terr[:])
+        v3 = np.sqrt(self.wind_opt._flight_data['wn'] ** 2 + self.wind_opt._flight_data['we'] ** 2)
+        alt = self.wind_opt._flight_data['alt']
+        t = (self.wind_opt._flight_data['time_microsec']-self.wind_opt._flight_data['time_microsec'][0])*1e-6
+        h2 = ax.scatter(v3, alt, c=t, s=10)
+        ax.grid(b=True, which='both')
+        ax.set_xlabel('Wind speed (m/s)')
+        ax.set_ylabel('Alt, m')
+        ax.set_ylim(np.floor(alt.min() / 100) * 100, np.ceil(alt.max() / 100) * 100)
+        hl = ax.legend([ht, h2], ['COSMO profile', 'UAV data'])
+        hc = fig.colorbar(h2, ax=ax)
+        hc.set_label('Mission time (s)')
+
+        if self._save_output:
+            self.pp.savefig(fig)
+        else:
+            plt.show()
 
     def plot_fft_analysis(self):
         fig, ax = plt.subplots()
@@ -526,12 +550,13 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
+        # self.plot_vertical_wind_profile()
         # self.plot_fft_analysis()
-        # self.plot_trajectory_wind_vectors()
-        # self.plot_wind_field()
+        self.plot_trajectory_wind_vectors()
+        self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        self.plot_losses()
-        # self.plot_best_wind_estimate()
+        # self.plot_losses()
+        self.plot_best_wind_estimate()
 
         if self._save_output:
             self.close()
