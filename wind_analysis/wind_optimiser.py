@@ -1449,8 +1449,8 @@ class WindOptimiser(object):
                 loss_dict.update({'Optimized corners polynomial wind loss mae': []})
                 loss_dict.update({'Optimized corners polynomial wind loss mse': []})
             if self.flag.use_gpr_prediction:
-                loss_dict.update({'GPR loss mae': []})
-                loss_dict.update({'GPR loss mse': []})
+                loss_dict.update({'GPR wind loss mae': []})
+                loss_dict.update({'GPR wind loss mse': []})
 
             print('')
             print('Test set number: ', t)
