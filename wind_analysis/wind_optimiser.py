@@ -1505,8 +1505,8 @@ class WindOptimiser(object):
                                                            trajectory_labels.to(self._device))
                     # check that error is not zero to avoid division by 0 when normalizing the other losses
                     not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
-                    loss_dict.update({'Trajectory zero wind loss': zero_wind_loss_mae})
-                    loss_dict.update({'Trajectory zero wind loss': zero_wind_loss_mse})
+                    loss_dict.update({'Zero wind loss': zero_wind_loss_mae.item()})
+                    loss_dict.update({'Zero wind loss': zero_wind_loss_mse.item()})
                     print(i, ' Zero wind loss is: ', zero_wind_loss_mse.item())
 
 
@@ -1701,6 +1701,30 @@ class WindOptimiser(object):
                             loss_dict['Optimized corners wind loss mse'].append(np.nan)
                             print(i, ' Trajectory optimized corners loss is: ', np.nan)
 
+                # --- Interpolation (Krigging) prediction ---
+                if self.flag.use_krigging_prediction:
+                    # method too slow and should not be used
+                    FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
+                                                           wind_data_for_prediction=label_flight_data)
+                    _, _, interpolated_krigging_output = FlightInterpolator.interpolate_flight_data_krigging()
+
+                # --- Interpolation (Gaussian Process Regression) prediction ---
+                if self.flag.use_gpr_prediction:
+                    FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
+                                                           wind_data_for_prediction=label_flight_data)
+                    _, _, interpolated_gpr_output, gpr_output = FlightInterpolator.interpolate_flight_data_gpr()
+                    if self.flag.test_flight_data:
+                        gpr_loss_mae = self._loss_fn_mae(interpolated_gpr_output.to(self._device),
+                                                     trajectory_labels.to(self._device))
+                        gpr_loss_mse = self._loss_fn_mse(interpolated_gpr_output.to(self._device),
+                                                     trajectory_labels.to(self._device))
+                        if self.flag.normalize_losses and not_zero_labels:
+                            gpr_loss_mae /= zero_wind_loss_mae
+                            gpr_loss_mse /= zero_wind_loss_mse
+                        loss_dict['GPR wind loss mae'].append(gpr_loss_mae.item())
+                        loss_dict['GPR wind loss mse'].append(gpr_loss_mse.item())
+                        print(i, ' Trajectoru GPR loss is: ', gpr_loss_mse.item())
+
                 # --- Optimized corner polynomial prediction ---
                 if self.flag.use_optimized_corners_polynomial:
                     optimiser = OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1})
@@ -1726,8 +1750,9 @@ class WindOptimiser(object):
                     if self.flag.test_flight_data:
                         # interpolate prediction to scattered flight data locations corresponding to the labels
                         FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain,
-                                                               wind_data_for_prediction=label_flight_data)
-                        interpolated_corners_output = FlightInterpolator.interpolate_flight_data_from_grid(corners_output)
+                                                                 wind_data_for_prediction=label_flight_data)
+                        interpolated_corners_output = FlightInterpolator.interpolate_flight_data_from_grid(
+                            corners_output)
                         corners_loss_mae = self._loss_fn_mae(interpolated_corners_output.to(self._device),
                                                              trajectory_labels.to(self._device))
                         corners_loss_mse = self._loss_fn_mse(interpolated_corners_output.to(self._device),
@@ -1738,30 +1763,6 @@ class WindOptimiser(object):
                         loss_dict['Optimized corners polynomial wind loss mae'].append(corners_loss_mae.item())
                         loss_dict['Optimized corners polynomial wind loss mse'].append(corners_loss_mse.item())
                         print(i, ' Trajectory optimized polynomial corners loss is: ', corners_loss_mse.item())
-
-                # --- Interpolation (Krigging) prediction ---
-                if self.flag.use_krigging_prediction:
-                    # method too slow and should not be used
-                    FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
-                                                           wind_data_for_prediction=label_flight_data)
-                    _, _, interpolated_krigging_output = FlightInterpolator.interpolate_flight_data_krigging()
-
-                # --- Interpolation (Gaussian Process Regression) prediction ---
-                if self.flag.use_gpr_prediction:
-                    FlightInterpolator = FlightInterpolation(input_flight_data, terrain=self.terrain, predict=True,
-                                                           wind_data_for_prediction=label_flight_data)
-                    _, _, interpolated_gpr_output, gpr_output = FlightInterpolator.interpolate_flight_data_gpr()
-                    if self.flag.test_flight_data:
-                        gpr_loss_mae = self._loss_fn_mae(interpolated_gpr_output.to(self._device),
-                                                     trajectory_labels.to(self._device))
-                        gpr_loss_mse = self._loss_fn_mse(interpolated_gpr_output.to(self._device),
-                                                     trajectory_labels.to(self._device))
-                        if self.flag.normalize_losses and not_zero_labels:
-                            gpr_loss_mae /= zero_wind_loss_mae
-                            gpr_loss_mse /= zero_wind_loss_mse
-                        loss_dict['GPR wind loss mae'].append(gpr_loss_mae.item())
-                        loss_dict['GPR wind loss mse'].append(gpr_loss_mse.item())
-                        print(i, ' Trajectoru GPR loss is: ', gpr_loss_mse.item())
 
                 # outputs
                 # if i == 0:

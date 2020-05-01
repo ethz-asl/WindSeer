@@ -8,6 +8,8 @@ from analysis_utils.plotting_analysis import plot_prediction_observations, plot_
 import pandas as pd
 import datetime
 import torch
+from mayavi import mlab
+from scipy import signal
 
 
 def angle_wrap(angles):
@@ -204,6 +206,63 @@ class WindOptimiserOutput:
                 if o == self._optimisers[-1]:
                     print("Best optimization method: {0}".format(
                         self._names[self._best_method_index]))
+
+    def plot_high_res_version(self):
+        # fig = plt.figure()
+        # ax = fig.gca(projection='3d')
+        mlab.options.backend = 'envisage'
+        mlab.figure(size=(3840, 2160), bgcolor=(1, 1, 1))
+
+        # terrain
+        h_grid = self.wind_opt.terrain.z_terr[1] - self.wind_opt.terrain.z_terr[0]
+        # h_network_terrain = np.floor((self.wind_opt.terrain.h_terr - self.wind_opt.terrain.z_terr[0])/h_grid)
+        h_network_terrain = (self.wind_opt.terrain.h_terr - self.wind_opt.terrain.z_terr[0]) / h_grid
+        ny, nx = h_network_terrain.shape
+        # size = 1
+        # output_shape = (ny*size, nx*size)
+        # h_network_terrain = skimage.transform.resize(h_network_terrain, output_shape)
+        ny, nx = h_network_terrain.shape
+        x = np.arange(0, nx, 1)
+        y = np.arange(0, ny, 1)
+        # X, Y = np.meshgrid(x, y)
+        # smooth out terrain
+        # h_network_terrain = scipy.ndimage.filters.gaussian_filter(h_network_terrain, sigma=1)
+
+        # mlab plot
+        terrain_surf = mlab.surf(x, y, h_network_terrain.transpose(), colormap='Greys')
+        # fill area beneath surface plot
+        # outline
+        cat_extent = (0, 64, 0, 64, 0, 64)
+        mlab.outline(terrain_surf, color=(.7, .7, .7), extent=cat_extent)
+
+        # # wind field
+        wind_prediction = self._wind_prediction.detach().cpu()
+        #rotation
+        # wind_prediction[0, :] = wind_prediction[0, :] * np.sin(np.pi/3) - wind_prediction[1, :] * np.cos(np.pi/3)
+        # wind_prediction[1, :] = wind_prediction[0, :] * np.sin(np.pi /3) + wind_prediction[0, :] * np.cos(np.pi /3)
+        channels, nz, ny, nx = wind_prediction.shape
+
+        # skip values
+        wskip = 63
+        xf_skip = np.arange(0, nx, 1)[::wskip]
+        yf_skip = np.arange(0, ny, 1)[::wskip]
+        zf_skip = np.arange(0, nz, 1)
+        xv_skip, yv_skip, zv_skip = np.meshgrid(xf_skip, yf_skip, zf_skip)
+        # mlab.quiver3d(xv_skip, yv_skip, zv_skip, wind_prediction[0, zv_skip, yv_skip, xv_skip],
+                  # wind_prediction[1, zv_skip, yv_skip, xv_skip], wind_prediction[2, zv_skip, yv_skip, xv_skip], line_width=0.1)
+
+        # voxel rendering
+        wind_prediction_render = np.linalg.norm(wind_prediction.detach().cpu().numpy(), axis=0).transpose()
+        min_v = wind_prediction_render.min()
+        max_v = wind_prediction_render.max()
+        # mlab.pipeline.volume(mlab.pipeline.scalar_field(wind_prediction_render), vmin=min_v + 0.35 * (max_v - min_v),
+        #                      vmax=min_v + 0.9 * (max_v - min_v))
+        mlab.view(220, 80, 200)
+
+        if self._save_output:
+            mlab.savefig(self._base_path + self._current_time + '.png')
+        else:
+            mlab.show()
 
     def plot_vertical_wind_profile(self):
         fig, ax = plt.subplots()
@@ -558,12 +617,13 @@ class WindOptimiserOutput:
         # self.plot_opt_convergence()
         # self.plot_final_values()
         # self.plot_wind_over_time()
+        # self.plot_high_res_version()
         # self.plot_vertical_wind_profile()
         # self.plot_fft_analysis()
         # self.plot_trajectory_wind_vectors()
-        self.plot_wind_field()
+        # self.plot_wind_field()
         # self.plot_wind_vectors_angles()
-        # self.plot_losses()
+        self.plot_losses()
         # self.plot_best_wind_estimate()
 
         if self._save_output:
