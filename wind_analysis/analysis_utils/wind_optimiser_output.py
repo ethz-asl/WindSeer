@@ -506,7 +506,7 @@ class WindOptimiserOutput:
             plt.show()
 
     def plot_losses(self):
-        fig, ax = plt.subplots()
+        fig1, ax1 = plt.subplots()
         fig2, ax2 = plt.subplots()
         fig3, ax3 = plt.subplots()
 
@@ -515,7 +515,7 @@ class WindOptimiserOutput:
             samples_number_of_windows.append(self._losses_dict[i]['Number of windows'])
 
         # create matrix of losses
-        losses_start_position = list(self._losses_dict[0]).index('Zero wind loss mae') + 6
+        losses_start_position = list(self._losses_dict[0]).index('Zero wind loss mae') + 2
         num_of_losses = int((len(self._losses_dict[0])-losses_start_position)/2)
         num_of_samples = len(self._losses_dict)
         num_of_timesteps = max(samples_number_of_windows)
@@ -527,69 +527,79 @@ class WindOptimiserOutput:
         for i in range(num_of_losses):
             for j in range(num_of_samples):
                 for k in range(len(self._losses_dict[j]['Average wind loss mae'])):
-                    mae_matrix[i][j][k] = list(self._losses_dict[j].values())[losses_start_position-4 + i*2][k]
-                    mse_matrix[i][j][k] = list(self._losses_dict[j].values())[losses_start_position-4 + i*2+1][k]
+                    mae_matrix[i][j][k] = list(self._losses_dict[j].values())[losses_start_position + i*2][k]
+                    mse_matrix[i][j][k] = list(self._losses_dict[j].values())[losses_start_position + i*2+1][k]
+
+        # delete specific losses if necessary
+        # mae_matrix = mae_matrix[:-2, :]
+        # mse_matrix = mse_matrix[:-2, :]
+
+        # select specific tests from specific regions
+        # mae_matrix = mae_matrix[:, 4:6]
+        # mse_matrix = mse_matrix[:, 4:6]
 
         # --- Plots ---
         colors = ["#f15a24", "#feb306", "#0071bc", "#03a99d", "#8b5ca4", "#f15a24", "#feb306", "#0071bc", "#03a99d",
                   "#8b5ca4"]
-        # mae_matrix = np.expand_dims(mae_matrix[:, 7], axis=2)
-        # mse_matrix = np.expand_dims(mse_matrix[:, 7], axis=2)
 
-        # --- Average across time across losses ---
-        mean_across_time_mae = np.nanmean(mae_matrix, axis=1)
-        mean_across_time_mse = np.nanmean(mse_matrix, axis=1)
-        var_across_time_mae = np.nanvar(mae_matrix, axis=1)
-        var_across_time_mse = np.nanvar(mse_matrix, axis=1)
-        std_across_time_mae = np.sqrt(var_across_time_mae)
-        std_across_time_mse = np.sqrt(var_across_time_mse)
-        time = [60*i for i in range(mean_across_time_mae.shape[1])]
-        for i in range(mean_across_time_mae.shape[0]):
-            ax.plot(time, mean_across_time_mae[i, :], color=colors[i])
-            ax.fill_between(time, mean_across_time_mae[i, :] + std_across_time_mae[i, :], mean_across_time_mae[i, :] - std_across_time_mae[i, :], facecolor=colors[i], alpha=0.5)
+        # --- Average across samples ---
+        mean_across_smaples_mae = np.nanmean(mae_matrix, axis=1)
+        mean_across_smaples_mse = np.nanmean(mse_matrix, axis=1)
+        #
+        var_across_smaples_mae = np.nanvar(mae_matrix, axis=1)
+        var_across_smaples_mse = np.nanvar(mse_matrix, axis=1)
+        #
+        std_across_time_mae = np.sqrt(var_across_smaples_mae)
+        std_across_time_mse = np.sqrt(var_across_smaples_mse)
+        #
+        time = [60*i for i in range(mean_across_smaples_mae.shape[1])]
+        for i in range(mean_across_smaples_mae.shape[0]):
+            ax1.plot(time, mean_across_smaples_mae[i, :], color=colors[i])
+            # ax1.fill_between(time, mean_across_smaples_mae[i, :]
+            #                  + std_across_time_mae[i, :], mean_across_smaples_mae[i, :]
+            #                  - std_across_time_mae[i, :], facecolor=colors[i], alpha=0.5)
+
             # ax.boxplot(mean_across_time_mae[:, i], showmeans=True)
             # ax.errorbar(time, mean_across_time_mae[:, i], std_across_time_mae[:, i])
-        ax.set_xlabel('Time')
-        ax.set_ylabel('MAE')
-        ax.legend(('AE', 'VAE', 'Average wind', 'Optimized corners spline'))
+        ax1.set_xlabel('Time')
+        ax1.set_ylabel('MAE')
+        # ax.legend(('AE', 'VAE', 'Average wind', 'Optimized corners spline'))
 
-        # for i in range(mean_across_time_mse.shape[1]):
-        #     ax2.plot(time, mean_across_time_mse[:, i])
-        # ax2.set_xlabel('Time')
-        # ax2.set_ylabel('MSE')
-        # ax2.legend(('AE', 'VAE', 'Average wind', 'Optimized corners spline'))
+        # ------- Average across samples and across time ------
 
-        # --- Average across samples across losses ---
-        # for i in range(mae_matrix.shape[1]):
-        #     mae_matrix_sample = mae_matrix[:, i]
-        #     mean_sample_mae = np.nanmean(mae_matrix, axis=0)
-        #     print('Mean sample ' + str(i) + ' mae', mean_sample_mae)
-        mean_across_samples_mae = np.nanmean(mae_matrix, axis=(1, 2))
-        print('Mean across samples mae', mean_across_samples_mae)
-        mean_across_samples_mse = np.nanmean(mse_matrix, axis=(1, 2))
-        print('Mean across samples mse', mean_across_samples_mse)
-        reshaped_mae = mae_matrix.swapaxes(0, 1).reshape(-1, mae_matrix.shape[0])
-        # filtered_reshaped_mae = reshaped_mae[~np.isnan(reshaped_mae)]
-        # filter nans
+        print('')
+        mean_across_samples_time_mae = np.nanmean(mae_matrix, axis=(1, 2))
+        print('Mean across samples and time mae', mean_across_samples_time_mae)
+        mean_across_samples_time_mse = np.nanmean(mse_matrix, axis=(1, 2))
+        print('Mean across samples and time mse', mean_across_samples_time_mse)
+
+        # filtered nans
+        reshaped_mae = mae_matrix.swapaxes(0, 2).reshape(-1, mae_matrix.shape[0])
         mask = ~np.isnan(reshaped_mae)
         filtered_data = [d[m] for d, m in zip(reshaped_mae.T, mask.T)]
-        ax2.boxplot(filtered_data, positions=np.arange(mae_matrix.shape[0])+1, showmeans=True)
+
+        # plots
+        ax2.boxplot(filtered_data, positions=np.arange(mae_matrix.shape[0]) + 1, showmeans=True)
         ax3.violinplot(filtered_data, positions=np.arange(mae_matrix.shape[0]) + 1, showmeans=True)
         ax2.set_xticks(np.arange(mae_matrix.shape[0]) + 1)
-        ax2.set_xticklabels(['AE', 'VAE', 'Average wind', 'Optimized corners spline'])
+        # ax2.set_xticklabels(['AE', 'VAE', 'Average wind', 'Optimized corners spline'])
         ax3.set_xticks(np.arange(mae_matrix.shape[0]) + 1)
-        ax3.set_xticklabels(['AE', 'VAE', 'Average wind', 'Optimized corners spline'])
-        # data_to_plot = np.random.rand(100, 5)
-        # positions = np.arange(5) + 1
-        # # matplotlib > 1.4
-        # ax2.violinplot(data_to_plot, positions=positions, showmeans=True)
+        # ax3.set_xticklabels(['AE', 'VAE', 'Average wind', 'Optimized corners spline'])
+
+        # ------ Average across time sample wise ------
+        print('')
+        for i in range(mae_matrix.shape[1]):
+            mean_across_time_mae_samplewise = np.nanmean(mae_matrix[:, i], axis=1)
+            print('Mean across samples and time mae for sample ' + str(i) + ': ', mean_across_time_mae_samplewise)
+            mean_across_time_mse_samplewise = np.nanmean(mse_matrix[:, i], axis=1)
+            print('Mean across samples and time mse for sample ' + str(i) + ': ', mean_across_time_mse_samplewise)
 
         # make image full screen
-        fig_manager = plt.get_current_fig_manager()
-        fig_manager.window.maximize()
+        # fig_manager = plt.get_current_fig_manager()
+        # fig_manager.window.maximize()
 
         if self._save_output:
-            self.pp.savefig(fig)
+            self.pp.savefig(fig1)
             self.pp.savefig(fig2)
             self.pp.savefig(fig3)
         else:

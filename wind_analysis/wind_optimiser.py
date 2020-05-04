@@ -1047,7 +1047,7 @@ class WindOptimiser(object):
                 output_batch = values[step_size+window_size:]
             elif self.flag.sliding_input_prediction and not self.flag.incremental_input_prediction:
                 input_batch = values[step_size:step_size+window_size]
-                output_batch = values[step_size+window_size:step_size+window_size+response_size]
+                output_batch = values[step_size+window_size:]
             input_flight.update({keys: input_batch})
             output_flight.update({keys: output_batch})
 
@@ -1352,19 +1352,19 @@ class WindOptimiser(object):
                 if self.flag.test_flight_data:
                     # get flight data
                     if 0 <= t < 4:
-                        cosmo_file = '/home/bogdan/Desktop/data/cosmo-1_ethz_fcst_2018112312.nc'
-                        terrain_tiff_file = '/home/bogdan/Desktop/data/riemenstalden_full.tif'
-                        flight_data_dir = '/home/bogdan/Desktop/data/riemenstalden/'
+                        cosmo_file = 'data/cosmo-1_ethz_fcst_2018112312.nc'
+                        terrain_tiff_file = 'data/riemenstalden_full.tif'
+                        flight_data_dir = 'data/riemenstalden/'
                     elif 4 <= t < 6:
-                        cosmo_file = '/home/bogdan/Desktop/data/cosmo-1_ethz_fcst_2018112309.nc'
-                        terrain_tiff_file = '/home/bogdan/Desktop/danciub/data/fluelen_full.tif'
-                        flight_data_dir = '/home/bogdan/Desktop/data/fluelen/'
+                        cosmo_file = 'data/cosmo-1_ethz_fcst_2018112309.nc'
+                        terrain_tiff_file = 'data/fluelen_full.tif'
+                        flight_data_dir = 'data/fluelen/'
                     elif 6 <= t < 7:
-                        terrain_tiff_file = '/home/bogdan/Desktop/data/tobelhof.tif'
-                        flight_data_dir = '/home/bogdan/Desktop/data/tobelhof/'
-                    elif 7 <= t < 9:
-                        terrain_tiff_file = '/home/bogdan/Desktop/data/hinwil.tif'
-                        flight_data_dir = '/home/bogdan/Desktop/data/hinwil/'
+                        terrain_tiff_file = 'data/tobelhof.tif'
+                        flight_data_dir = 'data/tobelhof/'
+                    elif 7 <= t < 12:
+                        terrain_tiff_file = 'data/hinwil.tif'
+                        flight_data_dir = 'data/hinwil/'
                     else:
                         print('Too many flight files in the config file!')
                         raise ValueError
@@ -1494,8 +1494,8 @@ class WindOptimiser(object):
                                                            self.labels.to(self._device))
                     # check that error is not zero to avoid division by 0 when normalizing the other losses
                     not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
-                    loss_dict.update({'Zero wind loss mae': zero_wind_loss_mae.item()})
-                    loss_dict.update({'Zero wind loss mse': zero_wind_loss_mse.item()})
+                    loss_dict['Zero wind loss mae'].append(zero_wind_loss_mae.item())
+                    loss_dict['Zero wind loss mse'].append(zero_wind_loss_mse.item())
                     print(i, ' Zero wind loss is: ', zero_wind_loss_mse.item())
                 if self.flag.test_flight_data:
                     interpolated_zero_wind_output = torch.zeros_like(trajectory_labels)
@@ -1505,10 +1505,9 @@ class WindOptimiser(object):
                                                            trajectory_labels.to(self._device))
                     # check that error is not zero to avoid division by 0 when normalizing the other losses
                     not_zero_labels = not(zero_wind_loss_mae == 0 and zero_wind_loss_mse == 0)
-                    loss_dict.update({'Zero wind loss': zero_wind_loss_mae.item()})
-                    loss_dict.update({'Zero wind loss': zero_wind_loss_mse.item()})
+                    loss_dict['Zero wind loss mae'].append(zero_wind_loss_mae.item())
+                    loss_dict['Zero wind loss mse'].append(zero_wind_loss_mse.item())
                     print(i, ' Zero wind loss is: ', zero_wind_loss_mse.item())
-
 
                 # --- Networks prediction ---
                 # scale real flight data if requested
