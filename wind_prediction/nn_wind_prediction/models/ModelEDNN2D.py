@@ -240,6 +240,8 @@ class ModelEDNN2D(nn.Module):
         self.apply(init_weights)
 
     def forward(self, x):
+        output = {}
+
         if self.__use_terrain_mask:
             # store the terrain data
             is_wind = x[:,0, :].unsqueeze(1).clone()
@@ -260,6 +262,9 @@ class ModelEDNN2D(nn.Module):
             shape = x.size()
             x = x.view(-1, self.num_flat_features(x))
             x = self.__activation(self.__fc1(x))
+
+            output["encoding"] = x
+
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
 
@@ -296,7 +301,9 @@ class ModelEDNN2D(nn.Module):
         if self.__use_terrain_mask:
             x = is_wind.repeat(1, self.__num_outputs, 1, 1) * x
 
-        return {'pred': x}
+        output["pred"] = x
+
+        return output
 
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension

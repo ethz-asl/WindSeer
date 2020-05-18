@@ -424,9 +424,13 @@ class ModelEDNN3D(nn.Module):
                 else:
                     x = x_mean
 
+            output["encoding"] = x
+
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
         else:
+            output["encoding"] = x.view(-1, self.num_flat_features(x))
+
             x = self.__activation(self.__c1(self.__pad_conv(x)))
             x = self.__activation(self.__c2(self.__pad_conv(x)))
 
