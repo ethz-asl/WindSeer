@@ -263,7 +263,7 @@ class ModelEDNN2D(nn.Module):
             x = x.view(-1, self.num_flat_features(x))
             x = self.__activation(self.__fc1(x))
 
-            output["encoding"] = x
+            output["encoding"] = x.clone()
 
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
