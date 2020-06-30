@@ -73,9 +73,10 @@ class HDF5Dataset(Dataset):
             nz:
                 Number of grid points in z-direction of the output, default 64
             input_mode:
-                Indicates how the input is constructed. The following modes are currently implemented:
+                Indicates how the input is constructed. The following modes are currently implemented (default 0):
                     0: The inflow condition is copied over the full domain
-                    1: The vertical edges are interpolated over the full domain, default 0
+                    1: The vertical edges are interpolated over the full domain
+                    2: The inputs have the same values as the labels (channel wise)
             augmentation:
                 If true the data is augmented according to the mode and augmentation_kwargs. The terrain and the velocities
                 must be requested to use this mode for now
@@ -449,6 +450,9 @@ class HDF5Dataset(Dataset):
 
                 # interpolating the vertical edges
                 input = torch.cat((input_data[0,:,:,:].unsqueeze(0), self.__interpolator.edge_interpolation(input_data[1:,:,:,:])))
+
+            elif (self.__input_mode == 2):
+                input = input_data
 
             else:
                 print('HDF5Dataset Error: Input mode ', self.__input_mode, ' is not supported')
