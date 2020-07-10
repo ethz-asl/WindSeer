@@ -4,4 +4,4 @@
 # But gitignore and the example file
 !.gitignore
 !example.yaml
-!encoding_of_size_256.yaml
+!encoding_size_256.yaml
