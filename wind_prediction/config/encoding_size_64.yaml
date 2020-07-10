@@ -110,7 +110,7 @@ model:
         use_terrain_mask: True,
         pooling_method: 'striding',
         use_fc_layers: False,
-        fc_scaling: 16,
+        fc_scaling: 32,
         use_mapping_layer: False,
         potential_flow: False,
         activation_type: 'LeakyReLU',
