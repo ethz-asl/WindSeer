@@ -5,7 +5,7 @@
 # training parameters
 run:
     plot_every_n_batches: 5
-    n_epochs: 500
+    n_epochs: 1000
     batchsize: 35
     num_workers: 6
     learning_rate_initial: 1.0E-4
