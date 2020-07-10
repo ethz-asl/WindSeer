@@ -1,5 +1,6 @@
 ###
 # Configuration used to reduce the encoding size to 256
+# fc_scaling is what determines the encoding size
 ###
 
 # training parameters
