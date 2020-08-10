@@ -4,6 +4,3 @@
 # But gitignore and the example file
 !.gitignore
 !example.yaml
-!encoding_size_256.yaml
-!encoding_size_64.yaml
-!encoding_size_4096.yaml
