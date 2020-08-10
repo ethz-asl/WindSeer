@@ -284,9 +284,9 @@ def main():
     print(' ')
 
     # plot the sample
-    provided_channels = ['ux_in', 'uy_in', 'uz_in', 'terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd', 'W']
+    provided_channels = ['ux_in', 'uy_in', 'uz_in', 'terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd']
     terrain = input[:1]
-    input = torch.cat((input[1:4], terrain, label, W), 0)
+    input = torch.cat((input[1:4], terrain, label), 0)
     title_dict = {'W': 'Loss weighting fn [-]'}
     utils.plot_sample(provided_channels, 'all', input, None, terrain.squeeze(), plot_divergence, nn_data.get_grid_size(input_dataset),
                       title_dict=title_dict)

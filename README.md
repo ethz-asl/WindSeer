@@ -38,8 +38,8 @@ TODO: add installation for the planning benchmark locally and on the cluster
 
 On the leonhard cluster, you need to perform a few setup steps
 
-1. Load python 3.6.4 for gpu:
-   `module load python_gpu/3.6.4`
+1. Load python 3.6.4 for gpu and h5py python package:
+   `module load python_gpu/3.6.4 hdf5/1.10.1`
    
 2. Install required packages:
    `python -m pip install --user tensorboardX==1.4 lz4 tqdm interpolation`
