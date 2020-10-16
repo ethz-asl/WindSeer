@@ -24,7 +24,7 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
 2. Install (Cuda)[https://developer.nvidia.com/cuda-zone] if a graphics card is present and (PyTorch)[https://pytorch.org/get-started/locally/] according to your CUDA, Ubuntu, and Python version. At least PyTorch 1.0.1 is required.
 
 3. Install the following required python packages:
-   `pip3 install tensorboardX lz4 numpy tqdm matplotlib scipy pandas h5py interpolation termcolor pyyaml`
+   `pip3 install tensorboardX lz4 numpy tqdm matplotlib scipy pandas h5py interpolation termcolor pyyaml scikit-learn`
    
 4. Install python tkinter
    `sudo apt-get install python3-tk`
@@ -34,12 +34,21 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
 
 TODO: add installation for the planning benchmark locally and on the cluster
 
+### llmvlite build errors
+If you have trouble installing `llvmlite` on Ubuntu 18.04 (a dependency of `interpolate`), it may be due to a version mismatch. Try this:
+   ```
+   sudo apt-get install llvm-10-dev
+   export LLVM_CONFIG='/usr/bin/llvm-config-10'
+   pip3 install interpolation
+   ```   
+
+
 ## Working with Leonhard
 
 On the leonhard cluster, you need to perform a few setup steps
 
-1. Load python 3.6.4 for gpu:
-   `module load python_gpu/3.6.4`
+1. Load python 3.6.4 for gpu and h5py python package:
+   `module load python_gpu/3.6.4 hdf5/1.10.1`
    
 2. Install required packages:
    `python -m pip install --user tensorboardX==1.4 lz4 tqdm interpolation`

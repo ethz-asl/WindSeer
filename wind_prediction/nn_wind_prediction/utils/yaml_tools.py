@@ -6,9 +6,9 @@ import yaml
 
 class EDNNParameters(object):
 
-    def __init__(self, yaml_config):
+    def __init__(self, yaml_config, verbose = True):
         self.yaml_file = yaml_config
-        run_parameters = self.load_yaml(self.yaml_file)
+        run_parameters = self.load_yaml(self.yaml_file, verbose)
         self.model = run_parameters['model']
         self.data = run_parameters['data']
         self.run = run_parameters['run']
@@ -17,8 +17,9 @@ class EDNNParameters(object):
 
 
     @staticmethod
-    def load_yaml(file):
-        print("Using YAML config: {0}".format(file))
+    def load_yaml(file, verbose = True):
+        if verbose:
+            print("Using YAML config: {0}".format(file))
         with open(file, 'rt') as fh:
             run_parameters = yaml.safe_load(fh)
 

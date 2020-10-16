@@ -2,7 +2,6 @@ from __future__ import print_function
 
 from nn_wind_prediction.utils.interpolation import DataInterpolation
 
-from interpolation.splines import UCGrid, eval_linear
 import numpy as np
 import random
 import torch
@@ -12,6 +11,12 @@ import nn_wind_prediction.utils as utils
 import sys
 sys.path.append('../')
 from wind_analysis.analysis_utils import generate_turbulence
+
+
+numpy_interpolation = False
+if sys.version_info[0] > 2:
+    from interpolation.splines import UCGrid, eval_linear
+    numpy_interpolation = True
 
 
 class HDF5Dataset(Dataset):
@@ -81,9 +86,10 @@ class HDF5Dataset(Dataset):
             nz:
                 Number of grid points in z-direction of the output, default 64
             input_mode:
-                Indicates how the input is constructed. The following modes are currently implemented:
+                Indicates how the input is constructed. The following modes are currently implemented (default 0):
                     0: The inflow condition is copied over the full domain
-                    1: The vertical edges are interpolated over the full domain, default 0
+                    1: The vertical edges are interpolated over the full domain
+                    2: The inputs have the same values as the labels (channel wise)
             augmentation:
                 If true the data is augmented according to the mode and augmentation_kwargs. The terrain and the velocities
                 must be requested to use this mode for now
@@ -305,16 +311,16 @@ class HDF5Dataset(Dataset):
             weighting_channels = []
 
         # make sure that all requested channels are possible
-        default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+        self.default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
         for channel in input_channels:
-            if channel not in default_channels:
+            if channel not in self.default_channels:
                 raise ValueError('HDF5Dataset: Incorrect input_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel, default_channels))
+                                 'correct channels are {}'.format(channel, self.default_channels))
 
         for channel in label_channels:
-            if channel not in default_channels:
+            if channel not in self.default_channels:
                 raise ValueError('HDF5Dataset: Incorrect label_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel, default_channels))
+                                 'correct channels are {}'.format(channel, self.default_channels))
 
         self.__channels_to_load = []
         self.__input_indices = []
@@ -322,7 +328,7 @@ class HDF5Dataset(Dataset):
 
         # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
         index = 0
-        for channel in default_channels:
+        for channel in self.default_channels:
             if channel in input_channels or channel in label_channels or channel in weighting_channels:
                 self.__channels_to_load += [channel]
                 if channel in input_channels:
@@ -411,7 +417,8 @@ class HDF5Dataset(Dataset):
         # avoids printing a warning multiple times
         self.__augmentation_warning_printed = False
 
-        print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
+        if verbose:
+            print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
 
     def __getitem__(self, index):
         h5_file = h5py.File(self.__filename, 'r', swmr=True)
@@ -498,9 +505,13 @@ class HDF5Dataset(Dataset):
                             ds = torch.tensor([ds[1], ds[0], ds[2]])
 
                 elif self.__augmentation_mode == 1:
-                    # use the numpy implementation as it is more accurate and slightly faster
-                    data = self.__augmentation_mode2_numpy(data, self.__nx) # u_x: index 1, u_y: index 2
-                    #data = self.__augmentation_mode2_torch(data, self.__nx) # u_x: index 1, u_y: index 2
+                    if numpy_interpolation:
+                        # use the numpy implementation as it is more accurate and slightly faster
+                        # and python 3 is used
+                        data = self.__augmentation_mode2_numpy(data, self.__nx) # u_x: index 1, u_y: index 2
+                    else:
+                        # use the torch version for python 2
+                        data = self.__augmentation_mode2_torch(data, self.__nx) # u_x: index 1, u_y: index 2
 
                     # flip in x-direction
                     if (self.__rand.randint(0,1)):
@@ -745,12 +756,13 @@ class HDF5Dataset(Dataset):
             if self.__create_sparse_mask or self.__create_trajectory_mask or self.__create_sequential_input:
                 # take modified labels with terrain and sparse/terrain mask as input data
                 input = sparse_input
+
             else:
                 input_data = torch.index_select(data, 0, self.__input_indices)
                 if self.__input_mode == 0:
                     # copy the inflow condition across the full domain
                     input = torch.cat((input_data[0,:,:,:].unsqueeze(0),
-                                        input_data[1:,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)))
+                                       input_data[1:,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)))
 
                 elif self.__input_mode == 1:
                     # This interpolation is slower (at least on a cpu)
@@ -760,6 +772,10 @@ class HDF5Dataset(Dataset):
                     # interpolating the vertical edges
                     input = torch.cat((input_data[0,:,:,:].unsqueeze(0),
                                         self.__interpolator.edge_interpolation(input_data[1:,:,:,:])))
+
+                elif (self.__input_mode == 2):
+                    # Input the ground truth data
+                    input = input_data
                 else:
                     print('HDF5Dataset Error: Input mode ', self.__input_mode, ' is not supported')
                     sys.exit()

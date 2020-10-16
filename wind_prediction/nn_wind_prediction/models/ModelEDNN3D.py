@@ -602,6 +602,7 @@ class ModelEDNN3D(nn.Module):
                         else:
                             x = x_mean
                     out, hidden = self.__lstm2(x.unsqueeze(1))
+                    output["encoding"] = out.clone()
                     x = self.__activation(out.squeeze(1))
                     x = x.view(shape)
                 else:
@@ -620,6 +621,8 @@ class ModelEDNN3D(nn.Module):
                             x = x_mean + std * torch.randn_like(std)
                         else:
                             x = x_mean
+
+                    output["encoding"] = x.clone()
 
                     x = self.__activation(self.__fc2(x))
                     x = x.view(shape)
@@ -649,6 +652,8 @@ class ModelEDNN3D(nn.Module):
                     # activation
                     x = self.__activation(x)
 
+                    output["encoding"] = x.view(-1, self.num_flat_features(x)).clone()
+
                     # Convolution 2
                     # elementwise multiplication
                     sparse_mask_expanded = sparse_mask.expand_as(x)
@@ -677,12 +682,18 @@ class ModelEDNN3D(nn.Module):
                     out, _ = self.__convLSTM1(x)
                     x = out[0]  # output
                     x = self.__activation(x)
+
+                    output["encoding"] = x.view(-1, self.num_flat_features(x)).clone()
+
                     # ConvLSTM2
                     _, last_states = self.__convLSTM2(x)
                     x = last_states[0][0]  # last hidden state
                     x = self.__activation(x)
                 else:
                     x = self.__activation(self.__c1(self.__pad_conv(x)))
+
+                    output["encoding"] = x.view(-1, self.num_flat_features(x)).clone()
+
                     x = self.__activation(self.__c2(self.__pad_conv(x)))
 
             # up-convolution
