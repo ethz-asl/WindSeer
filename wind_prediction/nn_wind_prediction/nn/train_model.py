@@ -9,11 +9,9 @@ import time
 import torch
 from torch.nn.functional import mse_loss
 import nn_wind_prediction.utils as utils
-import random
 
 should_exit = False
 sig_dict = dict((k, v) for v, k in reversed(sorted(signal.__dict__.items())) if v.startswith('SIG') and not v.startswith('SIG_'))
-
 
 def signal_handler(sig, frame):
     global should_exit
@@ -22,7 +20,6 @@ def signal_handler(sig, frame):
     except:
         print('INFO: Received signal: ', sig, ', exit training loop')
     should_exit = True
-
 
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
