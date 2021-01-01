@@ -3,7 +3,9 @@ import sys
 import torch
 import torch.nn as nn
 
-class ModelStacked(nn.Module):
+from .ModelBase import ModelBase
+
+class ModelStacked(ModelBase):
     __default_pass_full_output = False
     __default_submodel_terrain_mask = False
     __default_use_terrain_mask = True
@@ -117,10 +119,6 @@ class ModelStacked(nn.Module):
                 print('ModelStacked WARNING: Maximum train level reached, continue to train last submodel')
 
         self.__prediction_level = self.__train_level
-
-    def init_params(self):
-        for model in self.__models:
-            x = model.init_params()
 
     def num_inputs(self):
         return self.__models[0].num_inputs()

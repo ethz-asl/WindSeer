@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 import sys
 
-class ModelTwin(nn.Module):
+from .ModelBase import ModelBase
+
+class ModelTwin(ModelBase):
     __default_uncertainty_train_mode = 'alternating'
 
     def __init__(self, **kwargs):

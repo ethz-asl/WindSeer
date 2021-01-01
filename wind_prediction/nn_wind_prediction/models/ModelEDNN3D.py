@@ -5,6 +5,8 @@ import torch.nn.functional as F
 import nn_wind_prediction.utils as utils
 from nn_wind_prediction.models.ConvLSTMLayer import ConvLSTM3d
 
+from .ModelBase import ModelBase
+
 '''
 Encoder/Decoder Neural Network
 
@@ -15,7 +17,7 @@ Encoder/Decoder Neural Network
 
 The first input layer is assumed to be terrain information. It should be zero in the terrain and nonzero elsewhere.
 '''
-class ModelEDNN3D(nn.Module):
+class ModelEDNN3D(ModelBase):
     __default_activation = nn.LeakyReLU
     __default_activation_kwargs = {'negative_slope': 0.1}
     __default_filter_kernel_size = 3
@@ -422,44 +424,6 @@ class ModelEDNN3D(nn.Module):
         # mask pooling
         if self.__use_sparse_convolution:
             self.__mask_pooling = nn.MaxPool3d(1, stride=2)
-
-    def new_epoch_callback(self, epoch):
-        # nothing to do here
-        return
-
-    def freeze_model(self):
-        def freeze_weights(m):
-            for params in m.parameters():
-                params.requires_grad = False
-
-        self.apply(freeze_weights)
-
-    def unfreeze_model(self):
-        def unfreeze_weights(m):
-            for params in m.parameters():
-                params.requires_grad = True
-
-        self.apply(unfreeze_weights)
-
-    def num_inputs(self):
-        return self.__num_inputs
-
-    def num_outputs(self):
-        return self.__num_outputs
-
-    def init_params(self):
-        def init_weights(m):
-            if (type(m) != type(self)):
-                try:
-                    torch.nn.init.xavier_normal_(m.weight.data)
-                except:
-                    pass
-                try:
-                    torch.nn.init.normal_(m.bias, mean=0.0, std=0.02)
-                except:
-                    pass
-
-        self.apply(init_weights)
 
     def forward(self, x):
         if self.__use_sparse_mask:
