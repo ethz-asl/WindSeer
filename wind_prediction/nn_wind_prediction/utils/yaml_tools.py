@@ -66,7 +66,7 @@ class EDNNParameters(object):
         return name
 
     def Dataset_kwargs(self):
-        return {'stride_hor': self.data['stride_hor'],
+        kwargs = {'stride_hor': self.data['stride_hor'],
                 'stride_vert': self.data['stride_vert'],
                 'input_channels': self.data['input_channels'],
                 'label_channels': self.data['label_channels'],
@@ -82,18 +82,62 @@ class EDNNParameters(object):
                 'nx': self.model['model_args']['n_x'],
                 'ny': self.model['model_args']['n_y'],
                 'nz': self.model['model_args']['n_z'],
-                'autoscale': self.data['autoscale'],
-                'loss_weighting_fn': self.loss['loss_weighting_fn'],
-                'create_sparse_mask': self.data['create_sparse_mask'],
-                'max_percentage_of_sparse_data': self.data['max_percentage_of_sparse_data'],
-                'terrain_percentage_correction': self.data['terrain_percentage_correction'],
-                'create_trajectory_mask': self.data['create_trajectory_mask'],
-                'create_sequential_input': self.data['create_sequential_input'],
-                'max_sequence_length': self.data['max_sequence_length'],
-                'sample_terrain_region': self.data['sample_terrain_region'],
-                'add_gaussian_noise': self.data['add_gaussian_noise'],
-                'add_turbulence': self.data['add_turbulence'],
-                'add_bias': self.data['add_bias']}
+                'autoscale': self.data['autoscale']}
+
+
+        # check if the keys exist for the more recently introduced parameter
+        # to keep backwards compatibility
+        if 'create_sparse_mask' in self.data.keys():
+            kwargs['create_sparse_mask'] = self.data['create_sparse_mask']
+        else:
+            kwargs['create_sparse_mask'] = False
+
+        if 'max_percentage_of_sparse_data' in self.data.keys():
+            kwargs['max_percentage_of_sparse_data'] = self.data['max_percentage_of_sparse_data']
+        else:
+            kwargs['max_percentage_of_sparse_data'] = 0.1
+
+        if 'terrain_percentage_correction' in self.data.keys():
+            kwargs['terrain_percentage_correction'] = self.data['terrain_percentage_correction']
+        else:
+            kwargs['terrain_percentage_correction'] = False
+
+        if 'create_trajectory_mask' in self.data.keys():
+            kwargs['create_trajectory_mask'] = self.data['create_trajectory_mask']
+        else:
+            kwargs['create_trajectory_mask'] = False
+
+        if 'create_sequential_input' in self.data.keys():
+            kwargs['create_sequential_input'] = self.data['create_sequential_input']
+        else:
+            kwargs['create_sequential_input'] = False
+
+        if 'max_sequence_length' in self.data.keys():
+            kwargs['max_sequence_length'] = self.data['max_sequence_length']
+        else:
+            kwargs['max_sequence_length'] = 3
+
+        if 'sample_terrain_region' in self.data.keys():
+            kwargs['sample_terrain_region'] = self.data['sample_terrain_region']
+        else:
+            kwargs['sample_terrain_region'] = False
+
+        if 'add_gaussian_noise' in self.data.keys():
+            kwargs['add_gaussian_noise'] = self.data['add_gaussian_noise']
+        else:
+            kwargs['add_gaussian_noise'] = False
+
+        if 'add_turbulence' in self.data.keys():
+            kwargs['add_turbulence'] = self.data['add_turbulence']
+        else:
+            kwargs['add_turbulence'] = False
+
+        if 'add_bias' in self.data.keys():
+            kwargs['add_bias'] = self.data['add_bias']
+        else:
+            kwargs['add_bias'] = False
+
+        return kwargs
 
     def model_kwargs(self):
         return self.model['model_args']
