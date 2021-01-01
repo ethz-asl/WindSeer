@@ -599,13 +599,13 @@ def plot_sample(provided_channels, channels_to_plot, input, label, terrain, plot
     The axes along which the slices are made as well as the location of the slice
     can be set using sliders and buttons in the figure.
     '''
-    instance = PlotUtils('sample',provided_channels, channels_to_plot, input, label, terrain, 0, None, plot_divergence,
+    instance = PlotUtils('sample',provided_channels, channels_to_plot, input, label, terrain, 0, None, None, plot_divergence,
                          ds, title_dict =title_dict)
     instance.plot_sample()
 
 def plot_prediction(provided_channels, channels_to_plot, output, label, terrain, uncertainty = None, plot_divergence = False,
                  ds = None, title_dict = None):
-    instance = PlotUtils('prediction',provided_channels, channels_to_plot, output, label, terrain, 1, uncertainty,
+    instance = PlotUtils('prediction',provided_channels, channels_to_plot, output, label, terrain, 1, None, uncertainty,
                          plot_divergence, ds, title_dict =title_dict)
     instance.plot_prediction()
 
