@@ -82,7 +82,8 @@ class EDNNParameters(object):
                 'nx': self.model['model_args']['n_x'],
                 'ny': self.model['model_args']['n_y'],
                 'nz': self.model['model_args']['n_z'],
-                'autoscale': self.data['autoscale']}
+                'autoscale': self.data['autoscale'],
+                'loss_weighting_fn': self.loss['loss_weighting_fn']}
 
 
         # check if the keys exist for the more recently introduced parameter
