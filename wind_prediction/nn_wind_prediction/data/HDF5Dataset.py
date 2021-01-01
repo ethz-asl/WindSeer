@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 from nn_wind_prediction.utils.interpolation import DataInterpolation
+import nn_wind_prediction.utils.generate_turbulence as generate_turbulence
 
 import numpy as np
 import random
@@ -9,9 +10,6 @@ from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
 import sys
-sys.path.append('../')
-from wind_analysis.analysis_utils import generate_turbulence
-
 
 numpy_interpolation = False
 if sys.version_info[0] > 2:
