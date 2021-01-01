@@ -90,53 +90,33 @@ class EDNNParameters(object):
         # to keep backwards compatibility
         if 'create_sparse_mask' in self.data.keys():
             kwargs['create_sparse_mask'] = self.data['create_sparse_mask']
-        else:
-            kwargs['create_sparse_mask'] = False
 
         if 'max_percentage_of_sparse_data' in self.data.keys():
             kwargs['max_percentage_of_sparse_data'] = self.data['max_percentage_of_sparse_data']
-        else:
-            kwargs['max_percentage_of_sparse_data'] = 0.1
 
         if 'terrain_percentage_correction' in self.data.keys():
             kwargs['terrain_percentage_correction'] = self.data['terrain_percentage_correction']
-        else:
-            kwargs['terrain_percentage_correction'] = False
 
         if 'create_trajectory_mask' in self.data.keys():
             kwargs['create_trajectory_mask'] = self.data['create_trajectory_mask']
-        else:
-            kwargs['create_trajectory_mask'] = False
 
         if 'create_sequential_input' in self.data.keys():
             kwargs['create_sequential_input'] = self.data['create_sequential_input']
-        else:
-            kwargs['create_sequential_input'] = False
 
         if 'max_sequence_length' in self.data.keys():
             kwargs['max_sequence_length'] = self.data['max_sequence_length']
-        else:
-            kwargs['max_sequence_length'] = 3
 
         if 'sample_terrain_region' in self.data.keys():
             kwargs['sample_terrain_region'] = self.data['sample_terrain_region']
-        else:
-            kwargs['sample_terrain_region'] = False
 
         if 'add_gaussian_noise' in self.data.keys():
             kwargs['add_gaussian_noise'] = self.data['add_gaussian_noise']
-        else:
-            kwargs['add_gaussian_noise'] = False
 
         if 'add_turbulence' in self.data.keys():
             kwargs['add_turbulence'] = self.data['add_turbulence']
-        else:
-            kwargs['add_turbulence'] = False
 
         if 'add_bias' in self.data.keys():
             kwargs['add_bias'] = self.data['add_bias']
-        else:
-            kwargs['add_bias'] = False
 
         return kwargs
 
