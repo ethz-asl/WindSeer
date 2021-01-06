@@ -29,7 +29,7 @@ def spec_tens_iso_inc(k, L, sigma):
     return Phi
 
 
-def generate_turbulence_spectral(use_fft=True, check_statistics=False):
+def generate_turbulence_spectral(nx, ny, nz, dx, dy, dz, use_fft=True, check_statistics=False):
     '''
     Prototyping Turbulent Wind Fields based on Spectral Domain Simulation
 
@@ -44,40 +44,21 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
               - Simulation of Three-Dimensional Turbulent Velocity Fields,
               R. Frehlich & L.Cornman, J. of applied Meteorology, vol.40, 2000
     '''
-    lambda_min = 1100/63  # minimal wavelength of turbulence to simulate, [m]  (min 6cm)
+    lambda_min = min([dx, dy, dz])  # minimal wavelength of turbulence to simulate, [m]  (min 6cm)
 
-    x_range = [0, 15]  # x-grid range [m] (north)
-    y_range = [0, 15]  # y-grid range [m] (east)
-    z_range = [0, 15]  # z-grid range [m] (down)
-
-    dx = 0.5
-    dy = 0.5
-    dz = 0.5
-
-    x = np.arange(x_range[0], x_range[1], dx).tolist()
-    y = np.arange(y_range[0], y_range[1], dy).tolist()
-    z = np.arange(z_range[0], z_range[1], dz).tolist()
-
-    nx = len(x)
-    ny = len(y)
-    nz = len(z)
+    x = np.arange(0, dx * (nx -1), dx).tolist()
+    y = np.arange(0, dy * (ny -1), dy).tolist()
+    z = np.arange(0, dz * (nz -1), dz).tolist()
 
     X, Y, Z = np.meshgrid(x, y, z)
     U = np.array(0 * X).astype(complex)
     V = np.array(0 * Y).astype(complex)
     W = np.array(0 * Z).astype(complex)
 
-
-    ### Spectral parameters
-    nk = 91
-    nk_x = nk
-    nk_y = nk
-    nk_z = nk
-
     # assemble spatial frequency components (wave vector)
-    k_x = 2*np.pi/lambda_min/nk_x * np.array(np.arange(-(nk_x-1)/2, (nk_x+1)/2).tolist())
-    k_y = 2*np.pi/lambda_min/nk_x * np.array(np.arange(-(nk_y-1)/2, (nk_y+1)/2).tolist())
-    k_z = 2*np.pi/lambda_min/nk_x * np.array(np.arange(-(nk_z-1)/2, (nk_z+1)/2).tolist())
+    k_x = 2*np.pi/lambda_min/nx * np.array(np.arange(-(nx-1)/2, (nx+1)/2).tolist())
+    k_y = 2*np.pi/lambda_min/ny * np.array(np.arange(-(ny-1)/2, (ny+1)/2).tolist())
+    k_z = 2*np.pi/lambda_min/nz * np.array(np.arange(-(nz-1)/2, (nz+1)/2).tolist())
 
     # frequency spacing
     dk_x = k_x[1] - k_x[0]
@@ -90,16 +71,16 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
     ## Fourier Simulation
 
     # Create random phase for every frequency component
-    xi = (np.random.randn(3, nk_x, nk_y, nk_z) + 1j*np.random.randn(3, nk_x, nk_y, nk_z))/np.sqrt(2)
+    xi = (np.random.randn(3, nx, ny, nz) + 1j*np.random.randn(3, nx, ny, nz))/np.sqrt(2)
 
-    C_ij = np.zeros((3, 3, nk_x, nk_y, nk_z))
-    # Phi_ij = np.zeros((3, 3, nk_x, nk_y, nk_z))
-    # E_ij = np.zeros((nk_x, nk_y, nk_z))
+    C_ij = np.zeros((3, 3, nx, ny, nz))
+    # Phi_ij = np.zeros((3, 3, nx, ny, nz))
+    # E_ij = np.zeros((nx, ny, nz))
     # E_sum = 0
 
-    for ikx in range(nk_x):
-        for iky in range(nk_y):
-            for ikz in range(nk_z):
+    for ikx in range(nx):
+        for iky in range(ny):
+            for ikz in range(nz):
                 k = np.array([k_x[ikx], k_y[iky], k_z[ikz]])
                 k = np.transpose(k)
                 if 0 < np.linalg.norm(k) <= k_x[-1]:
@@ -129,9 +110,9 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
                     r = np.transpose(r)
                     v_r = np.zeros((3,), dtype=np.complex_)
 
-                    for ikx in range(nk_x):
-                        for iky in range(nk_y):
-                            for ikz in range(nk_z):
+                    for ikx in range(nx):
+                        for iky in range(ny):
+                            for ikz in range(nz):
                                 k = np.array([k_x[ikx], k_y[iky], k_z[ikz]])
                                 k = np.transpose(k)
                                 v_r = v_r + np.exp(1j * np.array(np.transpose(k).dot(r))) \
@@ -143,34 +124,34 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
 
     if use_fft:
         # IFFT
-        complex_field = np.zeros((3, nk_x, nk_y, nk_z), dtype=complex)
-        for ikx in range(nk_x):
-            for iky in range(nk_y):
-                for ikz in range(nk_z):
+        complex_field = np.zeros((3, nx, ny, nz), dtype=complex)
+        for ikx in range(nx):
+            for iky in range(ny):
+                for ikz in range(nz):
                     complex_field[:, ikx, iky, ikz] = np.array(C_ij[:, :, ikx, iky, ikz]).dot(np.array(xi[:, ikx, iky, ikz]))
 
         U_c = np.squeeze(complex_field[0, :, :, :])
         V_c = np.squeeze(complex_field[1, :, :, :])
         W_c = np.squeeze(complex_field[2, :, :, :])
 
-        U_c = np.roll(np.roll(np.roll(U_c, int(-(nk_x-1)/2), axis=0), int(-(nk_y-1)/2), axis=1), int(-(nk_z-1)/2), axis=2)
-        V_c = np.roll(np.roll(np.roll(V_c, int(-(nk_x-1)/2), axis=0), int(-(nk_y-1)/2), axis=1), int(-(nk_z-1)/2), axis=2)
-        W_c = np.roll(np.roll(np.roll(W_c, int(-(nk_x-1)/2), axis=0), int(-(nk_y-1)/2), axis=1), int(-(nk_z-1)/2), axis=2)
+        U_c = np.roll(np.roll(np.roll(U_c, int(-(nx-1)/2), axis=0), int(-(ny-1)/2), axis=1), int(-(nz-1)/2), axis=2)
+        V_c = np.roll(np.roll(np.roll(V_c, int(-(nx-1)/2), axis=0), int(-(ny-1)/2), axis=1), int(-(nz-1)/2), axis=2)
+        W_c = np.roll(np.roll(np.roll(W_c, int(-(nx-1)/2), axis=0), int(-(ny-1)/2), axis=1), int(-(nz-1)/2), axis=2)
 
-        U2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(U_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x*nk_y*nk_z
-        V2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(V_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x*nk_y*nk_z
-        W2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(W_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nk_x*nk_y*nk_z
+        U2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(U_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nx*ny*nz
+        V2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(V_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nx*ny*nz
+        W2 = np.fft.ifft(np.fft.ifft(np.fft.ifft(W_c, n=None, axis=0), n=None, axis=1), n=None, axis=2) * nx*ny*nz
 
-        x2 = np.linspace(0, (nk_x-1)*lambda_min, nk_x)
-        y2 = np.linspace(0, (nk_y-1)*lambda_min, nk_y)
-        z2 = np.linspace(0, (nk_z-1)*lambda_min, nk_z)
+        x2 = np.linspace(0, (nx-1)*lambda_min, nx)
+        y2 = np.linspace(0, (ny-1)*lambda_min, ny)
+        z2 = np.linspace(0, (nz-1)*lambda_min, nz)
 
         X2, Y2, Z2 = np.meshgrid(x2, y2, z2)
 
         if check_statistics:
             prsv_pred = 0
-            for ikx in range(nk_x):
-                for iky in range(nk_y):
+            for ikx in range(nx):
+                for iky in range(ny):
                     prsv_pred = prsv_pred + np.array(np.transpose(complex_field[:, ikx, iky, ikz])).dot(complex_field[:, ikx, iky, ikz])
 
             # check statistics of field
@@ -181,10 +162,10 @@ def generate_turbulence_spectral(use_fft=True, check_statistics=False):
             # turbulent kinetic energy (of real valued field)
             tke_real = 0.5 * np.sum(np.multiply(std_real, std_real))
             # turbulent kinetic energy (of complex valued field)
-            tke_complex = 0.5 / (nk_x*nk_y*nk_z) * (np.sum(np.reshape(np.multiply(np.abs(U2), np.abs(U2)), (1, -1)))
+            tke_complex = 0.5 / (nx*ny*nz) * (np.sum(np.reshape(np.multiply(np.abs(U2), np.abs(U2)), (1, -1)))
                                                         + np.sum(np.reshape(np.multiply(np.abs(V2), np.abs(V2)), (1, -1)))
                                                         + np.sum(np.reshape(np.multiply(np.abs(W2), np.abs(W2)), (1, -1))))
-            prsv = 1 / (nk_x*nk_y*nk_z) * (np.sum(np.reshape(np.multiply(np.abs(U2), np.abs(U2)), (1, -1)))
+            prsv = 1 / (nx*ny*nz) * (np.sum(np.reshape(np.multiply(np.abs(U2), np.abs(U2)), (1, -1)))
                                               + np.sum(np.reshape(np.multiply(np.abs(V2), np.abs(V2)), (1, -1)))
                                               + np.sum(np.reshape(np.multiply(np.abs(W2), np.abs(W2)), (1, -1))))
 
