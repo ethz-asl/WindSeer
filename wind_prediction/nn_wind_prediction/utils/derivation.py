@@ -18,9 +18,9 @@ def derive(input_tensor, deriv_axis, ds=1, terrain=None, no_nans=True):
     '''
     # account for terrain, the cells near the terrain will be excluded
     if terrain is not None:
-        is_terrain = 1 - terrain.sign_()
+        is_terrain = 1 - terrain.sign()
         input_tensor = input_tensor.clone()
-        input_tensor[is_terrain.byte()] = torch.tensor(float('nan'))
+        input_tensor[is_terrain.bool()] = torch.tensor(float('nan'))
 
     # Permute axes depending on deriv_axs, no permutation required for X
     if deriv_axis == 1:  # Z
