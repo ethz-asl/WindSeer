@@ -37,6 +37,17 @@ terrain_scaling = 1.0
 stride_hor = 1
 stride_vert = 1
 autoscale = False
+
+additive_gaussian_noise = True
+max_gaussian_noise_std = 0.0
+n_turb_fields = 1
+max_normalized_turb_scale = 0.0
+max_normalized_bias_scale = 0.0
+only_z_velocity_bias = True
+
+max_fraction_of_sparse_data = 0.05
+min_fraction_of_sparse_data = 0.001
+
 input_channels = ['terrain', 'ux', 'uy', 'uz']
 label_channels = ['ux', 'uy', 'uz', 'turb']
 loss_weighting_fn = 1
@@ -49,12 +60,17 @@ def main():
     db = nn_data.HDF5Dataset(input_dataset, input_channels=input_channels, label_channels=label_channels,
                                       nx=nx, ny=ny, nz=nz, input_mode=input_mode, augmentation_mode=augmentation_mode,
                                       augmentation=augmentation, autoscale=autoscale, augmentation_kwargs= augmentation_kwargs,
-                                      stride_hor=stride_hor, stride_vert=stride_vert,
-                                      scaling_ux=ux_scaling, scaling_uy=uy_scaling,
-                                      scaling_terrain=terrain_scaling,
+                                      stride_hor=stride_hor, stride_vert=stride_vert, device='cpu',
+                                      scaling_ux=ux_scaling, scaling_uy=uy_scaling, loss_weighting_clamp=True,
+                                      scaling_terrain=terrain_scaling, return_name=False,
                                       scaling_uz=uz_scaling, scaling_turb=turbulence_scaling, scaling_p=p_scaling,
                                       scaling_epsilon=epsilon_scaling, scaling_nut=nut_scaling,
-                                      return_grid_size=True, verbose=True, loss_weighting_fn=loss_weighting_fn)
+                                      return_grid_size=True, verbose=True, loss_weighting_fn=loss_weighting_fn,
+                                      additive_gaussian_noise = additive_gaussian_noise,
+                                      max_gaussian_noise_std=max_gaussian_noise_std, n_turb_fields=n_turb_fields,
+                                      max_normalized_turb_scale=max_normalized_turb_scale, max_normalized_bias_scale=max_normalized_bias_scale,
+                                      only_z_velocity_bias=only_z_velocity_bias, max_fraction_of_sparse_data=max_fraction_of_sparse_data,
+                                      min_fraction_of_sparse_data=min_fraction_of_sparse_data)
 
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
                                               shuffle=False, num_workers=4)
@@ -265,14 +281,14 @@ def main():
 
     print('INFO: Time to get all samples in the dataset', dataset_rounds, 'times took', (time.time() - start_time), 'seconds')
 
-    try:
-        if autoscale:
-            input, label, W, scale, ds = db[plot_sample_num]
-        else:
-            input, label, W, ds = db[plot_sample_num]
-    except:
+    if plot_sample_num > len(db)-1:
         print('The plot_sample_num needs to be a value between 0 and', len(db)-1, '->' , plot_sample_num, ' is invalid.')
-        sys.exit()
+        sys.exit
+
+    if autoscale:
+        input, label, W, scale, ds = db[plot_sample_num]
+    else:
+        input, label, W, ds = db[plot_sample_num]
 
     print(' ')
     print('----------------------------------')
@@ -284,16 +300,33 @@ def main():
     print(' ')
 
     # plot the sample
-    provided_channels = ['ux_in', 'uy_in', 'uz_in', 'terrain', 'ux_cfd', 'uy_cfd', 'uz_cfd', 'turb_cfd']
-    terrain = input[:1]
-    input = torch.cat((input[1:4], terrain, label), 0)
-    title_dict = {'W': 'Loss weighting fn [-]'}
-    utils.plot_sample(provided_channels, 'all', input, None, terrain.squeeze(), plot_divergence, nn_data.get_grid_size(input_dataset),
-                      title_dict=title_dict)
+    input_channels_plotting = [s + '_in' if s in ['ux', 'uy', 'uz'] else s for s in db.get_input_channels()]
+    label_channels_plotting = [s + '_cfd' for s in label_channels]
+    if 'mask' in db.get_input_channels():
+        input_mask = input[db.get_input_channels().index('mask')].squeeze()
+    else:
+        input_mask = None
+
+    if input_mode == 5:
+        # plot the trajectory
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        zs, ys, xs = input_mask.nonzero(as_tuple=False).split(1, dim=1)
+        ax.scatter(xs.numpy(), ys.numpy(), zs.numpy(), c='b', s = 100, marker='s')
+
+        ax.set_xlim([0, nx])
+        ax.set_ylim([0, ny])
+        ax.set_zlim([0, nz])
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_zlabel('z')
+
+        db.print_dataset_stats()
+
+    utils.plot_sample(input_channels_plotting, input, label_channels_plotting, label, input_mask = input_mask, ds = nn_data.get_grid_size(input_dataset))
 
 if __name__ == '__main__':
-#     try:
-#         torch.multiprocessing.set_start_method('spawn')
-#     except RuntimeError:
-#         pass
     main()
