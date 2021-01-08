@@ -131,8 +131,7 @@ class LPLoss(Module):
             raise ValueError('LPLoss: predicted and target do not have the same shape, pred:{}, target:{}'
                              .format(predicted['pred'].shape, target.shape))
 
-        if ((len(predicted['pred'].shape) != 5) or (len(input.shape) != 5)) and (len(input.shape) != 6):
-            # in case of hybrid CNN-RNN model the input will be 6D tensor
+        if (len(predicted['pred'].shape) != 5) or (len(input.shape) != 5):
             raise ValueError('LPLoss: the loss is only defined for 5D data. Unsqueeze single samples!')
 
         return self.compute_loss(predicted['pred'], target, input, W)
@@ -146,10 +145,7 @@ class LPLoss(Module):
 
         # compute terrain correction factor for each sample in batch
         if self.__exclude_terrain:
-            if len(input.shape) == 6:
-                terrain = input[:, 0, 0:1]
-            else:
-                terrain = input[:, 0:1]
+            terrain = input[:, 0:1]
             terrain_correction_factors = utils.compute_terrain_factor(predicted, terrain)
 
             # apply terrain correction factor to loss of each sample in batch
