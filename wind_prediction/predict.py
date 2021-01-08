@@ -156,5 +156,5 @@ if args.plot_prediction:
 else:
     channels_to_plot = None
 
-nn_custom.predict_channels(input, label, scale, device, net, params, channels_to_plot, args.dataset,
-                           plot_divergence =False, loss_fn=criterion, savename=savename)
+nn_custom.predict_channels(input, label, scale, device, net, params, channels_to_plot, args.dataset, testset.get_input_channels(),
+                           plot_divergence = False, loss_fn=criterion, savename=savename)
