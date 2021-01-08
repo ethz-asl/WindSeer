@@ -226,7 +226,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                     writer.add_scalar('Val/MaxUncertainty', validation_max_uncertainty, epoch + 1)
                     writer.add_scalar('Val/MinUncertainty', validation_min_uncertainty, epoch + 1)
 
-                writer.add_scalar('Training/LearningRate', scheduler_lr.get_lr()[0], epoch + 1)
+                writer.add_scalar('Training/LearningRate', scheduler_lr.get_last_lr()[0], epoch + 1)
 
                 # record components of the loss
                 if log_loss_components:
