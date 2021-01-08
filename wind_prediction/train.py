@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 
 now_time = time.strftime("%Y_%m_%d-%H_%M")
-t1 = time.time()
+t_start = time.time()
 parser = argparse.ArgumentParser(description='Training an EDNN for predicting wind data from terrain')
 parser.add_argument('-np', '--no-plots', dest='make_plots', action='store_false', help='Turn off plots (default False)')
 parser.add_argument('-y', '--yaml-config', required=True, help='YAML config file')
@@ -118,20 +118,6 @@ else:
     if run_params.run['custom_init']:
         net.init_params()
 
-if run_params.run['vae_custom_weight_initialization']:
-    net.load_state_dict(torch.load(os.path.join(model_dir, 'e1000.model'), map_location=lambda storage, loc: storage))
-    counter = 0
-    for child in net.children():
-        if counter == 0:
-            # reset weights for the encoder
-            for j in range(len(child)):
-                child[j].reset_parameters()
-        elif 0 < counter < 4:
-            # freeze loaded weights for the decoder
-            for param in child.parameters():
-                param.requires_grad = False
-        counter += 1
-
 # parallelize the data if multiple gpus can be used
 if torch.cuda.device_count() > 1:
   print("Using ", torch.cuda.device_count(), " GPUs!")
@@ -147,10 +133,19 @@ if loss_fn.learn_scaling:
     param_list.append({'params': loss_fn.parameters()})
 
 # define optimizer and objective
-optimizer = torch.optim.Adam(param_list, lr=run_params.run['learning_rate_initial'],
-                             betas=(run_params.run['beta1'], run_params.run['beta2']),
-                             eps = run_params.run['eps'], weight_decay = run_params.run['weight_decay'],
-                             amsgrad = run_params.run['amsgrad'])
+if run_params.run['optimizer_type'] == 'ranger':
+    from ranger import Ranger
+    optimizer = Ranger(param_list, **run_params.run['optimizer_kwargs'])
+elif run_params.run['optimizer_type'] == 'radam':
+    from radam import RAdam
+    optimizer = RAdam(param_list, **run_params.run['optimizer_kwargs'])
+
+elif run_params.run['optimizer_type'] == 'adam':
+    optimizer = torch.optim.Adam(param_list, **run_params.run['optimizer_kwargs'])
+else:
+    print('Invalid optimizer_type, defaulting to Adam')
+    optimizer = torch.optim.Adam(param_list, **run_params.run['optimizer_kwargs'])
+
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 scheduler.last_epoch = warm_start_epoch
@@ -172,8 +167,7 @@ except:
     log_loss_components = False
     print('train.py: log_loss_components key not available, setting default value: ', log_loss_components)
 
-t2 = time.time()
-print('Time until actual training: ', t2-t1, 's')
+print('Setup time: ', time.time() - t_start, 's')
 # start the actual training
 net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer,
                        loss_fn, device, run_params.run['n_epochs'],
