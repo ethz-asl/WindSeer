@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import os
 import signal
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import time
 import torch
 from torch.nn.functional import mse_loss
