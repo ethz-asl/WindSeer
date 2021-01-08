@@ -8,8 +8,8 @@ class ModelBase(nn.Module):
     def __init__(self, **kwargs):
         super(ModelBase, self).__init__()
         
-        self.__num_inputs = None
-        self.__num_outputs = None
+        self.num_inputs = None
+        self.num_outputs = None
 
     def new_epoch_callback(self, epoch):
         # nothing to do here
@@ -29,11 +29,11 @@ class ModelBase(nn.Module):
 
         self.apply(unfreeze_weights)
 
-    def num_inputs(self):
-        return self.__num_inputs
+    def get_num_inputs(self):
+        return self.num_inputs
 
-    def num_outputs(self):
-        return self.__num_outputs
+    def get_num_outputs(self):
+        return self.num_outputs
 
     def init_params(self):
         def init_weights(m):

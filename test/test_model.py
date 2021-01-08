@@ -29,13 +29,12 @@ def test_model(Model, d3, batch_size, error_counter, test_counter, **kwargs):
         return error_counter, test_counter
 
     if d3:
-        input = torch.randn(batch_size, net.num_inputs(), kwargs['n_z'], kwargs['n_y'], kwargs['n_x']).to(device)
-        labels = torch.randn(batch_size, net.num_outputs(), kwargs['n_z'], kwargs['n_y'], kwargs['n_x']).to(device)
+        input = torch.randn(batch_size, net.get_num_inputs(), kwargs['n_z'], kwargs['n_y'], kwargs['n_x']).to(device)
+        labels = torch.randn(batch_size, net.get_num_outputs(), kwargs['n_z'], kwargs['n_y'], kwargs['n_x']).to(device)
     else:
-        input = torch.randn(batch_size, net.num_inputs(), kwargs['n_z'], kwargs['n_x']).to(device)
-        labels = torch.randn(batch_size, net.num_outputs(), kwargs['n_z'], kwargs['n_x']).to(device)
+        input = torch.randn(batch_size, net.get_num_inputs(), kwargs['n_z'], kwargs['n_x']).to(device)
+        labels = torch.randn(batch_size, net.get_num_outputs(), kwargs['n_z'], kwargs['n_x']).to(device)
 
-    output = net(input)
     try:
         output = net(input)
 
@@ -60,285 +59,155 @@ if __name__ == "__main__":
     error_counter = 0
     test_counter = 0
 
+    default_config = {'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
+                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
+                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
+                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
+                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
+                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
+                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
+                    'channel_multiplier': 2, 'grid_size': [1,1,1], 'vae': False, 'use_uz_in': True,
+                    'logvar_scaling': 10, 'use_sparse_mask': False, 'use_sparse_convolution': False}
+
     configs = []
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    configs.append(default_config.copy())
 
-    configs.append({'batchsize': 8, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['batchsize'] = 8
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 16, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['n_x'] = 16
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 16, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['n_y'] = 16
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 16, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['n_z'] = 16
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 3,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['n_downsample_layers'] = 3
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 32, 'n_y': 32, 'n_z': 32, 'n_downsample_layers': 4,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['n_x'] = 32
+    config['n_y'] = 32
+    config['n_z'] = 32
+    config['n_downsample_layers'] = 4
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': False, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['skipping'] = False
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': False, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['use_terrain_mask'] = False
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'maxpool',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['pooling_method'] = 'maxpool'
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'averagepool',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['pooling_method'] = 'averagepool'
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': False, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['pooling_method'] = 'averagepool'
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 8, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['use_fc_layers'] = False
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': True, 'potential_flow': True,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['fc_scaling'] = 8
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'PReLU', 'activation_args': {'init': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['use_mapping_layer'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D', 'use_grid_size': True, 'use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['activation_type'] = 'PReLU'
+    config['activation_args'] = {'init': 0.1}
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': False, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['use_mapping_layer'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': False, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': True, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['submodel_terrain_mask'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': False, 'n_stacked': 6, 'n_epochs': 6,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['potential_flow'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': False, 'n_stacked': 6, 'n_epochs': 6,
-                    'pass_full_output': False, 'submodel_terrain_mask': True, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['predict_uncertainty'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 3, 'n_x': 16, 'n_y': 16, 'n_z': 16, 'n_downsample_layers': 4,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 4, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 2,  'n_epochs': 2,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['n_stacked'] = 2
+    config['n_epochs'] = 2
+    configs.append(config)
 
-    configs.append({'batchsize': 3, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 4, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 2,  'n_epochs': 2,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 5,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['pass_full_output'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 4, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 2,  'n_epochs': 2,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 7,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['submodel_terrain_mask'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': True, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['filter_kernel_size'] = 5
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': True, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['n_first_conv_channels'] = 12
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': True, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['channel_multiplier'] = 4
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': True, 'use_epsilon': True, 'use_nut': True, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['use_turbulence'] = False
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2.18, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['use_epsilon'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 4, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['use_nut'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 3,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 12,
-                    'channel_multiplier': 2.3, 'grid_size': [1,1,1]})
+    config = default_config.copy()
+    config['vae'] = True
+    configs.append(config)
 
-    configs.append({'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
-                    'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
-                    'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
-                    'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
-                    'verbose': True, 'submodel_type': 'ModelEDNN3D','use_turbulence': True, 'n_stacked': 3, 'n_epochs': 3,
-                    'pass_full_output': False, 'submodel_terrain_mask': False, 'filter_kernel_size': 3,
-                    'use_pressure': False, 'use_epsilon': False, 'use_nut': False, 'n_first_conv_channels': 8,
-                    'channel_multiplier': 2, 'grid_size': [1,1,1], 'vae': True})
+    config = default_config.copy()
+    config['use_uz_in'] = False
+    configs.append(config)
+
+    config = default_config.copy()
+    config['logvar_scaling'] = 1
+    configs.append(config)
+
+    config = default_config.copy()
+    config['use_sparse_mask'] = True
+    configs.append(config)
+
+    config = default_config.copy()
+    config['use_sparse_convolution'] = True
+    configs.append(config)
 
     print("--------------------------------------------------------")
     print("ModelEDNN2D tests")

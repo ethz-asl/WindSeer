@@ -130,24 +130,24 @@ class ModelEDNN2D(ModelBase):
             if verbose:
                 print('EDNN2D: use_turbulence not present in kwargs, using default value:', self.__default_use_turbulence)
 
-        self.__num_inputs = 3
-        self.__num_outputs = 2
+        self.num_inputs = 3
+        self.num_outputs = 2
 
         if self.__use_turbulence:
-            self.__num_outputs += 1
+            self.num_outputs += 1
 
         # convolution layers
         self.__conv = nn.ModuleList()
         for i in range(self.__n_downsample_layers):
             if i == 0:
-                self.__conv += [nn.Conv2d(self.__num_inputs, 8, 3)]
+                self.__conv += [nn.Conv2d(self.num_inputs, 8, 3)]
             else:
                 self.__conv += [nn.Conv2d(4*2**i, 8*2**i, 3)]
 
         if self.__use_fc_layers:
             # fully connected layers
             if self.__n_downsample_layers == 0:
-                n_features = int(self.__num_inputs * self.__n_x * self.__n_z)
+                n_features = int(self.num_inputs * self.__n_x * self.__n_z)
             else:
                 n_features = int(8*2**(self.__n_downsample_layers-1) * self.__n_x * self.__n_z / ((2**self.__n_downsample_layers)**2))
             self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
@@ -182,7 +182,7 @@ class ModelEDNN2D(ModelBase):
             for i in range(self.__n_downsample_layers):
                 if i == 0:
                     self.__deconv1 += [nn.Conv2d(16, 8, 4)]
-                    self.__deconv2 += [nn.Conv2d(8, self.__num_outputs, 4)]
+                    self.__deconv2 += [nn.Conv2d(8, self.num_outputs, 4)]
                 else:
                     self.__deconv1 += [nn.Conv2d(16*2**i, 8*2**i, 4)]
                     self.__deconv2 += [nn.Conv2d(8*2**i, 4*2**i, 4)]
@@ -190,13 +190,13 @@ class ModelEDNN2D(ModelBase):
         else:
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv2d(8, self.__num_outputs, 4)]
+                    self.__deconv1 += [nn.Conv2d(8, self.num_outputs, 4)]
                 else:
                     self.__deconv1 += [nn.Conv2d(8*2**i, 4*2**i, 4)]
 
         if self.__use_mapping_layer:
             # mapping layer
-            self.__mapping_layer = nn.Conv2d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
+            self.__mapping_layer = nn.Conv2d(self.num_outputs,self.num_outputs,1,groups=self.num_outputs) # for each channel a separate filter
 
         if self.__potential_flow:
             self.__pf_convolution = nn.Conv2d(2,1,1)
@@ -262,7 +262,7 @@ class ModelEDNN2D(ModelBase):
                             x[:,2:,:]], 1)
 
         if self.__use_terrain_mask:
-            x = is_wind.repeat(1, self.__num_outputs, 1, 1) * x
+            x = is_wind.repeat(1, self.num_outputs, 1, 1) * x
 
         output["pred"] = x
 

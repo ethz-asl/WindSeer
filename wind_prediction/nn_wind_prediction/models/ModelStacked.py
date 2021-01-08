@@ -67,11 +67,11 @@ class ModelStacked(ModelBase):
         self.__models += [Model(**kwargs)]
 
         if self.__pass_full_output:
-            kwargs['force_num_inputs'] = self.__models[0].num_outputs() + self.__models[0].num_inputs()
+            kwargs['force_num_inputs'] = self.__models[0].get_num_outputs() + self.__models[0].get_num_inputs()
         else:
-            kwargs['force_num_inputs'] = self.__models[0].num_outputs() + 1
+            kwargs['force_num_inputs'] = self.__models[0].get_num_outputs() + 1
 
-        kwargs['force_num_outputs'] = self.__models[0].num_outputs()
+        kwargs['force_num_outputs'] = self.__models[0].get_num_outputs()
 
         for i in range(1, N):
             if i == (N -1):
@@ -120,11 +120,11 @@ class ModelStacked(ModelBase):
 
         self.__prediction_level = self.__train_level
 
-    def num_inputs(self):
-        return self.__models[0].num_inputs()
+    def get_num_inputs(self):
+        return self.__models[0].get_num_inputs()
 
-    def num_outputs(self):
-        return self.__models[-1].num_outputs()
+    def get_num_outputs(self):
+        return self.__models[-1].get_num_outputs()
 
     def forward(self, x):
         input = x.clone()
@@ -140,5 +140,4 @@ class ModelStacked(ModelBase):
                     # only pass the terrain information
                     x = self.__models[i](torch.cat((input[:,0,:].unsqueeze(1), x['pred']),1))
 
-        output['pred'] = x
-        return output
+        return x

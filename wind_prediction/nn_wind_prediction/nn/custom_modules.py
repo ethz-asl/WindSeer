@@ -2,6 +2,50 @@ import torch.nn as nn
 import torch
 
 
+class SparseConv(nn.Module):
+    def __init__(self, conv_type, mask_exclude_first_dim = False, **kwargs):
+        """
+        A very simple but inefficient way of implementing sparse convolution according to
+        3D Semantic Segmentation with Submanifold Sparse Convolutional Networks, CVPR 2018
+        """
+
+        super(SparseConv, self).__init__()
+
+        if (kwargs['kernel_size'] % 2) == 0:
+            raise ValueError('SparseConv requires an odd kernel size')
+
+        self.__conv = conv_type(**kwargs)
+
+        # convolution to get the mask in the same shape as the output
+        mask_kwargs = kwargs.copy()
+        mask_kwargs['in_channels'] = 1
+        mask_kwargs['out_channels'] = 1
+        mask_kwargs['bias'] = False
+        center = int(mask_kwargs['kernel_size'] / 2)
+
+        # set all but the center pixel to 0 and the center to 1
+        self.__conv_mask = conv_type(**mask_kwargs)
+        self.__conv_mask.weight.requires_grad = False
+        self.__conv_mask.weight *= 0
+        idx = (torch.tensor(self.__conv_mask.weight.shape) * 0.5).to(torch.long)
+        self.__conv_mask.weight[idx.split(1)] = 1.0
+
+        self.__mask_exclude_first_dim = mask_exclude_first_dim
+
+    def forward(self, x):
+        # create mask by checking if all channels in a cell are 0
+        if self.__mask_exclude_first_dim:
+            mask = (x[:,1:].abs().sum(1) != 0).float().unsqueeze(1)
+        else:
+            mask = (x.abs().sum(1) != 0).float().unsqueeze(1)
+
+        mask = self.__conv_mask(mask)
+
+        x = self.__conv(x)
+
+        return x * mask.expand(x.shape)
+
+
 class ConvLSTMCell(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, kernel_size, bias):
@@ -20,6 +64,8 @@ class ConvLSTMCell(nn.Module):
         """
 
         super(ConvLSTMCell, self).__init__()
+
+        print('Warning: ConvLSTMCell have not been properly tested and might be buggy')
 
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -87,6 +133,8 @@ class ConvLSTM3d(nn.Module):
     def __init__(self, input_dim, hidden_dim, kernel_size, num_layers,
                  batch_first=False, bias=True, return_all_layers=False):
         super(ConvLSTM3d, self).__init__()
+        
+        print('Warning: ConvLSTM3d have not been properly tested and might be buggy')
 
         # Make 3d tuple from kernel_size
         kernel_size = (kernel_size, kernel_size, kernel_size)

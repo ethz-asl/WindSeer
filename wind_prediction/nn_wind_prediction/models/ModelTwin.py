@@ -73,11 +73,11 @@ class ModelTwin(ModelBase):
     def unfreeze_uncertainty(self):
         self.__model_uncertainty.unfreeze_model()
 
-    def num_inputs(self):
-        return self.__model_mean.num_inputs()
+    def get_num_inputs(self):
+        return self.__model_mean.get_num_inputs()
 
-    def num_outputs(self):
-        return self.__model_mean.num_outputs()
+    def get_num_outputs(self):
+        return self.__model_mean.get_num_outputs()
 
     def init_params(self):
         self.__model_mean.init_params()
@@ -86,4 +86,4 @@ class ModelTwin(ModelBase):
     def forward(self, x):
         mean = self.__model_mean.forward(x)['pred']
         logvar = self.__model_uncertainty.forward(x)['pred']
-        return {'pred': x, 'logvar': logvar}
+        return {'pred': mean, 'logvar': logvar}
