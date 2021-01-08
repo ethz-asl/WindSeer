@@ -173,8 +173,8 @@ net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optim
                        loss_fn, device, run_params.run['n_epochs'],
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
-                       run_params.run['compute_validation_loss'], log_loss_components,
-                       model_dir, args.use_writer, warm_start_epoch)
+                       run_params.run['compute_validation_loss'], run_params.run['compute_validation_loss_every_n_epochs'],
+                       log_loss_components, model_dir, args.use_writer, warm_start_epoch)
 
 # save the model if requested
 if (run_params.run['save_model']):

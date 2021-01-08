@@ -23,8 +23,8 @@ def signal_handler(sig, frame):
 
 def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimizer,
                 loss_fn, device, n_epochs, plot_every_n_batches, save_model_every_n_epoch,
-                save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss, log_loss_components,
-                model_directory, use_writer, start_epoch=0):
+                save_params_hist_every_n_epoch, minibatch_loss, compute_validation_loss, compute_validation_loss_every_n_epochs,
+                log_loss_components, model_directory, use_writer, start_epoch=0):
     '''
     Train the model according to the specified loss function and params
 
@@ -55,6 +55,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             to compute the correct loss for that epoch.
         compute_validation_loss:
             Indicates whether the validatio loss should be computed at the end of each epoch
+        compute_validation_loss_every_n_epochs:
+            Compute the validation loss every nth epoch
         model_directory:
             The target directory where the model and the training log data should be stored
         use_writer:
@@ -189,7 +191,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
             validation_avg_uncertainty = 0.0
             validation_max_uncertainty = float('-inf')
             validation_min_uncertainty = float('inf')
-            if compute_validation_loss:
+            compute_validation_loss_this_epoch = (epoch % compute_validation_loss_every_n_epochs == (compute_validation_loss_every_n_epochs - 1)) and compute_validation_loss
+            if compute_validation_loss_this_epoch:
                 for data in loader_validationset:
                     if should_exit:
                         break
@@ -219,7 +222,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 writer.add_scalar('Train/MaxUncertainty', train_max_uncertainty, epoch + 1)
                 writer.add_scalar('Train/MinUncertainty', train_min_uncertainty, epoch + 1)
 
-                if compute_validation_loss:
+                if compute_validation_loss_this_epoch:
                     writer.add_scalar('Val/Loss', validation_loss, epoch + 1)
                     writer.add_scalar('Val/MeanMSELoss', validation_avg_mean, epoch + 1)
                     writer.add_scalar('Val/AverageUncertainty', validation_avg_uncertainty, epoch + 1)
@@ -232,7 +235,7 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 if log_loss_components:
                     for name, value in train_loss_components.items():
                         writer.add_scalar('Train/LC_' + name, value, epoch + 1)
-                    if compute_validation_loss:
+                    if compute_validation_loss_this_epoch:
                         for name, value in validation_loss_components.items():
                             writer.add_scalar('Val/LC_' + name, value, epoch + 1)
 
