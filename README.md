@@ -29,8 +29,14 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
 4. Install python tkinter
    `sudo apt-get install python3-tk`
 
+5. Clone the repo and update the submodules with:
+   `git clone --recurse-submodules https://github.com/ethz-asl/intel_wind.git`
+
 5. Install the `nn_wind_prediction` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
-    `pip install -e wind_prediction/`
+   `pip3 install -e wind_prediction/`
+
+6. Install RAdam and Ranger if you want to use the Ranger optimizer. To do so change into respective folders and install the packages using:
+   `pip3 install . --user --no-deps`
 
 TODO: add installation for the planning benchmark locally and on the cluster
 
