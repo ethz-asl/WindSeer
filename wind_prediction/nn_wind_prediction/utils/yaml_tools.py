@@ -83,40 +83,54 @@ class EDNNParameters(object):
                 'ny': self.model['model_args']['n_y'],
                 'nz': self.model['model_args']['n_z'],
                 'autoscale': self.data['autoscale'],
-                'loss_weighting_fn': self.loss['loss_weighting_fn']}
+                'loss_weighting_fn': self.loss['loss_weighting_fn'],
+                'loss_weighting_clamp': self.loss['loss_weighting_clamp']}
 
+        if 'return_grid_size' in self.data.keys():
+            kwargs['return_grid_size'] = self.data['return_grid_size']
+        else:
+            kwargs['return_grid_size'] = False
+
+        if 'verbose' in self.data.keys():
+            kwargs['verbose'] = self.data['verbose']
+        else:
+            kwargs['verbose'] = True
+
+        if 'return_name' in self.data.keys():
+            kwargs['return_name'] = self.data['return_name']
+        else:
+            kwargs['return_name'] = False
+
+        if 'device' in self.data.keys():
+            kwargs['device'] = self.data['device']
+        else:
+            kwargs['device'] = 'cpu'
 
         # check if the keys exist for the more recently introduced parameter
         # to keep backwards compatibility
-        if 'create_sparse_mask' in self.data.keys():
-            kwargs['create_sparse_mask'] = self.data['create_sparse_mask']
+        if 'additive_gaussian_noise' in self.data.keys():
+            kwargs['additive_gaussian_noise'] = self.data['additive_gaussian_noise']
 
-        if 'max_percentage_of_sparse_data' in self.data.keys():
-            kwargs['max_percentage_of_sparse_data'] = self.data['max_percentage_of_sparse_data']
+        if 'max_gaussian_noise_std' in self.data.keys():
+            kwargs['max_gaussian_noise_std'] = self.data['max_gaussian_noise_std']
 
-        if 'terrain_percentage_correction' in self.data.keys():
-            kwargs['terrain_percentage_correction'] = self.data['terrain_percentage_correction']
+        if 'n_turb_fields' in self.data.keys():
+            kwargs['n_turb_fields'] = self.data['n_turb_fields']
 
-        if 'create_trajectory_mask' in self.data.keys():
-            kwargs['create_trajectory_mask'] = self.data['create_trajectory_mask']
+        if 'max_normalized_turb_scale' in self.data.keys():
+            kwargs['max_normalized_turb_scale'] = self.data['max_normalized_turb_scale']
 
-        if 'create_sequential_input' in self.data.keys():
-            kwargs['create_sequential_input'] = self.data['create_sequential_input']
+        if 'max_normalized_bias_scale' in self.data.keys():
+            kwargs['max_normalized_bias_scale'] = self.data['max_normalized_bias_scale']
 
-        if 'max_sequence_length' in self.data.keys():
-            kwargs['max_sequence_length'] = self.data['max_sequence_length']
+        if 'only_z_velocity_bias' in self.data.keys():
+            kwargs['only_z_velocity_bias'] = self.data['only_z_velocity_bias']
 
-        if 'sample_terrain_region' in self.data.keys():
-            kwargs['sample_terrain_region'] = self.data['sample_terrain_region']
+        if 'max_fraction_of_sparse_data' in self.data.keys():
+            kwargs['max_fraction_of_sparse_data'] = self.data['max_fraction_of_sparse_data']
 
-        if 'add_gaussian_noise' in self.data.keys():
-            kwargs['add_gaussian_noise'] = self.data['add_gaussian_noise']
-
-        if 'add_turbulence' in self.data.keys():
-            kwargs['add_turbulence'] = self.data['add_turbulence']
-
-        if 'add_bias' in self.data.keys():
-            kwargs['add_bias'] = self.data['add_bias']
+        if 'min_fraction_of_sparse_data' in self.data.keys():
+            kwargs['min_fraction_of_sparse_data'] = self.data['min_fraction_of_sparse_data']
 
         return kwargs
 
@@ -140,7 +154,6 @@ class EDNNParameters(object):
     def print(self):
         print('Train Settings:')
         print('\tWarm start:\t\t', self.run['warm_start'])
-        print('\tLearning rate initial:\t', self.run['learning_rate_initial'])
         print('\tLearning rate step size:', self.run['learning_rate_decay_step_size'])
         print('\tLearning rate decay:\t', self.run['learning_rate_decay'])
         print('\tBatchsize:\t\t', self.run['batchsize'])
@@ -160,6 +173,11 @@ class EDNNParameters(object):
         print('\t Model type:\t\t', self.model['model_type'])
         print('\t Model args:')
         print('\t\t', self.model['model_args'])
+        print(' ')
+        print('Optimizer Settings:')
+        print('\t Optimizer type:\t', self.run['optimizer_type'])
+        print('\t Optimizer args:')
+        print('\t\t', self.run['optimizer_kwargs'])
         print(' ')
         print('Dataset Settings:')
         print('\tInput channels:\t',self.data['input_channels'])
