@@ -54,6 +54,12 @@ loss:
     loss_weighting_fn: 0 # 0: off, 1: pressure fluct, 2: pressure grad, 3: vel grad
     loss_weighting_clamp: True
 
+    # If true the labels and predictions are channel-wise scaled by the average of the respective channel
+    auto_channel_scaling: True
+
+    # lower limit to the channel scaling values
+    eps_scaling: 1E-2
+
 # dataset parameters
 data:
     trainset_name: 'data/train.hdf5'
@@ -81,7 +87,7 @@ data:
     epsilon_scaling: 1.0
     nut_scaling: 1.0
     terrain_scaling: 1.0
-    autoscale: True
+    autoscale: False
     additive_gaussian_noise: True # if true the gaussian noise is additive, else a multiplication of the values
     max_gaussian_noise_std: 0.0 # gaussian noise standard deviation for the normalized wind
     n_turb_fields: 0 # number of turbelence fields
