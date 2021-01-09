@@ -93,7 +93,7 @@ class CombinedLoss(Module):
         if self.auto_channel_scaling:
             channel_scaling = target.abs().mean(tuple(range(2, len(target.shape))))
 
-            channel_scaling *= terrain_correction_factors.unsqueeze(-1)
+            channel_scaling /= terrain_correction_factors.unsqueeze(-1)
 
             channel_scaling = channel_scaling.clamp(min=self.eps_scaling)
 
