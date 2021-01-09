@@ -122,6 +122,8 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
                 train_max_uncertainty = max(train_max_uncertainty, uncertainty_exp.max().item())
                 train_min_uncertainty = min(train_min_uncertainty, uncertainty_exp.min().item())
 
+            del outputs, inputs, labels, W
+
             loss.backward()
             optimizer.step()
 

@@ -435,14 +435,16 @@ class ModelEDNN3D(ModelBase):
                 else:
                     x = x_mean
 
-            output["encoding"] = x.clone()
+            if self.__vae:
+                output["encoding"] = x.clone()
 
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
         else:
             x = self.__activation(self.__c1(self.__pad_conv(x)))
 
-            output["encoding"] = x.view(-1, self.num_flat_features(x)).clone()
+            if self.__vae:
+                output["encoding"] = x.view(-1, self.num_flat_features(x)).clone()
 
             x = self.__activation(self.__c2(self.__pad_conv(x)))
 
