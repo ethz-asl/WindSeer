@@ -21,7 +21,7 @@ rm ../../CMakeModules/FindEigen3.cmake
 
 # execute the building on a cluster computer
 # only submit the job here because on the cluster git clone is not possible
-bsub -Is -n 8 -W 1:00 -R "rusage[mem=4096]" bas
+bsub -Is -n 8 -W 1:00 -R "rusage[mem=4096]" bash
 
 # build and install ompl
 cmake -DCMAKE_INSTALL_PREFIX=~/software/ompl/build/lib ../../

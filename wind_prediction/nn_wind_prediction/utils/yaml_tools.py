@@ -86,11 +86,6 @@ class EDNNParameters(object):
                 'loss_weighting_fn': self.loss['loss_weighting_fn'],
                 'loss_weighting_clamp': self.loss['loss_weighting_clamp']}
 
-        if 'return_grid_size' in self.data.keys():
-            kwargs['return_grid_size'] = self.data['return_grid_size']
-        else:
-            kwargs['return_grid_size'] = False
-
         if 'verbose' in self.data.keys():
             kwargs['verbose'] = self.data['verbose']
         else:
