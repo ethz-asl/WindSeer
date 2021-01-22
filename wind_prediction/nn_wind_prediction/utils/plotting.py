@@ -47,6 +47,9 @@ class PlotUtils():
         # check what can be plotted
         self.__plot_input = False
         if input is not None and provided_input_channels is not None:
+            if len(input.shape) != 4:
+                raise ValueError('The input tensor must have 4 dimension')
+
             if input.shape[0] != len(provided_input_channels):
                 raise ValueError('PlotUtils: The number of provided input labels must be equal to the number of channels in the input tensor')
 
@@ -54,6 +57,9 @@ class PlotUtils():
 
         self.__plot_prediction = False
         if prediction is not None and provided_prediction_channels is not None:
+            if len(input.shape) != 4:
+                raise ValueError('The prediction tensor must have 4 dimension')
+
             if prediction.shape[0] != len(provided_prediction_channels):
                 raise ValueError('PlotUtils: The number of provided prediction channels must be equal to the number of channels in the prediction tensor')
 
@@ -75,6 +81,9 @@ class PlotUtils():
 
         self.__plot_uncertainty = False
         if uncertainty is not None:
+            if len(input.shape) != 4:
+                raise ValueError('The uncertainty tensor must have 4 dimension')
+
             if uncertainty.shape != len(provided_prediction_channels):
                 raise ValueError('PlotUtils: The shape of the label and prediction tensor have to be equal')
 
