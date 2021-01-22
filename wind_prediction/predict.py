@@ -54,7 +54,7 @@ params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yam
 
 # load dataset
 testset = nn_data.HDF5Dataset(args.dataset,
-                             augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
+                              augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
 testloader = torch.utils.data.DataLoader(testset, batch_size=1, # needs to be one
                                              shuffle=False, num_workers=num_worker)
 

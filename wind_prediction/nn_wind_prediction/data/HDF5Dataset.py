@@ -481,7 +481,7 @@ class HDF5Dataset(Dataset):
             if self.__autoscale:
                 # determine the scales
                 noise_scale = 1.0
-                scale = self.__get_scale(data[self.__data_velocity_indices, :, :, :])
+                scale = self.get_scale(data[self.__data_velocity_indices, :, :, :])
 
                 # applying the autoscale to the velocities
                 data[self.__data_velocity_indices, :, :, :] /= scale
@@ -504,7 +504,7 @@ class HDF5Dataset(Dataset):
 
             else:
                 # determine the scale of the sample to properly scale the noise
-                noise_scale = self.__get_scale(data[self.__data_velocity_indices, :, :, :])
+                noise_scale = self.get_scale(data[self.__data_velocity_indices, :, :, :])
 
             # downscale if requested
             data = data[:, ::self.__stride_vert, ::self.__stride_hor, ::self.__stride_hor]
@@ -880,7 +880,7 @@ class HDF5Dataset(Dataset):
 
         return torch.from_numpy(interpolated).float()
 
-    def __get_scale(self, x):
+    def get_scale(self, x):
         shape = x.shape
 
         # get data from corners of sample
