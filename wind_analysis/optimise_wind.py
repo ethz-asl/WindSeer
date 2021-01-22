@@ -1,78 +1,136 @@
-import torch
 import argparse
-from wind_optimiser import WindOptimiser, OptTest, SimpleStepOptimiser
-from analysis_utils.wind_optimiser_output import WindOptimiserOutput
-import pickle
+import numpy as np
+import torch
 
+
+import nn_wind_prediction.models as models
+import nn_wind_prediction.utils as nn_utils
+from analysis_utils import utils
+from analysis_utils.WindOptimizer import WindOptimizer
 
 parser = argparse.ArgumentParser(description='Optimise wind speed and direction from COSMO data using observations')
-parser.add_argument('input_yaml', help='Input yaml config')
-parser.add_argument('-n', '--n_steps', type=int, default=200, help='Number of optimisation steps')
+parser.add_argument('config_yaml', help='Input yaml config')
+parser.add_argument('-model_dir', dest='model_dir', required=True, help='The directory of the model')
+parser.add_argument('-model_version', dest='model_version', default='latest', help='The model version')
+parser.add_argument('-p', '--plot', action='store_true', help='Plot the optimization results')
+parser.add_argument('-test', '--optimizer_test', action='store_true', help='Loop through all possible optimizers and report the results')
+parser.add_argument('-s', '--save', action='store_true', help='Store the results of the optimization')
+parser.add_argument('-o', '--out_file', default='/tmp/opt_results.npy', help='Filename of the optimization results')
 args = parser.parse_args()
 
-# Range of different optimisers from torch.optim, and a basic gradient step (SimpleStepOptimiser)
-optimisers = [OptTest(SimpleStepOptimiser, {'lr': 5.0, 'lr_decay': 0.01}),
-              OptTest(torch.optim.Adadelta, {'lr': 1.0}),
-              OptTest(torch.optim.Adagrad, {'lr': 1.0, 'lr_decay': 0.1}),
-              OptTest(torch.optim.Adam, {'lr': 1.0, 'betas': (.9, .999)}),
-              OptTest(torch.optim.Adamax, {'lr': 1.0, 'betas': (.9, .999)}),
-              OptTest(torch.optim.ASGD, {'lr': 2.0, 'lambd': 1e-3}),
-              OptTest(torch.optim.SGD, {'lr': 2.0, 'momentum': 0.5, 'nesterov': True}),
-              ]
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# Create WindOptimiser object using yaml config
-wind_opt = WindOptimiser(args.input_yaml)
+config = nn_utils.BasicParameters(args.config_yaml)
 
-# TODO: hardcoded flags to be put in config file
-original_input = False
-optimise_corners = False
-predict_wind = True
+# load the NN
+nn_params = nn_utils.EDNNParameters(args.model_dir + '/params.yaml')
+NetworkType = getattr(models, nn_params.model['model_type'])
+net = NetworkType(**nn_params.model_kwargs())
+state_dict = torch.load(args.model_dir + '/' + args.model_version + '.model',
+                        map_location=lambda storage, loc: storage)
+net.load_state_dict(state_dict)
+net.to(device)
+net.eval()
 
-# save and load variables from file
-save_file = True
-load_file = False
-filename = 'optimisation_output.pickle'
+if nn_params.data['input_mode'] != 1:
+    raise ValueError('Models with an input mode other than 1 are not supported')
 
+config.params['model'] = {}
+config.params['model']['input_channels'] = nn_params.data['input_channels']
+config.params['model']['label_channels'] = nn_params.data['label_channels']
+config.params['model']['autoscale'] = nn_params.data['autoscale']
+for key in nn_params.data.keys():
+    if 'scaling' in key:
+        config.params['model'][key] = nn_params.data[key]
 
-# Optimise wind variables using each optimisation method
-if optimise_corners:
-    all_ov, losses, grads = [], [], []
-    for i, o in enumerate(optimisers):
-        output, input, ov, loss, grad = wind_opt.optimise_wind_corners(o.opt, n=args.n_steps, opt_kwargs=o.kwargs,
-                                                                           print_steps=True, verbose=False)
-        all_ov.append(ov)
-        losses.append(loss)
-        grads.append(grad)
+# optimizer
+loss_fn = utils.get_loss_fn(config.params['loss'])
 
-if predict_wind:
-    # Wind predictions
-    wind_predictions, losses, inputs, losses_dict = [], [], [], []
-    if wind_opt.flag.use_window_split:
-        wind_predictions, losses_dict, inputs = wind_opt.window_split_prediction()
-    else:
-        if wind_opt.flag.test_simulated_data:
-            if original_input:
-                wind_predictions, losses = wind_opt.get_original_input_prediction()
-            elif wind_opt.flag.use_sparse_data:
-                wind_predictions, losses, inputs = wind_opt.sparse_data_prediction()
-            elif wind_opt.flag.use_trajectory:
-                wind_predictions, losses, inputs = wind_opt.cfd_trajectory_prediction()
-        if wind_opt.flag.test_flight_data:
-            if wind_opt.flag.predict_flight:
-                wind_predictions, losses, inputs = wind_opt.flight_prediction()
+wind_opt = WindOptimizer(net, loss_fn, device)
 
-    if save_file:
-        with open(filename, 'wb') as f:
-            pickle.dump(losses_dict, f, protocol=-1)
-    if load_file:
-        with open(filename, 'rb') as f:
-            losses_dict = pickle.load(f)
+measurement, terrain, ground_truth, mask, scale = utils.load_measurements(config.params['measurements'], config.params['model'])
 
-    print('Job done. No errors!')
+measurement = measurement.to(device)
+terrain = terrain.to(device)
+ground_truth = ground_truth.to(device)
+mask = mask.to(device)
 
-    # Analyse optimised wind
-    wind_opt_output = WindOptimiserOutput(wind_opt, wind_predictions, losses, inputs, losses_dict)
-    # Plot graphs
-    wind_opt_output.plot()
-    # # Print losses
-    # wind_opt_output.print_losses()
+generate_input_fn, initial_parameter = utils.get_input_fn(config.params['input_fn'], measurement, mask)
+
+if args.optimizer_test:
+    optimizers = [{'name': 'SimpleStepOptimizer', 'kwargs': {'lr': 5.0, 'lr_decay': 0.01}},
+                  {'name': 'Adadelta', 'kwargs': {'lr': 1.0}},
+                  {'name': 'Adagrad', 'kwargs': {'lr': 1.0}},
+                  {'name': 'Adam', 'kwargs': {'lr': 1.0, 'betas': (.9, .999)}},
+                  {'name': 'Adamax', 'kwargs': {'lr': 1.0, 'betas': (.9, .999)}},
+                  {'name': 'ASGD', 'kwargs': {'lr': 2.0, 'lambd': 1e-3}},
+                  {'name': 'SGD', 'kwargs': {'lr': 2.0, 'momentum': 0.5, 'nesterov': True}},
+                 ]
+
+    losses_list = []
+    parameter_list = []
+    gradients_list = []
+
+    for opt in optimizers:
+        # copy the params in this way to initialize the optimization always with the same value
+        print('Evaluating optimizer: ' + opt['name'])
+        params = torch.Tensor(initial_parameter.cpu().detach().clone()).to(device).requires_grad_()
+        config.params['optimizer'] = opt
+        prediction, optimization_params, losses, parameter, gradients, input = \
+            wind_opt.run(generate_input_fn, params, terrain, measurement, mask, scale, config.params)
+
+        gradients_list.append(torch.stack(gradients))
+        parameter_list.append(torch.stack(parameter))
+        losses_list.append(losses)
+
+else:
+    prediction, optimization_params, losses, parameter, gradients, input = \
+        wind_opt.run(generate_input_fn, initial_parameter, terrain, measurement, mask, scale, config.params)
+
+    optimizers = [config.params['optimizer']]
+    gradients_list = [torch.stack(gradients)]
+    parameter_list = [torch.stack(parameter)]
+    losses_list = [losses]
+
+if args.save:
+    out = {'optimizers': optimizers,
+           'gradients': gradients_list,
+           'parameters': parameter_list,
+           'losses': losses_list}
+    np.save(args.out_file, out)
+
+if args.plot:
+    # visualize the results
+    import matplotlib.pyplot as plt
+
+    x = np.arange(len(losses_list[0]))
+
+    fig = plt.figure()
+    fig.patch.set_facecolor('white')
+    for i, loss in enumerate(losses_list):
+        plt.plot(x, loss, label = optimizers[i]['name'])
+    plt.xlabel('Iteration')
+    plt.ylabel('Loss')
+    plt.legend(loc='best')
+
+    fig, ah = plt.subplots(2, gradients_list[0].shape[1])
+    fig.patch.set_facecolor('white')
+    for j in range(len(gradients_list)):
+        for i in range(gradients_list[j].shape[1]):
+            ah[0][i].plot(x, parameter_list[j][:, i].numpy(), label = optimizers[j]['name'])
+            ah[1][i].plot(x, gradients_list[j][:, i].numpy(), label = optimizers[j]['name'])
+
+            if j == 0:
+                ah[0][i].set_title('Parameter' + str(i))
+                ah[1][i].set_xlabel('Iteration')
+
+    ah[0][0].set_ylabel('Parameter Value')
+    ah[1][0].set_xlabel('Gradients')
+    plt.legend(loc='best')
+
+    nn_utils.plot_prediction(nn_params.data['label_channels'],
+                             prediction = prediction['pred'][0].detach(),
+                             label = ground_truth[0],
+                             provided_input_channels = nn_params.data['input_channels'],
+                             input = input[0].detach(),
+                             terrain = terrain.squeeze())

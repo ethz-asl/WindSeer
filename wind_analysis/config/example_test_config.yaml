@@ -1,152 +1,48 @@
-# Test parameters
-test:
-    test_simulated_data: False
-    test_flight_data: True
+optimizer:
+    # possible options:
+    # 'SimpleStepOptimizer', Adadelta', 'Adagrad', 'Adam', 'Adamax', 'ASGD', 'SGD'
+    name: 'Adam'
+    kwargs: {'lr': 0.5}
 
-# CFD data
-cfd:
-    testset_name: '/media/bogdan/Elements/MyLaptop/eth master/Master thesis/test.hdf5'
-    # Channels to load from data, choose from ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
-    input_channels: ['terrain', 'ux', 'uy', 'uz'] # only terrain and velocities are loaded
-    label_channels: ['ux', 'uy', 'uz']  # velocities
-    print_names: False
-    # Index of sample in the test set
-    index: 63
+loss:
+    # possible options:
+    # 'L1', 'MSE'
+    name: 'MSE'
 
-# COSMO data
-cosmo:
-    file: '/home/bogdan/Desktop/data/cosmo-1_ethz_fcst_2018112309.nc'        #09, 12
-    time: 'auto'
-    terrain_file: '/home/bogdan/Desktop/data/cosmo-1_ethz_ana_const.nc'
-    terrain_tiff: '/home/bogdan/Desktop/data/fluelen_full.tif'        # riemenstalden_full, fluelen_full, hinwil, tobelhof
-    prediction_prefix: ''  # rotated_
+measurements:
+    # possible options:
+    # 'cfd', 'log'
+    type: 'cfd'
 
-# flight data
-flight:
-    flight_data_dir: '/cluster/scratch/danciub/data/fluelen/'
-    files: ['20181123_flight03_fpr_wind.hdf5', '20181123_flight04_fpr_wind.hdf5', '20181123_flight05_fpr_wind.hdf5', '20181123_flight06_fpr_wind.hdf5',
-    '20181123_flight01_fpr_wind.hdf5', '20181123_flight02_fpr_wind.hdf5',
-    '20190411_flight01_fpr_wind.hdf5',
-    '20190719_flight01_fpr_wind.hdf5', '20190719_flight02_fpr_wind.hdf5']
+    cfd:
+        filename: '/tmp/test.hdf5'
+        index: 10
+        kwargs: {input_mode: 3,
+                 additive_gaussian_noise: True,
+                 max_gaussian_noise_std: 0.0,
+                 n_turb_fields: 0,
+                 max_normalized_turb_scale: 0.0,
+                 max_normalized_bias_scale: 0.0,
+                 only_z_velocity_bias: False,
+                 max_fraction_of_sparse_data: 0.1,
+                 min_fraction_of_sparse_data: 0.001,
+                 }
 
-    # ['20181123_flight03_fpr_wind.hdf5', '20181123_flight04_fpr_wind.hdf5', '20181123_flight05_fpr_wind.hdf5', '20181123_flight06_fpr_wind.hdf5',
-    #  '20181123_flight03_fpr_wind_hn.hdf5', '20181123_flight04_fpr_wind_hn.hdf5', '20181123_flight05_fpr_wind_hn.hdf5', '20181123_flight06_fpr_wind_hn.hdf5']
+    log:
+        name: '/tmp/test.ulog'
 
-    # ['20181123_flight01_fpr_wind.hdf5', '20181123_flight02_fpr_wind.hdf5',
-    #  '20181123_flight01_fpr_wind_hn.hdf5', '20181123_flight02_fpr_wind_hn.hdf5']
 
-#  ['20190719_flight01_fpr_wind.hdf5',
-#   '20190719_flight01_fpr_wind_hn.hdf5',
-#   '20190719_flight01_fpr_wind_hn_techpod.hdf5',
-#   '20190719_flight01_fpr_wind_techpod.hdf5',
-#   '20190719_flight02_fpr_wind.hdf5',
-#   '20190719_flight02_fpr_wind_hn.hdf5',
-#   '20190726_flight01_fpr_wind_hn_techpod.hdf5',
-#   '20190726_flight01_fpr_wind_techpod.hdf5',
-#   '20190726_flight02_fpr_wind_hn_techpod.hdf5',
-#   '20190726_flight02_fpr_wind_techpod.hdf5',
-#   '20190726_flight03_fpr_wind_hn_techpod.hdf5',
-#   '20190726_flight03_fpr_wind_techpod.hdf5',
-#   '20190726_flight04_fpr_wind_hn_techpod.hdf5',
-#   '20190726_flight04_fpr_wind_techpod.hdf5',
-#   '20190726_flight05_fpr_wind_hn_techpod.hdf5',
-#   '20190726_flight05_fpr_wind_techpod.hdf5',
-#   '20190809_flight01_fpr_wind.hdf5',
-#   '20190809_flight01_fpr_wind_hn.hdf5',
-#   '20190809_flight01_fpr_wind_hn_techpod.hdf5',
-#   '20190809_flight01_fpr_wind_techpod.hdf5',
-#   '20190809_flight02_fpr_wind.hdf5',
-#   '20190809_flight02_fpr_wind_hn.hdf5',
-#   '20190809_flight02_fpr_wind_hn_techpod.hdf5',
-#   '20190809_flight02_fpr_wind_techpod.hdf5',
-#   '20190809_flight03_fpr_wind.hdf5',
-#   '20190809_flight03_fpr_wind_hn.hdf5',
-#   '20190809_flight03_fpr_wind_hn_techpod.hdf5',
-#   '20190809_flight03_fpr_wind_techpod.hdf5',
-#   '20190809_flight04_fpr_wind_hn_techpod.hdf5',
-#   '20190809_flight04_fpr_wind_techpod.hdf5']
 
-    # ['20190411_flight01_fpr_wind.hdf5',
-    #  '20190411_flight01_fpr_wind_hn.hdf5']
-    index: 4
-    #
-    filtered_dir: '/home/bogdan/Desktop/data/'
-    use_ekf_wind: False
-
-# Wind measurements parameters
-wind:
-    # Sparse points: generate random wind data by randomly sampling from the CFD labels
-    sparse_data: {
-        use_sparse_data: False,
-        #
-        percentage_of_sparse_data: 0.0005,
-        terrain_percentage_correction: False,
-        sample_random_region: False,
-    }
-    # Trajectory generation
-    trajectory: {
-        use_trajectory_generation: True,
-        #
-        trajectory_type: 'segments',  # spiral, random, segments
-        #
-        use_simulated_trajectory: False,
-        num_points_generated: 10,
-        uav_speed: 15,
-        dt: 1 # seconds
-    }
-    # Real flight wind data
-    flight: {
-        predict_flight: True,
-        interpolation_method: 'bin',   #'bin', 'idw', 'krigging', 'gpr'
+input_fn:
+    # possible options:
+    # 'bp_corners_1', 'bp_corners_4'
+    type: 'bp_corners_4'
+    kwargs: {
+        roughness: 64 # roughness of the boundary layer [n_cells]
     }
 
-# Noise parameters
-noise:
-  add_turbulence: True
-  add_gaussian_noise: True
-
-# Window split parameters
-window_split:
-  use_window_split: True
-  #
-  batch_test: True
-  incremental_input_prediction: False
-  sliding_input_prediction: True
-  # normalize losses with zero wind loss
-  normalize_losses: True
-  #
-  use_average_wind: True
-  use_optimized_corners: True
-  use_optimized_corners_polynomial: True
-  use_gpr_prediction: True
-  use_krigging_prediction: False
-  #
-  rescale_prediction: True
-  #
-  window_time: 60 # seconds
-  response_time: 120 # seconds
-  step_time: 60 # seconds
-
-# Corner optimisation parameters
-corner_optimisation:
-    optimise_corners_individually: True
-    num_of_optimisation_steps: 15
-    # Rotation
-    rotation: 0.0
-    # Scale
-    scale: 1.0
-    # Spline
-    polynomial_law_num_points: 6  #approximate wind profile using a power law
-    init_wind_speed: 1.0
-
-# NN models parameters
-model:
-  location: '/home/bogdan/Desktop/data/trained_models/'
-  name: ['test_model_63', 'test_model_65', 'test_model_67', 'test_model_68', 'test_model_75', 'test_model_77', 'ednn3d_best']
-  version: ['latest', 'latest', 'latest', 'latest', 'latest', 'latest', 'latest']
-  boolean_terrain: False
-  loss: 'MSE'  # L1, MSE, SoftMargin
-  hybrid_model: {
-      use_hybrid_model: [False, False, False, True, True, True, False],
-      sequence_length: 5
-  }
+run:
+    max_iter: 100
+    loss_change_threshold: 0.01
+    loss_change_window: 4
+    grad_threshold: 0.0001
