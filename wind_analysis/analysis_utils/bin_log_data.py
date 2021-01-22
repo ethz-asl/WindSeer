@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-def bin_log_data(wind_data, grid_dimensions):
+def bin_log_data(wind_data, grid_dimensions, verbose = False):
     '''
     Bins the input wind data into a grid specified by the input grid dimensions.
     Currently assumes that in all 3 dimensions the number of cells is equal.
@@ -42,8 +42,8 @@ def bin_log_data(wind_data, grid_dimensions):
 
     wind = torch.zeros((3, grid_dimensions['n_cells'],grid_dimensions['n_cells'],grid_dimensions['n_cells']))
     variance = torch.zeros((3, grid_dimensions['n_cells'],grid_dimensions['n_cells'],grid_dimensions['n_cells'])) * float('nan')
+    mask = torch.zeros((grid_dimensions['n_cells'],grid_dimensions['n_cells'],grid_dimensions['n_cells']))
 
-    counter = 0
     vals_per_cell = []
     for i in range(grid_dimensions['n_cells']):
         for j in range(grid_dimensions['n_cells']):
@@ -57,10 +57,12 @@ def bin_log_data(wind_data, grid_dimensions):
                     variance[1, i, j, k] = np.var(wy[i][j][k])
                     variance[2, i, j, k] = np.var(wz[i][j][k])
 
-                    counter += 1
+                    mask[i, j, k] = 1
                     vals_per_cell.append(len(wx[i][j][k]))
-    print('')
-    print('\tNumber of cells with values:     {}'.format(counter))
-    print('\tPercentage of cells with values: {:.2f}'.format(100* counter / (grid_dimensions['n_cells']*grid_dimensions['n_cells']*grid_dimensions['n_cells'])))
-    print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
-    return wind, variance
+
+    if verbose:
+        print('')
+        print('\tNumber of cells with values:     {}'.format(mask.sum()))
+        print('\tPercentage of cells with values: {:.2f}'.format(100 * mask.sum() / (grid_dimensions['n_cells']*grid_dimensions['n_cells']*grid_dimensions['n_cells'])))
+        print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
+    return wind, variance, mask
