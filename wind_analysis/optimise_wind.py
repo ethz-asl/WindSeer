@@ -128,9 +128,14 @@ if args.plot:
     ah[1][0].set_xlabel('Gradients')
     plt.legend(loc='best')
 
+    if mask is not None:
+        mask = mask.squeeze()
+
     nn_utils.plot_prediction(nn_params.data['label_channels'],
                              prediction = prediction['pred'][0].detach(),
                              label = ground_truth[0],
                              provided_input_channels = nn_params.data['input_channels'],
                              input = input[0].detach(),
-                             terrain = terrain.squeeze())
+                             terrain = terrain.squeeze(),
+                             measurements = measurement[0].detach(),
+                             measurements_mask = mask)

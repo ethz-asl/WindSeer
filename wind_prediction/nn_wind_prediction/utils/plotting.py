@@ -17,8 +17,10 @@ class PlotUtils():
         input: 4D tensor with [channels, z, y, x]. Channels must be ordered as in provided_input_channels.
         prediction: 4D tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
         label: 4D tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
+        measurements: 4D tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
         uncertainty: 4D tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
-        terrain: 3D tensor of terrain data [z, y, x]
+        terrain: 3D tensor of terrain data [z, y, x].
+        measurements_mask: 3D tensor with [z, y, x].
         ds: grid size of the data, used for plotting the divergence field, if set and the data is available the divergency is computed and plotted
         title_dict: an optional title dict can be passed, if one would like to replace the default titles or plot new channels
         title_fontsize: font size of the title
@@ -28,8 +30,8 @@ class PlotUtils():
         terrain_color: color of the terrain
     '''
     def __init__(self, channels_to_plot = 'all', provided_input_channels = None, provided_prediction_channels = None,
-                 input = None, prediction = None, label = None, terrain = None, input_mask=None,
-                 uncertainty = None, ds = None, title_dict = None,
+                 input = None, prediction = None, label = None, terrain = None, input_mask = None,
+                 uncertainty = None, measurements = None, measurements_mask = None, ds = None, title_dict = None,
                  title_fontsize = 14, label_fontsize = 12, tick_fontsize = 8, cmap=cm.jet, terrain_color='grey'):
 
         # Input is the prediction, label is CFD
@@ -67,10 +69,23 @@ class PlotUtils():
 
         self.__plot_label = False
         if label is not None and provided_prediction_channels is not None:
+            if len(label.shape) != 4:
+                raise ValueError('The label tensor must have 4 dimension')
+
             if label.shape[0] != len(provided_prediction_channels):
                 raise ValueError('PlotUtils: The number of provided prediction channels must be equal to the number of channels in the label tensor')
 
             self.__plot_label = True
+
+        self.__plot_measurements = False
+        if measurements is not None and provided_prediction_channels is not None:
+            if len(measurements.shape) != 4:
+                raise ValueError('The measurements tensor must have 4 dimension')
+
+            if measurements.shape[0] != len(provided_prediction_channels):
+                raise ValueError('PlotUtils: The number of provided prediction channels must be equal to the number of channels in the measurements tensor')
+
+            self.__plot_measurements = True
 
         self.__plot_error = False
         if label is not None and prediction is not None:
@@ -78,6 +93,13 @@ class PlotUtils():
                 raise ValueError('PlotUtils: The shape of the label and prediction tensor have to be equal')
 
             self.__plot_error = True
+            plot_prediction_error = True
+        elif measurements is not None and prediction is not None:
+            if measurements.shape != prediction.shape:
+                raise ValueError('PlotUtils: The shape of the label and prediction tensor have to be equal')
+
+            self.__plot_error = True
+            plot_prediction_error = False
 
         self.__plot_uncertainty = False
         if uncertainty is not None:
@@ -195,7 +217,7 @@ class PlotUtils():
         if self.__plot_input:
             self.__n_figures += 1
 
-        if self.__plot_prediction or self.__plot_label or self.__plot_error or self.__plot_uncertainty:
+        if self.__plot_prediction or self.__plot_label or self.__plot_error or self.__plot_measurements or self.__plot_uncertainty:
             self.__n_figures += int(math.ceil(len(self.__provided_prediction_channels) / 4.0))
 
         for j in range(self.__n_figures):
@@ -219,6 +241,7 @@ class PlotUtils():
         self.__label_images = []
         self.__error_images = []
         self.__uncertainty_images = []
+        self.__measurement_images = []
 
         # mask the input by the input mask if one is provided
         if input_mask is not None and self.__plot_input:
@@ -235,6 +258,17 @@ class PlotUtils():
                         input_tmp[i] = channel
 
             input = input_tmp
+
+        # mask the measurements by the mask if one is provided
+        if measurements_mask is not None and self.__plot_measurements:
+            meas_tmp = np.ma.MaskedArray(np.zeros(measurements.shape))
+            is_masked = np.logical_not(measurements_mask.cpu().numpy().astype(bool))
+            for i, channel in enumerate(measurements.cpu()):
+                meas_tmp[i] = np.ma.masked_where(is_masked, channel)
+
+            measurements = meas_tmp
+        elif self.__plot_measurements:
+            measurements = measurements.cpu().numpy()
 
         # mask the data by the terrain if it is provided
         if terrain is not None:
@@ -291,14 +325,21 @@ class PlotUtils():
         if self.__plot_label:
             self.__label = label;
 
+        if self.__plot_measurements:
+            self.__measurements = measurements
+
         if self.__plot_error:
-            self.__error = self.__label - self.__prediction
+            if plot_prediction_error:
+                self.__error = self.__label - self.__prediction
+            else:
+                self.__error = self.__measurements - self.__prediction
 
         if self.__plot_uncertainty:
             self.__uncertainty = uncertainty
 
         # if only the labels and the inputs are plotted combine them and plot in one figure
-        if self.__plot_input and self.__plot_label and not self.__plot_prediction and not self.__plot_error and not self.__plot_uncertainty:
+        if (self.__plot_input and self.__plot_label and not self.__plot_prediction and not self.__plot_measurements
+                and not self.__plot_error and not self.__plot_uncertainty):
             self.__input = np.ma.concatenate((self.__input, self.__label), 0)
             self.__provided_input_channels += self.__provided_prediction_channels
             self.__provided_prediction_channels = None
@@ -338,6 +379,10 @@ class PlotUtils():
                 im.set_data(self.__uncertainty[i, :, :, slice_number])
                 im.set_extent([0, self.__uncertainty.shape[2], 0, self.__uncertainty.shape[1]])
 
+            for i, im in enumerate(self.__measurement_images):
+                im.set_data(self.__measurements[i, :, :, slice_number])
+                im.set_extent([0, self.__measurements.shape[2], 0, self.__measurements.shape[1]])
+
         elif self.__axis == '  x-y':
             for i, im in enumerate(self.__input_images):
                 im.set_data(self.__input[i, slice_number, :, :])
@@ -359,6 +404,10 @@ class PlotUtils():
                 im.set_data(self.__uncertainty[i, slice_number, :, :])
                 im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[2]])
 
+            for i, im in enumerate(self.__measurement_images):
+                im.set_data(self.__measurements[i, slice_number, :, :])
+                im.set_extent([0, self.__measurements.shape[3], 0, self.__measurements.shape[2]])
+
         else:
             for i, im in enumerate(self.__input_images):
                 im.set_data(self.__input[i, :, slice_number, :])
@@ -379,6 +428,10 @@ class PlotUtils():
             for i, im in enumerate(self.__uncertainty_images):
                 im.set_data(self.__uncertainty[i, :, slice_number, :])
                 im.set_extent([0, self.__uncertainty.shape[3], 0, self.__uncertainty.shape[1]])
+
+            for i, im in enumerate(self.__measurement_images):
+                im.set_data(self.__measurements[i, :, slice_number, :])
+                im.set_extent([0, self.__measurements.shape[3], 0, self.__measurements.shape[1]])
 
         plt.draw()
 
@@ -472,11 +525,11 @@ class PlotUtils():
 
 
 
-        if self.__plot_prediction or self.__plot_label or self.__plot_error or self.__plot_uncertainty:
+        if self.__plot_prediction or self.__plot_label or self.__plot_error or self.__plot_uncertainty or self.__plot_measurements:
             for j in range(int(math.ceil(len(self.__provided_prediction_channels) / 4.0))):
                 # get the number of columns for this figure
                 n_columns = int(min(len(self.__provided_prediction_channels) - 4 * j, 4))
-                n_rows = self.__plot_prediction + self.__plot_label + self.__plot_error + self.__plot_uncertainty
+                n_rows = self.__plot_prediction + self.__plot_label + self.__plot_error + self.__plot_uncertainty + self.__plot_measurements
 
                 # create the new figure
                 fig_in, ah_in = plt.subplots(n_rows, n_columns, squeeze=False, figsize=(14.5,12))
@@ -531,6 +584,20 @@ class PlotUtils():
                         plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
 
                         ah_in[idx_row][0].set_ylabel('Error', fontsize=self.__label_fontsize)
+
+                        idx_row += 1
+
+                    if self.__plot_measurements:
+                        self.__measurement_images.append(ah_in[idx_row][i].imshow(
+                            self.__measurements[data_index,:,slice,:], origin='lower',
+                            vmin=np.nanmin(self.__measurements[data_index,:,:,:]),
+                            vmax=np.nanmax(self.__measurements[data_index,:,:,:]),
+                            aspect='equal', cmap=self.__cmap))
+
+                        chbar = fig_in.colorbar(self.__measurement_images[data_index], ax=ah_in[idx_row][i])
+                        plt.setp(chbar.ax.get_yticklabels(), fontsize=self.__tick_fontsize)
+
+                        ah_in[idx_row][0].set_ylabel('Measurements', fontsize=self.__label_fontsize)
 
                         idx_row += 1
 
@@ -595,7 +662,9 @@ def plot_sample(provided_input_channels, input, provided_label_channels, label, 
     instance.plot()
 
 def plot_prediction(provided_prediction_channels, prediction = None, label = None, uncertainty = None,
-                    provided_input_channels = None, input = None, terrain = None, ds = None, title_dict = None):
+                    provided_input_channels = None, input = None, terrain = None,
+                    measurements = None, measurements_mask = None,
+                    ds = None, title_dict = None):
 
     '''
     Creates the plots according to the data provided.
@@ -605,6 +674,7 @@ def plot_prediction(provided_prediction_channels, prediction = None, label = Non
     instance = PlotUtils(provided_prediction_channels = provided_prediction_channels,
                          provided_input_channels = provided_input_channels,
                          prediction = prediction, input = input, label = label, uncertainty = uncertainty,
+                         measurements = measurements, measurements_mask = measurements_mask,
                          terrain = terrain, ds = ds, title_dict = title_dict)
     instance.plot()
 
