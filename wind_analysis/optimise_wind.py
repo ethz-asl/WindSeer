@@ -52,7 +52,8 @@ measurement, terrain, ground_truth, mask, scale = utils.load_measurements(config
 
 measurement = measurement.to(device)
 terrain = terrain.to(device)
-ground_truth = ground_truth.to(device)
+if ground_truth is not None:
+    ground_truth = ground_truth[0].to(device)
 mask = mask.to(device)
 
 generate_input_fn, initial_parameter = utils.get_input_fn(config.params['input_fn'], measurement, mask)
@@ -133,7 +134,7 @@ if args.plot:
 
     nn_utils.plot_prediction(nn_params.data['label_channels'],
                              prediction = prediction['pred'][0].detach(),
-                             label = ground_truth[0],
+                             label = ground_truth,
                              provided_input_channels = nn_params.data['input_channels'],
                              input = input[0].detach(),
                              terrain = terrain.squeeze(),

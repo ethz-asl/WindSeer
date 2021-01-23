@@ -1,9 +1,13 @@
+import numpy as np
 import os
 import torch
 
 import nn_wind_prediction.data as nn_data
+from .bin_log_data import bin_log_data
 from .extract_cosmo_data import get_cosmo_cell
+from .get_mapgeo_terrain import get_terrain
 from .input_fn_definitions import *
+from .ulog_utils import extract_wind_data
 
 class SimpleStepOptimizer:
     def __init__(self, variables, lr=1e-4, lr_decay=0.0):
@@ -74,6 +78,12 @@ def get_input_fn(config, measurement, mask):
         # boundary layer profile on each corner with a separate scale and rotation angle
         return lambda p, t, i: bp_corners_4(p, t, i, config['kwargs']), initial_params
 
+    elif config['type'] == 'bp_corners_1_roughness':
+        roughness = mask.squeeze().shape[0]
+        initial_params = torch.Tensor([scale, angle, roughness]).to(measurement.device).requires_grad_()
+        # boundary layer profile on each corner with a shared scale and rotation angle
+        return lambda p, t, i: bp_corners_1_roughness(p, t, i, config['kwargs']), initial_params
+
     else:
         raise ValueError('Invalid input_fn type: ' + config['type'])
 
@@ -103,8 +113,8 @@ def load_measurements(config, config_model):
 
         # determine the grid dimension
         if 'cosmo_file' in config['log'].keys():
-            grid_dimensions = cosmo.get_cosmo_cell(config['log']['cosmo_file'], wind_data['lat'][0], wind_data['lon'][0],
-                                                   wind_data['alt'].min() - config['log']['alt_offset'], config['log']['d_horizontal'], config['log']['d_vertical'])
+            grid_dimensions = get_cosmo_cell(config['log']['cosmo_file'], wind_data['lat'][0], wind_data['lon'][0],
+                                             wind_data['alt'].min() - config['log']['alt_offset'], config['log']['d_horizontal'], config['log']['d_vertical'])
             grid_dimensions['n_cells'] = config['log']['num_cells']
     
         else:
@@ -129,15 +139,18 @@ def load_measurements(config, config_model):
                 grid_dimensions['x_max'] += 0.5 * diff
 
         x_terr, y_terr, z_terr, h_terr, full_block = \
-            get_mapgeo_terrain.get_terrain(config['log']['geotiff_file'],
-                                           [grid_dimensions['x_min'], grid_dimensions['x_max']],
-                                           [grid_dimensions['y_min'], grid_dimensions['y_max']],
-                                           [grid_dimensions['z_min'], grid_dimensions['z_max']],
-                                           (config['log']['num_cells'], config['log']['num_cells'], config['log']['num_cells']))
+            get_terrain(config['log']['geotiff_file'],
+                        [grid_dimensions['x_min'], grid_dimensions['x_max']],
+                        [grid_dimensions['y_min'], grid_dimensions['y_max']],
+                        [grid_dimensions['z_min'], grid_dimensions['z_max']],
+                        (config['log']['num_cells'], config['log']['num_cells'], config['log']['num_cells']))
 
         terrain = torch.from_numpy(np.logical_not(full_block).astype('float'))
 
-        measurement, variance, mask = bin_log_data(wind_data, grid_dimension)
+        measurement, variance, mask = bin_log_data(wind_data, grid_dimensions)
+
+        terrain = terrain.unsqueeze(0).unsqueeze(0).float()
+        measurement = measurement.unsqueeze(0).float()
 
         label = None
 

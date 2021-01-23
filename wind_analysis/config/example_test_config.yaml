@@ -29,14 +29,25 @@ measurements:
                  }
 
     log:
-        name: '/tmp/test.ulog'
+        filename: '/tmp/fpr_wind.hdf5'
+        cosmo_file: '/tmp/cosmo_ana_const.nc'
+        geotiff_file: '/tmp/terrain_full.tif'
+        num_cells: 64
+        alt_offset: 50 # offset of the takeoff position for the lower z-bound [m]
+        d_horizontal: 1100 # horizontal domain extent [m]
+        d_vertical: 700 # vertical domain extent [m]
 
 
 
 input_fn:
     # possible options:
-    # 'bp_corners_1', 'bp_corners_4'
-    type: 'bp_corners_4'
+    # 'bp_corners_1':
+    #     Same boundary layer profile for all corners, optimizing scale and rotation
+    # 'bp_corners_4':
+    #     Separate boundary layer profile for all corners, optimizing scale and rotation
+    # 'bp_corners_1_roughness':
+    #     Same boundary layer profile for all corners, optimizing scale, rotation, and roughness
+    type: 'bp_corners_1_roughness'
     kwargs: {
         roughness: 64 # roughness of the boundary layer [n_cells]
     }
