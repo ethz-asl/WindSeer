@@ -60,7 +60,9 @@ def get_loss_fn(config):
 def get_input_fn(config, measurement, mask):
     # get some characteristics of the flow to initialize the params
     if mask is not None:
-        scale = measurement.norm(dim=1).sum() / mask.sum()
+        #scale = measurement.norm(dim=1).sum() / mask.sum()
+        # starting from a underestimation of the wind magnitude seems to be more stable
+        scale = 1.0
     else:
         scale = 1.0
 
@@ -69,20 +71,38 @@ def get_input_fn(config, measurement, mask):
     angle = torch.atan2(measurement[:,1, idx[0], idx[1], idx[2]], measurement[:, 0, idx[0], idx[1], idx[2]]).mean().cpu().item()
     
     if config['type'] == 'bp_corners_1':
-        initial_params = torch.Tensor([scale, angle]).to(measurement.device).requires_grad_()
-        # boundary layer profile on each corner with a shared scale and rotation angle
-        return lambda p, t, i: bp_corners_1(p, t, i, config['kwargs']), initial_params
+        initial_params = torch.Tensor([[scale, angle]]).to(measurement.device).requires_grad_()
+
+        return lambda p, t, i: bp_corners(p, t, i, config['kwargs']), initial_params
 
     elif config['type'] == 'bp_corners_4':
-        initial_params = torch.Tensor([scale, scale, scale, scale, angle, angle, angle, angle]).to(measurement.device).requires_grad_()
-        # boundary layer profile on each corner with a separate scale and rotation angle
-        return lambda p, t, i: bp_corners_4(p, t, i, config['kwargs']), initial_params
+        initial_params = torch.Tensor([[scale, angle]]).repeat(4, 1).clone().to(measurement.device).requires_grad_()
+
+        return lambda p, t, i: bp_corners(p, t, i, config['kwargs']), initial_params
 
     elif config['type'] == 'bp_corners_1_roughness':
         roughness = mask.squeeze().shape[0]
-        initial_params = torch.Tensor([scale, angle, roughness]).to(measurement.device).requires_grad_()
-        # boundary layer profile on each corner with a shared scale and rotation angle
-        return lambda p, t, i: bp_corners_1_roughness(p, t, i, config['kwargs']), initial_params
+        initial_params = torch.Tensor([[scale, angle, roughness]]).to(measurement.device).requires_grad_()
+
+        return lambda p, t, i: bp_corners(p, t, i, config['kwargs']), initial_params
+
+    elif config['type'] == 'bp_corners_4_roughness':
+        roughness = mask.squeeze().shape[0]
+        initial_params = torch.Tensor([[scale, angle, roughness]]).repeat(4, 1).clone().to(measurement.device).requires_grad_()
+
+        return lambda p, t, i: bp_corners(p, t, i, config['kwargs']), initial_params
+
+    elif config['type'] == 'splines_corner':
+        if config['kwargs']['uz_zero']:
+            num_channels = config['kwargs']['num_channels'] - 1
+        else:
+            num_channels = config['kwargs']['num_channels']
+
+        mean_vel = (measurement.sum(dim=-1).sum(dim=-1).sum(dim=-1) / mask.sum()).unsqueeze(-1)[:,:num_channels]
+        scale = ((torch.arange(config['kwargs']['num_control_points']) + 1.0) / config['kwargs']['num_control_points']).to(measurement.device)
+        initial_params = (mean_vel * scale.unsqueeze(0).unsqueeze(0)).repeat(4, 1, 1).clone().requires_grad_()
+
+        return lambda p, t, i: splines_corner(p, t, i, config['kwargs']), initial_params
 
     else:
         raise ValueError('Invalid input_fn type: ' + config['type'])

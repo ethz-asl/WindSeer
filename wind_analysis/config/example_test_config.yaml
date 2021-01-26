@@ -2,7 +2,7 @@ optimizer:
     # possible options:
     # 'SimpleStepOptimizer', Adadelta', 'Adagrad', 'Adam', 'Adamax', 'ASGD', 'SGD'
     name: 'Adam'
-    kwargs: {'lr': 0.5}
+    kwargs: {'lr': 2.0}
 
 loss:
     # possible options:
@@ -16,7 +16,7 @@ measurements:
 
     cfd:
         filename: '/tmp/test.hdf5'
-        index: 10
+        index: 20
         kwargs: {input_mode: 3,
                  additive_gaussian_noise: True,
                  max_gaussian_noise_std: 0.0,
@@ -37,8 +37,6 @@ measurements:
         d_horizontal: 1100 # horizontal domain extent [m]
         d_vertical: 700 # vertical domain extent [m]
 
-
-
 input_fn:
     # possible options:
     # 'bp_corners_1':
@@ -47,13 +45,24 @@ input_fn:
     #     Separate boundary layer profile for all corners, optimizing scale and rotation
     # 'bp_corners_1_roughness':
     #     Same boundary layer profile for all corners, optimizing scale, rotation, and roughness
-    type: 'bp_corners_1_roughness'
+    # 'bp_corners_4_roughness':
+    #     Separate boundary layer profile for all corners, optimizing scale, rotation, and roughness
+    # 'splines_corner':
+    #     Separate spline for each velocity and each corner
+    type: 'splines_corner'
     kwargs: {
-        roughness: 64 # roughness of the boundary layer [n_cells]
+        # bp_corners_* args
+        roughness: 64, # roughness of the boundary layer [n_cells]
+
+        # splines args
+        num_control_points: 4,
+        uz_zero : False,
     }
 
 run:
     max_iter: 100
-    loss_change_threshold: 0.01
+    loss_change_threshold: 0.0001
     loss_change_window: 4
     grad_threshold: 0.0001
+    verbose: True
+    masked_loss: True

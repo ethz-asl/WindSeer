@@ -56,6 +56,7 @@ if ground_truth is not None:
     ground_truth = ground_truth[0].to(device)
 mask = mask.to(device)
 
+config.params['input_fn']['kwargs']['num_channels'] = len(config.params['model']['input_channels']) - 1
 generate_input_fn, initial_parameter = utils.get_input_fn(config.params['input_fn'], measurement, mask)
 
 if args.optimizer_test:
@@ -80,8 +81,10 @@ if args.optimizer_test:
         prediction, optimization_params, losses, parameter, gradients, input = \
             wind_opt.run(generate_input_fn, params, terrain, measurement, mask, scale, config.params)
 
-        gradients_list.append(torch.stack(gradients))
-        parameter_list.append(torch.stack(parameter))
+        gradients = torch.stack(gradients)
+        parameter = torch.stack(parameter)
+        gradients_list.append(gradients.view(gradients.shape[0], gradients.shape[1], -1))
+        parameter_list.append(parameter.view(parameter.shape[0], parameter.shape[1], -1))
         losses_list.append(losses)
 
 else:
@@ -89,8 +92,11 @@ else:
         wind_opt.run(generate_input_fn, initial_parameter, terrain, measurement, mask, scale, config.params)
 
     optimizers = [config.params['optimizer']]
-    gradients_list = [torch.stack(gradients)]
-    parameter_list = [torch.stack(parameter)]
+
+    gradients = torch.stack(gradients)
+    parameter = torch.stack(parameter)
+    gradients_list = [gradients.view(gradients.shape[0], gradients.shape[1], -1)]
+    parameter_list = [parameter.view(parameter.shape[0], parameter.shape[1], -1)]
     losses_list = [losses]
 
 if args.save:
@@ -106,6 +112,7 @@ if args.plot:
 
     x = np.arange(len(losses_list[0]))
 
+    # plot the losses
     fig = plt.figure()
     fig.patch.set_facecolor('white')
     for i, loss in enumerate(losses_list):
@@ -114,20 +121,63 @@ if args.plot:
     plt.ylabel('Loss')
     plt.legend(loc='best')
 
-    fig, ah = plt.subplots(2, gradients_list[0].shape[1])
-    fig.patch.set_facecolor('white')
-    for j in range(len(gradients_list)):
-        for i in range(gradients_list[j].shape[1]):
-            ah[0][i].plot(x, parameter_list[j][:, i].numpy(), label = optimizers[j]['name'])
-            ah[1][i].plot(x, gradients_list[j][:, i].numpy(), label = optimizers[j]['name'])
+    # plot the parameter and the gradients
+    max_figs_per_figure = 4
+    num_params = parameter_list[0].shape[2]
+    num_fig = int(np.ceil(num_params / max_figs_per_figure))
 
-            if j == 0:
-                ah[0][i].set_title('Parameter' + str(i))
-                ah[1][i].set_xlabel('Iteration')
+    for co in range(gradients_list[0].shape[1]):
+        for i in range(num_fig):
+            num_plots = min(max_figs_per_figure, num_params - i * max_figs_per_figure)
 
-    ah[0][0].set_ylabel('Parameter Value')
-    ah[1][0].set_xlabel('Gradients')
-    plt.legend(loc='best')
+            fig, ah = plt.subplots(2, num_plots, squeeze=False)
+
+            if gradients_list[0].shape[1] > 1:
+                fig.suptitle('Parameter Corner ' + str(co))
+            else:
+                fig.suptitle('Parameter for all Corners')
+
+            for j in range(len(gradients_list)):
+                for k in range(num_plots):
+                    ah[0][k].plot(x, parameter_list[j][:, co, i * max_figs_per_figure + k].numpy(), label = optimizers[j]['name'])
+                    ah[1][k].plot(x, gradients_list[j][:, co, i * max_figs_per_figure + k].numpy(), label = optimizers[j]['name'])
+                    ah[1][k].set_xlabel('Iteration')
+                    ah[0][k].set_title('Parameter ' + str(i * max_figs_per_figure + k))
+
+            ah[0][0].set_ylabel('Parameter Value')
+            ah[1][0].set_ylabel('Gradients')
+            plt.legend(loc='best')
+
+            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # plot the corner profiles
+    corner_counter = 0
+    fig, ah = plt.subplots(input[0, 1:].shape[0], 4)
+    fig.suptitle('Velocity Profiles')
+    for i in [0, -1]:
+        for j in [0, -1]:
+            corner_input = input[0, 1: , :, i, j].cpu().detach().numpy()
+            height = np.arange(corner_input.shape[1])
+
+            if ground_truth is not None:
+                corner_gt = ground_truth[:, :, i, j].cpu().detach().numpy()
+
+            xlabels = ['ux', 'uy', 'uz']
+
+            for k in range(corner_input.shape[0]):
+                ah[k][corner_counter].plot(corner_input[k], height, label = 'prediction')
+                if ground_truth is not None:
+                    ah[k][corner_counter].plot(corner_gt[k], height, label = 'ground truth')
+
+                ah[k][corner_counter].set_xlabel(xlabels[k] + ' corner ' + str(corner_counter))
+                ah[k][0].set_ylabel('Height [cells]')
+
+            corner_counter += 1
+
+    if ground_truth is not None:
+        plt.legend(loc='best')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     if mask is not None:
         mask = mask.squeeze()
