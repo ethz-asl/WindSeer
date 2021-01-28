@@ -1,13 +1,15 @@
-import numpy as np
-import nn_wind_prediction.utils as utils
-from nn_wind_prediction.utils import get_terrain
-import matplotlib.pyplot as plt
-import os
-import nn_wind_prediction.cosmo as cosmo
-import nn_wind_prediction.utils.yaml_tools as yaml_tools
 import argparse
 from datetime import datetime
+import matplotlib.pyplot as plt
+import numpy as np
+import os
 from scipy.interpolate import RegularGridInterpolator
+
+from analysis_utils.extract_cosmo_data import extract_cosmo_data, cosmo_corner_wind
+from analysis_utils.get_mapgeo_terrain import get_terrain
+from analysis_utils.plotting_analysis import vector_lims, plot_wind_3d, plot_cosmo_corners, plot_wind_estimates, rec2polar, plot_vertical_profile, plot_lateral_variation
+from analysis_utils.ulog_utils import get_log_data, read_filtered_hdf5
+import nn_wind_prediction.utils.yaml_tools as yaml_tools
 
 
 if __name__ == "__main__":
@@ -25,15 +27,15 @@ if __name__ == "__main__":
     ulog_args = yaml_tools.UlogParameters(args.yaml_file)
     ulog_args.print()
 
-    ulog_data = utils.get_log_data(ulog_args.params['file'])
+    ulog_data = get_log_data(ulog_args.params['file'])
 
     lat0, lon0 = ulog_data['lat'][0], ulog_data['lon'][0]
 
     # Get cosmo wind
     t0 = datetime.utcfromtimestamp(ulog_data['utc_microsec'][0]/1e6)
     offset_cosmo_time = cosmo_args.get_cosmo_time(t0.hour)
-    cosmo_wind = cosmo.extract_cosmo_data(cosmo_args.params['file'], lat0, lon0, offset_cosmo_time,
-                                   terrain_file=cosmo_args.params['terrain_file'])
+    cosmo_wind = extract_cosmo_data(cosmo_args.params['file'], lat0, lon0, offset_cosmo_time,
+                                    terrain_file=cosmo_args.params['terrain_file'])
 
     # Get corresponding terrain
     # min_height = min(ulog_data['alt'].min(), h_terr.min())
@@ -46,8 +48,8 @@ if __name__ == "__main__":
 
     # Get corner winds for model inference, offset to actual terrain heights
     terrain_corners = h_terr[::h_terr.shape[0]-1, ::h_terr.shape[1]-1]
-    cosmo_corners = cosmo.cosmo_corner_wind(cosmo_wind, z_terr, terrain_height=terrain_corners,
-                                            rotate=cosmo_args.params['rotate']*np.pi/180.0, scale=cosmo_args.params['scale'])
+    cosmo_corners = cosmo_corner_wind(cosmo_wind, z_terr, terrain_height=terrain_corners,
+                                      rotate=cosmo_args.params['rotate']*np.pi/180.0, scale=cosmo_args.params['scale'])
 
     bn = os.path.splitext(os.path.basename(ulog_args.params['file']))[0]
 
@@ -57,8 +59,7 @@ if __name__ == "__main__":
     all_winds = [w_vanes, w_ekfest]
     wind_names = ['Raw vane estimates', 'On-board EKF estimate']
     try:
-        filt_file = os.path.join(ulog_args.params['filtered_dir'], bn+'_filtered.hdf5')
-        filtered_wind = utils.read_filtered_hdf5(filt_file)
+        filtered_wind = read_filtered_hdf5(ulog_args.params['filtered_file'])
         w_filtered = []
         for wind_key in ['wind_e', 'wind_n', 'wind_d']:
             w_filtered.append(np.interp(ulog_data['gp_time'], filtered_wind['time'], filtered_wind[wind_key]))
@@ -69,17 +70,17 @@ if __name__ == "__main__":
         print('Filtered wind hdf5 not found for ulog {0}'.format(bn))
         w_filtered = None
 
-    vane_lims = utils.vector_lims(w_vanes, axis=0)
-    cosmo_lims = utils.vector_lims(np.array([cosmo_wind['wind_x'], cosmo_wind['wind_y'], cosmo_wind['wind_z']]), axis=0)
+    vane_lims = vector_lims(w_vanes, axis=0)
+    cosmo_lims = vector_lims(np.array([cosmo_wind['wind_x'], cosmo_wind['wind_y'], cosmo_wind['wind_z']]), axis=0)
     Vlims = (0.0, max(vane_lims[1], cosmo_lims[1]))  # min(vane_lims[0], cosmo_lims[0])
 
-    fh, ah = utils.plot_wind_3d(plane_pos, w_vanes, x_terr, y_terr, h_terr, cosmo_wind, origin=plane_pos[:,0].flat, Vlims=Vlims, plot_cosmo=True)
-    utils.plot_cosmo_corners(ah, cosmo_corners, x_terr, y_terr, z_terr, origin=plane_pos[:,0].flat, Vlims=Vlims)
+    fh, ah = plot_wind_3d(plane_pos, w_vanes, x_terr, y_terr, h_terr, cosmo_wind, origin=plane_pos[:,0].flat, Vlims=Vlims, plot_cosmo=True)
+    plot_cosmo_corners(ah, cosmo_corners, x_terr, y_terr, z_terr, origin=plane_pos[:,0].flat, Vlims=Vlims)
     plot_time = (ulog_data['gp_time']-ulog_data['gp_time'][0])*1e-6
-    f2, a2 = utils.plot_wind_estimates(plot_time, all_winds, wind_names, polar=args.polar)
+    f2, a2 = plot_wind_estimates(plot_time, all_winds, wind_names, polar=args.polar)
     if args.prediction:
         try:
-            prediction_array = np.load('data/{0}{1}.npy'.format(cosmo_args.params['prediction_prefix'], bn))
+            prediction_array = np.load('data/{0}{1}.npy'.format(cosmo_args.params['_prefix'], bn))
         except:
             print('Prediction file {0} not found.')
             raise
@@ -101,7 +102,7 @@ if __name__ == "__main__":
         pred_wind = [prediction_interp[0](points), prediction_interp[1](points), prediction_interp[2](points)]
 
         if args.polar:
-            pred_V, pred_dir = utils.rec2polar(pred_wind[0], pred_wind[1], wind_bearing=True, deg=True)
+            pred_V, pred_dir = rec2polar(pred_wind[0], pred_wind[1], wind_bearing=True, deg=True)
             a2[0].plot(pred_t, pred_V, 'r.')
             a2[1].plot(pred_t, pred_dir, 'r.')
 
@@ -119,9 +120,9 @@ if __name__ == "__main__":
         w_plot = w_filtered
     else:
         w_plot = w_vanes
-    fp, ap = utils.plot_vertical_profile(z_terr, cosmo_corners[:,:,cy,cx], w_plot, ulog_data['alt'], plot_time)
+    fp, ap = plot_vertical_profile(z_terr, cosmo_corners[:,:,cy,cx], w_plot, ulog_data['alt'], plot_time)
     fp.set_size_inches((5, 8))
-    fv, av = utils.plot_lateral_variation(w_plot, plane_pos, plot_time, min_alt=1700, max_alt=None)
+    fv, av = plot_lateral_variation(w_plot, plane_pos, plot_time, min_alt=1700, max_alt=None)
 
     if args.save_figs:
         print("Saving figures.")
@@ -129,7 +130,7 @@ if __name__ == "__main__":
         f2.savefig('fig/{0}{1}_wind.png'.format(cosmo_args.params['prediction_prefix'], bn), bbox_inches='tight')
         fp.savefig('fig/{0}{1}_windProfile.png'.format(cosmo_args.params['prediction_prefix'], bn), bbox_inches='tight')
         fv.savefig('fig/{0}{1}_windLateral.png'.format(cosmo_args.params['prediction_prefix'], bn), bbox_inches='tight')
-    plt.show(block=False)
+    plt.show()
 
 ## Alternative projections
 # proj_EGM96 = pyproj.Proj(init="EPSG:4326", geoidgrids="egm96_15.gtx") # init="EPSG:5773",
