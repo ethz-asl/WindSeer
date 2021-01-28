@@ -6,6 +6,7 @@ import torch
 import nn_wind_prediction.models as models
 import nn_wind_prediction.utils as nn_utils
 from analysis_utils import utils
+from analysis_utils.plotting_analysis import plot_optimizer_results
 from analysis_utils.WindOptimizer import WindOptimizer
 
 parser = argparse.ArgumentParser(description='Optimise wind speed and direction from COSMO data using observations')
@@ -99,94 +100,22 @@ else:
     parameter_list = [parameter.view(parameter.shape[0], parameter.shape[1], -1)]
     losses_list = [losses]
 
-if args.save:
-    out = {'optimizers': optimizers,
+results = {'optimizers': optimizers,
            'gradients': gradients_list,
-           'parameters': parameter_list,
-           'losses': losses_list}
-    np.save(args.out_file, out)
+           'parameter': parameter_list,
+           'losses': losses_list,
+           'input': input[0].detach(),
+           'prediction': prediction['pred'][0].detach(),
+           'ground_truth': ground_truth,
+           'terrain': terrain,
+           'mask': mask,
+           'label_channels': nn_params.data['label_channels'],
+           'measurement': measurement[0].detach(),
+           'input_channels': nn_params.data['input_channels'],
+           }
+
+if args.save:
+    np.save(args.out_file, results)
 
 if args.plot:
-    # visualize the results
-    import matplotlib.pyplot as plt
-
-    x = np.arange(len(losses_list[0]))
-
-    # plot the losses
-    fig = plt.figure()
-    fig.patch.set_facecolor('white')
-    for i, loss in enumerate(losses_list):
-        plt.plot(x, loss, label = optimizers[i]['name'])
-    plt.xlabel('Iteration')
-    plt.ylabel('Loss')
-    plt.legend(loc='best')
-
-    # plot the parameter and the gradients
-    max_figs_per_figure = 4
-    num_params = parameter_list[0].shape[2]
-    num_fig = int(np.ceil(num_params / max_figs_per_figure))
-
-    for co in range(gradients_list[0].shape[1]):
-        for i in range(num_fig):
-            num_plots = min(max_figs_per_figure, num_params - i * max_figs_per_figure)
-
-            fig, ah = plt.subplots(2, num_plots, squeeze=False)
-
-            if gradients_list[0].shape[1] > 1:
-                fig.suptitle('Parameter Corner ' + str(co))
-            else:
-                fig.suptitle('Parameter for all Corners')
-
-            for j in range(len(gradients_list)):
-                for k in range(num_plots):
-                    ah[0][k].plot(x, parameter_list[j][:, co, i * max_figs_per_figure + k].numpy(), label = optimizers[j]['name'])
-                    ah[1][k].plot(x, gradients_list[j][:, co, i * max_figs_per_figure + k].numpy(), label = optimizers[j]['name'])
-                    ah[1][k].set_xlabel('Iteration')
-                    ah[0][k].set_title('Parameter ' + str(i * max_figs_per_figure + k))
-
-            ah[0][0].set_ylabel('Parameter Value')
-            ah[1][0].set_ylabel('Gradients')
-            plt.legend(loc='best')
-
-            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-    # plot the corner profiles
-    corner_counter = 0
-    fig, ah = plt.subplots(input[0, 1:].shape[0], 4)
-    fig.suptitle('Velocity Profiles')
-    for i in [0, -1]:
-        for j in [0, -1]:
-            corner_input = input[0, 1: , :, i, j].cpu().detach().numpy()
-            height = np.arange(corner_input.shape[1])
-
-            if ground_truth is not None:
-                corner_gt = ground_truth[:, :, i, j].cpu().detach().numpy()
-
-            xlabels = ['ux', 'uy', 'uz']
-
-            for k in range(corner_input.shape[0]):
-                ah[k][corner_counter].plot(corner_input[k], height, label = 'prediction')
-                if ground_truth is not None:
-                    ah[k][corner_counter].plot(corner_gt[k], height, label = 'ground truth')
-
-                ah[k][corner_counter].set_xlabel(xlabels[k] + ' corner ' + str(corner_counter))
-                ah[k][0].set_ylabel('Height [cells]')
-
-            corner_counter += 1
-
-    if ground_truth is not None:
-        plt.legend(loc='best')
-
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-    if mask is not None:
-        mask = mask.squeeze()
-
-    nn_utils.plot_prediction(nn_params.data['label_channels'],
-                             prediction = prediction['pred'][0].detach(),
-                             label = ground_truth,
-                             provided_input_channels = nn_params.data['input_channels'],
-                             input = input[0].detach(),
-                             terrain = terrain.squeeze(),
-                             measurements = measurement[0].detach(),
-                             measurements_mask = mask)
+    plot_optimizer_results(results)
