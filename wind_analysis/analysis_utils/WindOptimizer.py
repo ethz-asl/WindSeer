@@ -14,6 +14,10 @@ class WindOptimizer(object):
     def run(self, generate_input_fn, params, terrain, measurements, mask, scale, config):
         optimizer = get_optimizer([params], config['optimizer'])
 
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+                                                    step_size=config['scheduler']['step_size'],
+                                                    gamma=config['scheduler']['gamma'])
+
         nz, ny, nx = terrain.squeeze().shape
         device = measurements.device
 
@@ -68,6 +72,7 @@ class WindOptimizer(object):
 
             optimizer.step()
 
+            scheduler.step()
             iter += 1
 
         if config['run']['verbose']:

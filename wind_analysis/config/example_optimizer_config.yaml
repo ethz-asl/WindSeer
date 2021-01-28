@@ -1,0 +1,73 @@
+optimizer:
+    # possible options:
+    # 'SimpleStepOptimizer', Adadelta', 'Adagrad', 'Adam', 'Adamax', 'ASGD', 'SGD'
+    name: 'Adam'
+    kwargs: {'lr': 1.0}
+
+scheduler:
+    # Parameter for the step lr scheduler
+    step_size: 40
+    gamma: 0.5
+
+loss:
+    # possible options:
+    # 'L1', 'MSE'
+    name: 'MSE'
+
+measurements:
+    # possible options:
+    # 'cfd', 'log'
+    type: 'cfd'
+
+    cfd:
+        filename: '/tmp/test.hdf5'
+        index: 50
+        kwargs: {input_mode: 3,
+                 additive_gaussian_noise: True,
+                 max_gaussian_noise_std: 0.0,
+                 n_turb_fields: 0,
+                 max_normalized_turb_scale: 0.0,
+                 max_normalized_bias_scale: 0.0,
+                 only_z_velocity_bias: False,
+                 max_fraction_of_sparse_data: 0.1,
+                 min_fraction_of_sparse_data: 0.001,
+                 }
+
+    log:
+        filename: '/tmp/fpr_wind.hdf5'
+        cosmo_file: '/tmp/cosmo_ana_const.nc'
+        geotiff_file: '/tmp/terrain_full.tif'
+        num_cells: 64
+        alt_offset: 50 # offset of the takeoff position for the lower z-bound [m]
+        d_horizontal: 1100 # horizontal domain extent [m]
+        d_vertical: 700 # vertical domain extent [m]
+
+input_fn:
+    # possible options:
+    # 'bp_corners_1':
+    #     Same boundary layer profile for all corners, optimizing scale and rotation
+    # 'bp_corners_4':
+    #     Separate boundary layer profile for all corners, optimizing scale and rotation
+    # 'bp_corners_1_roughness':
+    #     Same boundary layer profile for all corners, optimizing scale, rotation, and roughness
+    # 'bp_corners_4_roughness':
+    #     Separate boundary layer profile for all corners, optimizing scale, rotation, and roughness
+    # 'splines_corner':
+    #     Separate spline for each velocity and each corner
+    type: 'splines_corner'
+    kwargs: {
+        # bp_corners_* args
+        roughness: 64, # roughness of the boundary layer [n_cells]
+
+        # splines args
+        num_control_points: 3,
+        uz_zero : True,
+    }
+
+run:
+    max_iter: 150
+    loss_change_threshold: 0.0001
+    loss_change_window: 4
+    grad_threshold: 0.0001
+    verbose: True
+    masked_loss: True
