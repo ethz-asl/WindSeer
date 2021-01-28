@@ -46,6 +46,12 @@ def get_optimizer(params, config):
         return torch.optim.ASGD(params, **config['kwargs'])
     elif config['name'] == 'SGD':
         return torch.optim.SGD(params, **config['kwargs'])
+    elif config['name'] == 'Ranger':
+        from ranger import Ranger
+        return Ranger(params, **config['kwargs'])
+    elif config['name'] == 'RAdam':
+        from radam import RAdam
+        return RAdam(params, **config['kwargs'])
     else:
         raise ValueError('Invalid optimizer name: ' + config['name'])
 

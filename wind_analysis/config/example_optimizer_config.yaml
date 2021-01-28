@@ -1,7 +1,7 @@
 optimizer:
     # possible options:
-    # 'SimpleStepOptimizer', Adadelta', 'Adagrad', 'Adam', 'Adamax', 'ASGD', 'SGD'
-    name: 'Adam'
+    # 'SimpleStepOptimizer', Adadelta', 'Adagrad', 'Adam', 'Adamax', 'ASGD', 'SGD', 'Ranger', 'RAdam'
+    name: 'RAdam'
     kwargs: {'lr': 1.0}
 
 scheduler:
