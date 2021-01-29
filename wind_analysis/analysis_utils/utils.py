@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import torch
+from torch.optim.optimizer import Optimizer
 
 import nn_wind_prediction.data as nn_data
 from .bin_log_data import bin_log_data
@@ -9,15 +10,14 @@ from .get_mapgeo_terrain import get_terrain
 from .input_fn_definitions import *
 from .ulog_utils import extract_wind_data
 
-class SimpleStepOptimizer:
-    def __init__(self, variables, lr=1e-4, lr_decay=0.0):
-        self.var = variables
-        self.learning_rate = lr
-        self.lr_decay = lr_decay
-        self.iterations = 0
+class SimpleStepOptimizer(Optimizer):
+    def __init__(self, params, lr=1e-4):
+        self.lr = lr
+        defaults = dict(lr=lr)
+        super(SimpleStepOptimizer, self).__init__(params, defaults)
 
     def __str__(self):
-        return 'SimpleStepOptimizer, lr={0:0.2e}, decay={0:0.2e}'.format(self.learning_rate, self.lr_decay)
+        return 'SimpleStepOptimizer, lr={0:0.2e}'.format(self.lr)
 
     def zero_grad(self):
         pass
@@ -25,11 +25,9 @@ class SimpleStepOptimizer:
     def step(self):
         # Basic gradient step
         with torch.no_grad():
-            for v in self.var:
-                v -= self.learning_rate * v.grad
-                v.grad.zero_()
-        self.iterations += 1
-        self.learning_rate *= (1-self.lr_decay)
+            for group in self.param_groups:
+                for p in group['params']:
+                    p -= group['lr']* p.grad
 
 def get_optimizer(params, config):
     if config['name'] == 'SimpleStepOptimizer':
@@ -133,6 +131,8 @@ def load_measurements(config, config_model):
             measurement = input[1:].unsqueeze(0)
             mask = None
 
+        wind_data = None
+
     elif config['type'] == 'log':
 
         wind_data = extract_wind_data(config['log']['filename'], False)
@@ -173,10 +173,11 @@ def load_measurements(config, config_model):
 
         terrain = torch.from_numpy(np.logical_not(full_block).astype('float'))
 
-        measurement, variance, mask = bin_log_data(wind_data, grid_dimensions)
+        measurement, variance, mask, prediction = bin_log_data(wind_data, grid_dimensions)
 
         terrain = terrain.unsqueeze(0).unsqueeze(0).float()
         measurement = measurement.unsqueeze(0).float()
+        mask = mask.unsqueeze(0).float()
 
         label = None
 
@@ -192,7 +193,7 @@ def load_measurements(config, config_model):
     else:
         scale = None
 
-    return measurement, terrain, label, mask, scale
+    return measurement, terrain, label, mask, scale, wind_data
 
 def predict(net, input, scale, config):
     if input.shape[1] != len(config['input_channels']):
