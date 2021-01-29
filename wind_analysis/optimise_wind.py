@@ -49,25 +49,27 @@ loss_fn = utils.get_loss_fn(config.params['loss'])
 
 wind_opt = WindOptimizer(net, loss_fn, device)
 
-measurement, terrain, ground_truth, mask, scale = utils.load_measurements(config.params['measurements'], config.params['model'])
+measurement, terrain, ground_truth, mask, scale, wind_data = utils.load_measurements(config.params['measurements'], config.params['model'])
 
 measurement = measurement.to(device)
 terrain = terrain.to(device)
 if ground_truth is not None:
-    ground_truth = ground_truth[0].to(device)
+    ground_truth = ground_truth[0].cpu()
 mask = mask.to(device)
 
 config.params['input_fn']['kwargs']['num_channels'] = len(config.params['model']['input_channels']) - 1
 generate_input_fn, initial_parameter = utils.get_input_fn(config.params['input_fn'], measurement, mask)
 
 if args.optimizer_test:
-    optimizers = [{'name': 'SimpleStepOptimizer', 'kwargs': {'lr': 5.0, 'lr_decay': 0.01}},
-                  {'name': 'Adadelta', 'kwargs': {'lr': 1.0}},
+    optimizers = [{'name': 'SimpleStepOptimizer', 'kwargs': {'lr': 0.1}},
+                  {'name': 'Adadelta', 'kwargs': {'lr': 5.0}},
                   {'name': 'Adagrad', 'kwargs': {'lr': 1.0}},
-                  {'name': 'Adam', 'kwargs': {'lr': 1.0, 'betas': (.9, .999)}},
-                  {'name': 'Adamax', 'kwargs': {'lr': 1.0, 'betas': (.9, .999)}},
-                  {'name': 'ASGD', 'kwargs': {'lr': 2.0, 'lambd': 1e-3}},
-                  {'name': 'SGD', 'kwargs': {'lr': 2.0, 'momentum': 0.5, 'nesterov': True}},
+                  {'name': 'Adam', 'kwargs': {'lr': 0.5, 'betas': (.9, .999)}},
+                  {'name': 'Adamax', 'kwargs': {'lr': 0.5, 'betas': (.9, .999)}},
+                  {'name': 'ASGD', 'kwargs': {'lr': 1.0, 'lambd': 1e-3}},
+                  {'name': 'SGD', 'kwargs': {'lr': 1.0, 'momentum': 0.5, 'nesterov': True}},
+                  {'name': 'RAdam', 'kwargs': {'lr': 2.0, 'betas': (.9, .999)}},
+                  {'name': 'Ranger', 'kwargs': {'lr': 1.0, 'betas': (.9, .999)}},
                  ]
 
     losses_list = []
@@ -82,8 +84,8 @@ if args.optimizer_test:
         prediction, optimization_params, losses, parameter, gradients, input = \
             wind_opt.run(generate_input_fn, params, terrain, measurement, mask, scale, config.params)
 
-        gradients = torch.stack(gradients)
-        parameter = torch.stack(parameter)
+        gradients = torch.stack(gradients).cpu()
+        parameter = torch.stack(parameter).cpu()
         gradients_list.append(gradients.view(gradients.shape[0], gradients.shape[1], -1))
         parameter_list.append(parameter.view(parameter.shape[0], parameter.shape[1], -1))
         losses_list.append(losses)
@@ -94,8 +96,8 @@ else:
 
     optimizers = [config.params['optimizer']]
 
-    gradients = torch.stack(gradients)
-    parameter = torch.stack(parameter)
+    gradients = torch.stack(gradients).cpu()
+    parameter = torch.stack(parameter).cpu()
     gradients_list = [gradients.view(gradients.shape[0], gradients.shape[1], -1)]
     parameter_list = [parameter.view(parameter.shape[0], parameter.shape[1], -1)]
     losses_list = [losses]
@@ -104,13 +106,13 @@ results = {'optimizers': optimizers,
            'gradients': gradients_list,
            'parameter': parameter_list,
            'losses': losses_list,
-           'input': input[0].detach(),
-           'prediction': prediction['pred'][0].detach(),
+           'input': input[0].cpu().detach(),
+           'prediction': prediction['pred'][0].cpu().detach(),
            'ground_truth': ground_truth,
-           'terrain': terrain,
-           'mask': mask,
+           'terrain': terrain.cpu(),
+           'mask': mask.cpu(),
            'label_channels': nn_params.data['label_channels'],
-           'measurement': measurement[0].detach(),
+           'measurement': measurement[0].cpu().detach(),
            'input_channels': nn_params.data['input_channels'],
            }
 
