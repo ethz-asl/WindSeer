@@ -129,12 +129,11 @@ def plot_optimizer_results(results):
         # visualize the results
     import matplotlib.pyplot as plt
 
-    x = np.arange(len(results['losses'][0]))
-
     # plot the losses
     fig = plt.figure()
     fig.patch.set_facecolor('white')
     for i, loss in enumerate(results['losses']):
+        x = np.arange(len(loss))
         plt.plot(x, loss, label = results['optimizers'][i]['name'])
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
@@ -158,6 +157,7 @@ def plot_optimizer_results(results):
 
             for j in range(len(results['gradients'])):
                 for k in range(num_plots):
+                    x = np.arange(len(results['parameter'][j][:, co, i * max_figs_per_figure + k]))
                     ah[0][k].plot(x, results['parameter'][j][:, co, i * max_figs_per_figure + k].numpy(), label = results['optimizers'][j]['name'])
                     ah[1][k].plot(x, results['gradients'][j][:, co, i * max_figs_per_figure + k].numpy(), label = results['optimizers'][j]['name'])
                     ah[1][k].set_xlabel('Iteration')
