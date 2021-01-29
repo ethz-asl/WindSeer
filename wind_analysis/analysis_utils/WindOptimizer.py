@@ -41,10 +41,6 @@ class WindOptimizer(object):
             measurements_masked = measurements
 
         while (iter < config['run']['max_iter']) and (loss_difference > config['run']['loss_change_threshold']) and (max_gradient > config['run']['grad_threshold']):
-            if config['run']['verbose']:
-                sys.stdout.write("\rIteration %i" % iter)
-                sys.stdout.flush()
-
             optimizer.zero_grad()
 
             input_vel = generate_input_fn(params, terrain, interpolator).to(device)
@@ -73,6 +69,11 @@ class WindOptimizer(object):
             optimizer.step()
 
             scheduler.step()
+
+            if config['run']['verbose']:
+                sys.stdout.write("\rIteration {}, loss: {}, grad: {}                           ".format(iter, loss.cpu().item(), max_gradient))
+                sys.stdout.flush()
+
             iter += 1
 
         if config['run']['verbose']:
