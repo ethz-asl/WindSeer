@@ -948,26 +948,41 @@ class HDF5Dataset(Dataset):
         mask = torch.zeros_like(boolean_terrain)
         mask_shape = mask.shape
 
-        # create a subregion which is between 0.25 and 0.75 in each dimension
-        sub_mask_shape = torch.Size((torch.tensor(mask_shape) * (torch.rand(3) * 0.5 + 0.25)).to(torch.long))
-        sub_mask = torch.zeros(sub_mask_shape)
-        sub_mask_start_idx = torch.zeros(3).to(torch.long)
-        sub_mask_start_idx[0] = int(self.__rand.triangular(0, mask_shape[0] - sub_mask_shape[0], 0))
-        sub_mask_start_idx[1] = self.__rand.randint(0, mask_shape[1] - sub_mask_shape[1])
-        sub_mask_start_idx[2] = self.__rand.randint(0, mask_shape[2] - sub_mask_shape[2])
+        # allow for a maximum of 10 tries to get a mask containing non terrain cells
+        iter = 0
+        max_iter = 10
+        inside_terrain = True
+        while (iter < max_iter and inside_terrain):
+            # create a subregion which is between 0.25 and 0.75 in each dimension
+            sub_mask_shape = torch.Size((torch.tensor(mask_shape) * (torch.rand(3) * 0.5 + 0.25)).to(torch.long))
+            sub_mask = torch.zeros(sub_mask_shape)
+            sub_mask_start_idx = torch.zeros(3).to(torch.long)
+            sub_mask_start_idx[0] = int(self.__rand.triangular(0, mask_shape[0] - sub_mask_shape[0], 0))
+            sub_mask_start_idx[1] = self.__rand.randint(0, mask_shape[1] - sub_mask_shape[1])
+            sub_mask_start_idx[2] = self.__rand.randint(0, mask_shape[2] - sub_mask_shape[2])
+
+            mean_terrain = boolean_terrain[sub_mask_start_idx[0]:sub_mask_start_idx[0] + sub_mask_shape[0],
+                                           sub_mask_start_idx[1]:sub_mask_start_idx[1] + sub_mask_shape[1],
+                                           sub_mask_start_idx[2]:sub_mask_start_idx[2] + sub_mask_shape[2]].float().mean().item()
+
+            inside_terrain = mean_terrain == 0
+            iter += 1
+
+        if iter == max_iter:
+            print('Did not find a valid mask within ' + str(iter) + 'iterations')
 
         # determine the number of cells to sample and correct the number of cells by the subregion size and the terrain occlusion
         target_frac = self.__rand.random() * (self.__max_fraction_of_sparse_data - self.__min_fraction_of_sparse_data) + self.__min_fraction_of_sparse_data
 
         # limit it to a maximum 50 % of the cells to limit the cases where all the cells are sampled
         #target_num_cell = min(int(mask.numel() * target_frac), int(0.5 * sub_mask.numel()))
-
         target_num_cell = int(sub_mask.numel() * target_frac)
 
         # set the initial number of cells to a negative value to correct for the expected number of cells samples inside the terrain
-        terrain_factor = 1.0 / boolean_terrain[sub_mask_start_idx[0]:sub_mask_start_idx[0] + sub_mask_shape[0],
-                                               sub_mask_start_idx[1]:sub_mask_start_idx[1] + sub_mask_shape[1],
-                                               sub_mask_start_idx[2]:sub_mask_start_idx[2] + sub_mask_shape[2]].float().mean().item()
+        if inside_terrain:
+            terrain_factor = 1.0
+        else:
+            terrain_factor = 1.0 / mean_terrain
 
         # limit it to 80 % of the cells to still ensure there are some free cells
         target_num_cell = min(int(target_num_cell * terrain_factor), int(0.8 * sub_mask.numel()))
