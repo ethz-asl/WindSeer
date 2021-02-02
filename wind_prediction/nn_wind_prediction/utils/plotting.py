@@ -755,8 +755,15 @@ def plot_prediction(provided_prediction_channels, prediction = None, label = Non
     The axes along which the slices are made as well as the location of the slice
     can be set using sliders and buttons in the figure.
     '''
+
+    input_mask = None
+    if provided_input_channels is not None and input is not None:
+        if 'mask' in provided_input_channels:
+            idx = provided_input_channels.index('mask')
+            input_mask = input[idx]
+
     instance = PlotUtils(provided_prediction_channels = provided_prediction_channels,
-                         provided_input_channels = provided_input_channels,
+                         provided_input_channels = provided_input_channels, input_mask = input_mask,
                          prediction = prediction, input = input, label = label, uncertainty = uncertainty,
                          measurements = measurements, measurements_mask = measurements_mask,
                          terrain = terrain, ds = ds, title_dict = title_dict)
