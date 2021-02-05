@@ -610,7 +610,7 @@ class HDF5Dataset(Dataset):
                     input_data[self.__input_channels.index('uz')] += turbulence[2]
 
             # add bias to wind velocities if requested
-            if self.__max_normalized_bias_scale:
+            if self.__max_normalized_bias_scale > 0:
                 if self.__only_z_velocity_bias:
                     if 'uz' in self.__input_channels:
                         bias_scale = self.__rand.random() * self.__max_normalized_bias_scale
