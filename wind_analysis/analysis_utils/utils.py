@@ -1,5 +1,6 @@
 import numpy as np
 import os
+from scipy import ndimage
 import torch
 from torch.optim.optimizer import Optimizer
 
@@ -171,7 +172,12 @@ def load_measurements(config, config_model):
                         [grid_dimensions['z_min'], grid_dimensions['z_max']],
                         (config['log']['num_cells'], config['log']['num_cells'], config['log']['num_cells']))
 
-        terrain = torch.from_numpy(np.logical_not(full_block).astype('float'))
+        is_wind = np.logical_not(full_block).astype('float')
+        if config['log']['distance_field']:
+            terrain = torch.from_numpy(ndimage.distance_transform_edt(is_wind).astype(np.float32))
+        else:
+            terrain = torch.from_numpy(is_wind.astype(np.float32))
+
 
         measurement, variance, mask, prediction = bin_log_data(wind_data, grid_dimensions)
 
@@ -200,7 +206,7 @@ def predict(net, input, scale, config):
         raise ValueError('The number of input channels is inconsistent')
 
     if scale is None:
-        scale = torch.Tensor([1.0])
+        scale = torch.Tensor([1.0]).to(input.device)
 
     for i, channel in enumerate(config['input_channels']):
         if 'ux' in channel or 'uy' in channel or 'uz' in channel:
