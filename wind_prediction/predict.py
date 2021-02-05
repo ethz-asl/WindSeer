@@ -39,12 +39,19 @@ parser.add_argument('-cpm', dest='compute_prediction_metrics', action='store_tru
 parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', help='If set the worst prediction of the input dataset is shown. Needs compute_prediction_error to be true.')
 parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
 parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
+parser.add_argument('-s', dest='seed', type=int, default=0, help='If larger than 0 this sets the seed of the random number generator')
 
 args = parser.parse_args()
 args.print_loss = args.print_loss or print_loss
 args.compute_prediction_error = args.compute_prediction_error or compute_prediction_error
 args.plot_worst_prediction = args.plot_worst_prediction or plot_worst_prediction
 args.plot_prediction = args.plot_prediction or plot_prediction
+
+if args.seed > 0:
+    import random
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
 # check if gpu available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

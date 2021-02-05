@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import random
 import torch
 
 
@@ -15,9 +16,16 @@ parser.add_argument('-model_dir', dest='model_dir', required=True, help='The dir
 parser.add_argument('-model_version', dest='model_version', default='latest', help='The model version')
 parser.add_argument('-p', '--plot', action='store_true', help='Plot the optimization results')
 parser.add_argument('-test', '--optimizer_test', action='store_true', help='Loop through all possible optimizers and report the results')
-parser.add_argument('-s', '--save', action='store_true', help='Store the results of the optimization')
+parser.add_argument('-save', '--save', action='store_true', help='Store the results of the optimization')
+parser.add_argument('-s', '--seed', default=0, type=int, help='Seed of the random generators')
 parser.add_argument('-o', '--out_file', default='/tmp/opt_results.npy', help='Filename of the optimization results')
 args = parser.parse_args()
+
+if args.seed > 0:
+    import random
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

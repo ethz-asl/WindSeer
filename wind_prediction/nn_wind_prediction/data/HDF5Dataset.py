@@ -64,6 +64,7 @@ class HDF5Dataset(Dataset):
     __default_only_z_velocity_bias = False
     __default_max_fraction_of_sparse_data = 1
     __default_min_fraction_of_sparse_data = 0.0
+    __default_use_system_random = False
 
     __lock = threading.Lock()
 
@@ -154,6 +155,9 @@ class HDF5Dataset(Dataset):
                 In case of a sparse input this indicates the maximum number of cells that should be sampled.
             min_fraction_of_sparse_data:
                 In case of a sparse input this indicates the minimum number of cells that should be sampled.
+            use_system_random:
+                If true the true system random generator is used, else the standart pseudo number generated
+                is used where setting the seed is feasible
         '''
 
         # ------------------------------------------- kwarg fetching ---------------------------------------------------
@@ -302,6 +306,13 @@ class HDF5Dataset(Dataset):
             if verbose:
                 print('HDF5Dataset: only_z_velocity_bias not present in kwargs, using default value:', self.__default_only_z_velocity_bias)
 
+        try:
+            self.__use_system_random = float(kwargs['use_system_random'])
+        except KeyError:
+            self.__use_system_random = self.__default_use_system_random
+            if verbose:
+                print('HDF5Dataset: use_system_random not present in kwargs, using default value:', self.__default_use_system_random)
+
         if self.__input_mode == 3 or self.__input_mode == 4:
             try:
                 self.__max_fraction_of_sparse_data = float(kwargs['max_fraction_of_sparse_data'])
@@ -440,7 +451,10 @@ class HDF5Dataset(Dataset):
             self.__input_channels += ['mask']
 
         # initialize random number generator used for the subsampling
-        self.__rand = random.SystemRandom()
+        if self.__use_system_random:
+            self.__rand = random.SystemRandom()
+        else:
+            self.__rand = random
 
         # interpolator for the three input velocities
         self.__interpolator = DataInterpolation(self.__device, 3, self.__nx, self.__ny, self.__nz)
