@@ -259,6 +259,9 @@ def train_model(net, loader_trainset, loader_validationset, scheduler_lr, optimi
         # adjust the learning rate if necessary
         scheduler_lr.step()
 
+        # adjust the eps in the loss if set
+        loss_fn.step()
+
     print("INFO: Finished training in %s seconds" % (time.time() - start_time))
 
     if use_writer:

@@ -27,11 +27,26 @@ class CombinedLoss(Module):
             self.auto_channel_scaling = False
             print('CombinedLoss: auto_channel_scaling not present in kwargs, using default value:', False)
 
-        try:
-            self.eps_scaling = float(kwargs['eps_scaling'])
-        except KeyError:
-            self.eps_scaling = 1E-2
-            print('CombinedLoss: eps_scaling not present in kwargs, using default value:', 1E-2)
+        if self.auto_channel_scaling:
+            self.step_counter = 0
+
+            try:
+                self.eps_scaling = float(kwargs['eps_scaling'])
+            except KeyError:
+                self.eps_scaling = 1E-2
+                print('CombinedLoss: eps_scaling not present in kwargs, using default value:', 1E-2)
+
+            try:
+                self.eps_scheduling_mode = kwargs['eps_scheduling_mode']
+            except KeyError:
+                self.eps_scheduling_mode = 'None'
+                print('CombinedLoss: eps_scheduling_mode not present in kwargs, using default value:', 'None')
+
+            try:
+                self.eps_scheduling_kwargs = kwargs['eps_scheduling_kwargs']
+            except KeyError:
+                self.eps_scheduling_kwargs = {}
+                print('CombinedLoss: eps_scheduling_mode not present in kwargs, using default value: {}')
 
         # if the scaling must be learnt, use a ParameterList for the scaling factors
         if self.learn_scaling and len(self.loss_component_names)>1:
@@ -73,6 +88,23 @@ class CombinedLoss(Module):
                 # using a factor of 0.0 == no loss scaling, due to the homoscedastic uncertainty expression. see below.
                 self.loss_factors += [torch.Tensor([0.0])]
                 self.learn_scaling = False
+
+    def step(self):
+        if self.auto_channel_scaling:
+            if self.eps_scheduling_mode == 'None':
+                pass
+
+            elif self.eps_scheduling_mode == 'step':
+                if self.step_counter > 0 and self.step_counter % self.eps_scheduling_kwargs['step_size'] == 0:
+                    self.eps_scaling *= self.eps_scheduling_kwargs['gamma']
+
+            elif self.eps_scheduling_mode == 'decay':
+                self.eps_scaling *= self.eps_scheduling_kwargs['gamma']
+
+            else:
+                print('CombinedLoss: Unknown eps scheduling mode: ', self.eps_scheduling_mode)
+
+            self.step_counter += 1
 
     def forward(self, predicted, target, input, W = None):
         if (len(predicted['pred'].shape) != 5):
