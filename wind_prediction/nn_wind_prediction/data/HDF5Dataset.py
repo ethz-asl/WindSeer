@@ -457,7 +457,7 @@ class HDF5Dataset(Dataset):
             self.__rand = random
 
         # interpolator for the three input velocities
-        self.__interpolator = DataInterpolation(self.__device, 3, self.__nx, self.__ny, self.__nz)
+        self.__interpolator = DataInterpolation(self.__device, len(self.__input_velocities_indices), self.__nx, self.__ny, self.__nz)
 
         # avoids printing a warning multiple times
         self.__augmentation_warning_printed = False
