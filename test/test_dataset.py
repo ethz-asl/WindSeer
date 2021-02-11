@@ -111,9 +111,10 @@ def main():
             ds = ds.squeeze()
 
             if compute_dataset_statistics:
-                ux.append(label[:,0,:].abs().mean().item())
-                uy.append(label[:,1,:].abs().mean().item())
-                uz.append(label[:,2,:].abs().mean().item())
+                terrain_correction_factor = utils.compute_terrain_factor(label, input[:,0:1]).item()
+                ux.append(label[:,0,:].abs().mean().item() * terrain_correction_factor)
+                uy.append(label[:,1,:].abs().mean().item() * terrain_correction_factor)
+                uz.append(label[:,2,:].abs().mean().item() * terrain_correction_factor)
                 ux_max.append(label[:,0,:].abs().max().item())
                 uy_max.append(label[:,1,:].abs().max().item())
                 uz_max.append(label[:,2,:].abs().max().item())
