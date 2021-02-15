@@ -213,6 +213,8 @@ def predict(net, input, scale, config):
             input[:, i] /= scale * config[channel + '_scaling']
         elif 'terrain' in channel:
             input[:, i] /= config[channel + '_scaling']
+        elif 'mask' in channel:
+            pass
         else:
             raise ValueError('Unknown channel: ' + channel)
 
