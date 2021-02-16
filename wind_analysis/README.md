@@ -16,16 +16,13 @@
     gdalinfo --version
     ~~~
 
-3. Install pygdal library
-    `pip3 install pygdal==2.3.2.4`
-    
-4. Install pyproj library
-    `pip3 install pyproj==1.9.6`  
+3. Install dependencies
+    ~~~
+    cd intel_wind/wind_analysis
+    pip3 install -r requirements.txt
+    ~~~
 
-5. Other dependencies
-    `pip3 install numpy scipy pyulog pykrige mlrose`
-
-6. Need to manually add the CH1903 definitions to pyproj. You can try to use this simple script.
+4. Manually add the CH1903 definitions to pyproj (required for transforming swisstopo data). You can try to use this simple script.
     ~~~
     cd intel_wind/wind_analysis/proj_definitions
     python install_ch_defs.py
