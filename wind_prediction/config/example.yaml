@@ -59,7 +59,10 @@ loss:
     auto_channel_scaling: True
 
     # lower limit to the channel scaling values
-    eps_scaling: 1E-2
+    eps_scaling: 1
+    eps_scheduling_mode: decay
+    eps_scheduling_kwargs: {'gamma': 0.998,
+                            'step_size': 10}
 
 # dataset parameters
 data:
