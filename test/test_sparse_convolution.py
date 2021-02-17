@@ -26,14 +26,13 @@ def main():
     # check that only previously activated cells are also active
     print((out_bool - x).sum())
 
-    with torch.no_grad():
-        plt.figure()
-        plt.imshow(x.squeeze().numpy())
-        plt.title('input')
-        plt.figure()
-        plt.imshow(out.abs().squeeze().numpy())
-        plt.title('output')
-        plt.show()
+    plt.figure()
+    plt.imshow(x.squeeze().numpy())
+    plt.title('input')
+    plt.figure()
+    plt.imshow(out.abs().squeeze().numpy())
+    plt.title('output')
+    plt.show()
 
 
 if __name__ == '__main__':
