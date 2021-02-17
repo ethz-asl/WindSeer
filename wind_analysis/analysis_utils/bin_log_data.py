@@ -5,13 +5,6 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel
 import time
 import torch
 
-try:
-    from pykrige.ok3d import OrdinaryKriging3D
-    pykrige_found = True
-except ImportError:
-    pykrige_found = False
-
-
 def bin_log_data_binning(wind_data, grid_dimensions, verbose = False):
     '''
     Bins the input wind data into a grid specified by the input grid dimensions.
@@ -155,104 +148,6 @@ def bin_log_data_idw_interpolation(wind_data, grid_dimensions, verbose = False):
         print('\tNumber of values per cell (avg): {:.2f}'.format(np.mean(vals_per_cell)))
     return wind, variance, mask, None
 
-def interpolate_flight_data_krigging(wind_data, grid_dimensions, verbose = False, predict = False):
-    '''
-    Create a wind map from the wind measurements using krigging interpolation.
-    Compute the mean velocity and variance at the center of each bin by
-    evaluating the wind map.
-
-    (Requires installation of pykrige library)
-
-    @out [wind]: (3,n,n,n) tensor containing the mean velocities of each cell
-    @out [variance]: (3,n,n,n) tensor containing the velocity variance of each cell
-    @out [mask]: (n,n,n) 1 indicates that wind was measured in that cell, 0 equals no measurements
-    @out [prediction]: If predict is true then this tensor contains the flow of the full field according to krigging
-    '''
-    if not pykrige_found:
-        raise ImportError('pykrige required for krigging but import failed')
-
-    t_start = time.time()
-    # Initialize empty wind, variance and predicted_flight_data
-    wind = torch.zeros((3, grid_dimensions['n_cells'], grid_dimensions['n_cells'], grid_dimensions['n_cells']))
-    variance = torch.zeros((3, grid_dimensions['n_cells'], grid_dimensions['n_cells'], grid_dimensions['n_cells']))
-    mask = torch.zeros((grid_dimensions['n_cells'], grid_dimensions['n_cells'], grid_dimensions['n_cells']))
-
-    # determine the resolution of the grid
-    x_res = (grid_dimensions['x_max'] - grid_dimensions['x_min']) / grid_dimensions['n_cells']
-    y_res = (grid_dimensions['y_max'] - grid_dimensions['y_min']) / grid_dimensions['n_cells']
-    z_res = (grid_dimensions['z_max'] - grid_dimensions['z_min']) / grid_dimensions['n_cells']
-
-    for i in range(len(wind_data['x'])):
-        if ((wind_data['x'][i] > grid_dimensions['x_min']) and
-            (wind_data['x'][i] < grid_dimensions['x_max']) and
-            (wind_data['y'][i] > grid_dimensions['y_min']) and
-            (wind_data['y'][i] < grid_dimensions['y_max']) and
-            (wind_data['alt'][i] > grid_dimensions['z_min']) and
-            (wind_data['alt'][i] < grid_dimensions['z_max'])):
-
-            idx_x = int((wind_data['x'][i] - grid_dimensions['x_min']) / x_res)
-            idx_y = int((wind_data['y'][i] - grid_dimensions['y_min']) / y_res)
-            idx_z = int((wind_data['alt'][i] - grid_dimensions['z_min']) / z_res)
-
-            mask[idx_z, idx_y, idx_x] = 1
-
-    idx_mask = mask.nonzero(as_tuple=False)
-
-    # limit the number of input points to the kriging
-    max_meas = 50
-    stride = int(np.ceil(len(wind_data['alt']) / max_meas))
-
-    OK3d_north = OrdinaryKriging3D(wind_data['alt'][::stride], wind_data['y'][::stride], wind_data['x'][::stride],
-                                   wind_data['wn'][::stride], variogram_model='linear')
-    OK3d_east = OrdinaryKriging3D(wind_data['alt'][::stride], wind_data['y'][::stride], wind_data['x'][::stride],
-                                  wind_data['we'][::stride], variogram_model='linear')
-    OK3d_down = OrdinaryKriging3D(wind_data['alt'][::stride], wind_data['y'][::stride], wind_data['x'][::stride],
-                                  -wind_data['wd'][::stride], variogram_model='linear')
-
-    for idx in idx_mask:
-        x = grid_dimensions['x_min'] + (idx[2] + 0.5) * x_res
-        y = grid_dimensions['y_min'] + (idx[1] + 0.5) * x_res
-        z = grid_dimensions['z_min'] + (idx[0] + 0.5) * x_res
-
-        k3d, ss3d = OK3d_north.execute('grid', z, y, x)
-        wind[0, idx[0], idx[1], idx[2]] = k3d[0][0][0]
-        variance[0, idx[0], idx[1], idx[2]] = ss3d[0][0][0]
-        # y
-        k3d, ss3d = OK3d_east.execute('grid', z, y, x)
-        wind[1, idx[0], idx[1], idx[2]] = k3d[0][0][0]
-        variance[1, idx[0], idx[1], idx[2]] = ss3d[0][0][0]
-        # z
-        k3d, ss3d = OK3d_down.execute('grid', z, y, x)
-        wind[2, idx[0], idx[1], idx[2]] = k3d[0][0][0]
-        variance[2, idx[0], idx[1], idx[2]] = ss3d[0][0][0]
-
-    if predict:
-        if verbose:
-            print(' Interpolation is done [{:.2f} s], predicting full domain...'.format(time.time() - t_start), end='', flush=True)
-        prediction = torch.zeros((3, grid_dimensions['n_cells'], grid_dimensions['n_cells'], grid_dimensions['n_cells']))
-
-        for i in range(grid_dimensions['n_cells']):
-            for j in range(grid_dimensions['n_cells']):
-                for k in range(grid_dimensions['n_cells']):
-                    x = grid_dimensions['x_min'] + (k + 0.5) * x_res
-                    y = grid_dimensions['y_min'] + (j + 0.5) * x_res
-                    z = grid_dimensions['z_min'] + (i + 0.5) * x_res
-
-                    k3d, ss3d = OK3d_north.execute('grid', z, y, x)
-                    prediction[0, i, j, k] = k3d[0][0][0]
-                    # y
-                    k3d, ss3d = OK3d_east.execute('grid', z, y, x)
-                    prediction[1, i, j, k] = k3d[0][0][0]
-                    # z
-                    k3d, ss3d = OK3d_down.execute('grid', z, y, x)
-                    prediction[2, i, j, k] = k3d[0][0][0]
-    else:
-        prediction = None
-
-    if verbose:
-        print('Krigging interpolation is done [{:.2f} s]'.format(time.time() - t_start))
-    return wind, variance, mask, prediction
-
 def interpolate_flight_data_gpr(wind_data, grid_dimensions, verbose = False, predict = False):
     '''
     Create a wind map from the wind measurements using Gaussian Process Regression
@@ -362,10 +257,8 @@ def bin_log_data(wind_data, grid_dimensions, method = 'binning', verbose = False
     elif method == 'interpolation':
         return bin_log_data_idw_interpolation(wind_data, grid_dimensions, verbose)
 
-    elif method == 'krigging':
-        return interpolate_flight_data_krigging(wind_data, grid_dimensions, verbose, full_field)
-
     elif method == 'gpr':
         return interpolate_flight_data_gpr(wind_data, grid_dimensions, verbose, full_field)
+
     else:
         raise ValueError('Unknown method: ' + method)
