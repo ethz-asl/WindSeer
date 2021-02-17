@@ -25,7 +25,7 @@ class CombinedLoss(Module):
             self.auto_channel_scaling = bool(kwargs['auto_channel_scaling'])
         except KeyError:
             self.auto_channel_scaling = False
-            print('CombinedLoss: auto_channel_scaling not present in kwargs, using default value:', False)
+            print('CombinedLoss: auto_channel_scaling not present in kwargs, using default value: ', self.auto_channel_scaling)
 
         if self.auto_channel_scaling:
             self.step_counter = 0
@@ -34,19 +34,19 @@ class CombinedLoss(Module):
                 self.eps_scaling = float(kwargs['eps_scaling'])
             except KeyError:
                 self.eps_scaling = 1E-2
-                print('CombinedLoss: eps_scaling not present in kwargs, using default value:', 1E-2)
+                print('CombinedLoss: eps_scaling not present in kwargs, using default value: ', self.eps_scaling)
 
             try:
                 self.eps_scheduling_mode = kwargs['eps_scheduling_mode']
             except KeyError:
                 self.eps_scheduling_mode = 'None'
-                print('CombinedLoss: eps_scheduling_mode not present in kwargs, using default value:', 'None')
+                print('CombinedLoss: eps_scheduling_mode not present in kwargs, using default value: ', self.eps_scheduling_mode)
 
             try:
                 self.eps_scheduling_kwargs = kwargs['eps_scheduling_kwargs']
             except KeyError:
                 self.eps_scheduling_kwargs = {}
-                print('CombinedLoss: eps_scheduling_mode not present in kwargs, using default value: {}')
+                print('CombinedLoss: eps_scheduling_mode not present in kwargs, using default value: ', self.eps_scheduling_kwargs)
 
         # if the scaling must be learnt, use a ParameterList for the scaling factors
         if self.learn_scaling and len(self.loss_component_names)>1:
