@@ -248,11 +248,3 @@ def plot_wind_estimates(time, wind_array, wind_names=None, polar=False):
         a2[2].plot(time, wind[2])
     a2[2].set_ylabel('$V_D$')
     return f2, a2
-
-
-def plot_prediction_observations(input, label, terrain, save, add_sparse_mask_row, masked_input):
-    i2 = input
-    instance = PlotUtils('prediction', ['ux', 'uy', 'uz'],
-                         ['ux', 'uy', 'uz'], i2, label, terrain, design=1, masked_input=masked_input)
-    fig, ax = instance.plot_prediction(label_name='Observed wind', save=save, add_sparse_mask_row=add_sparse_mask_row)
-    return fig, ax
