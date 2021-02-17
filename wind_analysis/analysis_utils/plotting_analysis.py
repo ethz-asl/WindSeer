@@ -126,9 +126,6 @@ def plot_lateral_variation(wind_est, pos, t, min_alt=None, max_alt=None, fig=Non
     return fig, ax
 
 def plot_optimizer_results(results):
-        # visualize the results
-    import matplotlib.pyplot as plt
-
     # plot the losses
     fig = plt.figure()
     fig.patch.set_facecolor('white')
