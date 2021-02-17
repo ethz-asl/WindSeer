@@ -4,6 +4,8 @@ def get_boundary_layer(n_cells, start_cell, roughness, device):
     '''
     Logarithmic boundary layer profile according to:
     https://www.openfoam.com/documentation/guides/latest/doc/guide-bcs-inlet-atm-atmBoundaryLayer.html
+
+    Roughness is in the number of cells (i.e. normalized by cell height)
     '''
     profile = torch.zeros(n_cells).to(device)
 
@@ -55,6 +57,9 @@ def get_spline_profile(n_z, start_idx, params, device):
     '''
     Generate an input profile for one corner using the input parameter as control points for a spline
     interpolation.
+
+    The control points are linearly distributed along the vertical axis. The first control point is located at
+    the start_idx and the last one at the top cell.
     '''
     profile = torch.zeros(params.shape[0], n_z).to(device)
 
@@ -85,20 +90,17 @@ def bp_corners(params, terrain, interpolator, config):
 
     params is a tensor with shape: [N, P], where N is either 1 or 4 and P either 2 or 3
     '''
-    if len(terrain.shape) != 5:
-        raise ValueError('The terrain must be a 5D tensor (batch, channel, nz, ny, nx]')
 
-    if terrain.shape[0] != 1:
-        raise ValueError('Only single batch operations are supported')
+    assert len(terrain.shape) is 5, 'The terrain must be a 5D tensor [batch, channel, nz, ny, nx]'
 
-    if terrain.shape[1] != 1:
-        raise ValueError('The terrain vector must contain only one channel')
+    assert terrain.shape[0] == 1, 'Only single batch operations are supported'
 
-    if len(params.shape) != 2:
-        raise ValueError('The shape of the parameter vector must have exactly two dimensions')
+    assert terrain.shape[1] == 1, 'The terrain vector must contain only one channel'
 
-    if not (params.shape[1] != 2 or params.shape[1] != 3) or not (params.shape[0] != 1 or params.shape[0] != 4):
-        raise ValueError('The shape of the parameter vector must be either [1, 2], [1, 3], [4, 2], or [4, 3]')
+    assert len(params.shape) == 2, 'The shape of the parameter vector must have exactly two dimensions'
+
+    assert list(params.shape) in [[1, 2], [1, 3], [4, 2], [4, 3]], 'The shape of the parameter vector must be either [1, 2], [1, 3], [4, 2], or [4, 3]'
+
 
     device = terrain.device
     input =  torch.zeros_like(terrain).repeat(1, interpolator.num_channels, 1, 1, 1).clone()
@@ -112,6 +114,8 @@ def bp_corners(params, terrain, interpolator, config):
                 roughness = params[corner_idx, 2]
             else:
                 roughness = config['roughness']
+
+            # roughness normalized by the actual height of the column
             normalized_roughness = roughness / (max(float(n_z - start_idx), 1.0))
 
             profile = get_boundary_layer(n_z, start_idx, normalized_roughness, device) * params[corner_idx, 0]
@@ -131,16 +135,17 @@ def splines_corner(params, terrain, interpolator, config):
     Inflow profile where the parameter are the control points for a
     spline interpolation.
 
+    The control points are linearly distributed along the vertical axis.
+    The first control point is located at the first non-terrain cell and the
+    last one at the top cell.
+
     params is a tensor with shape: [4, num_channels, n_control_points]
     '''
-    if len(terrain.shape) != 5:
-        raise ValueError('The terrain must be a 5D tensor (batch, channel, nz, ny, nx]')
+    assert len(terrain.shape) is 5, 'The terrain must be a 5D tensor [batch, channel, nz, ny, nx]'
 
-    if terrain.shape[0] != 1:
-        raise ValueError('Only single batch operations are supported')
+    assert terrain.shape[0] == 1, 'Only single batch operations are supported'
 
-    if terrain.shape[1] != 1:
-        raise ValueError('The terrain vector must contain only one channel')
+    assert terrain.shape[1] == 1, 'The terrain vector must contain only one channel'
 
     device = terrain.device
     input =  torch.zeros_like(terrain).repeat(1, interpolator.num_channels, 1, 1, 1).clone()
