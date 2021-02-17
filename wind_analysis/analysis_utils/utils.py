@@ -68,10 +68,12 @@ def get_input_fn(config, measurement, mask):
         #scale = measurement.norm(dim=1).sum() / mask.sum()
         # starting from a underestimation of the wind magnitude seems to be more stable
         scale = 1.0
+        idx = mask.squeeze().nonzero(as_tuple=True)
+        num_measurements = mask.sum()
     else:
         scale = 1.0
-
-    idx = mask.squeeze().nonzero(as_tuple=True)
+        idx = measurement[0, 0].squeeze().nonzero(as_tuple=True)
+        num_measurements = float(len(idx[0]))
     
     angle = torch.atan2(measurement[:,1, idx[0], idx[1], idx[2]], measurement[:, 0, idx[0], idx[1], idx[2]]).mean().cpu().item()
     
@@ -86,13 +88,13 @@ def get_input_fn(config, measurement, mask):
         return lambda p, t, i: bp_corners(p, t, i, config['kwargs']), initial_params
 
     elif config['type'] == 'bp_corners_1_roughness':
-        roughness = mask.squeeze().shape[0]
+        roughness = measurement.shape[2]
         initial_params = torch.Tensor([[scale, angle, roughness]]).to(measurement.device).requires_grad_()
 
         return lambda p, t, i: bp_corners(p, t, i, config['kwargs']), initial_params
 
     elif config['type'] == 'bp_corners_4_roughness':
-        roughness = mask.squeeze().shape[0]
+        roughness = measurement.shape[2]
         initial_params = torch.Tensor([[scale, angle, roughness]]).repeat(4, 1).clone().to(measurement.device).requires_grad_()
 
         return lambda p, t, i: bp_corners(p, t, i, config['kwargs']), initial_params
@@ -103,7 +105,7 @@ def get_input_fn(config, measurement, mask):
         else:
             num_channels = config['kwargs']['num_channels']
 
-        mean_vel = (measurement.sum(dim=-1).sum(dim=-1).sum(dim=-1) / mask.sum()).unsqueeze(-1)[:,:num_channels]
+        mean_vel = (measurement.sum(dim=-1).sum(dim=-1).sum(dim=-1) / num_measurements).unsqueeze(-1)[:,:num_channels]
         scale = ((torch.arange(config['kwargs']['num_control_points']) + 1.0) / config['kwargs']['num_control_points']).to(measurement.device)
         initial_params = (mean_vel * scale.unsqueeze(0).unsqueeze(0)).repeat(4, 1, 1).clone().requires_grad_()
 

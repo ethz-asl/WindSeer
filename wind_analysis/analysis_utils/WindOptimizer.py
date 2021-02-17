@@ -24,6 +24,9 @@ class WindOptimizer(object):
         num_channels = len(config['model']['input_channels']) - 1
         interpolator = DataInterpolation(device, num_channels, nx, ny, nz)
 
+        if mask is None:
+            config['run']['masked_loss'] = False
+
         iter = 0
         loss_difference = float("Inf")
         max_gradient = float("Inf")
@@ -52,7 +55,10 @@ class WindOptimizer(object):
             if config['run']['masked_loss']:
                 prediction_masked = torch.masked_select(prediction['pred'], mask[0] > 0)
             else:
-                prediction_masked = prediction['pred'] * mask
+                if mask is None:
+                    prediction_masked = prediction['pred']
+                else:
+                    prediction_masked = prediction['pred'] * mask
 
             loss = self.loss_fn(prediction_masked, measurements_masked)
             losses.append(loss.cpu().item())

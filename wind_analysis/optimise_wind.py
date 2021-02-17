@@ -63,7 +63,8 @@ measurement = measurement.to(device)
 terrain = terrain.to(device)
 if ground_truth is not None:
     ground_truth = ground_truth[0].cpu()
-mask = mask.to(device)
+if mask is not None:
+    mask = mask.to(device)
 
 config.params['input_fn']['kwargs']['num_channels'] = len(config.params['model']['input_channels']) - 1
 generate_input_fn, initial_parameter = utils.get_input_fn(config.params['input_fn'], measurement, mask)
@@ -110,6 +111,9 @@ else:
     parameter_list = [parameter.view(parameter.shape[0], parameter.shape[1], -1)]
     losses_list = [losses]
 
+if mask is not None:
+    mask = mask.cpu()
+
 results = {'optimizers': optimizers,
            'gradients': gradients_list,
            'parameter': parameter_list,
@@ -118,7 +122,7 @@ results = {'optimizers': optimizers,
            'prediction': prediction['pred'][0].cpu().detach(),
            'ground_truth': ground_truth,
            'terrain': terrain.cpu(),
-           'mask': mask.cpu(),
+           'mask': mask,
            'label_channels': nn_params.data['label_channels'],
            'measurement': measurement[0].cpu().detach(),
            'input_channels': nn_params.data['input_channels'],
