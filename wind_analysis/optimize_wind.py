@@ -10,7 +10,7 @@ from analysis_utils import utils
 from analysis_utils.plotting_analysis import plot_optimizer_results
 from analysis_utils.WindOptimizer import WindOptimizer
 
-parser = argparse.ArgumentParser(description='Optimise wind speed and direction from COSMO data using observations')
+parser = argparse.ArgumentParser(description='Optimize wind speed and direction from COSMO data using observations')
 parser.add_argument('config_yaml', help='Input yaml config')
 parser.add_argument('-model_dir', dest='model_dir', required=True, help='The directory of the model')
 parser.add_argument('-model_version', dest='model_version', default='latest', help='The model version')
