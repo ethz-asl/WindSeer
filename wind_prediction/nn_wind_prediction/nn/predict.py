@@ -303,7 +303,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         return prediction_errors, losses, worst_index, maxloss
 
 def predict_channels(input, label, scale, device, net, params, channels_to_plot, dataset,
-                     plot_divergence = False, loss_fn = None, savename=None):
+                     input_channels = None, plot_divergence = False, loss_fn = None, savename=None):
     with torch.no_grad():
         # predict and measure how long it takes
         input, label = input.to(device), label.to(device)
@@ -353,8 +353,19 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
             np.save(savename, pred.cpu().numpy())
 
         if channels_to_plot:
-            utils.plot_prediction(channels_to_predict, channels_to_plot, pred, label, input[0],uncertainty,
-                                  plot_divergence, ds=nn_data.get_grid_size(dataset))
+            if plot_divergence:
+                ds = nn_data.get_grid_size(dataset)
+            else:
+                ds = None
+
+            utils.plot_prediction(provided_prediction_channels = channels_to_predict,
+                                  prediction = pred,
+                                  label = label,
+                                  uncertainty = uncertainty,
+                                  provided_input_channels = input_channels,
+                                  input = input,
+                                  terrain = input[0].squeeze(),
+                                  ds = ds)
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
     if len(models_list) == 0:

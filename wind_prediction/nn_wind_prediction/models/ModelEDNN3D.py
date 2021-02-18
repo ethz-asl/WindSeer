@@ -3,18 +3,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import nn_wind_prediction.utils as utils
+import nn_wind_prediction.nn as nn_custom
+
+from .ModelBase import ModelBase
 
 '''
 Encoder/Decoder Neural Network
 
-1. Five layers of convolution and max pooling up to 128 channels
-2. Two fully connected layers
-3. Five times upsampling followed by convolution
-4. Mapping layer with a separate filter for each output channel
-
 The first input layer is assumed to be terrain information. It should be zero in the terrain and nonzero elsewhere.
 '''
-class ModelEDNN3D(nn.Module):
+class ModelEDNN3D(ModelBase):
     __default_activation = nn.LeakyReLU
     __default_activation_kwargs = {'negative_slope': 0.1}
     __default_filter_kernel_size = 3
@@ -33,6 +31,7 @@ class ModelEDNN3D(nn.Module):
     __default_skipping = True
     __default_align_corners = None
     __default_pooling_method = 'striding'
+    __default_use_uz_in = True
     __default_use_turbulence = True
     __default_use_pressure = False
     __default_use_epsilon = False
@@ -41,6 +40,8 @@ class ModelEDNN3D(nn.Module):
     __default_vae = False
     __default_logvar_scaling = 10
     __default_predict_uncertainty = False
+    __default_use_sparse_mask = False
+    __default_use_sparse_convolution = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
@@ -172,6 +173,13 @@ class ModelEDNN3D(nn.Module):
                 print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
 
         try:
+            self.__use_uz_in = kwargs['use_uz_in']
+        except KeyError:
+            self.__use_uz_in = self.__default_use_uz_in
+            if verbose:
+                print('EDNN3D: use_uz_in not present in kwargs, using default value:', self.__default_use_uz_in)
+
+        try:
             self.__use_turbulence = kwargs['use_turbulence']
         except KeyError:
             self.__use_turbulence = self.__default_use_turbulence
@@ -220,6 +228,20 @@ class ModelEDNN3D(nn.Module):
             if verbose:
                 print('EDNN3D: predict_uncertainty not present in kwargs, using default value:', self.__default_predict_uncertainty)
 
+        try:
+            self.__use_sparse_mask = kwargs['use_sparse_mask']
+        except KeyError:
+            self.__use_sparse_mask = self.__default_use_sparse_mask
+            if verbose:
+                print('EDNN3D: use_sparse_mask not present in kwargs, using default value:', self.__default_use_sparse_mask)
+
+        try:
+            self.__use_sparse_convolution = kwargs['use_sparse_convolution']
+        except KeyError:
+            self.__use_sparse_convolution = self.__default_use_sparse_convolution
+            if verbose:
+                print('EDNN3D: use_sparse_convolution not present in kwargs, using default value:', self.__default_use_sparse_convolution)
+
         if self.__vae and not self.__use_fc_layers:
             print('EDNN3D: Error, to use the vae mode the fc layers need to be enabled.')
             sys.exit()
@@ -233,48 +255,70 @@ class ModelEDNN3D(nn.Module):
             raise ValueError('The filter kernel size needs to be odd and larger than 0.')
 
         # construct the number of input and output channels based on the parameters
-        self.__num_inputs = 4 # (terrain, u_x_in, u_y_in, u_z_in)
-        self.__num_outputs = 3 # (u_x_out, u_y_out, u_z_out)
+        self.num_inputs = 3  # (terrain, u_x_in, u_y_in)
+
+        if self.__use_uz_in:
+            self.num_inputs += 1 # uz
+
+        if self.__use_sparse_mask:
+            self.num_inputs += 1  # sparse_mask
+
+        self.num_outputs = 3  # (u_x_out, u_y_out, u_z_out)
 
         if self.__use_turbulence:
-            self.__num_outputs += 1 # turb. kin. en.
+            self.num_outputs += 1  # turb. kin. en.
 
         if self.__use_pressure:
-            self.__num_outputs += 1 # pressure
+            self.num_outputs += 1  # pressure
 
         if self.__use_epsilon:
-            self.__num_outputs += 1 # dissipation
+            self.num_outputs += 1  # dissipation
 
         if self.__use_nut:
-            self.__num_outputs += 1 # viscosity
+            self.num_outputs += 1  # viscosity
 
         try:
-            self.__num_inputs = kwargs['force_num_inputs']
+            self.num_inputs = kwargs['force_num_inputs']
         except KeyError:
             pass
 
         try:
-            self.__num_outputs = kwargs['force_num_outputs']
+            self.num_outputs = kwargs['force_num_outputs']
             self.__predict_uncertainty = False
         except KeyError:
             pass
 
         # down-convolution layers
         self.__conv = nn.ModuleList()
+
+        if self.__use_sparse_convolution:
+            Conv = nn_custom.SparseConv
+            kwargs_conv = {'conv_type': nn.Conv3d,
+                           'mask_exclude_first_dim': True}
+
+        else:
+            Conv = nn.Conv3d
+            kwargs_conv = {}
+
         for i in range(self.__n_downsample_layers):
             if i == 0:
-                self.__conv += [nn.Conv3d(self.__num_inputs,
-                                          self.__n_first_conv_channels,
-                                          self.__filter_kernel_size)]
+                kwargs_conv['in_channels'] = self.num_inputs
+                kwargs_conv['out_channels'] = self.__n_first_conv_channels
+                kwargs_conv['kernel_size'] = self.__filter_kernel_size
+                self.__conv += [Conv(**kwargs_conv)]
+                if 'mask_exclude_first_dim' in kwargs_conv:
+                    kwargs_conv['mask_exclude_first_dim'] = False
+
             else:
-                self.__conv += [nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1))),
-                                          int(self.__n_first_conv_channels*(self.__channel_multiplier**i)),
-                                          self.__filter_kernel_size)]
+                kwargs_conv['in_channels'] = int(self.__n_first_conv_channels*(self.__channel_multiplier**(i-1)))
+                kwargs_conv['out_channels'] = int(self.__n_first_conv_channels*(self.__channel_multiplier**i))
+                kwargs_conv['kernel_size'] = self.__filter_kernel_size
+                self.__conv += [Conv(**kwargs_conv)]
 
         # fully connected layers
         if self.__use_fc_layers:
             if self.__n_downsample_layers == 0:
-                n_features = int(self.__num_inputs * self.__n_x * self.__n_y * self.__n_z)
+                n_features = int(self.num_inputs * self.__n_x * self.__n_y * self.__n_z)
             else:
                 n_features = int(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))) *  # number of channels
                                  self.__n_x * self.__n_y * self.__n_z / ((2**self.__n_downsample_layers)**3)) # number of pixels
@@ -285,11 +329,14 @@ class ModelEDNN3D(nn.Module):
                 print("EDNN3D: VAE state space is {} dimensional".format(self.__vae_dim))
             else:
                 self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
+
             self.__fc2 = nn.Linear(int(n_features/self.__fc_scaling), n_features)
         else:
-            self.__c1 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
-                                  int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
-                                  self.__filter_kernel_size)
+            kwargs_conv['in_channels'] = int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1)))
+            kwargs_conv['out_channels'] = int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers))
+            kwargs_conv['kernel_size'] = self.__filter_kernel_size
+            self.__c1 = Conv(**kwargs_conv)
+
             self.__c2 = nn.Conv3d(int(self.__n_first_conv_channels*(self.__channel_multiplier**self.__n_downsample_layers)),
                                   int(self.__n_first_conv_channels*(self.__channel_multiplier**(self.__n_downsample_layers-1))),
                                   self.__filter_kernel_size)
@@ -298,7 +345,7 @@ class ModelEDNN3D(nn.Module):
         self.__deconv1 = nn.ModuleList()
         self.__deconv2 = nn.ModuleList()
 
-        num_out = self.__num_outputs
+        num_out = self.num_outputs
         if self.__predict_uncertainty:
             num_out *= 2
 
@@ -326,7 +373,7 @@ class ModelEDNN3D(nn.Module):
 
         # mapping layer
         if self.__use_mapping_layer:
-            self.__mapping_layer = nn.Conv3d(num_out,num_out,1,groups=num_out) # for each channel a separate filter
+            self.__mapping_layer = nn.Conv3d(num_out, num_out,1, groups=num_out)  # for each channel a separate filter
 
         # padding modules
         padding_required = int((self.__filter_kernel_size - 1) / 2)
@@ -351,62 +398,26 @@ class ModelEDNN3D(nn.Module):
         else:
             raise ValueError('The pooling method value is invalid: ' + self.__pooling_method)
 
-    def new_epoch_callback(self, epoch):
-        # nothing to do here
-        return
-
-    def freeze_model(self):
-        def freeze_weights(m):
-            for params in m.parameters():
-                params.requires_grad = False
-
-        self.apply(freeze_weights)
-
-    def unfreeze_model(self):
-        def unfreeze_weights(m):
-            for params in m.parameters():
-                params.requires_grad = True
-
-        self.apply(unfreeze_weights)
-
-    def num_inputs(self):
-        return self.__num_inputs
-
-    def num_outputs(self):
-        return self.__num_outputs
-
-    def init_params(self):
-        def init_weights(m):
-            if (type(m) != type(self)):
-                try:
-                    torch.nn.init.xavier_normal_(m.weight.data)
-                except:
-                    pass
-                try:
-                    torch.nn.init.normal_(m.bias, mean = 0.0, std = 0.02)
-                except:
-                    pass
-
-        self.apply(init_weights)
-
     def forward(self, x):
-        output = {}
         if self.__use_terrain_mask:
             # store the terrain data
-            is_wind = x[:,0, :].unsqueeze(1).clone()
+            is_wind = x[:, 0, :].unsqueeze(1).clone()
             is_wind.sign_()
 
+        output = {}
         x_skip = []
+
+        # down-convolution
         if (self.__skipping):
             for i in range(self.__n_downsample_layers):
                 x = self.__activation(self.__conv[i](self.__pad_conv(x)))
                 x_skip.append(x.clone())
                 x = self.__pooling(x)
-
         else:
             for i in range(self.__n_downsample_layers):
                 x = self.__pooling(self.__activation(self.__conv[i](self.__pad_conv(x))))
 
+        # fully connected layers
         if self.__use_fc_layers:
             shape = x.size()
             x = x.view(-1, self.num_flat_features(x))
@@ -424,16 +435,20 @@ class ModelEDNN3D(nn.Module):
                 else:
                     x = x_mean
 
-            output["encoding"] = x.clone()
+            if self.__vae:
+                output["encoding"] = x.clone()
 
             x = self.__activation(self.__fc2(x))
             x = x.view(shape)
         else:
-            output["encoding"] = x.view(-1, self.num_flat_features(x)).clone()
-
             x = self.__activation(self.__c1(self.__pad_conv(x)))
+
+            if self.__vae:
+                output["encoding"] = x.view(-1, self.num_flat_features(x)).clone()
+
             x = self.__activation(self.__c2(self.__pad_conv(x)))
 
+        # up-convolution
         if (self.__skipping):
             for i in range(self.__n_downsample_layers-1, -1, -1):
                 if (i == 0):
@@ -465,8 +480,8 @@ class ModelEDNN3D(nn.Module):
             x = is_wind.repeat(1, x.shape[1], 1, 1, 1) * x
 
         if self.__predict_uncertainty:
-            output['pred'] = x[:,:self.__num_outputs]
-            output['logvar'] = self.__logvar_scaling * torch.nn.functional.softsign(x[:,self.__num_outputs:])
+            output['pred'] = x[:,:self.num_outputs]
+            output['logvar'] = self.__logvar_scaling * torch.nn.functional.softsign(x[:,self.num_outputs:])
         else:
             output['pred'] = x
 

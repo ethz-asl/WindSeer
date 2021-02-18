@@ -79,7 +79,7 @@ def get_terrain(terrain_geotiff, x, y, z=None, resolution=(64,64,64), build_bina
         y_img = y_img[::-1]
 
     interp_spline = RectBivariateSpline(y_img, x_img, z_img)
-    x_target = x[0] + (x[1] - x[0])/(resolution[0]-1)*np.arange(resolution[0])
+    x_target = x[0] + (x[1] - x[0])/(resolution[0]-1) * np.arange(resolution[0])
     y_target = y[0] + (y[1] - y[0])/(resolution[1]-1) * np.arange(resolution[1])
     z_out = interp_spline(y_target, x_target)
 

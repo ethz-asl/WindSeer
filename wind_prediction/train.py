@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 
 now_time = time.strftime("%Y_%m_%d-%H_%M")
-
+t_start = time.time()
 parser = argparse.ArgumentParser(description='Training an EDNN for predicting wind data from terrain')
 parser.add_argument('-np', '--no-plots', dest='make_plots', action='store_false', help='Turn off plots (default False)')
 parser.add_argument('-y', '--yaml-config', required=True, help='YAML config file')
@@ -50,31 +50,31 @@ if (os.path.isdir("/cluster/scratch/")):
         print("INFO: Finished copying testset in %s seconds" % (time.time() - t_intermediate))
 
 else:
-    print('Script is running on the a local machine')
+    print('Script is running on the local machine')
     trainset_name = run_params.data['trainset_name']
     validationset_name = run_params.data['validationset_name']
     testset_name = run_params.data['testset_name']
 
 
-
-#check if gpu is available
+# check if gpu is available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define dataset and dataloader
 trainset = data.HDF5Dataset(trainset_name,
-                      augmentation = run_params.data['augmentation'],
-                      augmentation_mode = run_params.data['augmentation_mode'],
-                      augmentation_kwargs = run_params.data['augmentation_kwargs'],
-                      **run_params.Dataset_kwargs())
+                            augmentation=run_params.data['augmentation'],
+                            augmentation_mode=run_params.data['augmentation_mode'],
+                            augmentation_kwargs=run_params.data['augmentation_kwargs'],
+                            **run_params.Dataset_kwargs())
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=run_params.run['batchsize'],
-                shuffle=True, num_workers=run_params.run['num_workers'])
+                                            shuffle=True, num_workers=run_params.run['num_workers'])
 
 validationset = data.HDF5Dataset(validationset_name,
-                subsample = False, augmentation = False, **run_params.Dataset_kwargs())
+                                 subsample=False, augmentation=False, **run_params.Dataset_kwargs())
 
 validationloader = torch.utils.data.DataLoader(validationset, shuffle=False, batch_size=run_params.run['batchsize'],
-                num_workers=run_params.run['num_workers'])
+                                num_workers=run_params.run['num_workers'])
+
 
 # define model
 NetworkType = getattr(models, run_params.model['model_type'])
@@ -133,10 +133,19 @@ if loss_fn.learn_scaling:
     param_list.append({'params': loss_fn.parameters()})
 
 # define optimizer and objective
-optimizer = torch.optim.Adam(param_list, lr=run_params.run['learning_rate_initial'],
-                             betas=(run_params.run['beta1'], run_params.run['beta2']),
-                             eps = run_params.run['eps'], weight_decay = run_params.run['weight_decay'],
-                             amsgrad = run_params.run['amsgrad'])
+if run_params.run['optimizer_type'] == 'ranger':
+    from ranger import Ranger
+    optimizer = Ranger(param_list, **run_params.run['optimizer_kwargs'])
+elif run_params.run['optimizer_type'] == 'radam':
+    from radam import RAdam
+    optimizer = RAdam(param_list, **run_params.run['optimizer_kwargs'])
+
+elif run_params.run['optimizer_type'] == 'adam':
+    optimizer = torch.optim.Adam(param_list, **run_params.run['optimizer_kwargs'])
+else:
+    print('Invalid optimizer_type, defaulting to Adam')
+    optimizer = torch.optim.Adam(param_list, **run_params.run['optimizer_kwargs'])
+
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
 scheduler.last_epoch = warm_start_epoch
@@ -158,13 +167,14 @@ except:
     log_loss_components = False
     print('train.py: log_loss_components key not available, setting default value: ', log_loss_components)
 
+print('Setup time: ', time.time() - t_start, 's')
 # start the actual training
 net = nn_custom.train_model(net, trainloader, validationloader, scheduler, optimizer,
                        loss_fn, device, run_params.run['n_epochs'],
                        run_params.run['plot_every_n_batches'], run_params.run['save_model_every_n_epoch'],
                        run_params.run['save_params_hist_every_n_epoch'], run_params.run['minibatch_epoch_loss'],
-                       run_params.run['compute_validation_loss'], log_loss_components,
-                       model_dir, args.use_writer, warm_start_epoch)
+                       run_params.run['compute_validation_loss'], run_params.run['compute_validation_loss_every_n_epochs'],
+                       log_loss_components, model_dir, args.use_writer, warm_start_epoch)
 
 # save the model if requested
 if (run_params.run['save_model']):

@@ -1,0 +1,6 @@
+[submodule "libs/Ranger-Deep-Learning-Optimizer"]
+	path = libs/Ranger-Deep-Learning-Optimizer
+	url = https://github.com/lessw2020/Ranger-Deep-Learning-Optimizer.git
+[submodule "libs/RAdam"]
+	path = libs/RAdam
+	url = https://github.com/LiyuanLucasLiu/RAdam.git

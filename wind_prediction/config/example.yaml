@@ -1,13 +1,13 @@
 # training parameters
 run:
     plot_every_n_batches: 5
-    n_epochs: 500
+    n_epochs: 1000
     batchsize: 35
     num_workers: 6
-    learning_rate_initial: 1.0E-4
-    learning_rate_decay: 0.5
-    learning_rate_decay_step_size: 100
+    learning_rate_decay: 0.25
+    learning_rate_decay_step_size: 750
     compute_validation_loss: True
+    compute_validation_loss_every_n_epochs: 10
     custom_init: False
     minibatch_epoch_loss: True
     evaluate_testset: False
@@ -19,12 +19,9 @@ run:
     save_model_every_n_epoch: 25
     save_params_hist_every_n_epoch: 100
 
-    # solver settings
-    beta1: 0.9
-    beta2: 0.999
-    eps: 1.0E-8
-    weight_decay: 0
-    amsgrad: False
+    # optimizer settings
+    optimizer_type: 'adam'
+    optimizer_kwargs: {lr: 1.0E-4}
 
 # loss parameters
 loss:
@@ -58,6 +55,15 @@ loss:
     loss_weighting_fn: 0 # 0: off, 1: pressure fluct, 2: pressure grad, 3: vel grad
     loss_weighting_clamp: True
 
+    # If true the labels and predictions are channel-wise scaled by the average of the respective channel
+    auto_channel_scaling: True
+
+    # lower limit to the channel scaling values
+    eps_scaling: 1
+    eps_scheduling_mode: decay
+    eps_scheduling_kwargs: {'gamma': 0.998,
+                            'step_size': 10}
+
 # dataset parameters
 data:
     trainset_name: 'data/train.hdf5'
@@ -77,15 +83,23 @@ data:
     input_mode: 1
     stride_hor: 1
     stride_vert: 1
-    ux_scaling: 0.5
-    uy_scaling: 0.5
-    uz_scaling: 0.1
-    turb_scaling: 0.01
+    ux_scaling: 1.0
+    uy_scaling: 1.0
+    uz_scaling: 1.0
+    turb_scaling: 1.0
     p_scaling: 1.0
     epsilon_scaling: 1.0
     nut_scaling: 1.0
     terrain_scaling: 1.0
-    autoscale: True
+    autoscale: False
+    additive_gaussian_noise: True # if true the gaussian noise is additive, else a multiplication of the values
+    max_gaussian_noise_std: 0.0 # gaussian noise standard deviation for the normalized wind
+    n_turb_fields: 0 # number of turbelence fields
+    max_normalized_turb_scale: 0.0 # scale of the turbulent field with respect to normalized wind
+    max_normalized_bias_scale: 0.0 # scale of the wind bias with respect to normalized wind
+    only_z_velocity_bias: False # If true, the bias is only added to the z-wind
+    max_fraction_of_sparse_data: 0.1 # maximum fraction of sampled grid cells for the sparse mask (only relevant for input mode 3 and 4)
+    min_fraction_of_sparse_data: 0.001 # minimum fraction of sampled grid cells for the sparse mask (only relevant for input mode 3 and 4)
 
 # model parameters
 model:
@@ -113,10 +127,14 @@ model:
         verbose: True,
         submodel_type: 'ModelEDNN3D',
         vae: False,
+        use_uz_in: True,
+        use_sparse_mask: False,
+        use_sparse_convolution: False,
 
         # uncertainty prediction params
         predict_uncertainty: False,
         uncertainty_train_mode: 'alternating',
+        logvar_scaling: 10,
 
         # uncertainty prediction params
         n_stacked: 3,

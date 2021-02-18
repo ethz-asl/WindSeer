@@ -6,7 +6,7 @@ import numpy as np
 import nn_wind_prediction.utils as utils
 
 # enter here the different models to compare
-model_names = ['ednn3d_1', 'ednn3d_2', 'ednn3d_3', 'ednn3d_4', 'ednn3d_5', 'ednn3d_6']
+model_names = ['optimizer_1', 'optimizer_2', 'optimizer_3', 'optimizer_4', 'optimizer_5']
 
 # default values --------------------------------------------------------
 plot_losses = False
@@ -63,7 +63,7 @@ losses = {}
 prediction_errors = {}
 
 for name in model_names:
-    data = np.load('prediction_errors_' + name + '.npz')
+    data = np.load('prediction_errors_' + name + '.npz', allow_pickle=True)
     loss = data['losses'].item()
     prediction_error = data['prediction_errors'].item()
 

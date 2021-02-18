@@ -1,14 +1,16 @@
 from __future__ import print_function
 
 from nn_wind_prediction.utils.interpolation import DataInterpolation
+import nn_wind_prediction.utils.generate_turbulence as generate_turbulence
 
 import numpy as np
 import random
-import sys
+import threading
 import torch
 from torch.utils.data.dataset import Dataset
 import h5py
 import nn_wind_prediction.utils as utils
+import sys
 
 numpy_interpolation = False
 if sys.version_info[0] > 2:
@@ -54,6 +56,17 @@ class HDF5Dataset(Dataset):
     __default_autoscale = False
     __default_loss_weighting_fn = 0
     __default_loss_weighting_clamp = True
+    __default_max_gaussian_noise_std = 0.0
+    __default_additive_gaussian_noise = True
+    __default_n_turb_fields = 1
+    __default_max_normalized_turb_scale = 0.0
+    __default_max_normalized_bias_scale = 0.0
+    __default_only_z_velocity_bias = False
+    __default_max_fraction_of_sparse_data = 1
+    __default_min_fraction_of_sparse_data = 0.0
+    __default_use_system_random = False
+
+    __lock = threading.Lock()
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -77,6 +90,10 @@ class HDF5Dataset(Dataset):
                     0: The inflow condition is copied over the full domain
                     1: The vertical edges are interpolated over the full domain
                     2: The inputs have the same values as the labels (channel wise)
+                    3: Randomly sample a sparse mask over the full domain and return the values of those sampled cells
+                    4: Randomly sample a sparse mask over the sub domain and return the values of those sampled cells
+                    5: Fake trajectories and return the values at those cells
+                    6: Sequential trajectory input (Not implement yet)
             augmentation:
                 If true the data is augmented according to the mode and augmentation_kwargs. The terrain and the velocities
                 must be requested to use this mode for now
@@ -108,112 +125,208 @@ class HDF5Dataset(Dataset):
                 Return the filename of the sample, default False
             autoscale:
                 Automatically scale the input and return the scale, default False
+            loss_weighting_fn:
+                Compose a matrix to weight the indivial cells differently
+                    0: no weighting function, weights are ones
+                    1: squared pressure fluctuations
+                    2: l2 norm of the pressure gradient
+                    3: l2 norm of the velocity gradient
+            loss_weighting_clamp:
+                Bool indicating if the weights should be clamped to a certain maximum value
+            additive_gaussian_noise:
+                Boolean indicating if the gaussian noise is additive or a randomly sampled factor to the actual velocities
+            max_gaussian_noise_std:
+                Maximum standard deviation of the gaussian noise added to the input. If set to 0 no noise is added.
+                This is a relative value as the noise is expressed in percent.
+            n_turb_fields:
+                Number of turbulence fields generated in the initialization to add turbulent disturbances to the
+                wind velocities. If either n_turb_fields or max_normalized_turb_scale are 0 no disturbances are
+                added.
+            max_normalized_turb_scale:
+                Maximum magnitude of the turbulence added to the normalized wind.
+                If either n_turb_fields or max_normalized_turb_scale are 0 no disturbances are
+                added.
+            max_normalized_bias_scale:
+                Maximum magnitude of the bias added to the normalized wind.
+                If set to 0 no bias is added.
+            only_z_velocity_bias:
+                Indicates if the bias is added only to the z-velocities. If false the bias is added to all wind axes.
+            max_fraction_of_sparse_data:
+                In case of a sparse input this indicates the maximum number of cells that should be sampled.
+            min_fraction_of_sparse_data:
+                In case of a sparse input this indicates the minimum number of cells that should be sampled.
+            use_system_random:
+                If true the true system random generator is used, else the standart pseudo number generated
+                is used where setting the seed is feasible
         '''
 
-        #-------------------------------------------- kwarg fetching ---------------------------------------------------
+        # ------------------------------------------- kwarg fetching ---------------------------------------------------
         try:
-            verbose = kwargs['verbose']
+            verbose = bool(kwargs['verbose'])
         except KeyError:
             verbose = False
 
         try:
-            self.__loss_weighting_fn = kwargs['loss_weighting_fn']
+            self.__loss_weighting_fn = int(kwargs['loss_weighting_fn'])
         except KeyError:
             self.__loss_weighting_fn = self.__default_loss_weighting_fn
             if verbose:
                 print('HDF5Dataset: loss_weighting_fn not present in kwargs, using default value:', self.__default_loss_weighting_fn)
 
         try:
-            self.__loss_weighting_clamp = kwargs['loss_weighting_clamp']
+            self.__loss_weighting_clamp = bool(kwargs['loss_weighting_clamp'])
         except KeyError:
             self.__loss_weighting_clamp = self.__default_loss_weighting_clamp
             if verbose:
                 print('HDF5Dataset: loss_weighting_clamp not present in kwargs, using default value:', self.__default_loss_weighting_clamp)
 
         try:
-            self.__device = kwargs['device']
+            self.__device = str(kwargs['device'])
         except KeyError:
             self.__device = self.__default_device
             if verbose:
                 print('HDF5Dataset: device not present in kwargs, using default value:', self.__default_device)
 
         try:
-            self.__nx = kwargs['nx']
+            self.__nx = int(kwargs['nx'])
         except KeyError:
             self.__nx = self.__default_nx
             if verbose:
                 print('HDF5Dataset: nx not present in kwargs, using default value:', self.__default_nx)
 
         try:
-            self.__ny = kwargs['ny']
+            self.__ny = int(kwargs['ny'])
         except KeyError:
             self.__ny = self.__default_ny
             if verbose:
                 print('HDF5Dataset: ny not present in kwargs, using default value:', self.__default_ny)
 
         try:
-            self.__nz = kwargs['nz']
+            self.__nz = int(kwargs['nz'])
         except KeyError:
             self.__nz = self.__default_nz
             if verbose:
                 print('HDF5Dataset: nz not present in kwargs, using default value:', self.__default_nz)
 
         try:
-            self.__input_mode = kwargs['input_mode']
+            self.__input_mode = int(kwargs['input_mode'])
         except KeyError:
             self.__input_mode = self.__default_input_mode
             if verbose:
                 print('HDF5Dataset: input_mode not present in kwargs, using default value:', self.__default_input_mode)
 
         try:
-            self.__augmentation = kwargs['augmentation']
+            self.__augmentation = bool(kwargs['augmentation'])
         except KeyError:
             self.__augmentation = self.__default_augmentation
             if verbose:
                 print('HDF5Dataset: augmentation not present in kwargs, using default value:', self.__default_augmentation)
 
         try:
-            self.__augmentation_mode = kwargs['augmentation_mode']
+            self.__augmentation_mode = int(kwargs['augmentation_mode'])
         except KeyError:
             self.__augmentation_mode = self.__default_augmentation_mode
             if verbose:
                 print('HDF5Dataset: augmentation_mode not present in kwargs, using default value:', self.__default_augmentation_mode)
 
         try:
-            self.__stride_hor = kwargs['stride_hor']
+            self.__stride_hor = int(kwargs['stride_hor'])
         except KeyError:
             self.__stride_hor = self.__default_stride_hor
             if verbose:
                 print('HDF5Dataset: stride_hor not present in kwargs, using default value:', self.__default_stride_hor)
 
         try:
-            self.__stride_vert = kwargs['stride_vert']
+            self.__stride_vert = int(kwargs['stride_vert'])
         except KeyError:
             self.__stride_vert = self.__default_stride_vert
             if verbose:
                 print('HDF5Dataset: stride_vert not present in kwargs, using default value:', self.__default_stride_vert)
 
         try:
-            self.__return_grid_size = kwargs['return_grid_size']
+            self.__return_grid_size = bool(kwargs['return_grid_size'])
         except KeyError:
             self.__return_grid_size = self.__default_return_grid_size
             if verbose:
                 print('HDF5Dataset: return_grid_size not present in kwargs, using default value:', self.__default_return_grid_size)
 
         try:
-            self.__return_name = kwargs['return_name']
+            self.__return_name = bool(kwargs['return_name'])
         except KeyError:
             self.__return_name = self.__default_return_name
             if verbose:
                 print('HDF5Dataset: return_name not present in kwargs, using default value:', self.__default_return_name)
 
         try:
-            self.__autoscale = kwargs['autoscale']
+            self.__autoscale = bool(kwargs['autoscale'])
         except KeyError:
             self.__autoscale = self.__default_autoscale
             if verbose:
                 print('HDF5Dataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
 
+        try:
+            self.__max_gaussian_noise_std = float(kwargs['max_gaussian_noise_std'])
+        except KeyError:
+            self.__max_gaussian_noise_std = self.__default_max_gaussian_noise_std
+            if verbose:
+                print('HDF5Dataset: max_gaussian_noise_std not present in kwargs, using default value:', self.__default_max_gaussian_noise_std)
+
+        try:
+            self.__additive_gaussian_noise = float(kwargs['additive_gaussian_noise'])
+        except KeyError:
+            self.__additive_gaussian_noise = self.__default_additive_gaussian_noise
+            if verbose:
+                print('HDF5Dataset: additive_gaussian_noise not present in kwargs, using default value:', self.__default_additive_gaussian_noise)
+
+        try:
+            self.__n_turb_fields = int(kwargs['n_turb_fields'])
+        except KeyError:
+            self.__n_turb_fields = self.__default_n_turb_fields
+            if verbose:
+                print('HDF5Dataset: n_turb_fields not present in kwargs, using default value:', self.__default_n_turb_fields)
+
+        try:
+            self.__max_normalized_turb_scale = float(kwargs['max_normalized_turb_scale'])
+        except KeyError:
+            self.__max_normalized_turb_scale = self.__default_max_normalized_turb_scale
+            if verbose:
+                print('HDF5Dataset: max_normalized_turb_scale not present in kwargs, using default value:', self.__default_max_normalized_turb_scale)
+
+        try:
+            self.__max_normalized_bias_scale = float(kwargs['max_normalized_bias_scale'])
+        except KeyError:
+            self.__max_normalized_bias_scale = self.__default_max_normalized_bias_scale
+            if verbose:
+                print('HDF5Dataset: max_normalized_bias_scale not present in kwargs, using default value:', self.__default_max_normalized_bias_scale)
+
+        try:
+            self.__only_z_velocity_bias = bool(kwargs['only_z_velocity_bias'])
+        except KeyError:
+            self.__only_z_velocity_bias = self.__default_only_z_velocity_bias
+            if verbose:
+                print('HDF5Dataset: only_z_velocity_bias not present in kwargs, using default value:', self.__default_only_z_velocity_bias)
+
+        try:
+            self.__use_system_random = float(kwargs['use_system_random'])
+        except KeyError:
+            self.__use_system_random = self.__default_use_system_random
+            if verbose:
+                print('HDF5Dataset: use_system_random not present in kwargs, using default value:', self.__default_use_system_random)
+
+        if self.__input_mode == 3 or self.__input_mode == 4:
+            try:
+                self.__max_fraction_of_sparse_data = float(kwargs['max_fraction_of_sparse_data'])
+            except KeyError:
+                self.__max_fraction_of_sparse_data = self.__default_max_fraction_of_sparse_data
+                if verbose:
+                    print('HDF5Dataset: max_fraction_of_sparse_data not present in kwargs, using default value:', self.__default_max_fraction_of_sparse_data)
+
+            try:
+                self.__min_fraction_of_sparse_data = float(kwargs['min_fraction_of_sparse_data'])
+            except KeyError:
+                self.__min_fraction_of_sparse_data = self.__default_min_fraction_of_sparse_data
+                if verbose:
+                    print('HDF5Dataset: min_fraction_of_sparse_data not present in kwargs, using default value:', self.__default_min_fraction_of_sparse_data)
 
         # --------------------------------------- initializing class params --------------------------------------------
         if len(input_channels) == 0 or len(label_channels) == 0:
@@ -241,8 +354,11 @@ class HDF5Dataset(Dataset):
                                  'correct channels are {}'.format(channel, self.default_channels))
 
         self.__channels_to_load = []
+        self.__input_channels = []
         self.__input_indices = []
         self.__label_indices = []
+        self.__input_velocities_indices = []
+        self.__data_velocity_indices = []
 
         # make sure that the channels_to_load list is correctly ordered, and save the input and label variable indices
         index = 0
@@ -250,7 +366,11 @@ class HDF5Dataset(Dataset):
             if channel in input_channels or channel in label_channels or channel in weighting_channels:
                 self.__channels_to_load += [channel]
                 if channel in input_channels:
+                    self.__input_channels += [channel]
                     self.__input_indices += [index]
+                    if channel in ['ux', 'uy', 'uz']:
+                        self.__data_velocity_indices += [index]
+                        self.__input_velocities_indices += [len(self.__input_indices) - 1]
                 if channel in label_channels:
                     self.__label_indices += [index]
                 index += 1
@@ -274,7 +394,7 @@ class HDF5Dataset(Dataset):
         # check that all the required channels are present for autoscale for augmentation
         # this is due to the get_scale method which needs the the velocities to compute the scale for autoscaling
         # augmentation mode 1 and 0 use indexing, the first 4 channels are required
-        if not all(elem in self.__channels_to_load for elem in ['terrain','ux', 'uy', 'uz']):
+        if not all(elem in self.__channels_to_load for elem in ['terrain', 'ux', 'uy', 'uz']):
             print('HDF5Dataset: augmentation and autoscale will not be applied, not all of the required channels (terrain,ux, uy, uz) were requested')
             self.__autoscale = False
             self.__augmentation = False
@@ -315,14 +435,37 @@ class HDF5Dataset(Dataset):
                     print('HDF5Dataset: ', 'scaling_' + channel, 'not present in kwargs, using default value:',
                           self.__default_scaling_dict[channel])
 
+        # create turbulent velocity fields for train set
+        if self.__n_turb_fields > 0 and self.__max_normalized_turb_scale > 0.0:
+            turbulent_velocity_fields = []
+            for i in range(self.__n_turb_fields):
+                # dx, dy, dz are hardcoded for the moment
+                dx = dy = 16.6444
+                dz = 11.5789
+                turbulent_velocity_field, _ = generate_turbulence.generate_turbulence_spectral(int(self.__nx * 1.5), int(self.__ny * 1.5), int(self.__ny * 1.5), dx, dy, dz)
+                turbulent_velocity_fields += [torch.from_numpy(turbulent_velocity_field.astype(np.float32)).unsqueeze(0)]
+            self.__turbulent_velocity_fields = torch.cat(turbulent_velocity_fields, 0)
+
+        # add the mask to the input channels for the respective input modes
+        if self.__input_mode == 3 or self.__input_mode == 4 or self.__input_mode == 5:
+            self.__input_channels += ['mask']
+
         # initialize random number generator used for the subsampling
-        self.__rand = random.SystemRandom()
+        if self.__use_system_random:
+            self.__rand = random.SystemRandom()
+        else:
+            self.__rand = random
 
         # interpolator for the three input velocities
-        self.__interpolator = DataInterpolation(self.__device, 3, self.__nx, self.__ny, self.__nz)
+        self.__interpolator = DataInterpolation(self.__device, len(self.__input_velocities_indices), self.__nx, self.__ny, self.__nz)
 
         # avoids printing a warning multiple times
         self.__augmentation_warning_printed = False
+
+        self.__min_num_cells = self.__nx * self.__ny * self.__nz
+        self.__max_num_cells = 0
+        self.__num_samples = 0
+        self.__average_num_cells = 0
 
         if verbose:
             print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
@@ -336,28 +479,30 @@ class HDF5Dataset(Dataset):
         for i, channel in enumerate(self.__channels_to_load):
             # extract channel data and apply scaling
             data_from_channels += [torch.from_numpy(sample[channel][...]).float().unsqueeze(0) / self.__scaling_dict[channel]]
-        data = torch.cat(data_from_channels , 0)
+
+        data = torch.cat(data_from_channels, 0)
 
         # send full data to device
         data = data.to(self.__device)
 
         ds = torch.from_numpy(sample['ds'][...])
 
-        data_shape = data[0,:].shape
+        data_shape = data[0, :].shape
 
         # 3D data transforms
         if (len(data_shape) == 3):
             # apply autoscale if requested
             if self.__autoscale:
-                # the velocities are indices 1,2,3
-                scale = self.__get_scale(data[1:4, :, :, :])
+                # determine the scales
+                noise_scale = 1.0
+                scale = self.get_scale(data[self.__data_velocity_indices, :, :, :])
 
                 # applying the autoscale to the velocities
-                data[1:4, :, :, :] /= scale
+                data[self.__data_velocity_indices, :, :, :] /= scale
 
                 # turb handling
                 if 'turb' in self.__channels_to_load:
-                    data[self.__channels_to_load.index('turb'), :, :, :] /= scale * scale
+                    data[self.__channels_to_load.index('turb'), :, :, :] /= scale*scale
 
                 # p handling
                 if 'p' in self.__channels_to_load:
@@ -371,9 +516,12 @@ class HDF5Dataset(Dataset):
                 if 'nut' in self.__channels_to_load:
                     data[self.__channels_to_load.index('nut'), :, :, :] /= scale
 
+            else:
+                # determine the scale of the sample to properly scale the noise
+                noise_scale = self.get_scale(data[self.__data_velocity_indices, :, :, :])
 
             # downscale if requested
-            data = data[:,::self.__stride_vert,::self.__stride_hor, ::self.__stride_hor]
+            data = data[:, ::self.__stride_vert, ::self.__stride_hor, ::self.__stride_hor]
 
             # augment if requested according to the augmentation mode
             if self.__augmentation:
@@ -435,24 +583,110 @@ class HDF5Dataset(Dataset):
 
             else:
                 # no data augmentation
-                data = data[:,:self.__nz, :self.__ny, :self.__nx]
+                data = data[:, :self.__nz, :self.__ny, :self.__nx]
 
-            # generate the input channels
+            # generate the input data
             input_data = torch.index_select(data, 0, self.__input_indices)
-            if (self.__input_mode == 0):
-                # copy the inflow condition across the full domain
-                input = torch.cat((input_data[0,:,:,:].unsqueeze(0), input_data[1:,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)))
+            boolean_terrain = input_data[0] > 0
 
-            elif (self.__input_mode == 1):
+            # add gaussian noise to wind velocities if requested
+            if self.__max_gaussian_noise_std > 0.0:
+                if self.__additive_gaussian_noise:
+                    std = self.__rand.random() * self.__max_gaussian_noise_std * noise_scale
+                    input_data[self.__input_velocities_indices] += torch.randn(input_data[self.__input_velocities_indices].shape) * std
+                else:
+                    std = self.__rand.random() * self.__max_gaussian_noise_std
+                    input_data[self.__input_velocities_indices] *= torch.randn(input_data[self.__input_velocities_indices].shape) * std + 1.0
+
+            # add turbulence to wind velocities if requested
+            if self.__n_turb_fields > 0 and self.__max_normalized_turb_scale > 0.0:
+                # randomly select one of the turbulent velocity fields
+                rand_idx = self.__rand.randint(0, self.__n_turb_fields - 1)
+                turb_scale = self.__rand.random() * self.__max_normalized_turb_scale
+                turbulence = self.__turbulent_velocity_fields[rand_idx]
+                _, turb_nx, turb_ny, turb_nz = turbulence.shape
+
+                # subsample turbulent velocity field with the same shape as data
+                _, nz, ny, nx = input_data.shape
+                start_x = self.__rand.randint(0, turb_nx - nx)
+                start_y = self.__rand.randint(0, turb_ny - ny)
+                start_z = self.__rand.randint(0, turb_nz - nz)
+                turbulence = turbulence[:, start_z:start_z+nz,  start_y:start_y+ny,  start_x:start_x+nx] * turb_scale * noise_scale
+
+                # mask by terrain
+                turbulence *= boolean_terrain
+
+                if 'ux' in self.__input_channels:
+                    input_data[self.__input_channels.index('ux')] += turbulence[0]
+                if 'uy' in self.__input_channels:
+                    input_data[self.__input_channels.index('uy')] += turbulence[1]
+                if 'uz' in self.__input_channels:
+                    input_data[self.__input_channels.index('uz')] += turbulence[2]
+
+            # add bias to wind velocities if requested
+            if self.__max_normalized_bias_scale > 0:
+                if self.__only_z_velocity_bias:
+                    if 'uz' in self.__input_channels:
+                        bias_scale = self.__rand.random() * self.__max_normalized_bias_scale
+                        bias = (torch.rand(1) * 2.0 - 1) * bias_scale * noise_scale
+                        input_data[self.__input_channels.index('uz')] += bias
+                    else:
+                        print('Adding bias only for uz requested but uz not present, not adding any bias')
+                else:
+                    bias_scale = self.__rand.random() * self.__max_normalized_bias_scale
+                    bias = (torch.rand(len(self.__input_velocities_indices), 1, 1, 1) * 2.0 - 1) * bias_scale * noise_scale
+                    input_data[self.__input_velocities_indices] += bias
+
+            # assemble the input according to the mode
+            if self.__input_mode == 0:
+                # copy the inflow condition across the full domain
+                input = torch.cat((input_data[0,:,:,:].unsqueeze(0),
+                                   input_data[1:,:,:,0].unsqueeze(-1).expand(-1,-1,-1,self.__nx)))
+
+            elif self.__input_mode == 1:
                 # This interpolation is slower (at least on a cpu)
                 # input = torch.cat([data[0,:,:,:].unsqueeze(0),
                 # self.__interpolator.edge_interpolation_batch(data[1:4,:,:,:].unsqueeze(0)).squeeze()])
 
                 # interpolating the vertical edges
-                input = torch.cat((input_data[0,:,:,:].unsqueeze(0), self.__interpolator.edge_interpolation(input_data[1:,:,:,:])))
+                input = torch.cat((input_data[0,:,:,:].unsqueeze(0),
+                                    self.__interpolator.edge_interpolation(input_data[1:,:,:,:])))
 
             elif (self.__input_mode == 2):
+                # Input the ground truth data
                 input = input_data
+
+            elif (self.__input_mode == 3):
+                # random sparse input with an additional mask as an input
+                mask =  self.__create_sparse_mask(boolean_terrain)
+                self.__update_sparse_stats(mask.sum().item())
+
+                # compose output
+                input_data[1:] *= mask
+                input = torch.cat([input_data, mask.float().unsqueeze(0)])
+
+            elif (self.__input_mode == 4):
+                # random sparse input from a subregion with an additional mask as an input
+                mask = self.__create_sparse_mask_subregion(boolean_terrain)
+                self.__update_sparse_stats(mask.sum().item())
+
+                # compose output
+                input_data[1:] *= mask
+                input = torch.cat([input_data, mask.float().unsqueeze(0)])
+
+            elif (self.__input_mode == 5):
+                # faking input from a flight path
+                mask = self.__create_sparse_mask_trajectory(boolean_terrain)
+                self.__update_sparse_stats(mask.sum().item())
+
+                # compose output
+                input_data[1:] *= mask
+                input = torch.cat([input_data, mask.float().unsqueeze(0)])
+
+            elif (self.__input_mode == 6):
+                # sequential input
+                print('HDF5Dataset Error: Sequential input is not implemented anymore')
+                sys.exit()
 
             else:
                 print('HDF5Dataset Error: Input mode ', self.__input_mode, ' is not supported')
@@ -478,7 +712,7 @@ class HDF5Dataset(Dataset):
             return out
 
         elif (len(data_shape) == 2):
-            print('HDF5Dataset Error: 2D data handling is not implemented yet')
+            print('HDF5Dataset Error: 2D data handling is not implemented anymore')
             sys.exit()
         else:
             print('HDF5Dataset Error: Data dimension of ', len(data_shape), ' is not supported')
@@ -486,6 +720,21 @@ class HDF5Dataset(Dataset):
 
     def get_name(self, index):
         return self.__memberslist[index]
+
+    def get_input_channels(self):
+        return self.__input_channels
+
+    def print_dataset_stats(self):
+        if self.__input_mode == 3 or self.__input_mode == 4 or self.__input_mode == 5:
+            print('-------------------------------------------------')
+            print('HDF5 Dataset sparse mask statistics')
+            print('\tminimum number of cells:', self.__min_num_cells)
+            print('\tmaximum number of cells:', self.__max_num_cells)
+            print('\taverage number of cells:', self.__average_num_cells)
+            print('\tnumber of mask created: ', self.__num_samples)
+            print('-------------------------------------------------')
+        else:
+            pass
 
     def __len__(self):
         return self.__num_files
@@ -547,7 +796,6 @@ class HDF5Dataset(Dataset):
             raise RuntimeError("The rotated and shifted grid does not satisfy the data grid bounds")
 
         return X, Y, Z, angle
-
 
     def __augmentation_mode2_torch(self, data, out_size, vx_channel = 1, vy_channel = 2):
         '''
@@ -646,12 +894,12 @@ class HDF5Dataset(Dataset):
 
         return torch.from_numpy(interpolated).float()
 
-    def __get_scale(self, x):
+    def get_scale(self, x):
         shape = x.shape
 
         # get data from corners of sample
-        corners = torch.index_select(x, 2, torch.tensor([0,shape[2]-1]))
-        corners = torch.index_select(corners, 3, torch.tensor([0,shape[3]-1]))
+        corners = torch.index_select(x, 2, torch.tensor([0, shape[2]-1]))
+        corners = torch.index_select(corners, 3, torch.tensor([0, shape[3]-1]))
 
         # compute the scale
         scale = corners.norm(dim=0).mean(dim=0).max()
@@ -661,6 +909,185 @@ class HDF5Dataset(Dataset):
             return scale
         else:
             return torch.tensor(1.0)
+
+    def __create_sparse_mask(self, boolean_terrain):
+        '''
+        Creating a randomly sampled sparse mask making sure only non-terrain cells are sampled.
+
+        Input params:
+            boolean_terrain: boolean representation of the terrain (False for terrain cells, True for wind cells)
+
+        Output:
+            mask: The sampled mask
+        '''
+        mask = torch.zeros_like(boolean_terrain)
+        mask_shape = mask.shape
+
+        # percentage of sparse data
+        target_frac = self.__rand.random() * (self.__max_fraction_of_sparse_data - self.__min_fraction_of_sparse_data) + self.__min_fraction_of_sparse_data
+        target_num_cell = int(mask.numel() * target_frac)
+
+        # set the initial number of cells to a negative value to correct for the expected number of cells samples inside the terrain
+        mask_num_cell = int(target_num_cell * (1.0 - 1.0 / boolean_terrain.float().mean().item()))
+
+        # iterate multiple times to make sure the right amount of cells are set in the mask
+        max_iter = 2
+        iter = 0
+        while iter < max_iter and mask_num_cell < target_num_cell:
+            max_iter = max_iter + 1
+
+            # sample cells
+            indices = self.__rand.sample(range(mask.numel()), min(int(target_num_cell - mask_num_cell), mask.numel()))
+            mask = mask.view(-1)
+            mask[indices] = 1.0
+            mask = mask.view(mask_shape)
+
+            # make sure no cells are inside the terrain
+            mask *= boolean_terrain
+            mask_num_cell = mask.sum().item()
+
+        return mask
+
+    def __create_sparse_mask_subregion(self, boolean_terrain):
+        '''
+        Creating a randomly sampled sparse mask making sure only non-terrain cells are sampled and all samples
+        are located in a smaller subregion of the full domain.
+
+        Input params:
+            boolean_terrain: boolean representation of the terrain (False for terrain cells, True for wind cells)
+
+        Output:
+            mask: The sampled mask
+        '''
+        mask = torch.zeros_like(boolean_terrain)
+        mask_shape = mask.shape
+
+        # allow for a maximum of 10 tries to get a mask containing non terrain cells
+        iter = 0
+        max_iter = 10
+        inside_terrain = True
+        while (iter < max_iter and inside_terrain):
+            # create a subregion which is between 0.25 and 0.75 in each dimension
+            sub_mask_shape = torch.Size((torch.tensor(mask_shape) * (torch.rand(3) * 0.5 + 0.25)).to(torch.long))
+            sub_mask = torch.zeros(sub_mask_shape)
+            sub_mask_start_idx = torch.zeros(3).to(torch.long)
+            sub_mask_start_idx[0] = int(self.__rand.triangular(0, mask_shape[0] - sub_mask_shape[0], 0))
+            sub_mask_start_idx[1] = self.__rand.randint(0, mask_shape[1] - sub_mask_shape[1])
+            sub_mask_start_idx[2] = self.__rand.randint(0, mask_shape[2] - sub_mask_shape[2])
+
+            mean_terrain = boolean_terrain[sub_mask_start_idx[0]:sub_mask_start_idx[0] + sub_mask_shape[0],
+                                           sub_mask_start_idx[1]:sub_mask_start_idx[1] + sub_mask_shape[1],
+                                           sub_mask_start_idx[2]:sub_mask_start_idx[2] + sub_mask_shape[2]].float().mean().item()
+
+            inside_terrain = mean_terrain == 0
+            iter += 1
+
+        if iter == max_iter:
+            print('Did not find a valid mask within ' + str(iter) + 'iterations')
+
+        # determine the number of cells to sample and correct the number of cells by the subregion size and the terrain occlusion
+        target_frac = self.__rand.random() * (self.__max_fraction_of_sparse_data - self.__min_fraction_of_sparse_data) + self.__min_fraction_of_sparse_data
+
+        # limit it to a maximum 50 % of the cells to limit the cases where all the cells are sampled
+        #target_num_cell = min(int(mask.numel() * target_frac), int(0.5 * sub_mask.numel()))
+        target_num_cell = int(sub_mask.numel() * target_frac)
+
+        # set the initial number of cells to a negative value to correct for the expected number of cells samples inside the terrain
+        if inside_terrain:
+            terrain_factor = 1.0
+        else:
+            terrain_factor = 1.0 / mean_terrain
+
+        # limit it to 80 % of the cells to still ensure there are some free cells
+        target_num_cell = min(int(target_num_cell * terrain_factor), int(0.8 * sub_mask.numel()))
+
+        # sample cells
+        indices = self.__rand.sample(range(sub_mask.numel()), target_num_cell)
+        sub_mask = sub_mask.view(-1)
+        sub_mask[indices] = 1.0
+        sub_mask = sub_mask.view(sub_mask_shape)
+
+        mask[sub_mask_start_idx[0]:sub_mask_start_idx[0] + sub_mask_shape[0],
+             sub_mask_start_idx[1]:sub_mask_start_idx[1] + sub_mask_shape[1],
+             sub_mask_start_idx[2]:sub_mask_start_idx[2] + sub_mask_shape[2]] = sub_mask
+
+        # make sure no cells are inside the terrain
+        mask *= boolean_terrain
+
+        return mask
+
+    def __create_sparse_mask_trajectory(self, boolean_terrain):
+        '''
+        Creating a sparse mask by faking a trajectory of a flying UAV.
+
+        Input params:
+            boolean_terrain: boolean representation of the terrain (False for terrain cells, True for wind cells)
+
+        Output:
+            mask: The sampled mask
+        '''
+        # TODO: Currently the params are hardcoded. Determine if they should be added to the yaml files.
+        mask = torch.zeros_like(boolean_terrain)
+        mask_shape = mask.shape
+
+        # define some trajectory parameter
+        min_trajectory_length = 30
+        max_trajectory_length = 300
+        min_segment_length = 5
+        max_segment_length = 20
+        step_size = 1.0
+        max_iter = 50
+
+        # initialize a random valid start position
+        valid_start_positions = torch.nonzero(boolean_terrain, as_tuple=False)
+        position = valid_start_positions[self.__rand.randint(0, valid_start_positions.shape[0]-1)]
+        mask[position.split(1)] = 1.0
+
+        # randomly determine a target trajectory length
+        trajectory_length = self.__rand.randint(min_trajectory_length, max_trajectory_length)
+
+        # loop through adding segments until target length is achieved
+        iter = 0
+        while (iter < max_iter) and mask.sum() < trajectory_length:
+            iter += 1
+            segment_length = self.__rand.randint(min_segment_length, max_segment_length)
+
+            # sample random propagation direction, divide z component by 4 to make flatter trajectories more likely
+            direction = torch.randn(3)
+            direction[0] *= 0.25
+            direction /= direction.norm()
+
+            num_steps = int(segment_length / step_size)
+            for i in range(num_steps):
+                new_position = position + step_size * direction
+                new_idx = torch.round(new_position).to(torch.long)
+
+                # check if the new position is inside the domain, if not invert the respective direction
+                if torch.prod(new_idx > 0) * torch.prod(new_idx + 1 < torch.tensor(mask_shape)):
+                    # check if new position is not inside the terrain
+                    if (boolean_terrain[new_idx.split(1)]):
+                        mask[new_idx.split(1)] = 1.0
+                        position = new_position
+                    else:
+                        break
+                else:
+                    direction *= (new_idx > 0) * 2 - 1
+                    direction *= (new_idx + 1 < torch.tensor(mask_shape)) * 2 - 1
+
+        return mask
+
+    def __update_sparse_stats(self, num_cells):
+        self.__lock.acquire()
+        self.__min_num_cells = min(self.__min_num_cells, num_cells)
+        self.__max_num_cells = max(self.__max_num_cells, num_cells)
+        if (self.__num_samples < 1):
+            self.__num_samples = 1
+            self.__average_num_cells = num_cells
+        else:
+            self.__num_samples += 1
+            self.__average_num_cells += (num_cells - self.__average_num_cells) / float(self.__num_samples)
+
+        self.__lock.release()
 
     def __compute_loss_weighting(self, data, ds, weighting_fn=0):
         '''

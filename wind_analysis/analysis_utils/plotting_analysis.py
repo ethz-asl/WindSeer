@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import torch
 from nn_wind_prediction.utils import PlotUtils
+import nn_wind_prediction.utils as nn_utils
 
 plt.rc('font',**{'family':'serif','sans-serif':['Computer Modern Roman']})
 plt.rc('text', usetex=True)
@@ -124,6 +125,87 @@ def plot_lateral_variation(wind_est, pos, t, min_alt=None, max_alt=None, fig=Non
     hc.set_label('Mission time (s)')
     return fig, ax
 
+def plot_optimizer_results(results):
+    # plot the losses
+    fig = plt.figure()
+    fig.patch.set_facecolor('white')
+    for i, loss in enumerate(results['losses']):
+        x = np.arange(len(loss))
+        plt.plot(x, loss, label = results['optimizers'][i]['name'])
+    plt.xlabel('Iteration')
+    plt.ylabel('Loss')
+    plt.legend(loc='best')
+
+    # plot the parameter and the gradients
+    max_figs_per_figure = 4
+    num_params = results['parameter'][0].shape[2]
+    num_fig = int(np.ceil(num_params / max_figs_per_figure))
+
+    for co in range(results['gradients'][0].shape[1]):
+        for i in range(num_fig):
+            num_plots = min(max_figs_per_figure, num_params - i * max_figs_per_figure)
+
+            fig, ah = plt.subplots(2, num_plots, squeeze=False)
+
+            if results['gradients'][0].shape[1] > 1:
+                fig.suptitle('Parameter Corner ' + str(co))
+            else:
+                fig.suptitle('Parameter for all Corners')
+
+            for j in range(len(results['gradients'])):
+                for k in range(num_plots):
+                    x = np.arange(len(results['parameter'][j][:, co, i * max_figs_per_figure + k]))
+                    ah[0][k].plot(x, results['parameter'][j][:, co, i * max_figs_per_figure + k].numpy(), label = results['optimizers'][j]['name'])
+                    ah[1][k].plot(x, results['gradients'][j][:, co, i * max_figs_per_figure + k].numpy(), label = results['optimizers'][j]['name'])
+                    ah[1][k].set_xlabel('Iteration')
+                    ah[0][k].set_title('Parameter ' + str(i * max_figs_per_figure + k))
+
+            ah[0][0].set_ylabel('Parameter Value')
+            ah[1][0].set_ylabel('Gradients')
+            plt.legend(loc='best')
+
+            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # plot the corner profiles
+    corner_counter = 0
+    fig, ah = plt.subplots(results['input'][1:].shape[0], 4)
+    fig.suptitle('Velocity Profiles')
+    for i in [0, -1]:
+        for j in [0, -1]:
+            corner_input = results['input'][1: , :, i, j].cpu().detach().numpy()
+            height = np.arange(corner_input.shape[1])
+
+            if results['ground_truth'] is not None:
+                corner_gt = results['ground_truth'][:, :, i, j].cpu().detach().numpy()
+
+            xlabels = ['ux', 'uy', 'uz']
+
+            for k in range(corner_input.shape[0]):
+                ah[k][corner_counter].plot(corner_input[k], height, label = 'prediction')
+                if results['ground_truth'] is not None:
+                    ah[k][corner_counter].plot(corner_gt[k], height, label = 'ground truth')
+
+                ah[k][corner_counter].set_xlabel(xlabels[k] + ' corner ' + str(corner_counter))
+                ah[k][0].set_ylabel('Height [cells]')
+
+            corner_counter += 1
+
+    if results['ground_truth'] is not None:
+        plt.legend(loc='best')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    if results['mask'] is not None:
+        results['mask'] = results['mask'].squeeze()
+
+    nn_utils.plot_prediction(results['label_channels'],
+                             prediction = results['prediction'],
+                             label = results['ground_truth'],
+                             provided_input_channels = results['input_channels'],
+                             input = results['input'],
+                             terrain = results['terrain'].squeeze(),
+                             measurements = results['measurement'],
+                             measurements_mask = results['mask'])
 
 def rec2polar(vx, vy, wind_bearing=False, deg=False):
     mag = np.sqrt(vx**2 + vy**2)
@@ -166,10 +248,3 @@ def plot_wind_estimates(time, wind_array, wind_names=None, polar=False):
         a2[2].plot(time, wind[2])
     a2[2].set_ylabel('$V_D$')
     return f2, a2
-
-
-def plot_prediction_observations(input, label, terrain):
-    i2 = input
-    instance = PlotUtils('prediction', ['ux', 'uy', 'uz'],
-                         ['ux', 'uy', 'uz'], i2.cpu(),label,terrain, design=1)
-    instance.plot_prediction(label_name='Observed wind')

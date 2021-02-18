@@ -1,3 +1,4 @@
+from .ModelBase import ModelBase
 from .ModelEDNN2D import ModelEDNN2D
 from .ModelEDNN3D import ModelEDNN3D
 from .ModelTwin import ModelTwin

@@ -1,0 +1,74 @@
+optimizer:
+    # possible options:
+    # 'SimpleStepOptimizer', Adadelta', 'Adagrad', 'Adam', 'Adamax', 'ASGD', 'SGD', 'Ranger', 'RAdam'
+    name: 'Adamax'
+    kwargs: {'lr': 0.5}
+
+scheduler:
+    # Parameter for the step lr scheduler
+    step_size: 50
+    gamma: 0.5
+
+loss:
+    # possible options:
+    # 'L1', 'MSE'
+    name: 'MSE'
+
+measurements:
+    # possible options:
+    # 'cfd', 'log'
+    type: 'cfd'
+
+    cfd:
+        filename: '/tmp/test.hdf5'
+        index: 165
+        kwargs: {input_mode: 5,
+                 additive_gaussian_noise: True,
+                 max_gaussian_noise_std: 0.2,
+                 n_turb_fields: 0,
+                 max_normalized_turb_scale: 0.0,
+                 max_normalized_bias_scale: 0.3,
+                 only_z_velocity_bias: False,
+                 max_fraction_of_sparse_data: 0.1,
+                 min_fraction_of_sparse_data: 0.001,
+                 }
+
+    log:
+        filename: 'data/chasseral/20201128_ezg4_chasseral_flight01_fpr_wind.hdf5'
+        cosmo_file: 'data/cosmo-1_ethz_ana_const.nc'
+        geotiff_file: 'data/chasseral/chasseral.tif'
+        distance_field: True
+        num_cells: 64
+        alt_offset: 150 # offset of the takeoff position for the lower z-bound [m]
+        d_horizontal: 1100 # horizontal domain extent [m]
+        d_vertical: 700 # vertical domain extent [m]
+
+input_fn:
+    # possible options:
+    # 'bp_corners_1':
+    #     Same boundary layer profile for all corners, optimizing scale and rotation
+    # 'bp_corners_4':
+    #     Separate boundary layer profile for all corners, optimizing scale and rotation
+    # 'bp_corners_1_roughness':
+    #     Same boundary layer profile for all corners, optimizing scale, rotation, and roughness
+    # 'bp_corners_4_roughness':
+    #     Separate boundary layer profile for all corners, optimizing scale, rotation, and roughness
+    # 'splines_corner':
+    #     Separate spline for each velocity and each corner
+    type: 'splines_corner'
+    kwargs: {
+        # bp_corners_* args
+        roughness: 64, # roughness of the boundary layer [n_cells]
+
+        # splines args
+        num_control_points: 3,
+        uz_zero : True,
+    }
+
+run:
+    max_iter: 300
+    loss_change_threshold: 0.0001
+    loss_change_window: 4
+    grad_threshold: 0.0001
+    verbose: True
+    masked_loss: True

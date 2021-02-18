@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import yaml
 
+
 class EDNNParameters(object):
 
     def __init__(self, yaml_config, verbose = True):
@@ -65,7 +66,7 @@ class EDNNParameters(object):
         return name
 
     def Dataset_kwargs(self):
-        return {'stride_hor': self.data['stride_hor'],
+        kwargs = {'stride_hor': self.data['stride_hor'],
                 'stride_vert': self.data['stride_vert'],
                 'input_channels': self.data['input_channels'],
                 'label_channels': self.data['label_channels'],
@@ -82,7 +83,51 @@ class EDNNParameters(object):
                 'ny': self.model['model_args']['n_y'],
                 'nz': self.model['model_args']['n_z'],
                 'autoscale': self.data['autoscale'],
-                'loss_weighting_fn': self.loss['loss_weighting_fn']}
+                'loss_weighting_fn': self.loss['loss_weighting_fn'],
+                'loss_weighting_clamp': self.loss['loss_weighting_clamp']}
+
+        if 'verbose' in self.data.keys():
+            kwargs['verbose'] = self.data['verbose']
+        else:
+            kwargs['verbose'] = True
+
+        if 'return_name' in self.data.keys():
+            kwargs['return_name'] = self.data['return_name']
+        else:
+            kwargs['return_name'] = False
+
+        if 'device' in self.data.keys():
+            kwargs['device'] = self.data['device']
+        else:
+            kwargs['device'] = 'cpu'
+
+        # check if the keys exist for the more recently introduced parameter
+        # to keep backwards compatibility
+        if 'additive_gaussian_noise' in self.data.keys():
+            kwargs['additive_gaussian_noise'] = self.data['additive_gaussian_noise']
+
+        if 'max_gaussian_noise_std' in self.data.keys():
+            kwargs['max_gaussian_noise_std'] = self.data['max_gaussian_noise_std']
+
+        if 'n_turb_fields' in self.data.keys():
+            kwargs['n_turb_fields'] = self.data['n_turb_fields']
+
+        if 'max_normalized_turb_scale' in self.data.keys():
+            kwargs['max_normalized_turb_scale'] = self.data['max_normalized_turb_scale']
+
+        if 'max_normalized_bias_scale' in self.data.keys():
+            kwargs['max_normalized_bias_scale'] = self.data['max_normalized_bias_scale']
+
+        if 'only_z_velocity_bias' in self.data.keys():
+            kwargs['only_z_velocity_bias'] = self.data['only_z_velocity_bias']
+
+        if 'max_fraction_of_sparse_data' in self.data.keys():
+            kwargs['max_fraction_of_sparse_data'] = self.data['max_fraction_of_sparse_data']
+
+        if 'min_fraction_of_sparse_data' in self.data.keys():
+            kwargs['min_fraction_of_sparse_data'] = self.data['min_fraction_of_sparse_data']
+
+        return kwargs
 
     def model_kwargs(self):
         return self.model['model_args']
@@ -104,7 +149,6 @@ class EDNNParameters(object):
     def print(self):
         print('Train Settings:')
         print('\tWarm start:\t\t', self.run['warm_start'])
-        print('\tLearning rate initial:\t', self.run['learning_rate_initial'])
         print('\tLearning rate step size:', self.run['learning_rate_decay_step_size'])
         print('\tLearning rate decay:\t', self.run['learning_rate_decay'])
         print('\tBatchsize:\t\t', self.run['batchsize'])
@@ -124,6 +168,11 @@ class EDNNParameters(object):
         print('\t Model type:\t\t', self.model['model_type'])
         print('\t Model args:')
         print('\t\t', self.model['model_args'])
+        print(' ')
+        print('Optimizer Settings:')
+        print('\t Optimizer type:\t', self.run['optimizer_type'])
+        print('\t Optimizer args:')
+        print('\t\t', self.run['optimizer_kwargs'])
         print(' ')
         print('Dataset Settings:')
         print('\tInput channels:\t',self.data['input_channels'])
@@ -213,3 +262,18 @@ class UlogParameters(BasicParameters):
 
     def print(self):
         self._print('Ulog parameters:')
+
+
+class FlightParameters(BasicParameters):
+
+    def __init__(self, yaml_file):
+        super(FlightParameters, self).__init__(yaml_file, subdict='flight')
+
+    def load_yaml(self, file):
+        return self._load_yaml(file, "Using YAML flight config: ")
+
+    def save(self, dir=None):
+        self._save(dir, 'flight.yaml')
+
+    def print(self):
+        self._print('Flight parameters:')

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .ModelBase import ModelBase
 
 '''
 Encoder/Decoder Neural Network
@@ -12,7 +13,7 @@ Encoder/Decoder Neural Network
 
 The first input layer is assumed to be is_wind. This value is true for all cells except the terrain.
 '''
-class ModelEDNN2D(nn.Module):
+class ModelEDNN2D(ModelBase):
     __default_activation = nn.LeakyReLU
     __default_activation_kwargs = {'negative_slope': 0.1}
     __default_n_downsample_layers = 4
@@ -129,24 +130,24 @@ class ModelEDNN2D(nn.Module):
             if verbose:
                 print('EDNN2D: use_turbulence not present in kwargs, using default value:', self.__default_use_turbulence)
 
-        self.__num_inputs = 3
-        self.__num_outputs = 2
+        self.num_inputs = 3
+        self.num_outputs = 2
 
         if self.__use_turbulence:
-            self.__num_outputs += 1
+            self.num_outputs += 1
 
         # convolution layers
         self.__conv = nn.ModuleList()
         for i in range(self.__n_downsample_layers):
             if i == 0:
-                self.__conv += [nn.Conv2d(self.__num_inputs, 8, 3)]
+                self.__conv += [nn.Conv2d(self.num_inputs, 8, 3)]
             else:
                 self.__conv += [nn.Conv2d(4*2**i, 8*2**i, 3)]
 
         if self.__use_fc_layers:
             # fully connected layers
             if self.__n_downsample_layers == 0:
-                n_features = int(self.__num_inputs * self.__n_x * self.__n_z)
+                n_features = int(self.num_inputs * self.__n_x * self.__n_z)
             else:
                 n_features = int(8*2**(self.__n_downsample_layers-1) * self.__n_x * self.__n_z / ((2**self.__n_downsample_layers)**2))
             self.__fc1 = nn.Linear(n_features, int(n_features/self.__fc_scaling))
@@ -181,7 +182,7 @@ class ModelEDNN2D(nn.Module):
             for i in range(self.__n_downsample_layers):
                 if i == 0:
                     self.__deconv1 += [nn.Conv2d(16, 8, 4)]
-                    self.__deconv2 += [nn.Conv2d(8, self.__num_outputs, 4)]
+                    self.__deconv2 += [nn.Conv2d(8, self.num_outputs, 4)]
                 else:
                     self.__deconv1 += [nn.Conv2d(16*2**i, 8*2**i, 4)]
                     self.__deconv2 += [nn.Conv2d(8*2**i, 4*2**i, 4)]
@@ -189,55 +190,17 @@ class ModelEDNN2D(nn.Module):
         else:
             for i in range(self.__n_downsample_layers):
                 if i == 0:
-                    self.__deconv1 += [nn.Conv2d(8, self.__num_outputs, 4)]
+                    self.__deconv1 += [nn.Conv2d(8, self.num_outputs, 4)]
                 else:
                     self.__deconv1 += [nn.Conv2d(8*2**i, 4*2**i, 4)]
 
         if self.__use_mapping_layer:
             # mapping layer
-            self.__mapping_layer = nn.Conv2d(self.__num_outputs,self.__num_outputs,1,groups=self.__num_outputs) # for each channel a separate filter
+            self.__mapping_layer = nn.Conv2d(self.num_outputs,self.num_outputs,1,groups=self.num_outputs) # for each channel a separate filter
 
         if self.__potential_flow:
             self.__pf_convolution = nn.Conv2d(2,1,1)
             self.__pf_pad = nn.ReplicationPad2d((0, 1, 0, 1))
-
-    def new_epoch_callback(self, epoch):
-        # nothing to do here
-        return
-
-    def freeze_model(self):
-        def freeze_weights(m):
-            for params in m.parameters():
-                params.requires_grad = False
-
-        self.apply(freeze_weights)
-
-    def unfreeze_model(self):
-        def unfreeze_weights(m):
-            for params in m.parameters():
-                params.requires_grad = True
-
-        self.apply(unfreeze_weights)
-
-    def num_inputs(self):
-        return self.__num_inputs
-
-    def num_outputs(self):
-        return self.__num_outputs
-
-    def init_params(self):
-        def init_weights(m):
-            if (type(m) != type(self)):
-                try:
-                    torch.nn.init.xavier_normal_(m.weight.data)
-                except:
-                    pass
-                try:
-                    torch.nn.init.normal_(m.bias, mean = 0.0, std = 0.02)
-                except:
-                    pass
-
-        self.apply(init_weights)
 
     def forward(self, x):
         output = {}
@@ -299,7 +262,7 @@ class ModelEDNN2D(nn.Module):
                             x[:,2:,:]], 1)
 
         if self.__use_terrain_mask:
-            x = is_wind.repeat(1, self.__num_outputs, 1, 1) * x
+            x = is_wind.repeat(1, self.num_outputs, 1, 1) * x
 
         output["pred"] = x
 
