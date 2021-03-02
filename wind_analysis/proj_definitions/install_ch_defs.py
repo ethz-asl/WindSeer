@@ -28,7 +28,7 @@ def copy_with_check(src, dst):
 for file in ['CH', 'chenyx06etrs.gsb']:
     try:
         destination = os.path.join(pyproj.pyproj_datadir, file)
-    except AttributError:
+    except AttributeError:
         destination = os.path.join(pyproj.datadir.get_data_dir(), file)
     copy_with_check(file, destination)
 
