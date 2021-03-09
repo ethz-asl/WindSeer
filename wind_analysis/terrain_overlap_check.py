@@ -33,7 +33,7 @@ t = img.GetGeoTransform()
 xlims, ylims = [t[0]+10, t[0] + t[1]*w-10], [t[3] + t[5]*h+10, t[3]-10]
 
 x_terr, y_terr, h_terr = get_terrain(args.geotiff_file, xlims, ylims, [0.0, 1.0],
-                                     (args.n_horizontal, args.n_horizontal, args.n_vertical), build_binary_block=False)
+                                     (args.n_horizontal, args.n_horizontal, args.n_vertical), build_block=False)
 
 # Get COSMO terrain:
 lon, lat, hsurf, hfl = cosmo.read_cosmo_nc_file(args.cosmo_file, ['lon_1', 'lat_1', 'HSURF', 'HFL'])

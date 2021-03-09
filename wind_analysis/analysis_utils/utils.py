@@ -1,6 +1,5 @@
 import numpy as np
 import os
-from scipy import ndimage
 import torch
 from torch.optim.optimizer import Optimizer
 
@@ -167,18 +166,18 @@ def load_measurements(config, config_model):
                 grid_dimensions['x_min'] -= 0.5 * diff
                 grid_dimensions['x_max'] += 0.5 * diff
 
-        x_terr, y_terr, z_terr, h_terr, full_block = \
+        _, _, _, _, full_block = \
             get_terrain(config['log']['geotiff_file'],
                         [grid_dimensions['x_min'], grid_dimensions['x_max']],
                         [grid_dimensions['y_min'], grid_dimensions['y_max']],
                         [grid_dimensions['z_min'], grid_dimensions['z_max']],
-                        (config['log']['num_cells'], config['log']['num_cells'], config['log']['num_cells']))
+                        (config['log']['num_cells'], config['log']['num_cells'], config['log']['num_cells']),
+                        build_block = True,
+                        return_is_wind = True,
+                        distance_field = config['log']['distance_field'],
+                        horizontal_overflow = config['log']['horizontal_overflow'])
 
-        is_wind = np.logical_not(full_block).astype('float')
-        if config['log']['distance_field']:
-            terrain = torch.from_numpy(ndimage.distance_transform_edt(is_wind).astype(np.float32))
-        else:
-            terrain = torch.from_numpy(is_wind.astype(np.float32))
+        terrain = torch.from_numpy(full_block.astype(np.float32))
 
 
         measurement, variance, mask, prediction = bin_log_data(wind_data, grid_dimensions)
