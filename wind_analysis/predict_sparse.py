@@ -49,7 +49,15 @@ if ground_truth is not None:
     ground_truth = ground_truth[0].cpu()
 mask = mask.to(device)
 
-input = torch.cat([terrain, measurement, mask.unsqueeze(0)], dim = 1)
+input_idx = []
+if 'ux'  in config.params['model']['input_channels']:
+    input_idx.append(0)
+if 'uy'  in config.params['model']['input_channels']:
+    input_idx.append(1)
+if 'uz'  in config.params['model']['input_channels']:
+    input_idx.append(2)
+
+input = torch.cat([terrain, measurement[:, input_idx], mask.unsqueeze(0)], dim = 1)
 
 prediction = utils.predict(net, input, scale, config.params['model'])
 
