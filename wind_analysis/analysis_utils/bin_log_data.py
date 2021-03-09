@@ -28,7 +28,7 @@ def bin_log_data_binning(wind_data, grid_dimensions, verbose = False):
     z_res = (grid_dimensions['z_max'] - grid_dimensions['z_min']) / grid_dimensions['n_cells']
 
     # loop over the data and bin it
-    for i in range(1000,2000):
+    for i in range(len(wind_data['x'])):
         if ((wind_data['x'][i] > grid_dimensions['x_min']) and
             (wind_data['x'][i] < grid_dimensions['x_max']) and
             (wind_data['y'][i] > grid_dimensions['y_min']) and
