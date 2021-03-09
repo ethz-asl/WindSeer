@@ -190,6 +190,12 @@ def load_measurements(config, config_model):
         measurement = measurement.unsqueeze(0).float()
         mask = mask.unsqueeze(0).float()
 
+        # mask the measurements by the terrain to avoid having nonzero measurements inside the terrain
+        # which was not seen by the models during training
+        terrain_mask = (terrain > 0).float()
+        measurement *= terrain_mask
+        mask *= mask
+
         label = None
 
     else:
