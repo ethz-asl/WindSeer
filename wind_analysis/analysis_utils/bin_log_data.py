@@ -28,7 +28,7 @@ def bin_log_data_binning(wind_data, grid_dimensions, verbose = False):
     z_res = (grid_dimensions['z_max'] - grid_dimensions['z_min']) / grid_dimensions['n_cells']
 
     # loop over the data and bin it
-    for i in range(len(wind_data['x'])):
+    for i in range(1000,2000):
         if ((wind_data['x'][i] > grid_dimensions['x_min']) and
             (wind_data['x'][i] < grid_dimensions['x_max']) and
             (wind_data['y'][i] > grid_dimensions['y_min']) and
@@ -250,7 +250,21 @@ def interpolate_flight_data_gpr(wind_data, grid_dimensions, verbose = False, pre
 
     return wind, variance, mask, prediction
 
-def bin_log_data(wind_data, grid_dimensions, method = 'binning', verbose = False, full_field = False):
+def bin_log_data(wind_data, grid_dimensions, method = 'binning', verbose = False, full_field = False, t_start = -1, t_end = -1):
+    t_init = wind_data['time'][0] * 1e-6
+
+    # extract the relevant data if t_start or t_end are set
+    if t_start >= 0.0 or t_end > 0.0:
+        if t_start < 0.0:
+            t_start = 0.0
+        if t_end < 0.0:
+            t_end = np.inf
+
+        t_rel = wind_data['time'] * 1e-6 - t_init
+        idx = np.logical_and(t_rel >= t_start, t_rel <= t_end)
+        for key in wind_data.keys():
+            wind_data[key] = wind_data[key][idx]
+
     if method == 'binning':
         return bin_log_data_binning(wind_data, grid_dimensions, verbose)
 
