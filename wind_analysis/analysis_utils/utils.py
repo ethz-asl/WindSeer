@@ -194,7 +194,7 @@ def load_measurements(config, config_model):
         # which was not seen by the models during training
         terrain_mask = (terrain > 0).float()
         measurement *= terrain_mask
-        mask *= mask
+        mask *= terrain_mask[0]
 
         label = None
 
