@@ -40,32 +40,7 @@ class HDF5Dataset(Dataset):
     - If possible, generalize augmentation modes to be non dependant on provided channels
     '''
 
-    __default_device = 'cpu'
-    __default_nx = 64
-    __default_ny = 64
-    __default_nz = 64
-    __default_input_mode = 0
-    __default_augmentation = False
-    __default_augmentation_mode = 0
-    __default_augmentation_kwargs = {'subsampling': True, 'rotating': True,}
-    __default_stride_hor = 1
-    __default_stride_vert = 1
     __default_scaling_dict = {'terrain': 1.0, 'ux': 1.0, 'uy': 1.0, 'uz': 1.0, 'turb': 1.0, 'p': 1.0, 'epsilon': 1.0, 'nut': 1.0}
-    __default_return_grid_size = False
-    __default_return_name = False
-    __default_autoscale = False
-    __default_loss_weighting_fn = 0
-    __default_loss_weighting_clamp = True
-    __default_max_gaussian_noise_std = 0.0
-    __default_additive_gaussian_noise = True
-    __default_n_turb_fields = 1
-    __default_max_normalized_turb_scale = 0.0
-    __default_max_normalized_bias_scale = 0.0
-    __default_only_z_velocity_bias = False
-    __default_max_fraction_of_sparse_data = 1
-    __default_min_fraction_of_sparse_data = 0.0
-    __default_use_system_random = False
-
     __lock = threading.Lock()
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
@@ -159,174 +134,44 @@ class HDF5Dataset(Dataset):
                 If true the true system random generator is used, else the standart pseudo number generated
                 is used where setting the seed is feasible
         '''
-
         # ------------------------------------------- kwarg fetching ---------------------------------------------------
-        try:
-            verbose = bool(kwargs['verbose'])
-        except KeyError:
-            verbose = False
-
-        try:
-            self.__loss_weighting_fn = int(kwargs['loss_weighting_fn'])
-        except KeyError:
-            self.__loss_weighting_fn = self.__default_loss_weighting_fn
-            if verbose:
-                print('HDF5Dataset: loss_weighting_fn not present in kwargs, using default value:', self.__default_loss_weighting_fn)
-
-        try:
-            self.__loss_weighting_clamp = bool(kwargs['loss_weighting_clamp'])
-        except KeyError:
-            self.__loss_weighting_clamp = self.__default_loss_weighting_clamp
-            if verbose:
-                print('HDF5Dataset: loss_weighting_clamp not present in kwargs, using default value:', self.__default_loss_weighting_clamp)
-
-        try:
-            self.__device = str(kwargs['device'])
-        except KeyError:
-            self.__device = self.__default_device
-            if verbose:
-                print('HDF5Dataset: device not present in kwargs, using default value:', self.__default_device)
-
-        try:
-            self.__nx = int(kwargs['nx'])
-        except KeyError:
-            self.__nx = self.__default_nx
-            if verbose:
-                print('HDF5Dataset: nx not present in kwargs, using default value:', self.__default_nx)
-
-        try:
-            self.__ny = int(kwargs['ny'])
-        except KeyError:
-            self.__ny = self.__default_ny
-            if verbose:
-                print('HDF5Dataset: ny not present in kwargs, using default value:', self.__default_ny)
-
-        try:
-            self.__nz = int(kwargs['nz'])
-        except KeyError:
-            self.__nz = self.__default_nz
-            if verbose:
-                print('HDF5Dataset: nz not present in kwargs, using default value:', self.__default_nz)
-
-        try:
-            self.__input_mode = int(kwargs['input_mode'])
-        except KeyError:
-            self.__input_mode = self.__default_input_mode
-            if verbose:
-                print('HDF5Dataset: input_mode not present in kwargs, using default value:', self.__default_input_mode)
-
-        try:
-            self.__augmentation = bool(kwargs['augmentation'])
-        except KeyError:
-            self.__augmentation = self.__default_augmentation
-            if verbose:
-                print('HDF5Dataset: augmentation not present in kwargs, using default value:', self.__default_augmentation)
-
-        try:
-            self.__augmentation_mode = int(kwargs['augmentation_mode'])
-        except KeyError:
-            self.__augmentation_mode = self.__default_augmentation_mode
-            if verbose:
-                print('HDF5Dataset: augmentation_mode not present in kwargs, using default value:', self.__default_augmentation_mode)
-
-        try:
-            self.__stride_hor = int(kwargs['stride_hor'])
-        except KeyError:
-            self.__stride_hor = self.__default_stride_hor
-            if verbose:
-                print('HDF5Dataset: stride_hor not present in kwargs, using default value:', self.__default_stride_hor)
-
-        try:
-            self.__stride_vert = int(kwargs['stride_vert'])
-        except KeyError:
-            self.__stride_vert = self.__default_stride_vert
-            if verbose:
-                print('HDF5Dataset: stride_vert not present in kwargs, using default value:', self.__default_stride_vert)
-
-        try:
-            self.__return_grid_size = bool(kwargs['return_grid_size'])
-        except KeyError:
-            self.__return_grid_size = self.__default_return_grid_size
-            if verbose:
-                print('HDF5Dataset: return_grid_size not present in kwargs, using default value:', self.__default_return_grid_size)
-
-        try:
-            self.__return_name = bool(kwargs['return_name'])
-        except KeyError:
-            self.__return_name = self.__default_return_name
-            if verbose:
-                print('HDF5Dataset: return_name not present in kwargs, using default value:', self.__default_return_name)
-
-        try:
-            self.__autoscale = bool(kwargs['autoscale'])
-        except KeyError:
-            self.__autoscale = self.__default_autoscale
-            if verbose:
-                print('HDF5Dataset: autoscale not present in kwargs, using default value:', self.__default_autoscale)
-
-        try:
-            self.__max_gaussian_noise_std = float(kwargs['max_gaussian_noise_std'])
-        except KeyError:
-            self.__max_gaussian_noise_std = self.__default_max_gaussian_noise_std
-            if verbose:
-                print('HDF5Dataset: max_gaussian_noise_std not present in kwargs, using default value:', self.__default_max_gaussian_noise_std)
-
-        try:
-            self.__additive_gaussian_noise = float(kwargs['additive_gaussian_noise'])
-        except KeyError:
-            self.__additive_gaussian_noise = self.__default_additive_gaussian_noise
-            if verbose:
-                print('HDF5Dataset: additive_gaussian_noise not present in kwargs, using default value:', self.__default_additive_gaussian_noise)
-
-        try:
-            self.__n_turb_fields = int(kwargs['n_turb_fields'])
-        except KeyError:
-            self.__n_turb_fields = self.__default_n_turb_fields
-            if verbose:
-                print('HDF5Dataset: n_turb_fields not present in kwargs, using default value:', self.__default_n_turb_fields)
-
-        try:
-            self.__max_normalized_turb_scale = float(kwargs['max_normalized_turb_scale'])
-        except KeyError:
-            self.__max_normalized_turb_scale = self.__default_max_normalized_turb_scale
-            if verbose:
-                print('HDF5Dataset: max_normalized_turb_scale not present in kwargs, using default value:', self.__default_max_normalized_turb_scale)
-
-        try:
-            self.__max_normalized_bias_scale = float(kwargs['max_normalized_bias_scale'])
-        except KeyError:
-            self.__max_normalized_bias_scale = self.__default_max_normalized_bias_scale
-            if verbose:
-                print('HDF5Dataset: max_normalized_bias_scale not present in kwargs, using default value:', self.__default_max_normalized_bias_scale)
-
-        try:
-            self.__only_z_velocity_bias = bool(kwargs['only_z_velocity_bias'])
-        except KeyError:
-            self.__only_z_velocity_bias = self.__default_only_z_velocity_bias
-            if verbose:
-                print('HDF5Dataset: only_z_velocity_bias not present in kwargs, using default value:', self.__default_only_z_velocity_bias)
-
-        try:
-            self.__use_system_random = float(kwargs['use_system_random'])
-        except KeyError:
-            self.__use_system_random = self.__default_use_system_random
-            if verbose:
-                print('HDF5Dataset: use_system_random not present in kwargs, using default value:', self.__default_use_system_random)
+        parser = utils.KwargsParser(kwargs, 'HDF5Dataset')
+        verbose = parser.get_safe('verbose', False, bool, False)
+        self.__loss_weighting_fn = parser.get_safe('loss_weighting_fn', 0, int, verbose)
+        self.__loss_weighting_clamp = parser.get_safe('loss_weighting_clamp', True, bool, verbose)
+        self.__device = parser.get_safe('device', 'cpu', str, verbose)
+        self.__nx = parser.get_safe('nx', 64, int, verbose)
+        self.__ny = parser.get_safe('ny', 64, int, verbose)
+        self.__nz = parser.get_safe('nz', 64, int, verbose)
+        self.__input_mode = parser.get_safe('input_mode', 0, int, verbose)
+        self.__augmentation = parser.get_safe('augmentation', False, bool, verbose)
+        self.__stride_hor = parser.get_safe('stride_hor', 1, int, verbose)
+        self.__stride_vert = parser.get_safe('stride_vert', 1, int, verbose)
+        self.__return_grid_size = parser.get_safe('return_grid_size', False, bool, verbose)
+        self.__return_name = parser.get_safe('return_name', False, bool, verbose)
+        self.__autoscale = parser.get_safe('autoscale', False, bool, verbose)
+        self.__max_gaussian_noise_std = parser.get_safe('max_gaussian_noise_std', 0.0, float, verbose)
+        self.__additive_gaussian_noise = parser.get_safe('additive_gaussian_noise', True, bool, verbose)
+        self.__n_turb_fields = parser.get_safe('n_turb_fields', 0, int, verbose)
+        self.__max_normalized_turb_scale = parser.get_safe('max_normalized_turb_scale', 0.0, float, verbose)
+        self.__max_normalized_bias_scale = parser.get_safe('max_normalized_bias_scale', 0.0, float, verbose)
+        self.__only_z_velocity_bias = parser.get_safe('only_z_velocity_bias', False, bool, verbose)
+        self.__use_system_random = parser.get_safe('use_system_random', False, bool, verbose)
+        self.__max_gaussian_noise_std = parser.get_safe('max_gaussian_noise_std', 0.0, float, verbose)
 
         if self.__input_mode == 3 or self.__input_mode == 4:
-            try:
-                self.__max_fraction_of_sparse_data = float(kwargs['max_fraction_of_sparse_data'])
-            except KeyError:
-                self.__max_fraction_of_sparse_data = self.__default_max_fraction_of_sparse_data
-                if verbose:
-                    print('HDF5Dataset: max_fraction_of_sparse_data not present in kwargs, using default value:', self.__default_max_fraction_of_sparse_data)
+            self.__max_fraction_of_sparse_data = parser.get_safe('max_fraction_of_sparse_data', 1.0, float, verbose)
+            self.__min_fraction_of_sparse_data = parser.get_safe('min_fraction_of_sparse_data', 0.0, float, verbose)
 
-            try:
-                self.__min_fraction_of_sparse_data = float(kwargs['min_fraction_of_sparse_data'])
-            except KeyError:
-                self.__min_fraction_of_sparse_data = self.__default_min_fraction_of_sparse_data
-                if verbose:
-                    print('HDF5Dataset: min_fraction_of_sparse_data not present in kwargs, using default value:', self.__default_min_fraction_of_sparse_data)
+        if self.__augmentation:
+            self.__augmentation_mode = parser.get_safe('augmentation_mode', 0, int, verbose)
+
+            if self.__augmentation_mode == 0:
+                default_dict = {'subsampling': True, 'rotating': True,}
+                augmentation_kwargs = parser.get_safe('augmentation_kwargs', default_dict, dict, verbose)
+
+                self.__subsample = augmentation_kwargs['subsampling']
+                self.__rotating = augmentation_kwargs['rotating']
 
         # --------------------------------------- initializing class params --------------------------------------------
         if len(input_channels) == 0 or len(label_channels) == 0:
@@ -399,30 +244,6 @@ class HDF5Dataset(Dataset):
             self.__autoscale = False
             self.__augmentation = False
 
-        # parse the augmentation_kwargs depending on the augmentation_mode
-        if self.__augmentation:
-            # mode 1 has no options
-            if self.__augmentation_mode == 0:
-                try:
-                    self.__augmentation_kwargs = kwargs['augmentation_kwargs']
-                except KeyError:
-                    self.__augmentation_kwargs = self.__default_augmentation_kwargs
-                    if verbose:
-                        print('HDF5Dataset: augmentation_kwargs not present in kwargs, using default value:',
-                              self.__default_augmentation_kwargs)
-                try:
-                    self.__subsample = self.__augmentation_kwargs['subsampling']
-                except:
-                    self.__subsample = True
-                    if verbose:
-                        print('HDF5Dataset: subsampling not present in augmentation_kwargs, using default value:', True)
-
-                try:
-                    self.__rotating = self.__augmentation_kwargs['rotating']
-                except:
-                    self.__rotating = True
-                    if verbose:
-                        print('HDF5Dataset: rotating not present in augmentation_kwargs, using default value:', True)
 
         # create scaling dict for each channel
         self.__scaling_dict = dict()

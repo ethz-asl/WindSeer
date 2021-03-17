@@ -3,18 +3,17 @@ import torch
 import torch.nn as nn
 import sys
 
+import nn_wind_prediction.utils as utils
+
 from .ModelBase import ModelBase
 
 class ModelTwin(ModelBase):
-    __default_uncertainty_train_mode = 'alternating'
-
     def __init__(self, **kwargs):
         super(ModelTwin, self).__init__()
 
-        try:
-            verbose = kwargs['verbose']
-        except KeyError:
-            verbose = False
+        parser = utils.KwargsParser(kwargs, 'ModelTwin')
+        verbose = parser.get_safe('verbose', False, bool, False)
+        self.__uncertainty_train_mode = parser.get_safe('uncertainty_train_mode', 'alternating', str, verbose)
 
         # determine the model class
         try:
@@ -28,17 +27,9 @@ class ModelTwin(ModelBase):
 
         Model = getattr(classModule, kwargs['submodel_type'])
 
-        try:
-            self.__uncertainty_train_mode = kwargs['uncertainty_train_mode']
-        except KeyError:
-            self.__uncertainty_train_mode = self.__default_uncertainty_train_mode
-            if verbose:
-                print('ModelTwin WARNING: uncertainty_train_mode not present in kwargs, using default value:', self.__default_uncertainty_train_mode)
-
-        if (self.__uncertainty_train_mode != 'mean' or self.__uncertainty_train_mode != 'uncertainty' or
-            self.__uncertainty_train_mode != 'both' or self.__uncertainty_train_mode != 'alternating'):
-            print('Unknown train mode ', self.__uncertainty_train_mode, ', setting it to the default value:', self.__default_uncertainty_train_mode)
-            self.__uncertainty_train_mode = self.__default_uncertainty_train_mode
+        if (self.__uncertainty_train_mode != 'mean' and self.__uncertainty_train_mode != 'uncertainty' and
+            self.__uncertainty_train_mode != 'both' and self.__uncertainty_train_mode != 'alternating'):
+            raise ValueError('Unknown uncertainty train mode: ', self.__uncertainty_train_mode)
 
         self.__model_mean = Model(**kwargs)
         self.__model_uncertainty = Model(**kwargs)
