@@ -100,7 +100,6 @@ data:
     only_z_velocity_bias: False # If true, the bias is only added to the z-wind
     max_fraction_of_sparse_data: 0.1 # maximum fraction of sampled grid cells for the sparse mask (only relevant for input mode 3 and 4)
     min_fraction_of_sparse_data: 0.001 # minimum fraction of sampled grid cells for the sparse mask (only relevant for input mode 3 and 4)
-
     trajectory_min_length: 30,
     trajectory_max_length: 300,
     trajectory_min_segment_length: 5,
