@@ -31,10 +31,18 @@ measurements:
                  only_z_velocity_bias: False,
                  max_fraction_of_sparse_data: 0.1,
                  min_fraction_of_sparse_data: 0.001,
+                 trajectory_min_length: 30,
+                 trajectory_max_length: 300,
+                 trajectory_min_segment_length: 5,
+                 trajectory_max_segment_length: 20,
+                 trajectory_step_size: 1.0,
+                 trajectory_max_iter: 50,
+                 trajectory_start_weighting_mode: 0,
+                 trajectory_lenght_short_focus: False,
                  }
 
     log:
-        filename: 'data/chasseral/20201128_ezg4_chasseral_flight01_fpr_wind.hdf5'
+        filename: 'data/chasseral/20201128_ezg4_chasseral_flight04_fpr_wind.hdf5'
         cosmo_file: 'data/cosmo-1_ethz_ana_const.nc'
         geotiff_file: 'data/chasseral/chasseral.tif'
         distance_field: True
@@ -43,8 +51,8 @@ measurements:
         alt_offset: 200 # offset of the takeoff position for the lower z-bound [m]
         d_horizontal: 1100 # horizontal domain extent [m]
         d_vertical: 700 # vertical domain extent [m]
-        t_start: -1 # Use data from this time onwards from the log file, relative to the first timestamp [s]
-        t_end: -1 # Use data up to this time from the log file, relative to the first timestamp [s]
+        t_start: 50 # Use data from this time onwards from the log file, relative to the first timestamp [s]
+        t_end: 150 # Use data up to this time from the log file, relative to the first timestamp [s]
 
 input_fn:
     # possible options:

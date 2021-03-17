@@ -163,6 +163,16 @@ class HDF5Dataset(Dataset):
             self.__max_fraction_of_sparse_data = parser.get_safe('max_fraction_of_sparse_data', 1.0, float, verbose)
             self.__min_fraction_of_sparse_data = parser.get_safe('min_fraction_of_sparse_data', 0.0, float, verbose)
 
+        if self.__input_mode == 5:
+            self.__trajectory_min_length = parser.get_safe('trajectory_min_length', 30, int, verbose)
+            self.__trajectory_max_length = parser.get_safe('trajectory_max_length', 300, int, verbose)
+            self.__trajectory_min_segment_length = parser.get_safe('trajectory_min_segment_length', 5.0, float, verbose)
+            self.__trajectory_max_segment_length = parser.get_safe('trajectory_max_segment_length', 20.0, float, verbose)
+            self.__trajectory_step_size = parser.get_safe('trajectory_step_size', 1.0, float, verbose)
+            self.__trajectory_max_iter = parser.get_safe('trajectory_max_iter', 50, int, verbose)
+            self.__trajectory_start_weighting_mode = parser.get_safe('trajectory_start_weighting_mode', 0, int, verbose)
+            self.__trajectory_lenght_short_focus = parser.get_safe('trajectory_lenght_short_focus', False, bool, verbose)
+
         if self.__augmentation:
             self.__augmentation_mode = parser.get_safe('augmentation_mode', 0, int, verbose)
 
@@ -847,40 +857,48 @@ class HDF5Dataset(Dataset):
         Output:
             mask: The sampled mask
         '''
-        # TODO: Currently the params are hardcoded. Determine if they should be added to the yaml files.
         mask = torch.zeros_like(boolean_terrain)
         mask_shape = mask.shape
 
-        # define some trajectory parameter
-        min_trajectory_length = 30
-        max_trajectory_length = 300
-        min_segment_length = 5
-        max_segment_length = 20
-        step_size = 1.0
-        max_iter = 50
-
         # initialize a random valid start position
         valid_start_positions = torch.nonzero(boolean_terrain, as_tuple=False)
-        position = valid_start_positions[self.__rand.randint(0, valid_start_positions.shape[0]-1)]
+
+        if self.__trajectory_start_weighting_mode == 0:
+            position = random.choices(valid_start_positions)[0]
+
+        elif self.__trajectory_start_weighting_mode == 1:
+            cum_weights = torch.cumsum(mask.shape[0] -  valid_start_positions[:, 0], 0)
+            position = random.choices(valid_start_positions, cum_weights = cum_weights.numpy())[0]
+
+        elif self.__trajectory_start_weighting_mode == 2:
+            cum_weights = torch.cumsum((mask.shape[0] -  valid_start_positions[:, 0]) ** 2, 0)
+            position = random.choices(valid_start_positions, cum_weights = cum_weights.numpy())[0]
+
+        else:
+            raise ValueError('Unsupported trajectory_start_weighting_mode')
+
         mask[position.split(1)] = 1.0
 
         # randomly determine a target trajectory length
-        trajectory_length = self.__rand.randint(min_trajectory_length, max_trajectory_length)
+        if self.__trajectory_lenght_short_focus:
+            trajectory_length = int(self.__rand.triangular(self.__trajectory_min_length, self.__trajectory_max_length, self.__trajectory_min_length))
+        else:
+            trajectory_length = self.__rand.randint(self.__trajectory_min_length, self.__trajectory_max_length)
 
         # loop through adding segments until target length is achieved
         iter = 0
-        while (iter < max_iter) and mask.sum() < trajectory_length:
+        while (iter < self.__trajectory_max_iter) and mask.sum() < trajectory_length:
             iter += 1
-            segment_length = self.__rand.randint(min_segment_length, max_segment_length)
+            segment_length = self.__rand.randint(self.__trajectory_min_segment_length, self.__trajectory_max_segment_length)
 
             # sample random propagation direction, divide z component by 4 to make flatter trajectories more likely
             direction = torch.randn(3)
             direction[0] *= 0.25
             direction /= direction.norm()
 
-            num_steps = int(segment_length / step_size)
+            num_steps = int(segment_length / self.__trajectory_step_size)
             for i in range(num_steps):
-                new_position = position + step_size * direction
+                new_position = position + self.__trajectory_step_size * direction
                 new_idx = torch.round(new_position).to(torch.long)
 
                 # check if the new position is inside the domain, if not invert the respective direction

@@ -1,0 +1,40 @@
+measurements:
+    # possible options:
+    # 'cfd', 'log'
+    type: 'log'
+
+    cfd:
+        filename: '/tmp/test.hdf5'
+        index: 165
+        kwargs: {input_mode: 5,
+                 additive_gaussian_noise: True,
+                 max_gaussian_noise_std: 0.2,
+                 n_turb_fields: 0,
+                 max_normalized_turb_scale: 0.0,
+                 max_normalized_bias_scale: 0.3,
+                 only_z_velocity_bias: False,
+                 max_fraction_of_sparse_data: 0.1,
+                 min_fraction_of_sparse_data: 0.001,
+                 trajectory_min_length: 30,
+                 trajectory_max_length: 300,
+                 trajectory_min_segment_length: 5,
+                 trajectory_max_segment_length: 20,
+                 trajectory_step_size: 1.0,
+                 trajectory_max_iter: 50,
+                 trajectory_start_weighting_mode: 0,
+                 trajectory_lenght_short_focus: False,
+                 }
+
+    log:
+        filename: 'data/chasseral/20201128_ezg4_chasseral_flight01_fpr_wind.hdf5'
+        cosmo_file: 'data/cosmo-1_ethz_ana_const.nc'
+        geotiff_file: 'data/chasseral/chasseral_5.tif'
+        distance_field: True
+        num_cells: 64
+        horizontal_overflow: 10 # number of horizontal extra cells to build the distance field
+        alt_offset: 150 # offset of the takeoff position for the lower z-bound [m]
+        d_horizontal: 1100 # horizontal domain extent [m]
+        d_vertical: 700 # vertical domain extent [m]
+        t_start: -1 # Use data from this time onwards from the log file, relative to the first timestamp [s]
+        t_end: -1 # Use data up to this time from the log file, relative to the first timestamp [s]
+        
