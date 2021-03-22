@@ -303,7 +303,7 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         return prediction_errors, losses, worst_index, maxloss
 
 def predict_channels(input, label, scale, device, net, params, channels_to_plot, dataset,
-                     input_channels = None, plot_divergence = False, loss_fn = None, savename=None):
+                     input_channels = None, plot_divergence = False, loss_fn = None, savename=None, mayavi=False):
     with torch.no_grad():
         # predict and measure how long it takes
         input, label = input.to(device), label.to(device)
@@ -351,6 +351,20 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
 
         if savename is not None:
             np.save(savename, pred.cpu().numpy())
+
+        if mayavi:
+            terrain = input[0]
+
+            if input is not None and input_channels is not None:
+                if 'mask' in input_channels:
+                    utils.mlab_plot_measurements(input[1:-1], input[-1], terrain, terrain_mode=0, terrain_uniform_color=True, blocking=False)
+
+            if uncertainty is not None:
+                utils.mlab_plot_uncertainty()
+
+            utils.mlab_plot_error(label - pred, terrain, terrain_uniform_color=True, terrain_mode=0, blocking=False, error_mode=0)
+
+            utils.mlab_plot_prediction(pred, terrain, terrain_mode=0, terrain_uniform_color=True, prediction_channels=None, blocking=False)
 
         if channels_to_plot:
             if plot_divergence:

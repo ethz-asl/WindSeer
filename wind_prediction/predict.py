@@ -40,6 +40,7 @@ parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', h
 parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
 parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
 parser.add_argument('-s', dest='seed', type=int, default=0, help='If larger than 0 this sets the seed of the random number generator')
+parser.add_argument('--mayavi', action='store_true', help='Generate some extra plots using mayavi')
 
 args = parser.parse_args()
 args.print_loss = args.print_loss or print_loss
@@ -164,4 +165,4 @@ else:
     channels_to_plot = None
 
 nn_custom.predict_channels(input, label, scale, device, net, params, channels_to_plot, args.dataset, testset.get_input_channels(),
-                           plot_divergence = False, loss_fn=criterion, savename=savename)
+                           plot_divergence = False, loss_fn=criterion, savename=savename, mayavi=args.mayavi)
