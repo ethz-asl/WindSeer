@@ -362,7 +362,9 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
                                                  terrain_uniform_color=True, blocking=False)
 
             if uncertainty is not None:
-                utils.mlab_plot_uncertainty()
+                ui.append(
+                    utils.mlab_plot_uncertainty(uncertainty, terrain, terrain_uniform_color=True, terrain_mode=1,
+                                                prediction_channels=channels_to_predict, blocking=False, uncertainty_mode=0))
 
             ui.append(
                 utils.mlab_plot_prediction(pred, terrain, terrain_mode=1, terrain_uniform_color=True,

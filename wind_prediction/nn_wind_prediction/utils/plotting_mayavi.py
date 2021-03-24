@@ -241,9 +241,9 @@ def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_unifor
                 mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
 
                 if prediction_channels is not None:
-                    mlab.scalarbar(vol, title='Absolute Prediction Error ' + prediction_channels[i], label_fmt='%.1f')
+                    mlab.scalarbar(vol, title='Prediction Error ' + prediction_channels[i], label_fmt='%.1f')
                 else:
-                    mlab.scalarbar(vol, title='Absolute Prediction Error Channel ' + str(i), label_fmt='%.1f')
+                    mlab.scalarbar(vol, title='Prediction Error Channel ' + str(i), label_fmt='%.1f')
 
         else:
             raise ValueError('Unknown error plotting mode')
@@ -255,5 +255,61 @@ def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_unifor
 
         return [ui]
 
-def mlab_plot_uncertainty():
-    print('TODO')
+def mlab_plot_uncertainty(uncertainty, terrain, uncertainty_mode=0, terrain_mode=0,
+                          terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
+    '''
+    Visualize the prediction uncertainty using mayavi
+    The inputs are assumed to be torch tensors.
+    '''
+    if mayavi_available:
+        # error clouds
+        uncertainty_np = uncertainty.cpu().squeeze().permute(0,3,2,1).numpy()
+        terrain_shape = terrain.squeeze().shape
+
+        if uncertainty_mode == 0:
+            if white_background:
+                mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
+            else:
+                mlab.figure()
+
+            # take the norm across all channels
+            mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
+
+            scalar = mlab.pipeline.scalar_field(np.linalg.norm(np.exp(uncertainty_np), axis=0))
+            scalar.origin = [0,0,0]
+            vol = mlab.pipeline.volume(scalar, vmax=uncertainty_np.max()*0.5)
+
+            mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
+
+            mlab.scalarbar(vol, title='Uncertainty', label_fmt='%.2f')
+
+        elif uncertainty_mode == 1:
+            # one figure per channel
+            for i in range(uncertainty_np.shape[0]):
+                if white_background:
+                    mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
+                else:
+                    mlab.figure()
+
+                mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
+
+                scalar = mlab.pipeline.scalar_field(np.linalg.norm(uncertainty_np[i], axis=0))
+                scalar.origin = [0,0,0]
+                vol = mlab.pipeline.volume(scalar, vmin=np.abs(uncertainty_np[i]).max()*0.1)
+
+                mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
+
+                if prediction_channels is not None:
+                    mlab.scalarbar(vol, title='Uncertainty ' + prediction_channels[i], label_fmt='%.1f')
+                else:
+                    mlab.scalarbar(vol, title='Uncertainty Channel ' + str(i), label_fmt='%.1f')
+
+        else:
+            raise ValueError('Unknown uncertainty plotting mode')
+
+        ui = mlab_plot_slice('Uncertainty', uncertainty_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
+
+        if blocking:
+            mlab.show()
+
+        return [ui]
