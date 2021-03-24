@@ -167,7 +167,8 @@ def mlab_plot_measurements(measurements, mask, terrain, terrain_mode=0, terrain_
         if blocking:
             mlab.show()
 
-def mlab_plot_prediction(prediction, terrain, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
+def mlab_plot_prediction(prediction, terrain, terrain_mode=0, terrain_uniform_color=False,
+                         prediction_channels=None, blocking=True, white_background=True, quiver_mask_points=20):
     '''
     Visualize the prediction using mayavi
     The inputs are assumed to be torch tensors.
@@ -185,7 +186,7 @@ def mlab_plot_prediction(prediction, terrain, terrain_mode=0, terrain_uniform_co
         mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
         mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
 
-        mlab.quiver3d(prediction_np[0], prediction_np[1], prediction_np[2], mask_points = 16) # TODO param
+        mlab.quiver3d(prediction_np[0], prediction_np[1], prediction_np[2], mask_points = quiver_mask_points)
 
         # slice plot
         ui = mlab_plot_slice('Prediction', prediction_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
