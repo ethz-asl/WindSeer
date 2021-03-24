@@ -1,6 +1,7 @@
 try:
     from mayavi import mlab
     from mayavi.core.ui.api import MayaviScene, SceneEditor, MlabSceneModel
+    from mayavi.core.api import PipelineBase
     from traits.api import HasTraits, Range, Instance, on_trait_change, Enum
     from traitsui.api import View, Item, VGroup, HGroup
     mayavi_available = True
@@ -31,28 +32,30 @@ def mlab_plot_terrain(terrain, mode=0, uniform_color=False, figure=None):
 
             X = np.concatenate([X, np.flip(X, axis=0), X[0, None, :]], axis=0)
             Y = np.concatenate([Y, np.flip(Y, axis=0), Y[0, None, :]], axis=0)
-            Z = np.concatenate([Z, np.flip(Z * 0.0 + 1.0, axis=0), Z[0, None, :]], axis=0)
+            Z = np.concatenate([Z, np.flip(Z * 0.0, axis=0), Z[0, None, :]], axis=0)
 
             X = np.concatenate([X[:, 0, None], X, X[:,-1, None]], axis=1)
             Y = np.concatenate([Y[:, 0, None], Y, Y[:,-1, None]], axis=1)
-            Z = np.concatenate([Z[:, 0, None] * 0.0  + 1.0, Z, Z[:,-1, None] * 0.0  + 1.0], axis=1)
+            Z = np.concatenate([Z[:, 0, None] * 0.0, Z, Z[:,-1, None] * 0.0], axis=1)
 
             if uniform_color:
-                mlab.mesh(X, Y, Z, representation='surface', mode='cube', color=(160.0/255.0 ,82.0/255.0 ,45.0/255.0), figure=figure)
+                terr = mlab.mesh(X, Y, Z, representation='surface', mode='cube', color=(160.0/255.0 ,82.0/255.0 ,45.0/255.0), figure=figure)
 
             else:
-                mlab.mesh(X, Y, Z, representation='surface', mode='cube', figure=figure)
+                terr = mlab.mesh(X, Y, Z, representation='surface', mode='cube', figure=figure)
 
         elif mode == 1:
             if uniform_color:
-                mlab.barchart(Z, color=(160.0/255.0 ,82.0/255.0 ,45.0/255.0), figure=figure, auto_scale=False, lateral_scale=1.0)
+                terr = mlab.barchart(Z, color=(160.0/255.0 ,82.0/255.0 ,45.0/255.0), figure=figure, auto_scale=False, lateral_scale=1.0)
             else:
-                mlab.barchart(Z, figure=figure)
+                terr = mlab.barchart(Z, figure=figure)
 
         else:
             raise ValueError('Unknown terrain plotting mode')
 
-def mlab_plot_slice(title, input_data, terrain, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True):
+        return terr
+
+def mlab_plot_slice(title, input_data, terrain, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
     '''
     Plot the data using the image_plane_widgets and traits to modify the slice direction and number, as well as the displayed channel
     '''
@@ -69,48 +72,69 @@ def mlab_plot_slice(title, input_data, terrain, terrain_mode=0, terrain_uniform_
             plane_orientation_list = ['x_axes', 'y_axes', 'z_axes']
             labels = prediction_channels
 
+            ipw = Instance(PipelineBase)
+
+            def __init__(self):
+                HasTraits.__init__(self)
+
+            @on_trait_change('scene.activated')
+            def plot(self):
+                if white_background:
+                    self.scene.scene.background = (1, 1, 1)
+                    self.scene.scene.foreground = (0, 0, 0)
+
+                terrain_shape = terrain.squeeze().shape
+
+                self.t = mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color, figure=self.scene.mayavi_scene)
+                self.scalar = mlab.pipeline.scalar_field(self.data[0])
+                self.scalar.origin = [0, 0, 0.5] # shift by 0.5 such that the slice is in the middle of the cell and not at the bottom
+
+                self.ipw = mlab.pipeline.image_plane_widget(
+                            self.scalar,
+                            plane_orientation='x_axes',
+                            slice_index=0,
+                            figure=self.scene.mayavi_scene)
+
+                self.o = mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
+
+                self.colorbar()
+
+            def colorbar(self):
+                if self.labels is not None:
+                    self.scene.mlab.scalarbar(self.ipw, title=title + ' ' + self.labels[self.channel], label_fmt='%.1f')
+                else:
+                    self.scene.mlab.scalarbar(self.ipw, title=title + ' Channel ' + str(self.channel), label_fmt='%.1f')
+
+            @on_trait_change('channel')
+            def channel_changed(self):
+                self.ipw.mlab_source.scalars = self.data[self.channel]
+                self.colorbar()
+
+            @on_trait_change('slice')
+            def slice_changed(self):
+                self.ipw.widgets[0].slice_index = self.slice
+
+            @on_trait_change('direction')
+            def direction_changed(self):
+                self.ipw.widgets[0].plane_orientation = self.direction
+                self.ipw.widgets[0].slice_index = self.slice
+
             view = View(Item('scene', editor=SceneEditor(scene_class=MayaviScene)),
                         VGroup('_', 'channel', 'slice', 'direction'),
                         resizable=True,
                         )
 
-            def __init__(self):
-                HasTraits.__init__(self)
-                self.t = mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color, figure=self.scene.mayavi_scene)
-                self.p = mlab.pipeline.image_plane_widget(
-                            mlab.pipeline.scalar_field(self.data[0]),
-                            plane_orientation='x_axes',
-                            slice_index=0,
-                            figure=self.scene.mayavi_scene)
-
-            def colorbar(self):
-                if self.labels is not None:
-                    self.scene.mlab.scalarbar(self.p, title=title + ' ' + self.labels[self.channel], label_fmt='%.1f')
-                else:
-                    self.scene.mlab.scalarbar(self.p, title=title + ' Channel ' + str(self.channel), label_fmt='%.1f')
-
-            @on_trait_change('channel')
-            def channel_changed(self):
-                self.p.mlab_source.scalars = self.data[self.channel]
-                self.colorbar()
-
-            @on_trait_change('slice')
-            def slice_changed(self):
-                self.p.widgets[0].slice_index = self.slice
-
-            @on_trait_change('direction')
-            def direction_changed(self):
-                self.p.widgets[0].plane_orientation = self.direction
-                self.p.widgets[0].slice_index = self.slice
 
         vis = VisualizationWorker()
-        vis.edit_traits()
-        vis.colorbar()
+
+        ui = vis.edit_traits()
 
         if blocking:
             mlab.show()
 
-def mlab_plot_measurements(measurements, mask, terrain, terrain_mode=0, terrain_uniform_color=False, blocking=True):
+        return ui
+
+def mlab_plot_measurements(measurements, mask, terrain, terrain_mode=0, terrain_uniform_color=False, blocking=True, white_background=True):
     '''
     Visualize the measurements using mayavi
     The inputs are assumed to be torch tensors.
@@ -120,7 +144,11 @@ def mlab_plot_measurements(measurements, mask, terrain, terrain_mode=0, terrain_
         mask_np = terrain.cpu().squeeze().numpy()
         measurement_idx = mask.squeeze().nonzero(as_tuple=False).cpu().numpy()
 
-        mlab.figure()
+        if white_background:
+            mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
+        else:
+            mlab.figure()
+
         mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
 
         if measurements_np.shape[0] == 3:
@@ -134,23 +162,42 @@ def mlab_plot_measurements(measurements, mask, terrain, terrain_mode=0, terrain_
 
         mlab.quiver3d(measurement_idx[:, 2], measurement_idx[:, 1], measurement_idx[:, 0], wind_vel[0], wind_vel[1], wind_vel[2])
 
+        mlab.outline(extent=[0, mask_np.shape[2]-1, 0, mask_np.shape[1]-1, 0, mask_np.shape[0]-1])
+
         if blocking:
             mlab.show()
 
-def mlab_plot_prediction(prediction, terrain, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True):
+def mlab_plot_prediction(prediction, terrain, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
     '''
     Visualize the prediction using mayavi
     The inputs are assumed to be torch tensors.
     '''
     if mayavi_available:
         prediction_np = prediction.cpu().squeeze().permute(0,3,2,1).numpy()
+        terrain_shape = terrain.squeeze().shape
 
-        mlab_plot_slice('Prediction', prediction_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False)
+        # quiver plot
+        if white_background:
+            mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
+        else:
+            mlab.figure()
+
+        mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
+        mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
+
+        mlab.quiver3d(prediction_np[0], prediction_np[1], prediction_np[2], mask_points = 16) # TODO param
+
+        # slice plot
+        ui = mlab_plot_slice('Prediction', prediction_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
+
+        mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
 
         if blocking:
             mlab.show()
 
-def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True):
+        return [ui]
+
+def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
     '''
     Visualize the prediction error using mayavi
     The inputs are assumed to be torch tensors.
@@ -158,24 +205,39 @@ def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_unifor
     if mayavi_available:
         # error clouds
         error_np = error.cpu().squeeze().permute(0,3,2,1).numpy()
+        terrain_shape = terrain.squeeze().shape
 
         if error_mode == 0:
+            if white_background:
+                mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
+            else:
+                mlab.figure()
             # take the norm across all channels
-            mlab.figure()
             mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
 
-            vol = mlab.pipeline.volume(mlab.pipeline.scalar_field(np.linalg.norm(error_np, axis=0)),
-                                       vmin=error_np.max()*0.1)
+            scalar = mlab.pipeline.scalar_field(np.linalg.norm(error_np, axis=0))
+            scalar.origin = [0,0,0]
+            vol = mlab.pipeline.volume(scalar, vmin=error_np.max()*0.1)
+
+            mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
 
             mlab.scalarbar(vol, title='Prediction Error Norm [m/s]', label_fmt='%.1f')
 
         elif error_mode == 1:
             # one figure per channel
             for i in range(error_np.shape[0]):
-                mlab.figure()
+                if white_background:
+                    mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
+                else:
+                    mlab.figure()
+
                 mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
 
-                vol = mlab.pipeline.volume(mlab.pipeline.scalar_field(np.abs(error_np[i])), vmin=np.abs(error_np[i]).max()*0.1)
+                scalar = mlab.pipeline.scalar_field(np.linalg.norm(error_np[i], axis=0))
+                scalar.origin = [0,0,0]
+                vol = mlab.pipeline.volume(scalar, vmin=np.abs(error_np[i]).max()*0.1)
+
+                mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
 
                 if prediction_channels is not None:
                     mlab.scalarbar(vol, title='Absolute Prediction Error ' + prediction_channels[i], label_fmt='%.1f')
@@ -185,11 +247,12 @@ def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_unifor
         else:
             raise ValueError('Unknown error plotting mode')
 
-        mlab_plot_slice('Prediction Error', error_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False)
+        ui = mlab_plot_slice('Prediction Error', error_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
 
         if blocking:
             mlab.show()
 
+        return [ui]
 
 def mlab_plot_uncertainty():
     print('TODO')

@@ -60,10 +60,15 @@ if 'uz'  in config.params['model']['input_channels']:
 
 input = torch.cat([terrain, measurement[:, input_idx], mask.unsqueeze(0)], dim = 1)
 
-prediction = utils.predict(net, input, scale, config.params['model'])
+with torch.no_grad():
+    prediction = utils.predict(net, input, scale, config.params['model'])
 
 if args.mayavi:
+    ui = []
     nn_utils.mlab_plot_measurements(measurement, mask, terrain, terrain_mode=0, terrain_uniform_color=True, blocking=False)
+
+    ui.append(
+        nn_utils.mlab_plot_prediction(prediction['pred'], terrain, terrain_mode=1, terrain_uniform_color=True, prediction_channels=None, blocking=False))
 
 nn_utils.plot_prediction(nn_params.data['label_channels'],
                          prediction = prediction['pred'][0].cpu().detach(),

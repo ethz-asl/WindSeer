@@ -354,6 +354,7 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
 
         if mayavi:
             terrain = input[0]
+            ui = []
 
             if input is not None and input_channels is not None:
                 if 'mask' in input_channels:
@@ -362,9 +363,12 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
             if uncertainty is not None:
                 utils.mlab_plot_uncertainty()
 
-            utils.mlab_plot_error(label - pred, terrain, terrain_uniform_color=True, terrain_mode=0, blocking=False, error_mode=0)
+            ui.append(
+                utils.mlab_plot_prediction(pred, terrain, terrain_mode=1, terrain_uniform_color=True, prediction_channels=None, blocking=False))
 
-            utils.mlab_plot_prediction(pred, terrain, terrain_mode=0, terrain_uniform_color=True, prediction_channels=None, blocking=False)
+            ui.append(
+                utils.mlab_plot_error(label - pred, terrain, terrain_uniform_color=True, terrain_mode=0, blocking=False, error_mode=0))
+
 
         if channels_to_plot:
             if plot_divergence:
