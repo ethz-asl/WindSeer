@@ -171,7 +171,7 @@ class HDF5Dataset(Dataset):
             self.__trajectory_step_size = parser.get_safe('trajectory_step_size', 1.0, float, verbose)
             self.__trajectory_max_iter = parser.get_safe('trajectory_max_iter', 50, int, verbose)
             self.__trajectory_start_weighting_mode = parser.get_safe('trajectory_start_weighting_mode', 0, int, verbose)
-            self.__trajectory_lenght_short_focus = parser.get_safe('trajectory_lenght_short_focus', False, bool, verbose)
+            self.__trajectory_length_short_focus = parser.get_safe('trajectory_length_short_focus', False, bool, verbose)
 
         if self.__augmentation:
             self.__augmentation_mode = parser.get_safe('augmentation_mode', 0, int, verbose)
@@ -880,7 +880,7 @@ class HDF5Dataset(Dataset):
         mask[position.split(1)] = 1.0
 
         # randomly determine a target trajectory length
-        if self.__trajectory_lenght_short_focus:
+        if self.__trajectory_length_short_focus:
             trajectory_length = int(self.__rand.triangular(self.__trajectory_min_length, self.__trajectory_max_length, self.__trajectory_min_length))
         else:
             trajectory_length = self.__rand.randint(self.__trajectory_min_length, self.__trajectory_max_length)
