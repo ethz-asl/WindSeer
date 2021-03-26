@@ -38,7 +38,7 @@ measurements:
                  trajectory_step_size: 1.0,
                  trajectory_max_iter: 50,
                  trajectory_start_weighting_mode: 0,
-                 trajectory_lenght_short_focus: False,
+                 trajectory_length_short_focus: False,
                  }
 
     log:
