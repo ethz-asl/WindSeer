@@ -3,6 +3,8 @@ import sys
 import torch
 import torch.nn as nn
 
+import nn_wind_prediction.utils as utils
+
 from .ModelBase import ModelBase
 
 class ModelStacked(ModelBase):
@@ -13,11 +15,13 @@ class ModelStacked(ModelBase):
     def __init__(self, **kwargs):
         super(ModelStacked, self).__init__()
 
-        try:
-            N = kwargs['n_stacked']
-        except KeyError:
-            print('ModelStacked ERROR: The key "n_stacked" was not defined in the model args and is required')
-            sys.exit()
+        parser = utils.KwargsParser(kwargs, 'ModelStacked')
+        verbose = parser.get_safe('verbose', False, bool, False)
+        N = parser.get_safe('n_stacked', 1, int, verbose)
+        n_epochs = parser.get_safe('n_epochs', N, int, verbose)
+        submodel_terrain_mask = parser.get_safe('submodel_terrain_mask', False, bool, verbose)
+        use_terrain_mask = parser.get_safe('use_terrain_mask', True, bool, verbose)
+        self.__pass_full_output = parser.get_safe('pass_full_output', False, bool, verbose)
 
         try:
             classModule = importlib.import_module('nn_wind_prediction.models.' + kwargs['submodel_type'])
@@ -33,33 +37,6 @@ class ModelStacked(ModelBase):
         except AttributeError:
             print('ModelStacked ERROR: The module has no attribute:', kwargs['submodel_type'])
             sys.exit()
-
-        try:
-            n_epochs = kwargs['n_epochs']
-        except KeyError:
-            print('ModelStacked ERROR: The key "n_epochs" was not defined in the model args, setting it to: ', N)
-            n_epochs = N
-
-        try:
-            self.__pass_full_output = kwargs['pass_full_output']
-        except KeyError:
-            self.__pass_full_output = self.__default_pass_full_output
-            if verbose:
-                print('ModelStacked WARNING: pass_full_output not present in kwargs, using default value:', self.__default_pass_full_output)
-
-        try:
-            submodel_terrain_mask = kwargs['submodel_terrain_mask']
-        except KeyError:
-            submodel_terrain_mask = self.__default_submodel_terrain_mask
-            if verbose:
-                print('ModelStacked WARNING: submodel_terrain_mask not present in kwargs, using default value:', self.__default_submodel_terrain_mask)
-
-        try:
-            use_terrain_mask = kwargs['use_terrain_mask']
-        except KeyError:
-            use_terrain_mask = self.__default_use_terrain_mask
-            if verbose:
-                print('ModelStacked WARNING: use_terrain_mask not present in kwargs, using default value:', self.__default_use_terrain_mask)
 
         # generate the stacked models based on the input params
         self.__models = nn.ModuleList()

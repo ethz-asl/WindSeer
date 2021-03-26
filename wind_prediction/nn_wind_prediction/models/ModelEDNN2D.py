@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .ModelBase import ModelBase
 
+import nn_wind_prediction.utils as utils
+
 '''
 Encoder/Decoder Neural Network
 
@@ -14,121 +16,27 @@ Encoder/Decoder Neural Network
 The first input layer is assumed to be is_wind. This value is true for all cells except the terrain.
 '''
 class ModelEDNN2D(ModelBase):
-    __default_activation = nn.LeakyReLU
-    __default_activation_kwargs = {'negative_slope': 0.1}
-    __default_n_downsample_layers = 4
-    __default_use_terrain_mask = True
-    __default_use_mapping_layer = False
-    __default_use_fc_layers = True
-    __default_fc_scaling = 8
-    __default_potential_flow = False
-    __default_n_x = 64
-    __default_n_z = 64
-    __default_interpolation_mode = 'nearest'
-    __default_skipping = True
-    __default_align_corners = None
-    __default_pooling_method = 'striding'
-    __default_use_turbulence = True
-
     def __init__(self, **kwargs):
         super(ModelEDNN2D, self).__init__()
-        try:
-            verbose = kwargs['verbose']
-        except KeyError:
-            verbose = False
 
-        try:
-            self.__use_terrain_mask = kwargs['use_terrain_mask']
-        except KeyError:
-            self.__use_terrain_mask = self.__default_use_terrain_mask
-            if verbose:
-                print('EDNN2D: use_terrain_mask not present in kwargs, using default value:', self.__default_use_terrain_mask)
+        parser = utils.KwargsParser(kwargs, 'EDNN2D')
+        verbose = parser.get_safe('verbose', False, bool, False)
+        self.__use_terrain_mask = parser.get_safe('use_terrain_mask', True, bool, verbose)
+        self.__n_downsample_layers = parser.get_safe('n_downsample_layers', 4, int, verbose)
+        self.__use_mapping_layer = parser.get_safe('use_mapping_layer', False, bool, verbose)
+        self.__use_fc_layers = parser.get_safe('use_fc_layers', True, bool, verbose)
+        self.__fc_scaling = parser.get_safe('fc_scaling', 8.0, float, verbose)
+        self.__potential_flow = parser.get_safe('potential_flow', False, bool, verbose)
+        self.__n_x = parser.get_safe('n_x', 64, int, verbose)
+        self.__n_z = parser.get_safe('n_z', 64, int, verbose)
+        self.__interpolation_mode = parser.get_safe('interpolation_mode', 'nearest', str, verbose)
+        self.__skipping = parser.get_safe('skipping', True, bool, verbose)
+        self.__align_corners = parser.get_safe('align_corners', False, bool, verbose)
+        self.__pooling_method = parser.get_safe('pooling_method', 'striding', str, verbose)
+        self.__use_turbulence = parser.get_safe('use_turbulence', True, bool, verbose)
 
-        try:
-            self.__n_downsample_layers = kwargs['n_downsample_layers']
-        except KeyError:
-            self.__n_downsample_layers = self.__default_n_downsample_layers
-            if verbose:
-                print('EDNN2D: n_downsample_layers not present in kwargs, using default value:', self.__default_n_downsample_layers)
-
-        try:
-            self.__use_mapping_layer = kwargs['use_mapping_layer']
-        except KeyError:
-            self.__use_mapping_layer = self.__default_use_mapping_layer
-            if verbose:
-                print('EDNN2D: use_mapping_layer not present in kwargs, using default value:', self.__default_use_mapping_layer)
-
-        try:
-            self.__use_fc_layers = kwargs['use_fc_layers']
-        except KeyError:
-            self.__use_fc_layers = self.__default_use_fc_layers
-            if verbose:
-                print('EDNN2D: use_fc_layers not present in kwargs, using default value:', self.__default_use_fc_layers)
-
-        try:
-            self.__fc_scaling = kwargs['fc_scaling']
-        except KeyError:
-            self.__fc_scaling = self.__default_fc_scaling
-            if verbose:
-                print('EDNN2D: fc_scaling not present in kwargs, using default value:', self.__default_fc_scaling)
-
-        try:
-            self.__potential_flow = kwargs['potential_flow']
-        except KeyError:
-            self.__potential_flow = self.__default_potential_flow
-            if verbose:
-                print('EDNN2D: potential_flow not present in kwargs, using default value:', self.__default_potential_flow)
-
-        try:
-            self.__n_x = kwargs['n_x']
-        except KeyError:
-            self.__n_x = self.__default_n_x
-            if verbose:
-                print('EDNN2D: n_x not present in kwargs, using default value:', self.__default_n_x)
-
-        try:
-            self.__n_z = kwargs['n_z']
-        except KeyError:
-            self.__n_z = self.__default_n_z
-            if verbose:
-                print('EDNN2D: n_z not present in kwargs, using default value:', self.__default_n_z)
-
-        try:
-            self.__interpolation_mode = kwargs['interpolation_mode']
-        except KeyError:
-            self.__interpolation_mode = self.__default_interpolation_mode
-            if verbose:
-                print('EDNN2D: interpolation_mode not present in kwargs, using default value:', self.__default_interpolation_mode)
-
-        try:
-            self.__skipping = kwargs['skipping']
-        except KeyError:
-            self.__skipping = self.__default_skipping
-            if verbose:
-                print('EDNN2D: skipping not present in kwargs, using default value:', self.__default_skipping)
-
-        try:
-            self.__align_corners = kwargs['align_corners']
-            if self.__align_corners == False:
-                self.__align_corners = None
-        except KeyError:
-            self.__align_corners = self.__default_align_corners
-            if verbose:
-                print('EDNN2D: align_corners not present in kwargs, using default value:', self.__default_align_corners)
-
-        try:
-            self.__pooling_method = kwargs['pooling_method']
-        except KeyError:
-            self.__pooling_method = self.__default_pooling_method
-            if verbose:
-                print('EDNN2D: pooling_method not present in kwargs, using default value:', self.__default_pooling_method)
-
-        try:
-            self.__use_turbulence = kwargs['use_turbulence']
-        except KeyError:
-            self.__use_turbulence = self.__default_use_turbulence
-            if verbose:
-                print('EDNN2D: use_turbulence not present in kwargs, using default value:', self.__default_use_turbulence)
+        if self.__align_corners == False:
+            self.__align_corners = None
 
         self.num_inputs = 3
         self.num_outputs = 2

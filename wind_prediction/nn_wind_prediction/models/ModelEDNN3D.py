@@ -15,232 +15,40 @@ The first input layer is assumed to be terrain information. It should be zero in
 class ModelEDNN3D(ModelBase):
     __default_activation = nn.LeakyReLU
     __default_activation_kwargs = {'negative_slope': 0.1}
-    __default_filter_kernel_size = 3
-    __default_n_first_conv_channels = 8
-    __default_channel_multiplier = 2
-    __default_n_downsample_layers = 4
-    __default_use_terrain_mask = True
-    __default_use_mapping_layer = False
-    __default_use_fc_layers = True
-    __default_fc_scaling = 8
-    __default_potential_flow = False
-    __default_n_x = 64
-    __default_n_y = 64
-    __default_n_z = 64
-    __default_interpolation_mode = 'nearest'
-    __default_skipping = True
-    __default_align_corners = None
-    __default_pooling_method = 'striding'
-    __default_use_uz_in = True
-    __default_use_turbulence = True
-    __default_use_pressure = False
-    __default_use_epsilon = False
-    __default_use_nut = False
-    __default_grid_size = [1, 1, 1]
-    __default_vae = False
-    __default_logvar_scaling = 10
-    __default_predict_uncertainty = False
-    __default_use_sparse_mask = False
-    __default_use_sparse_convolution = False
 
     def __init__(self, **kwargs):
         super(ModelEDNN3D, self).__init__()
 
-        try:
-            verbose = kwargs['verbose']
-        except KeyError:
-            verbose = False
-
-        try:
-            self.__use_terrain_mask = kwargs['use_terrain_mask']
-        except KeyError:
-            self.__use_terrain_mask = self.__default_use_terrain_mask
-            if verbose:
-                print('EDNN3D: use_terrain_mask not present in kwargs, using default value:', self.__default_use_terrain_mask)
-
-        try:
-            self.__n_downsample_layers = kwargs['n_downsample_layers']
-        except KeyError:
-            self.__n_downsample_layers = self.__default_n_downsample_layers
-            if verbose:
-                print('EDNN3D: n_downsample_layers not present in kwargs, using default value:', self.__default_n_downsample_layers)
-
-        try:
-            self.__filter_kernel_size = int(kwargs['filter_kernel_size']) # needs to be an integer
-        except KeyError:
-            self.__filter_kernel_size = self.__default_filter_kernel_size
-            if verbose:
-                print('EDNN3D: filter_kernel_size not present in kwargs, using default value:', self.__default_filter_kernel_size)
-
-        try:
-            self.__n_first_conv_channels = int(kwargs['n_first_conv_channels']) # needs to be an integer
-        except KeyError:
-            self.__n_first_conv_channels = self.__default_n_first_conv_channels
-            if verbose:
-                print('EDNN3D: n_first_conv_channels not present in kwargs, using default value:', self.__default_n_first_conv_channels)
-
-        try:
-            self.__channel_multiplier = kwargs['channel_multiplier']
-        except KeyError:
-            self.__channel_multiplier = self.__default_channel_multiplier
-            if verbose:
-                print('EDNN3D: channel_multiplier not present in kwargs, using default value:', self.__default_channel_multiplier)
-
-        try:
-            self.__use_mapping_layer = kwargs['use_mapping_layer']
-        except KeyError:
-            self.__use_mapping_layer = self.__default_use_mapping_layer
-            if verbose:
-                print('EDNN3D: use_mapping_layer not present in kwargs, using default value:', self.__default_use_mapping_layer)
-
-        try:
-            self.__use_fc_layers = kwargs['use_fc_layers']
-        except KeyError:
-            self.__use_fc_layers = self.__default_use_fc_layers
-            if verbose:
-                print('EDNN3D: use_fc_layers not present in kwargs, using default value:', self.__default_use_fc_layers)
-
-        try:
-            self.__fc_scaling = kwargs['fc_scaling']
-        except KeyError:
-            self.__fc_scaling = self.__default_fc_scaling
-            if verbose:
-                print('EDNN3D: fc_scaling not present in kwargs, using default value:', self.__default_fc_scaling)
-
-        try:
-            self.__potential_flow = kwargs['potential_flow']
-        except KeyError:
-            self.__potential_flow = self.__default_potential_flow
-            if verbose:
-                print('EDNN3D: potential_flow not present in kwargs, using default value:', self.__default_potential_flow)
-
-        try:
-            self.__n_x = kwargs['n_x']
-        except KeyError:
-            self.__n_x = self.__default_n_x
-            if verbose:
-                print('EDNN3D: n_x not present in kwargs, using default value:', self.__default_n_x)
-
-        try:
-            self.__n_y = kwargs['n_y']
-        except KeyError:
-            self.__n_y = self.__default_n_y
-            if verbose:
-                print('EDNN3D: n_y not present in kwargs, using default value:', self.__default_n_y)
-
-        try:
-            self.__n_z = kwargs['n_z']
-        except KeyError:
-            self.__n_z = self.__default_n_z
-            if verbose:
-                print('EDNN3D: n_z not present in kwargs, using default value:', self.__default_n_z)
-
-        try:
-            self.__interpolation_mode = kwargs['interpolation_mode']
-        except KeyError:
-            self.__interpolation_mode = self.__default_interpolation_mode
-            if verbose:
-                print('EDNN3D: interpolation_mode not present in kwargs, using default value:', self.__default_interpolation_mode)
-
-        try:
-            self.__skipping = kwargs['skipping']
-        except KeyError:
-            self.__skipping = self.__default_skipping
-            if verbose:
-                print('EDNN3D: skipping not present in kwargs, using default value:', self.__default_skipping)
-
-        try:
-            self.__align_corners = kwargs['align_corners']
-            if self.__align_corners == False:
-                self.__align_corners = None
-        except KeyError:
-            self.__align_corners = self.__default_align_corners
-            if verbose:
-                print('EDNN3D: align_corners not present in kwargs, using default value:', self.__default_align_corners)
-
-        try:
-            self.__pooling_method = kwargs['pooling_method']
-        except KeyError:
-            self.__pooling_method = self.__default_pooling_method
-            if verbose:
-                print('EDNN3D: pooling_method not present in kwargs, using default value:', self.__default_pooling_method)
-
-        try:
-            self.__grid_size = kwargs['grid_size']
-        except KeyError:
-            self.__grid_size = self.__default_grid_size
-            if verbose:
-                print('EDNN3D: grid_size is not present in kwargs, using default value:', self.__default_grid_size)
-
-        try:
-            self.__use_uz_in = kwargs['use_uz_in']
-        except KeyError:
-            self.__use_uz_in = self.__default_use_uz_in
-            if verbose:
-                print('EDNN3D: use_uz_in not present in kwargs, using default value:', self.__default_use_uz_in)
-
-        try:
-            self.__use_turbulence = kwargs['use_turbulence']
-        except KeyError:
-            self.__use_turbulence = self.__default_use_turbulence
-            if verbose:
-                print('EDNN3D: use_turbulence not present in kwargs, using default value:', self.__default_use_turbulence)
-
-        try:
-            self.__use_pressure = kwargs['use_pressure']
-        except KeyError:
-            self.__use_pressure = self.__default_use_pressure
-            if verbose:
-                print('EDNN3D: use_pressure not present in kwargs, using default value:', self.__default_use_pressure)
-
-        try:
-            self.__use_epsilon = kwargs['use_epsilon']
-        except KeyError:
-            self.__use_epsilon = self.__default_use_epsilon
-            if verbose:
-                print('EDNN3D: use_epsilon not present in kwargs, using default value:', self.__default_use_epsilon)
-
-        try:
-            self.__use_nut = kwargs['use_nut']
-        except KeyError:
-            self.__use_nut = self.__default_use_nut
-            if verbose:
-                print('EDNN3D: use_nut not present in kwargs, using default value:', self.__default_use_nut)
-
-        try:
-            self.__vae = kwargs['vae']
-        except KeyError:
-            self.__vae = self.__default_vae
-            if verbose:
-                print('EDNN3D: vae not present in kwargs, using default value:', self.__default_vae)
-
-        try:
-            self.__logvar_scaling = kwargs['logvar_scaling']
-        except KeyError:
-            self.__logvar_scaling = self.__default_logvar_scaling
-            if verbose:
-                print('EDNN3D: logvar_scaling not present in kwargs, using default value:', self.__default_logvar_scaling)
-
-        try:
-            self.__predict_uncertainty = kwargs['predict_uncertainty']
-        except KeyError:
-            self.__predict_uncertainty = self.__default_predict_uncertainty
-            if verbose:
-                print('EDNN3D: predict_uncertainty not present in kwargs, using default value:', self.__default_predict_uncertainty)
-
-        try:
-            self.__use_sparse_mask = kwargs['use_sparse_mask']
-        except KeyError:
-            self.__use_sparse_mask = self.__default_use_sparse_mask
-            if verbose:
-                print('EDNN3D: use_sparse_mask not present in kwargs, using default value:', self.__default_use_sparse_mask)
-
-        try:
-            self.__use_sparse_convolution = kwargs['use_sparse_convolution']
-        except KeyError:
-            self.__use_sparse_convolution = self.__default_use_sparse_convolution
-            if verbose:
-                print('EDNN3D: use_sparse_convolution not present in kwargs, using default value:', self.__default_use_sparse_convolution)
+        parser = utils.KwargsParser(kwargs, 'EDNN3D')
+        verbose = parser.get_safe('verbose', False, bool, False)
+        self.__use_terrain_mask = parser.get_safe('use_terrain_mask', True, bool, verbose)
+        self.__n_downsample_layers = parser.get_safe('n_downsample_layers', 4, int, verbose)
+        self.__filter_kernel_size = parser.get_safe('filter_kernel_size', 3, int, verbose)
+        self.__n_first_conv_channels = parser.get_safe('n_first_conv_channels', 8, int, verbose)
+        self.__channel_multiplier = parser.get_safe('channel_multiplier', 2, float, verbose)
+        self.__use_mapping_layer = parser.get_safe('use_mapping_layer', False, bool, verbose)
+        self.__use_fc_layers = parser.get_safe('use_fc_layers', True, bool, verbose)
+        self.__fc_scaling = parser.get_safe('fc_scaling', 8.0, float, verbose)
+        self.__potential_flow = parser.get_safe('potential_flow', False, bool, verbose)
+        self.__n_x = parser.get_safe('n_x', 64, int, verbose)
+        self.__n_y = parser.get_safe('n_y', 64, int, verbose)
+        self.__n_z = parser.get_safe('n_z', 64, int, verbose)
+        self.__interpolation_mode = parser.get_safe('interpolation_mode',  'nearest', str, verbose)
+        self.__skipping = parser.get_safe('skipping', True, bool, verbose)
+        self.__align_corners = parser.get_safe('align_corners', False, bool, verbose)
+        self.__use_terrain_mask = parser.get_safe('align_corners', True, bool, verbose)
+        self.__pooling_method = parser.get_safe('pooling_method',  'striding', str, verbose)
+        self.__grid_size = parser.get_safe('grid_size',  [1, 1, 1], list, verbose)
+        self.__use_uz_in = parser.get_safe('use_uz_in', True, bool, verbose)
+        self.__use_turbulence = parser.get_safe('use_turbulence', True, bool, verbose)
+        self.__use_pressure = parser.get_safe('use_pressure', False, bool, verbose)
+        self.__use_epsilon = parser.get_safe('use_epsilon', False, bool, verbose)
+        self.__use_nut = parser.get_safe('use_nut', False, bool, verbose)
+        self.__vae = parser.get_safe('vae', False, bool, verbose)
+        self.__logvar_scaling = parser.get_safe('logvar_scaling', 10.0, float, verbose)
+        self.__predict_uncertainty = parser.get_safe('predict_uncertainty', False, bool, verbose)
+        self.__use_sparse_mask = parser.get_safe('use_sparse_mask', False, bool, verbose)
+        self.__use_sparse_convolution = parser.get_safe('use_sparse_convolution', False, bool, verbose)
 
         if self.__vae and not self.__use_fc_layers:
             print('EDNN3D: Error, to use the vae mode the fc layers need to be enabled.')
@@ -249,6 +57,9 @@ class ModelEDNN3D(ModelBase):
         if self.__n_downsample_layers <= 0:
             print('EDNN3D: Error, n_downsample_layers must be larger than 0')
             sys.exit()
+
+        if self.__align_corners == False:
+            self.__align_corners = None
 
         # input variable check
         if (self.__filter_kernel_size % 2 == 0) or (self.__filter_kernel_size < 1):
@@ -442,10 +253,6 @@ class ModelEDNN3D(ModelBase):
             x = x.view(shape)
         else:
             x = self.__activation(self.__c1(self.__pad_conv(x)))
-
-            if self.__vae:
-                output["encoding"] = x.view(-1, self.num_flat_features(x)).clone()
-
             x = self.__activation(self.__c2(self.__pad_conv(x)))
 
         # up-convolution

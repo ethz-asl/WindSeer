@@ -40,8 +40,8 @@ def bin_log_data_binning(wind_data, grid_dimensions, verbose = False):
             idx_y = int((wind_data['y'][i] - grid_dimensions['y_min']) / y_res)
             idx_z = int((wind_data['alt'][i] - grid_dimensions['z_min']) / z_res)
 
-            wx[idx_z][idx_y][idx_x].append(wind_data['wn'][i])
-            wy[idx_z][idx_y][idx_x].append(wind_data['we'][i])
+            wx[idx_z][idx_y][idx_x].append(wind_data['we'][i])
+            wy[idx_z][idx_y][idx_x].append(wind_data['wn'][i])
             wz[idx_z][idx_y][idx_x].append(-wind_data['wd'][i])
 
     wind = torch.zeros((3, grid_dimensions['n_cells'],grid_dimensions['n_cells'],grid_dimensions['n_cells']))
@@ -113,8 +113,8 @@ def bin_log_data_idw_interpolation(wind_data, grid_dimensions, verbose = False):
                                  (wind_data['y'][i] - y_cell) ** 2 +
                                  (wind_data['alt'][i] - z_cell) ** 2)
 
-            wx[idx_z][idx_y][idx_x].append(wind_data['wn'][i])
-            wy[idx_z][idx_y][idx_x].append(wind_data['we'][i])
+            wx[idx_z][idx_y][idx_x].append(wind_data['we'][i])
+            wy[idx_z][idx_y][idx_x].append(wind_data['wn'][i])
             wz[idx_z][idx_y][idx_x].append(-wind_data['wd'][i])
             id[idx_z][idx_y][idx_x].append(1.0 / distance)
 
@@ -199,9 +199,9 @@ def interpolate_flight_data_gpr(wind_data, grid_dimensions, verbose = False, pre
 
     # Fit to data using Maximum Likelihood Estimation of the parameters
     gp_x.fit(np.column_stack([wind_data['alt'][::stride], wind_data['y'][::stride], wind_data['x'][::stride]]),
-             wind_data['wn'][::stride])
-    gp_y.fit(np.column_stack([wind_data['alt'][::stride], wind_data['y'][::stride], wind_data['x'][::stride]]),
              wind_data['we'][::stride])
+    gp_y.fit(np.column_stack([wind_data['alt'][::stride], wind_data['y'][::stride], wind_data['x'][::stride]]),
+             wind_data['wn'][::stride])
     gp_z.fit(np.column_stack([wind_data['alt'][::stride], wind_data['y'][::stride], wind_data['x'][::stride]]),
              -wind_data['wd'][::stride])
 
@@ -250,7 +250,26 @@ def interpolate_flight_data_gpr(wind_data, grid_dimensions, verbose = False, pre
 
     return wind, variance, mask, prediction
 
-def bin_log_data(wind_data, grid_dimensions, method = 'binning', verbose = False, full_field = False):
+def bin_log_data(wind_data, grid_dimensions, method = 'binning', verbose = False, full_field = False, t_start = None, t_end = None):
+    t_init = wind_data['time'][0] * 1e-6
+
+    # extract the relevant data if t_start or t_end are set
+    if t_end is not None or t_start is not None:
+        if t_start is None:
+            t_start = 0.0
+        elif t_start < 0.0:
+            t_start = 0.0
+
+        if t_end is None:
+            t_end = np.inf
+        elif t_end < 0.0:
+            t_end = np.inf
+
+        t_rel = wind_data['time'] * 1e-6 - t_init
+        idx = np.logical_and(t_rel >= t_start, t_rel <= t_end)
+        for key in wind_data.keys():
+            wind_data[key] = wind_data[key][idx]
+
     if method == 'binning':
         return bin_log_data_binning(wind_data, grid_dimensions, verbose)
 

@@ -188,6 +188,8 @@ if (run_params.run['save_model']):
     if run_params.loss['learn_scaling']:
         torch.save(loss_fn.state_dict(), os.path.join(model_dir, 'latest.loss'))
 
+trainset.print_dataset_stats()
+
 # evaluate the model performance on the testset if requested
 if (run_params.run['evaluate_testset']):
 

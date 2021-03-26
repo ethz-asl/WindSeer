@@ -21,32 +21,15 @@ class CombinedLoss(Module):
         self.loss_factors = []
         self.last_computed_loss_components = dict()
 
-        try:
-            self.auto_channel_scaling = bool(kwargs['auto_channel_scaling'])
-        except KeyError:
-            self.auto_channel_scaling = False
-            print('CombinedLoss: auto_channel_scaling not present in kwargs, using default value: ', self.auto_channel_scaling)
+        parser = utils.KwargsParser(kwargs, 'CombinedLoss')
+        self.auto_channel_scaling = parser.get_safe('auto_channel_scaling', False, bool, True)
 
         if self.auto_channel_scaling:
             self.step_counter = 0
 
-            try:
-                self.eps_scaling = float(kwargs['eps_scaling'])
-            except KeyError:
-                self.eps_scaling = 1E-2
-                print('CombinedLoss: eps_scaling not present in kwargs, using default value: ', self.eps_scaling)
-
-            try:
-                self.eps_scheduling_mode = kwargs['eps_scheduling_mode']
-            except KeyError:
-                self.eps_scheduling_mode = 'None'
-                print('CombinedLoss: eps_scheduling_mode not present in kwargs, using default value: ', self.eps_scheduling_mode)
-
-            try:
-                self.eps_scheduling_kwargs = kwargs['eps_scheduling_kwargs']
-            except KeyError:
-                self.eps_scheduling_kwargs = {}
-                print('CombinedLoss: eps_scheduling_mode not present in kwargs, using default value: ', self.eps_scheduling_kwargs)
+            self.eps_scaling = parser.get_safe('auto_channel_scaling', 1E-2, float, True)
+            self.eps_scheduling_mode = parser.get_safe('auto_channel_scaling', 'None', str, True)
+            self.eps_scheduling_kwargs = parser.get_safe('eps_scheduling_kwargs', {}, dict, True)
 
         # if the scaling must be learnt, use a ParameterList for the scaling factors
         if self.learn_scaling and len(self.loss_component_names)>1:
@@ -169,8 +152,6 @@ class LPLoss(Module):
             exclude_terrain: bool indicating if a correction factor should be applied to make loss independent of the
                                 amount of terrain.
     '''
-    __default_exclude_terrain = True
-
     def __init__(self, p, **kwargs):
         super(LPLoss, self).__init__()
 
@@ -182,12 +163,8 @@ class LPLoss(Module):
         if self.__p < 1:
             warnings.warn('LPLoss: loss order p is fractional, p = {}'.format(self.__p))
 
-        try:
-            self.__exclude_terrain = kwargs['exclude_terrain']
-        except KeyError:
-            self.__exclude_terrain = self.__default_exclude_terrain
-            print('LPLoss: exclude_terrain not present in kwargs, using default value:',
-                  self.__default_exclude_terrain)
+        parser = utils.KwargsParser(kwargs, 'LPLoss')
+        self.__exclude_terrain = parser.get_safe('exclude_terrain', True, bool, True)
 
     def forward(self, predicted, target, input, W = None, terrain_correction_factors = None):
         if (predicted['pred'].shape != target.shape):
@@ -219,44 +196,15 @@ class LPLoss(Module):
 
 #--------------------------------------------- Scaled Loss  ------------------------------------------------------------
 class ScaledLoss(Module):
-    __default_loss_type = 'MSE'
-    __default_max_scale = 4.0
-    __default_norm_threshold = 0.5
-    __default_exclude_terrain = True
-    __default_no_scaling = False
-
     def __init__(self, **kwargs):
         super(ScaledLoss, self).__init__()
 
-        try:
-            self.__loss_type = kwargs['loss_type']
-        except KeyError:
-            self.__loss_type = self.__default_loss_type
-            print('ScaledLoss: loss_type not present in kwargs, using default value:', self.__default_loss_type)
-
-        try:
-            self.__max_scale = kwargs['max_scale']
-        except KeyError:
-            self.__max_scale = self.__default_max_scale
-            print('ScaledLoss: max_scale not present in kwargs, using default value:', self.__default_max_scale)
-
-        try:
-            self.__norm_threshold = kwargs['norm_threshold']
-        except KeyError:
-            self.__norm_threshold = self.__default_norm_threshold
-            print('ScaledLoss: norm_threshold not present in kwargs, using default value:', self.__default_norm_threshold)
-
-        try:
-            self.__exclude_terrain = kwargs['exclude_terrain']
-        except KeyError:
-            self.__exclude_terrain = self.__default_exclude_terrain
-            print('ScaledLoss: exclude_terrain not present in kwargs, using default value:', self.__default_exclude_terrain)
-
-        try:
-            self.__no_scaling = kwargs['no_scaling']
-        except KeyError:
-            self.__no_scaling = self.__default_no_scaling
-            print('ScaledLoss: no_scaling not present in kwargs, using default value:', self.__default_no_scaling)
+        parser = utils.KwargsParser(kwargs, 'ScaledLoss')
+        self.__exclude_terrain = parser.get_safe('exclude_terrain', True, bool, True)
+        self.__loss_type = parser.get_safe('loss_type', 'MSE', str, True)
+        self.__norm_threshold = parser.get_safe('norm_threshold', 0.5, float, True)
+        self.__max_scale = parser.get_safe('max_scale', 4.0, float, True)
+        self.__no_scaling = parser.get_safe('no_scaling', False, bool, True)
 
         if (self.__loss_type == 'MSE'):
             self.__loss = torch.nn.MSELoss(reduction='none')
@@ -317,30 +265,13 @@ class DivergenceFreeLoss(Module):
         loss_type: whether to use a L1 or a MSE based method.
         grid_size: list containing the grid spacing in directions X, Y and Z of the dataset. [m]
     '''
-    __default_loss_type = 'MSE'
-    __default_grid_size = [1, 1, 1]
-    __default_exclude_terrain = True
-
     def __init__(self, **kwargs):
         super(DivergenceFreeLoss, self).__init__()
-        try:
-            self.__loss_type = kwargs['loss_type']
-        except KeyError:
-            self.__loss_type = self.__default_loss_type
-            print('DivergenceFreeLoss: loss_type not present in kwargs, using default value:', self.__default_loss_type)
 
-        try:
-            self.__grid_size = kwargs['grid_size']
-        except KeyError:
-            self.__grid_size = self.__default_grid_size
-            print('DivergenceFreeLoss: grid_size not present in kwargs, using default value:', self.__default_grid_size)
-
-        try:
-           self.__exclude_terrain =  kwargs['exclude_terrain']
-        except KeyError:
-            self.__exclude_terrain = self.__default_exclude_terrain
-            print('DivergenceFreeLoss: exclude_terrain not present in kwargs, using default value:',
-                  self.__default_exclude_terrain)
+        parser = utils.KwargsParser(kwargs, 'DivergenceFreeLoss')
+        self.__loss_type = parser.get_safe('loss_type', 'MSE', str, True)
+        self.__grid_size = parser.get_safe('grid_size', [1, 1, 1], list, True)
+        self.__exclude_terrain = parser.get_safe('exclude_terrain', True, bool, True)
 
         if (self.__loss_type == 'MSE'):
             self.__loss = torch.nn.MSELoss(reduction='none')
@@ -392,30 +323,13 @@ class VelocityGradientLoss(Module):
         loss_type: whether to use a L1 or a MSE based method.
         grid_size: list containing the grid spacing in directions X, Y and Z of the dataset. [m]
     '''
-    __default_loss_type = 'MSE'
-    __default_grid_size = [1, 1, 1]
-    __default_exclude_terrain = True
-
     def __init__(self, **kwargs):
         super(VelocityGradientLoss, self).__init__()
-        try:
-            self.__loss_type = kwargs['loss_type']
-        except KeyError:
-            self.__loss_type = self.__default_loss_type
-            print('VelocityGradientLoss: loss_type not present in kwargs, using default value:', self.__default_loss_type)
 
-        try:
-            self.__grid_size = kwargs['grid_size']
-        except KeyError:
-            self.__grid_size = self.__default_grid_size
-            print('VelocityGradientLoss: grid_size not present in kwargs, using default value:', self.__default_grid_size)
-
-        try:
-           self.__exclude_terrain =  kwargs['exclude_terrain']
-        except KeyError:
-            self.__exclude_terrain = self.__default_exclude_terrain
-            print('VelocityGradientLoss: exclude_terrain not present in kwargs, using default value:',
-                  self.__default_exclude_terrain)
+        parser = utils.KwargsParser(kwargs, 'VelocityGradientLoss')
+        self.__exclude_terrain = parser.get_safe('exclude_terrain', True, bool, True)
+        self.__loss_type = parser.get_safe('loss_type', 'MSE', str, True)
+        self.__grid_size = parser.get_safe('grid_size', [1, 1, 1], list, True)
 
         if (self.__loss_type == 'MSE'):
             self.__loss = torch.nn.MSELoss(reduction='none')
@@ -496,26 +410,12 @@ class GaussianLogLikelihoodLoss(Module):
     '''
     Gaussian Log Likelihood Loss according to https://arxiv.org/pdf/1705.07115.pdf
     '''
-
-    __default_eps = 1e-8
-    __default_exclude_terrain = True
-
-
     def __init__(self, **kwargs):
         super(GaussianLogLikelihoodLoss, self).__init__()
 
-        try:
-            self.__eps = float(kwargs['uncertainty_loss_eps'])
-        except KeyError:
-            self.__eps = self.__default_eps
-            print('GaussianLogLikelihoodLoss: uncertainty_loss_eps not present in kwargs, using default value:', self.__eps)
-
-        try:
-           self.__exclude_terrain =  kwargs['exclude_terrain']
-        except KeyError:
-            self.__exclude_terrain = self.__default_exclude_terrain
-            print('GaussianLogLikelihoodLoss: exclude_terrain not present in kwargs, using default value:',
-                  self.__default_exclude_terrain)
+        parser = utils.KwargsParser(kwargs, 'GaussianLogLikelihoodLoss')
+        self.__exclude_terrain = parser.get_safe('exclude_terrain', True, bool, True)
+        self.__eps = parser.get_safe('uncertainty_loss_eps', 1e-8, float, True)
 
     def forward(self, predicted, target, input, W = None, terrain_correction_factors = None):
         if (predicted['pred'].shape != target.shape):

@@ -184,6 +184,7 @@ def read_filtered_hdf5(filename, proj_logfile=None, proj_output=None, skip_amoun
 
     return out_dict
 
+
 def extract_wind_data(filename, use_estimate):
     # import the wind data
     t_start = time.time()
@@ -192,6 +193,7 @@ def extract_wind_data(filename, use_estimate):
         print('Importing wind data from ulog file...', end='', flush=True)
         ulog_data = get_log_data(filename)
         wind_data = {
+            'time': ulog_data['gp_time'],
             'lat': ulog_data['lat'],
             'lon': ulog_data['lon'],
             'alt_amsl': ulog_data['alt_amsl'],
@@ -216,6 +218,7 @@ def extract_wind_data(filename, use_estimate):
         hdf5_data = read_filtered_hdf5(filename)
 
         wind_data = {
+            'time': hdf5_data['time'],
             'lat': hdf5_data['lat'],
             'lon': hdf5_data['lon'],
             'alt_amsl': hdf5_data['alt_amsl'],
