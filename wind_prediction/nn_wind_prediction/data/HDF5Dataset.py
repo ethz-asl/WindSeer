@@ -864,15 +864,15 @@ class HDF5Dataset(Dataset):
         valid_start_positions = torch.nonzero(boolean_terrain, as_tuple=False)
 
         if self.__trajectory_start_weighting_mode == 0:
-            position = random.choices(valid_start_positions)[0]
+            position = random.choices(valid_start_positions, k=1)[0]
 
         elif self.__trajectory_start_weighting_mode == 1:
             cum_weights = torch.cumsum(mask.shape[0] -  valid_start_positions[:, 0], 0)
-            position = random.choices(valid_start_positions, cum_weights = cum_weights.numpy())[0]
+            position = random.choices(valid_start_positions, cum_weights=cum_weights.numpy(), k=1)[0]
 
         elif self.__trajectory_start_weighting_mode == 2:
             cum_weights = torch.cumsum((mask.shape[0] -  valid_start_positions[:, 0]) ** 2, 0)
-            position = random.choices(valid_start_positions, cum_weights = cum_weights.numpy())[0]
+            position = random.choices(valid_start_positions, cum_weights=cum_weights.numpy(), k=1)[0]
 
         else:
             raise ValueError('Unsupported trajectory_start_weighting_mode')
