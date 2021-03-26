@@ -35,6 +35,6 @@ measurements:
         alt_offset: 150 # offset of the takeoff position for the lower z-bound [m]
         d_horizontal: 1100 # horizontal domain extent [m]
         d_vertical: 700 # vertical domain extent [m]
-        t_start: -1 # Use data from this time onwards from the log file, relative to the first timestamp [s]
-        t_end: -1 # Use data up to this time from the log file, relative to the first timestamp [s]
+        t_start:  # Use data from this time onwards from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
+        t_end:  # Use data up to this time from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
         
