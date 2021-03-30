@@ -135,6 +135,8 @@ def load_measurements(config, config_model):
 
         wind_data = None
 
+        grid_dimensions = None
+
     elif config['type'] == 'log':
 
         wind_data = extract_wind_data(config['log']['filename'], False)
@@ -179,7 +181,6 @@ def load_measurements(config, config_model):
 
         terrain = torch.from_numpy(full_block.astype(np.float32))
 
-
         measurement, variance, mask, prediction = bin_log_data(wind_data,
                                                                grid_dimensions,
                                                                method = 'binning',
@@ -210,7 +211,7 @@ def load_measurements(config, config_model):
     else:
         scale = None
 
-    return measurement, terrain, label, mask, scale, wind_data
+    return measurement, terrain, label, mask, scale, wind_data, grid_dimensions
 
 def predict(net, input, scale, config):
     if input.shape[1] != len(config['input_channels']):

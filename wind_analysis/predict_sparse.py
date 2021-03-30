@@ -40,7 +40,7 @@ for key in nn_params.data.keys():
         config.params['model'][key] = nn_params.data[key]
 
 # load the data
-measurement, terrain, ground_truth, mask, scale, wind_data = utils.load_measurements(config.params['measurements'], config.params['model'])
+measurement, terrain, ground_truth, mask, scale, _, _ = utils.load_measurements(config.params['measurements'], config.params['model'])
 
 config.params['model']['input_channels'] += ['mask']
 
