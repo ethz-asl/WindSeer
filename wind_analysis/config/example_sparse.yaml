@@ -30,13 +30,15 @@ measurements:
         cosmo_file: 'data/cosmo-1_ethz_ana_const.nc'
         geotiff_file: 'data/chasseral/chasseral_5.tif'
         distance_field: True
+        use_cosmo_grid: False
+        enforce_grid_size: True
         num_cells: 64
         horizontal_overflow: 10 # number of horizontal extra cells to build the distance field
         alt_offset: 150 # offset of the takeoff position for the lower z-bound [m]
         d_horizontal: 1100 # horizontal domain extent [m]
         d_vertical: 700 # vertical domain extent [m]
-        t_start:  # Use data from this time onwards from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
-        t_end:  # Use data up to this time from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
+        t_start: 0 # Use data from this time onwards from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
+        t_end: 60 # Use data up to this time from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
 
 evaluation:
     mode: 1
@@ -46,4 +48,4 @@ evaluation:
     compute_baseline: False
     baseline_method: 'averaging' # 'averaging', 'zero'
     full_flight: True # Indicates if for the sliding window evaluation the flight should be predicted
-    cumulative: True # Indicates if for the sliding window evaluation the data from the beginning of the flight up to time t should be used
+    cumulative: False # Indicates if for the sliding window evaluation the data from the beginning of the flight up to time t should be used

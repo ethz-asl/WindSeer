@@ -138,25 +138,44 @@ def load_measurements(config, config_model):
         grid_dimensions = None
 
     elif config['type'] == 'log':
-
         wind_data = extract_wind_data(config['log']['filename'], False)
 
         # determine the grid dimension
-        if 'cosmo_file' in config['log'].keys():
+        if config['log']['use_cosmo_grid']:
+            if not 'cosmo_file' in config['log'].keys():
+                print('Cosmo file not specified, using the manually defined grid')
+                config['log']['use_cosmo_grid'] = False
+
+        if config['log']['use_cosmo_grid']:
             grid_dimensions = get_cosmo_cell(config['log']['cosmo_file'], wind_data['lat'][0], wind_data['lon'][0],
                                              wind_data['alt'].min() - config['log']['alt_offset'], config['log']['d_horizontal'], config['log']['d_vertical'])
             grid_dimensions['n_cells'] = config['log']['num_cells']
-    
+
         else:
-            grid_dimensions = {
-                'n_cells': config['log']['num_cells'],
-                'x_min': wind_data['x'].min() - 1.0,
-                'x_max': wind_data['x'].max() + 1.0,
-                'y_min': wind_data['y'].min() - 1.0,
-                'y_max': wind_data['y'].max() + 1.0,
-                'z_min': wind_data['alt'].min() - 20.0,
-                'z_max': wind_data['alt'].max() + 1.0,
-            }
+            if config['log']['enforce_grid_size']:
+                # center the grid around the takeoff location
+                grid_dimensions = {
+                    'n_cells': config['log']['num_cells'],
+                    'x_min': wind_data['x'][0] - 0.5 * config['log']['d_horizontal'],
+                    'x_max': wind_data['x'][0] + 0.5 * config['log']['d_horizontal'],
+                    'y_min': wind_data['y'][0] - 0.5 * config['log']['d_horizontal'],
+                    'y_max': wind_data['y'][0] + 0.5 * config['log']['d_horizontal'],
+                    'z_min': wind_data['alt'].min() - config['log']['alt_offset'],
+                    'z_max': wind_data['alt'].min() - config['log']['alt_offset'] + config['log']['d_vertical'],
+                }
+
+            else:
+                # adjust the grid size based on the flight data
+                print('Warning: This does not preserve the normal grid size and could lead to issues when using the network for a prediction')
+                grid_dimensions = {
+                    'n_cells': config['log']['num_cells'],
+                    'x_min': wind_data['x'].min() - 1.0,
+                    'x_max': wind_data['x'].max() + 1.0,
+                    'y_min': wind_data['y'].min() - 1.0,
+                    'y_max': wind_data['y'].max() + 1.0,
+                    'z_min': wind_data['alt'].min() - 20.0,
+                    'z_max': wind_data['alt'].max() + 1.0,
+                }
     
             # force the grid to be square
             if (grid_dimensions['x_max'] - grid_dimensions['x_min']) > (grid_dimensions['y_max'] - grid_dimensions['y_min']):
