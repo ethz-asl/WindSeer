@@ -15,9 +15,9 @@ def interpolate_flight_path(wind_prediction, grid_dimensions, flight_path):
     y = np.arange(grid_dimensions['n_cells'])
     z = np.arange(grid_dimensions['n_cells'])
 
-    interpolators = [RegularGridInterpolator((x, y, z), wind_prediction_permuted[0]),
-                     RegularGridInterpolator((x, y, z), wind_prediction_permuted[1]),
-                     RegularGridInterpolator((x, y, z), wind_prediction_permuted[2])]
+    interpolators = [RegularGridInterpolator((x, y, z), wind_prediction_permuted[0], bounds_error=False, fill_value=None),
+                     RegularGridInterpolator((x, y, z), wind_prediction_permuted[1], bounds_error=False, fill_value=None),
+                     RegularGridInterpolator((x, y, z), wind_prediction_permuted[2], bounds_error=False, fill_value=None)]
 
     resolutions = [(grid_dimensions['x_max'] - grid_dimensions['x_min']) / grid_dimensions['n_cells'],
                    (grid_dimensions['y_max'] - grid_dimensions['y_min']) / grid_dimensions['n_cells'],
