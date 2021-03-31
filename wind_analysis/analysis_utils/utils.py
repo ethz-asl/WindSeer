@@ -8,7 +8,7 @@ from .bin_log_data import bin_log_data
 from .extract_cosmo_data import get_cosmo_cell
 from .get_mapgeo_terrain import get_terrain
 from .input_fn_definitions import *
-from .ulog_utils import extract_wind_data
+from .ulog_utils import extract_wind_data, filter_wind_data
 
 class SimpleStepOptimizer(Optimizer):
     def __init__(self, params, lr=1e-4):
@@ -139,6 +139,9 @@ def load_measurements(config, config_model):
 
     elif config['type'] == 'log':
         wind_data = extract_wind_data(config['log']['filename'], False)
+
+        if config['log']['filter_window_size'] > 0:
+            wind_data = filter_wind_data(wind_data, config['log']['filter_window_size'])
 
         # determine the grid dimension
         if config['log']['use_cosmo_grid']:

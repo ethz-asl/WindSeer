@@ -238,3 +238,22 @@ def extract_wind_data(filename, use_estimate):
 
     print(' done [{:.2f} s]'.format(time.time() - t_start))
     return wind_data
+
+def filter_wind_data(wind_data, filter_size):
+    if filter_size % 2 == 0:
+        raise ValueError('The filter size has to be uneven')
+
+    skip = int((filter_size - 1) * 0.5)
+    wind_out = {}
+    for key in wind_data:
+        wind_out[key] = wind_data[key][skip:-skip]
+
+    wind_out['we_raw'] = wind_out['we']
+    wind_out['wn_raw'] = wind_out['wn']
+    wind_out['wd_raw'] = wind_out['wd']
+
+    wind_out['we'] = np.convolve(wind_data['we'], np.ones(filter_size)/filter_size, mode='valid')
+    wind_out['wn'] = np.convolve(wind_data['wn'], np.ones(filter_size)/filter_size, mode='valid')
+    wind_out['wd'] = np.convolve(wind_data['wd'], np.ones(filter_size)/filter_size, mode='valid')
+
+    return wind_out

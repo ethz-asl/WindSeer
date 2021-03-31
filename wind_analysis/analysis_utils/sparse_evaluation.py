@@ -352,6 +352,13 @@ def plot_predictions(wind_data, predictions, vlines):
     ax2.set_prop_cycle('color', [cm(1.0*i/num_colors) for i in range(num_colors)])
     ax3.set_prop_cycle('color', [cm(1.0*i/num_colors) for i in range(num_colors)])
 
+    if 'we_raw' in wind_data.keys():
+        ax1.plot(time, wind_data['we_raw'], color='grey', alpha=0.5, label='raw measurements')
+    if 'wn_raw' in wind_data.keys():
+        ax2.plot(time, wind_data['wn_raw'], color='grey', alpha=0.5, label='raw measurements')
+    if 'wd_raw' in wind_data.keys():
+        ax3.plot(time, -wind_data['wd_raw'], color='grey', alpha=0.5, label='raw measurements')
+
     ax1.plot(time, wind_data['we'], color='black', label='measurements')
     ax2.plot(time, wind_data['wn'], color='black', label='measurements')
     ax3.plot(time, -wind_data['wd'], color='black', label='measurements')
