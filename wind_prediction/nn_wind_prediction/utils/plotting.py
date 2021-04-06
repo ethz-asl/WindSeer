@@ -146,7 +146,7 @@ class PlotUtils():
 
         self.__plot_uncertainty = False
         if uncertainty is not None:
-            assert uncertainty.shape is 4, `The uncertainty tensor must have 4 dimension'
+            assert uncertainty.shape is 4, 'The uncertainty tensor must have 4 dimension'
 
             assert uncertainty.shape == prediction.shape, 'PlotUtils: The shape of the uncertainty and prediction tensor have to be equal'
 
