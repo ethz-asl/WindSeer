@@ -12,9 +12,13 @@ except ImportError:
 import numpy as np
 import scipy
 
-def mlab_plot_terrain(terrain, mode=0, uniform_color=False, figure=None):
+def mlab_plot_terrain(terrain, mode='blocks', uniform_color=False, figure=None):
     '''
     Plot the terrain into the current figure
+
+    Terrain Modes:
+      blocks: Blocks with the extend of the actual grid cells
+      mesh: Linearly interpolated mesh of the terrain with the control points at the center location of the cell
     '''
     if mayavi_available:
         # convert to numpy and permute axis such that the order is: [x,y,z]
@@ -25,7 +29,8 @@ def mlab_plot_terrain(terrain, mode=0, uniform_color=False, figure=None):
         keep_idx = (terrain_np == 0)[:, :, 0]
         Z[~keep_idx] = np.NaN
 
-        if mode == 0:
+        terrain_modes = ['mesh', 'blocks']
+        if mode == terrain_modes[0]:
             indices = np.indices(terrain.cpu().squeeze().numpy().shape)
             X = indices[0, :, :, 0]
             Y = indices[1, :, :, 0]
@@ -44,18 +49,18 @@ def mlab_plot_terrain(terrain, mode=0, uniform_color=False, figure=None):
             else:
                 terr = mlab.mesh(X, Y, Z, representation='surface', mode='cube', figure=figure)
 
-        elif mode == 1:
+        elif mode == terrain_modes[1]:
             if uniform_color:
                 terr = mlab.barchart(Z, color=(160.0/255.0 ,82.0/255.0 ,45.0/255.0), figure=figure, auto_scale=False, lateral_scale=1.0)
             else:
                 terr = mlab.barchart(Z, figure=figure)
 
         else:
-            raise ValueError('Unknown terrain plotting mode')
+            raise ValueError('Unknown terrain plotting mode: ' + str(mode) + ' supported: ' + str(terrain_modes))
 
         return terr
 
-def mlab_plot_slice(title, input_data, terrain, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
+def mlab_plot_slice(title, input_data, terrain, terrain_mode='blocks', terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
     '''
     Plot the data using the image_plane_widgets and traits to modify the slice direction and number, as well as the displayed channel
     '''
@@ -134,7 +139,7 @@ def mlab_plot_slice(title, input_data, terrain, terrain_mode=0, terrain_uniform_
 
         return ui
 
-def mlab_plot_measurements(measurements, mask, terrain, terrain_mode=0, terrain_uniform_color=False, blocking=True, white_background=True):
+def mlab_plot_measurements(measurements, mask, terrain, terrain_mode='blocks', terrain_uniform_color=False, blocking=True, white_background=True):
     '''
     Visualize the measurements using mayavi
     The inputs are assumed to be torch tensors.
@@ -167,7 +172,7 @@ def mlab_plot_measurements(measurements, mask, terrain, terrain_mode=0, terrain_
         if blocking:
             mlab.show()
 
-def mlab_plot_prediction(prediction, terrain, terrain_mode=0, terrain_uniform_color=False,
+def mlab_plot_prediction(prediction, terrain, terrain_mode='blocks', terrain_uniform_color=False,
                          prediction_channels=None, blocking=True, white_background=True, quiver_mask_points=20):
     '''
     Visualize the prediction using mayavi
@@ -198,17 +203,22 @@ def mlab_plot_prediction(prediction, terrain, terrain_mode=0, terrain_uniform_co
 
         return [ui]
 
-def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
+def mlab_plot_error(error, terrain, error_mode='norm', terrain_mode='blocks', terrain_uniform_color=False, prediction_channels=None, blocking=True, white_background=True):
     '''
     Visualize the prediction error using mayavi
     The inputs are assumed to be torch tensors.
+
+    Error Modes:
+      norm: Compute the norm across all channels
+      channels: Display one figure per channel
     '''
     if mayavi_available:
         # error clouds
         error_np = error.cpu().squeeze().permute(0,3,2,1).numpy()
         terrain_shape = terrain.squeeze().shape
 
-        if error_mode == 0:
+        error_modes = ['norm', 'channels']
+        if error_mode == error_modes[0]:
             if white_background:
                 mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
             else:
@@ -224,7 +234,7 @@ def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_unifor
 
             mlab.scalarbar(vol, title='Prediction Error Norm [m/s]', label_fmt='%.1f')
 
-        elif error_mode == 1:
+        elif error_mode == error_modes[1]:
             # one figure per channel
             for i in range(error_np.shape[0]):
                 if white_background:
@@ -246,7 +256,7 @@ def mlab_plot_error(error, terrain, error_mode=0, terrain_mode=0, terrain_unifor
                     mlab.scalarbar(vol, title='Prediction Error Channel ' + str(i), label_fmt='%.1f')
 
         else:
-            raise ValueError('Unknown error plotting mode')
+            raise ValueError('Unknown error plotting mode: ' + str(error_mode) + ' supported: ' + str(error_modes))
 
         ui = mlab_plot_slice('Prediction Error', error_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
 
@@ -260,13 +270,18 @@ def mlab_plot_uncertainty(uncertainty, terrain, uncertainty_mode=0, terrain_mode
     '''
     Visualize the prediction uncertainty using mayavi
     The inputs are assumed to be torch tensors.
+
+    Uncertainty Modes:
+      norm: Compute the norm across all channels
+      channels: Display one figure per channel
     '''
     if mayavi_available:
         # error clouds
         uncertainty_np = uncertainty.cpu().squeeze().permute(0,3,2,1).numpy()
         terrain_shape = terrain.squeeze().shape
 
-        if uncertainty_mode == 0:
+        uncertainty_modes = ['norm', 'channels']
+        if uncertainty_mode == uncertainty_modes[0]:
             if white_background:
                 mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
             else:
@@ -283,7 +298,7 @@ def mlab_plot_uncertainty(uncertainty, terrain, uncertainty_mode=0, terrain_mode
 
             mlab.scalarbar(vol, title='Uncertainty', label_fmt='%.2f')
 
-        elif uncertainty_mode == 1:
+        elif uncertainty_mode == uncertainty_modes[1]:
             # one figure per channel
             for i in range(uncertainty_np.shape[0]):
                 if white_background:
@@ -305,7 +320,7 @@ def mlab_plot_uncertainty(uncertainty, terrain, uncertainty_mode=0, terrain_mode
                     mlab.scalarbar(vol, title='Uncertainty Channel ' + str(i), label_fmt='%.1f')
 
         else:
-            raise ValueError('Unknown uncertainty plotting mode')
+            raise ValueError('Unknown uncertainty plotting mode: ' + str(uncertainty_mode) + ' supported: ' + str(uncertainty_modes))
 
         ui = mlab_plot_slice('Uncertainty', uncertainty_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
 

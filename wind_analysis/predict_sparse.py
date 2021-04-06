@@ -65,10 +65,10 @@ with torch.no_grad():
 
 if args.mayavi:
     ui = []
-    nn_utils.mlab_plot_measurements(measurement, mask, terrain, terrain_mode=1, terrain_uniform_color=True, blocking=False)
+    nn_utils.mlab_plot_measurements(measurement, mask, terrain, terrain_mode='blocks', terrain_uniform_color=True, blocking=False)
 
     ui.append(
-        nn_utils.mlab_plot_prediction(prediction['pred'], terrain, terrain_mode=1, terrain_uniform_color=True,
+        nn_utils.mlab_plot_prediction(prediction['pred'], terrain, terrain_mode='blocks', terrain_uniform_color=True,
                                       prediction_channels=config.params['model']['label_channels'], blocking=False))
 
 nn_utils.plot_prediction(nn_params.data['label_channels'],
