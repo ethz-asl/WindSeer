@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser(description='Predict the flow based on the spar
 parser.add_argument('config_yaml', help='Input yaml config')
 parser.add_argument('-model_dir', dest='model_dir', required=True, help='The directory of the model')
 parser.add_argument('-model_version', dest='model_version', default='latest', help='The model version')
+parser.add_argument('--mayavi', action='store_true', help='Generate some extra plots using mayavi')
 args = parser.parse_args()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -59,7 +60,16 @@ if 'uz'  in config.params['model']['input_channels']:
 
 input = torch.cat([terrain, measurement[:, input_idx], mask.unsqueeze(0)], dim = 1)
 
-prediction = utils.predict(net, input, scale, config.params['model'])
+with torch.no_grad():
+    prediction = utils.predict(net, input, scale, config.params['model'])
+
+if args.mayavi:
+    ui = []
+    nn_utils.mlab_plot_measurements(measurement, mask, terrain, terrain_mode='blocks', terrain_uniform_color=True, blocking=False)
+
+    ui.append(
+        nn_utils.mlab_plot_prediction(prediction['pred'], terrain, terrain_mode='blocks', terrain_uniform_color=True,
+                                      prediction_channels=config.params['model']['label_channels'], blocking=False))
 
 nn_utils.plot_prediction(nn_params.data['label_channels'],
                          prediction = prediction['pred'][0].cpu().detach(),

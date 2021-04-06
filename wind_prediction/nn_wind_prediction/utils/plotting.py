@@ -146,11 +146,9 @@ class PlotUtils():
 
         self.__plot_uncertainty = False
         if uncertainty is not None:
-            if len(input.shape) != 4:
-                raise ValueError('The uncertainty tensor must have 4 dimension')
+            assert uncertainty.shape is 4, 'The uncertainty tensor must have 4 dimension'
 
-            if uncertainty.shape != len(provided_prediction_channels):
-                raise ValueError('PlotUtils: The shape of the label and prediction tensor have to be equal')
+            assert uncertainty.shape == prediction.shape, 'PlotUtils: The shape of the uncertainty and prediction tensor have to be equal'
 
             if self.__domain_shape is None:
                 self.__domain_shape = uncertainty.shape[1:]
