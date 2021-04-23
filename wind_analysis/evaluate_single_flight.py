@@ -6,6 +6,7 @@ import torch
 import nn_wind_prediction.models as models
 import nn_wind_prediction.utils as nn_utils
 from analysis_utils import utils
+from analysis_utils.ulog_utils import extract_wind_data, filter_wind_data
 from analysis_utils.sparse_evaluation import evaluate_flight_log
 
 parser = argparse.ArgumentParser(description='Evaluate the model performance on real flight data using a sliding window')
@@ -55,6 +56,14 @@ else:
 # load the data
 _, terrain, _, _, scale, wind_data, grid_dimensions = utils.load_measurements(config.params['measurements'], config.params['model'])
 
+if not config.params['evaluation']['validation_file'] is None:
+    wind_data_validation = extract_wind_data(config.params['evaluation']['validation_file'], False)
+    if config.params['measurements']['log']['filter_window_size'] > 0:
+            wind_data_validation = filter_wind_data(wind_data_validation, config.params['measurements']['log']['filter_window_size'])
+
+else:
+    wind_data_validation = None
+
 config.params['model']['input_channels'] += ['mask']
 
-evaluate_flight_log(wind_data, scale, terrain, grid_dimensions, net, config, device)
+evaluate_flight_log(wind_data, scale, terrain, grid_dimensions, net, config, device, wind_data_validation)

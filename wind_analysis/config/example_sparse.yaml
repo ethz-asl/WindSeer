@@ -42,7 +42,13 @@ measurements:
         t_end: 60 # Use data up to this time from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
 
 evaluation:
-    mode: 1
+    # Modes:
+    # 0: Single flight, take a window as an input and predict/compare the wind for the rest of the flight along the path
+    # 1: Single flight, take a sliding window as an input and predict/compare the wind for the full flight or a small window along the path
+    # 2: Single flight, take a sliding window as an input and predict/compare the wind for the full flight or a small window in the binned version
+    # 3: Multi flight, take a window as an input and predict/compare the wind for the rest of the flight and to the validation flight
+    # 4: Single flight, take a sliding window as an input and predict/compare the wind for the full flight or a small window along the path for the validation flight
+    mode: 4
     t_start: 0 # Use data from this time onwards from the log file, relative to the first timestamp (0 for negative values) [s]
     dt_input: 60 # Window size of the input for the sliding window approach [s]
     dt_pred: 60 # Window size of the prediction for the sliding window approach [s]
@@ -50,3 +56,4 @@ evaluation:
     baseline_method: 'averaging' # 'averaging', 'zero'
     full_flight: True # Indicates if for the sliding window evaluation the flight should be predicted
     cumulative: False # Indicates if for the sliding window evaluation the data from the beginning of the flight up to time t should be used
+    validation_file: 'data/chasseral/20201128_ezg3_chasseral_flight01_fpr_wind.hdf5'

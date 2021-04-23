@@ -203,11 +203,19 @@ def load_measurements(config, config_model):
 
         terrain = torch.from_numpy(full_block.astype(np.float32))
 
+        t_start = None
+        t_end = None
+        if config['log']['t_start'] is not None:
+            t_start = config['log']['t_start'] + wind_data['time'][0] * 1e-6
+
+        if config['log']['t_end'] is not None:
+            t_end = config['log']['t_end'] + wind_data['time'][0] * 1e-6
+
         measurement, variance, mask, prediction = bin_log_data(wind_data,
                                                                grid_dimensions,
                                                                method = 'binning',
-                                                               t_start = config['log']['t_start'],
-                                                               t_end = config['log']['t_end'])
+                                                               t_start = t_start,
+                                                               t_end = t_end)
 
         terrain = terrain.unsqueeze(0).unsqueeze(0).float()
         measurement = measurement.unsqueeze(0).float()
