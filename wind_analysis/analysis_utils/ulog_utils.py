@@ -200,6 +200,7 @@ def extract_wind_data(filename, use_estimate):
             'x': ulog_data['x'],
             'y': ulog_data['y'],
             'alt': ulog_data['alt'],
+            'time_gps': None,
         }
         if (use_estimate):
             wind_data['we'] = ulog_data['we_east']
@@ -228,6 +229,7 @@ def extract_wind_data(filename, use_estimate):
             'we':  hdf5_data['wind_e'],
             'wn':  hdf5_data['wind_n'],
             'wd':  hdf5_data['wind_d'],
+            'time_gps': hdf5_data['time_gps'],
         }
 
         del hdf5_data
