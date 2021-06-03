@@ -1,6 +1,8 @@
+import copy
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
+from scipy.stats import spearmanr, kendalltau, pearsonr
 import torch
 
 from .bin_log_data import bin_log_data, extract_window_wind_data
@@ -123,13 +125,27 @@ def evaluate_project_forward(wind_data, scale, terrain, grid_dimensions, net, co
 
     # compute the metrics
     wind_data_prediction = extract_window_wind_data(wind_data, t_end, None)
+
+    prediction_errors = {}
+    compute_error(wind_data_prediction, prediction_errors, "")
     print('Prediction metric:')
-    print('\tAverage absolute error ux: ', np.mean(np.abs(wind_data_prediction['we'] - wind_data_prediction['we_pred'])))
-    print('\tAverage absolute error uy: ', np.mean(np.abs(wind_data_prediction['wn'] - wind_data_prediction['wn_pred'])))
-    print('\tAverage absolute error uz: ', np.mean(np.abs(-wind_data_prediction['wd'] - wind_data_prediction['wu_pred'])))
-    print('\tMaximum absolute error ux: ', np.max(np.abs(wind_data_prediction['we'] - wind_data_prediction['we_pred'])))
-    print('\tMaximum absolute error uy: ', np.max(np.abs(wind_data_prediction['wn'] - wind_data_prediction['wn_pred'])))
-    print('\tMaximum absolute error uz: ', np.max(np.abs(-wind_data_prediction['wd'] - wind_data_prediction['wu_pred'])))   
+    print('\tAverage absolute error ux: ', prediction_errors['we'][0])
+    print('\tAverage absolute error uy: ', prediction_errors['wn'][0])
+    print('\tAverage absolute error uz: ', prediction_errors['wu'][0])
+    print('\tMaximum absolute error ux: ', prediction_errors['we_max'][0])
+    print('\tMaximum absolute error uy: ', prediction_errors['wn_max'][0])
+    print('\tMaximum absolute error uz: ', prediction_errors['wu_max'][0])
+    print('\tAverage unbiased absolute error ux: ', prediction_errors['we_unbiased'][0])
+    print('\tAverage unbiased absolute error uy: ', prediction_errors['wn_unbiased'][0])
+    print('\tAverage unbiased absolute error uz: ', prediction_errors['wu_unbiased'][0])
+    print('\tPearson R ux: ', prediction_errors['we_pearson_r'][0])
+    print('\tPearson R uy: ', prediction_errors['wn_pearson_r'][0])
+    print('\tPearson R uz: ', prediction_errors['wu_pearson_r'][0])
+    print('\tSpearman R ux: ', prediction_errors['we_spear_r'][0])
+    print('\tSpearman R uy: ', prediction_errors['wn_spear_r'][0])
+    print('\tSpearman R uz: ', prediction_errors['wu_spear_r'][0])
+
+    plot_correlation([wind_data_prediction])
 
     # plot the prediction
     time = wind_data['time'] * 1e-6
@@ -172,12 +188,7 @@ def evaluate_sliding_window_path(wind_data, scale, terrain, grid_dimensions, net
     t_end = t_start + dt
     t_max = wind_data['time'][-1] * 1e-6
 
-    prediction_errors = {'we': [],
-                         'wn': [],
-                         'wu': [],
-                         'we_max': [],
-                         'wn_max': [],
-                         'wu_max': []}
+    prediction_errors = {}
     predictions = []
     vlines = [t_start]
 
@@ -206,22 +217,10 @@ def evaluate_sliding_window_path(wind_data, scale, terrain, grid_dimensions, net
         for key in prediction_path.keys():
             wind_data_prediction[key] = prediction_path[key]
 
-        prediction_path['time'] = wind_data_prediction['time']
-        predictions.append(prediction_path)
+        predictions.append(copy.deepcopy(wind_data_prediction))
         vlines.append(t_end)
 
-        prediction_errors['we'].append(
-            np.mean(np.abs(wind_data_prediction['we'] - wind_data_prediction['we_pred'])))
-        prediction_errors['wn'].append(
-            np.mean(np.abs(wind_data_prediction['wn'] - wind_data_prediction['wn_pred'])))
-        prediction_errors['wu'].append(
-            np.mean(np.abs(-wind_data_prediction['wd'] - wind_data_prediction['wu_pred'])))
-        prediction_errors['we_max'].append(
-            np.max(np.abs(wind_data_prediction['we'] - wind_data_prediction['we_pred'])))
-        prediction_errors['wn_max'].append(
-            np.max(np.abs(wind_data_prediction['wn'] - wind_data_prediction['wn_pred'])))
-        prediction_errors['wu_max'].append(
-            np.max(np.abs(-wind_data_prediction['wd'] - wind_data_prediction['wu_pred'])))
+        compute_error(wind_data_prediction, prediction_errors, "")
 
         if not config.params['evaluation']['cumulative']:
             t_start = t_end
@@ -232,6 +231,7 @@ def evaluate_sliding_window_path(wind_data, scale, terrain, grid_dimensions, net
 
     plt.figure()
     ax = plt.subplot(2,1,1)
+    ax.set_title("Prediction errors")
     ax.plot(prediction_errors['we'], label='we')
     ax.plot(prediction_errors['wn'], label='wn')
     ax.plot(prediction_errors['wu'], label='wu')
@@ -245,7 +245,29 @@ def evaluate_sliding_window_path(wind_data, scale, terrain, grid_dimensions, net
     ax.set_ylabel('maximum prediction error [m/s]')
     ax.set_xlabel('window number [-]')
 
-    plot_predictions(wind_data, predictions, vlines)
+    plt.figure()
+    ax = plt.subplot(2,1,1)
+    ax.set_title("Unbiased prediction errors")
+    ax.plot(prediction_errors['we_unbiased'], label='we')
+    ax.plot(prediction_errors['wn_unbiased'], label='wn')
+    ax.plot(prediction_errors['wu_unbiased'], label='wu')
+    ax.legend()
+    ax.set_ylabel('unbiased prediction error [m/s]')
+
+    ax = plt.subplot(2,1,2)
+    ax.set_title("Correlation factor")
+    ax.plot(prediction_errors['we_pearson_r'], label='we pearson')
+    ax.plot(prediction_errors['wn_pearson_r'], label='wn pearson')
+    ax.plot(prediction_errors['wu_pearson_r'], label='wu pearson')
+    ax.plot(prediction_errors['we_spear_r'], label='we spearman')
+    ax.plot(prediction_errors['wn_spear_r'], label='wn spearman')
+    ax.plot(prediction_errors['wu_spear_r'], label='wu spearman')
+    ax.legend()
+    ax.set_ylabel('correlation factor [-]')
+    ax.set_xlabel('window number [-]')
+
+    #plot_correlation(predictions)
+    plot_predictions(wind_data, predictions, vlines, title="Wind Prediction")
 
     plt.show()
 
@@ -332,21 +354,45 @@ def evaluate_prediction_cross_flight_forward(wind_data, scale, terrain, grid_dim
 
     # compute the metrics
     wind_data_prediction = extract_window_wind_data(wind_data, t_end, None, True)
+    prediction_errors = {}
+    compute_error(wind_data_prediction, prediction_errors, "")
+    compute_error(wind_data_validation, prediction_errors, "_val")
     print('Prediction Metric Input Log:')
-    print('\tAverage absolute error ux: ', np.mean(np.abs(wind_data_prediction['we'] - wind_data_prediction['we_pred'])))
-    print('\tAverage absolute error uy: ', np.mean(np.abs(wind_data_prediction['wn'] - wind_data_prediction['wn_pred'])))
-    print('\tAverage absolute error uz: ', np.mean(np.abs(-wind_data_prediction['wd'] - wind_data_prediction['wu_pred'])))
-    print('\tMaximum absolute error ux: ', np.max(np.abs(wind_data_prediction['we'] - wind_data_prediction['we_pred'])))
-    print('\tMaximum absolute error uy: ', np.max(np.abs(wind_data_prediction['wn'] - wind_data_prediction['wn_pred'])))
-    print('\tMaximum absolute error uz: ', np.max(np.abs(-wind_data_prediction['wd'] - wind_data_prediction['wu_pred'])))
+    print('\tAverage absolute error ux: ', prediction_errors['we'][0])
+    print('\tAverage absolute error uy: ', prediction_errors['wn'][0])
+    print('\tAverage absolute error uz: ', prediction_errors['wu'][0])
+    print('\tMaximum absolute error ux: ', prediction_errors['we_max'][0])
+    print('\tMaximum absolute error uy: ', prediction_errors['wn_max'][0])
+    print('\tMaximum absolute error uz: ', prediction_errors['wu_max'][0])
+    print('\tAverage unbiased absolute error ux: ', prediction_errors['we_unbiased'][0])
+    print('\tAverage unbiased absolute error uy: ', prediction_errors['wn_unbiased'][0])
+    print('\tAverage unbiased absolute error uz: ', prediction_errors['wu_unbiased'][0])
+    print('\tPearson R ux: ', prediction_errors['we_pearson_r'][0])
+    print('\tPearson R uy: ', prediction_errors['wn_pearson_r'][0])
+    print('\tPearson R uz: ', prediction_errors['wu_pearson_r'][0])
+    print('\tSpearman R ux: ', prediction_errors['we_spear_r'][0])
+    print('\tSpearman R uy: ', prediction_errors['wn_spear_r'][0])
+    print('\tSpearman R uz: ', prediction_errors['wu_spear_r'][0])
 
     print('Prediction Metric Validation Log:')
-    print('\tAverage absolute error ux: ', np.mean(np.abs(wind_data_validation['we'] - wind_data_validation['we_pred'])))
-    print('\tAverage absolute error uy: ', np.mean(np.abs(wind_data_validation['wn'] - wind_data_validation['wn_pred'])))
-    print('\tAverage absolute error uz: ', np.mean(np.abs(-wind_data_validation['wd'] - wind_data_validation['wu_pred'])))
-    print('\tMaximum absolute error ux: ', np.max(np.abs(wind_data_validation['we'] - wind_data_validation['we_pred'])))
-    print('\tMaximum absolute error uy: ', np.max(np.abs(wind_data_validation['wn'] - wind_data_validation['wn_pred'])))
-    print('\tMaximum absolute error uz: ', np.max(np.abs(-wind_data_validation['wd'] - wind_data_validation['wu_pred'])))
+    print('\tAverage absolute error ux: ', prediction_errors['we_val'][0])
+    print('\tAverage absolute error uy: ', prediction_errors['wn_val'][0])
+    print('\tAverage absolute error uz: ', prediction_errors['wu_val'][0])
+    print('\tMaximum absolute error ux: ', prediction_errors['we_max_val'][0])
+    print('\tMaximum absolute error uy: ', prediction_errors['wn_max_val'][0])
+    print('\tMaximum absolute error uz: ', prediction_errors['wu_max_val'][0])
+    print('\tAverage unbiased absolute error ux: ', prediction_errors['we_unbiased_val'][0])
+    print('\tAverage unbiased absolute error uy: ', prediction_errors['wn_unbiased_val'][0])
+    print('\tAverage unbiased absolute error uz: ', prediction_errors['wu_unbiased_val'][0])
+    print('\tPearson R ux: ', prediction_errors['we_pearson_r_val'][0])
+    print('\tPearson R uy: ', prediction_errors['wn_pearson_r_val'][0])
+    print('\tPearson R uz: ', prediction_errors['wu_pearson_r_val'][0])
+    print('\tSpearman R ux: ', prediction_errors['we_spear_r_val'][0])
+    print('\tSpearman R uy: ', prediction_errors['wn_spear_r_val'][0])
+    print('\tSpearman R uz: ', prediction_errors['wu_spear_r_val'][0])
+
+    plot_correlation([wind_data_prediction], "Correlation plots input flight")
+    plot_correlation([wind_data_validation], "Correlation plots validation flight")
 
     # plot the prediction
     plt.figure()
@@ -397,19 +443,7 @@ def evaluate_prediction_cross_flight_sliding_window(wind_data, scale, terrain, g
     t_end = t_start + dt
     t_max = wind_data['time_gps'][-1]
 
-    prediction_errors = {'we': [],
-                         'wn': [],
-                         'wu': [],
-                         'we_max': [],
-                         'wn_max': [],
-                         'wu_max': [],
-                         'we_val': [],
-                         'wn_val': [],
-                         'wu_val': [],
-                         'we_max_val': [],
-                         'wn_max_val': [],
-                         'wu_max_val': []}
-    
+    prediction_errors = {}
     predictions = []
     predictions_validation = []
     vlines = [t_start]
@@ -451,45 +485,12 @@ def evaluate_prediction_cross_flight_sliding_window(wind_data, scale, terrain, g
         for key in prediction_path_validation.keys():
             wind_data_prediction_val[key] = prediction_path_validation[key]
 
-        prediction_path['time_gps'] = wind_data_prediction['time_gps']
-        prediction_path_validation['time_gps'] = wind_data_prediction_val['time_gps']
-        predictions.append(prediction_path)
-        predictions_validation.append(prediction_path_validation)
+        predictions.append(copy.deepcopy(wind_data_prediction))
+        predictions_validation.append(copy.deepcopy(wind_data_prediction_val))
         vlines.append(t_end)
 
-        prediction_errors['we'].append(
-            np.mean(np.abs(wind_data_prediction['we'] - wind_data_prediction['we_pred'])))
-        prediction_errors['wn'].append(
-            np.mean(np.abs(wind_data_prediction['wn'] - wind_data_prediction['wn_pred'])))
-        prediction_errors['wu'].append(
-            np.mean(np.abs(-wind_data_prediction['wd'] - wind_data_prediction['wu_pred'])))
-        prediction_errors['we_max'].append(
-            np.max(np.abs(wind_data_prediction['we'] - wind_data_prediction['we_pred'])))
-        prediction_errors['wn_max'].append(
-            np.max(np.abs(wind_data_prediction['wn'] - wind_data_prediction['wn_pred'])))
-        prediction_errors['wu_max'].append(
-            np.max(np.abs(-wind_data_prediction['wd'] - wind_data_prediction['wu_pred'])))
-
-        if len(wind_data_prediction_val['time']) > 0:
-            prediction_errors['we_val'].append(
-                np.mean(np.abs(wind_data_prediction_val['we'] - wind_data_prediction_val['we_pred'])))
-            prediction_errors['wn_val'].append(
-                np.mean(np.abs(wind_data_prediction_val['wn'] - wind_data_prediction_val['wn_pred'])))
-            prediction_errors['wu_val'].append(
-                np.mean(np.abs(-wind_data_prediction_val['wd'] - wind_data_prediction_val['wu_pred'])))
-            prediction_errors['we_max_val'].append(
-                np.max(np.abs(wind_data_prediction_val['we'] - wind_data_prediction_val['we_pred'])))
-            prediction_errors['wn_max_val'].append(
-                np.max(np.abs(wind_data_prediction_val['wn'] - wind_data_prediction_val['wn_pred'])))
-            prediction_errors['wu_max_val'].append(
-                np.max(np.abs(-wind_data_prediction_val['wd'] - wind_data_prediction_val['wu_pred'])))
-        else:
-            prediction_errors['we_val'].append(np.NaN)
-            prediction_errors['wn_val'].append(np.NaN)
-            prediction_errors['wu_val'].append(np.NaN)
-            prediction_errors['we_max_val'].append(np.NaN)
-            prediction_errors['wn_max_val'].append(np.NaN)
-            prediction_errors['wu_max_val'].append(np.NaN)
+        compute_error(wind_data_prediction, prediction_errors, "")
+        compute_error(wind_data_prediction_val, prediction_errors, "_val")
 
         if not config.params['evaluation']['cumulative']:
             t_start = t_end
@@ -500,6 +501,7 @@ def evaluate_prediction_cross_flight_sliding_window(wind_data, scale, terrain, g
 
     plt.figure()
     ax = plt.subplot(2,1,1)
+    ax.set_title("Prediction errors")
     ax.plot(prediction_errors['we'], label='we')
     ax.plot(prediction_errors['wn'], label='wn')
     ax.plot(prediction_errors['wu'], label='wu')
@@ -519,12 +521,127 @@ def evaluate_prediction_cross_flight_sliding_window(wind_data, scale, terrain, g
     ax.set_ylabel('maximum prediction error [m/s]')
     ax.set_xlabel('window number [-]')
 
-    plot_predictions(wind_data, predictions, vlines, use_gps_time = True)
-    plot_predictions(wind_data_validation, predictions_validation, vlines, use_gps_time = True)
+    plt.figure()
+    ax = plt.subplot(2,1,1)
+    ax.set_title("Unbiased prediction errors")
+    ax.plot(prediction_errors['we_unbiased'], label='we')
+    ax.plot(prediction_errors['wn_unbiased'], label='wn')
+    ax.plot(prediction_errors['wu_unbiased'], label='wu')
+    ax.plot(prediction_errors['we_unbiased_val'], label='we validation')
+    ax.plot(prediction_errors['wn_unbiased_val'], label='wn validation')
+    ax.plot(prediction_errors['wu_unbiased_val'], label='wu validation')
+    ax.legend()
+    ax.set_ylabel('unbiased prediction error [m/s]')
+
+    ax = plt.subplot(2,1,2)
+    ax.set_title("Correlation factor")
+    ax.plot(prediction_errors['we_pearson_r'], label='we pearson')
+    ax.plot(prediction_errors['wn_pearson_r'], label='wn pearson')
+    ax.plot(prediction_errors['wu_pearson_r'], label='wu pearson')
+    ax.plot(prediction_errors['we_spear_r'], label='we spearman')
+    ax.plot(prediction_errors['wn_spear_r'], label='wn spearman')
+    ax.plot(prediction_errors['wu_spear_r'], label='wu spearman')
+    ax.plot(prediction_errors['we_pearson_r_val'], label='we pearson validation')
+    ax.plot(prediction_errors['wn_pearson_r_val'], label='wn pearson validation')
+    ax.plot(prediction_errors['wu_pearson_r_val'], label='wu pearson validation')
+    ax.plot(prediction_errors['we_spear_r_val'], label='we spearman validation')
+    ax.plot(prediction_errors['wn_spear_r_val'], label='wn spearman validation')
+    ax.plot(prediction_errors['wu_spear_r_val'], label='wu spearman validation')
+    ax.legend()
+    ax.set_ylabel('correlation factor [-]')
+    ax.set_xlabel('window number [-]')
+
+    plot_predictions(wind_data, predictions, vlines, use_gps_time = True, title="Input flight")
+    plot_predictions(wind_data_validation, predictions_validation, vlines, use_gps_time = True, title="Validation flight")
 
     plt.show()
 
-def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False):
+def compute_error(prediction_data, errors, field_appendix = ""):
+    fields = ['we',
+              'wn',
+              'wu',
+              'we_max',
+              'wn_max',
+              'wu_max',
+              'absolute_errors',
+              'we_unbiased',
+              'wn_unbiased',
+              'wu_unbiased',
+              'we_spear_r',
+              'wn_spear_r',
+              'wu_spear_r',
+              'we_pearson_r',
+              'wn_pearson_r',
+              'wu_pearson_r',]
+
+    for f in fields:
+        if not (f  + field_appendix) in errors.keys():
+            errors[(f  + field_appendix)] = []
+
+    if len(prediction_data['time']) > 0:
+        errors['we' + field_appendix].append(
+            np.mean(np.abs(prediction_data['we'] - prediction_data['we_pred'])))
+        errors['wn' + field_appendix].append(
+            np.mean(np.abs(prediction_data['wn'] - prediction_data['wn_pred'])))
+        errors['wu' + field_appendix].append(
+            np.mean(np.abs(-prediction_data['wd'] - prediction_data['wu_pred'])))
+
+        errors['we_max' + field_appendix].append(
+            np.max(np.abs(prediction_data['we'] - prediction_data['we_pred'])))
+        errors['wn_max' + field_appendix].append(
+            np.max(np.abs(prediction_data['wn'] - prediction_data['wn_pred'])))
+        errors['wu_max' + field_appendix].append(
+            np.max(np.abs(-prediction_data['wd'] - prediction_data['wu_pred'])))
+
+        errors['absolute_errors' + field_appendix].append(np.sqrt(
+            np.power(np.abs(prediction_data['wn'] - prediction_data['wn_pred']), 2) +
+            np.power(np.abs(prediction_data['we'] - prediction_data['we_pred']), 2) +
+            np.power(np.abs(-prediction_data['wd'] - prediction_data['wu_pred']), 2)))
+
+        errors['we_unbiased' + field_appendix].append(
+            np.mean(np.abs((prediction_data['we'] - np.mean(prediction_data['we'])) - (prediction_data['we_pred'] - np.mean(prediction_data['we_pred'])))))
+        errors['wn_unbiased' + field_appendix].append(
+            np.mean(np.abs((prediction_data['wn'] - np.mean(prediction_data['wn'])) - (prediction_data['wn_pred'] - np.mean(prediction_data['wn_pred'])))))
+        errors['wu_unbiased' + field_appendix].append(
+            np.mean(np.abs(-(prediction_data['wd'] - np.mean(prediction_data['wd'])) - (prediction_data['wu_pred'] - np.mean(prediction_data['wu_pred'])))))
+
+        # slightly distort the prediction if it is constant because correlation cannot handle constant values
+        errors['we_spear_r' + field_appendix].append(
+            spearmanr(prediction_data['we'], prediction_data['we_pred']).correlation)
+        errors['wn_spear_r' + field_appendix].append(
+            spearmanr(prediction_data['wn'], prediction_data['wn_pred']).correlation)
+        errors['wu_spear_r' + field_appendix].append(
+            spearmanr(-prediction_data['wd'], prediction_data['wu_pred']).correlation)
+
+        errors['we_pearson_r' + field_appendix].append(
+            pearsonr(prediction_data['we'], prediction_data['we_pred'])[0])
+        errors['wn_pearson_r' + field_appendix].append(
+            pearsonr(prediction_data['wn'], prediction_data['wn_pred'])[0])
+        errors['wu_pearson_r' + field_appendix].append(
+            pearsonr(-prediction_data['wd'], prediction_data['wu_pred'])[0])
+
+    else:
+        for f in fields:
+            errors[f + field_appendix].append(np.NaN)
+
+def plot_correlation(prediction_data, title="Correlation plots"):
+    num_rows = len(prediction_data)
+    fig, axs = plt.subplots(num_rows, 3, squeeze=False)
+    fig.suptitle(title)
+    for i, pred_data in enumerate(prediction_data):
+        axs[i, 0].scatter(pred_data['we'], pred_data['we_pred'])
+        axs[i, 1].scatter(pred_data['wn'], pred_data['wn_pred'])
+        axs[i, 2].scatter(-pred_data['wd'], pred_data['wu_pred'])
+        axs[i, 0].set_ylabel('prediction window ' + str(i) + ' [m/s]')
+        axs[i, 0].set_aspect('equal')
+        axs[i, 1].set_aspect('equal')
+        axs[i, 2].set_aspect('equal')
+
+    axs[-1, 0].set_xlabel('measured we [m/s]')
+    axs[-1, 1].set_xlabel('measured wn [m/s]')
+    axs[-1, 2].set_xlabel('measured wu [m/s]')
+
+def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False, title=None):
     if use_gps_time:
          time = wind_data['time_gps']
     else:
@@ -533,6 +650,9 @@ def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False
     ax1 = plt.subplot(3,1,1)
     ax2 = plt.subplot(3,1,2)
     ax3 = plt.subplot(3,1,3)
+
+    if title:
+        ax1.set_title(title)
 
     cm = plt.get_cmap('jet')
     num_colors = len(predictions)
@@ -584,4 +704,3 @@ def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False
     ax3.set_xlabel('time [s]')
 
     ax1.legend(bbox_to_anchor=(1.01, 1), loc='upper left', borderaxespad=0.)
-    
