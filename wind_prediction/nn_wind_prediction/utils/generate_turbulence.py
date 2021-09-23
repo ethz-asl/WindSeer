@@ -130,7 +130,7 @@ def generate_turbulence_spectral(nx, ny, nz, dx, dy, dz, use_fft=True, check_sta
                     V[ipx, ipy, ipz] = v_r[1]
                     W[ipx, ipy, ipz] = v_r[2]
 
-    if use_fft:
+    else:
         # IFFT
         complex_field = np.zeros((3, nx, ny, nz), dtype=complex)
         for ikx in range(nx):
