@@ -17,3 +17,4 @@ mprofile*
 *_tmp.py
 *.npy
 *.npz
+*.tif
