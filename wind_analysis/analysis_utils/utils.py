@@ -114,8 +114,19 @@ def get_input_fn(config, measurement, mask):
         raise ValueError('Invalid input_fn type: ' + config['type'])
 
 def load_measurements(config, config_model):
+    # manually add uz if it was not present in the input channels since we want to return all the velocities as measurements
+    measurement_channels = ['terrain', 'ux', 'uy', 'uz']
+    return_variance = False
+    if 'turb' in config_model['label_channels']:
+        return_variance = True
+        measurement_channels += ['turb']
+
+    for ch in config_model['input_channels']:
+        if not ch in measurement_channels:
+            raise ValueError('Model has an input channel that is currently not supported: ', ch, 'supported: ', measurement_channels)
+
     if config['type'] == 'cfd':
-        dataset = nn_data.HDF5Dataset(config['cfd']['filename'], config_model['input_channels'],
+        dataset = nn_data.HDF5Dataset(config['cfd']['filename'], measurement_channels,
                                       config_model['label_channels'], augmentation = False,
                                       return_grid_size = True, **config['cfd']['kwargs'])
         data = dataset[config['cfd']['index']]
@@ -219,6 +230,8 @@ def load_measurements(config, config_model):
 
         terrain = terrain.unsqueeze(0).unsqueeze(0).float()
         measurement = measurement.unsqueeze(0).float()
+        if return_variance:
+            measurement = torch.cat([measurement, variance.float().sum(dim=0).unsqueeze(0).unsqueeze(0)], dim=1)
         mask = mask.unsqueeze(0).float()
 
         # mask the measurements by the terrain to avoid having nonzero measurements inside the terrain
