@@ -2,7 +2,6 @@ import copy
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
-from scipy.stats import spearmanr, kendalltau, pearsonr
 import torch
 
 from .bin_log_data import bin_log_data, extract_window_wind_data
@@ -138,19 +137,20 @@ def evaluate_project_forward(wind_data, scale, terrain, grid_dimensions, net, co
     print('\tAverage unbiased absolute error ux: ', prediction_errors['we_unbiased'][0])
     print('\tAverage unbiased absolute error uy: ', prediction_errors['wn_unbiased'][0])
     print('\tAverage unbiased absolute error uz: ', prediction_errors['wu_unbiased'][0])
-    print('\tPearson R ux: ', prediction_errors['we_pearson_r'][0])
-    print('\tPearson R uy: ', prediction_errors['wn_pearson_r'][0])
-    print('\tPearson R uz: ', prediction_errors['wu_pearson_r'][0])
-    print('\tSpearman R ux: ', prediction_errors['we_spear_r'][0])
-    print('\tSpearman R uy: ', prediction_errors['wn_spear_r'][0])
-    print('\tSpearman R uz: ', prediction_errors['wu_spear_r'][0])
+    print('\tError std ux: ', prediction_errors['we_std'][0])
+    print('\tError std uy: ', prediction_errors['wn_std'][0])
+    print('\tError std uz: ', prediction_errors['wu_std'][0])
 
     plot_correlation([wind_data_prediction])
 
     # plot the prediction
+    num_plots = 3
+    if 'turb_pred' in wind_data_prediction.keys():
+        num_plots = 4
+
     time = wind_data['time'] * 1e-6
     plt.figure()
-    ax = plt.subplot(3,1,1)
+    ax = plt.subplot(num_plots,1,1)
     ax.plot(time, wind_data['we_pred'], label='prediction')
     ax.plot(time, wind_data['we'], label='measurements')
     y_lim = ax.get_ylim()
@@ -160,7 +160,7 @@ def evaluate_project_forward(wind_data, scale, terrain, grid_dimensions, net, co
     ax.legend()
     ax.set_ylabel('ux | we [m/s]')
 
-    ax = plt.subplot(3,1,2)
+    ax = plt.subplot(num_plots,1,2)
     ax.plot(time, wind_data['wn_pred'], label='prediction')
     ax.plot(time, wind_data['wn'], label='measurements')
     y_lim = ax.get_ylim()
@@ -169,7 +169,7 @@ def evaluate_project_forward(wind_data, scale, terrain, grid_dimensions, net, co
                            alpha = 0.2, color = 'grey'))
     ax.set_ylabel('uy | wn [m/s]')
 
-    ax = plt.subplot(3,1,3)
+    ax = plt.subplot(num_plots,1,3)
     ax.plot(time, wind_data['wu_pred'], label='prediction')
     ax.plot(time, -wind_data['wd'], label='measurements')
     y_lim = ax.get_ylim()
@@ -178,6 +178,20 @@ def evaluate_project_forward(wind_data, scale, terrain, grid_dimensions, net, co
                            alpha = 0.2, color = 'grey'))
     ax.set_ylabel('uz | wu [m/s]')
     ax.set_xlabel('time [s]')
+
+    if 'turb_pred' in wind_data_prediction.keys():
+        measured_tke = 0.5 * ((wind_data['wn_raw']-wind_data['wn'])**2 +
+                              (wind_data['we_raw']-wind_data['we'])**2 +
+                              (wind_data['wd_raw']-wind_data['wd'])**2)
+        ax = plt.subplot(num_plots,1,4)
+        ax.plot(time, wind_data['turb_pred'], label='prediction')
+        ax.plot(time, measured_tke, label='measurement')
+        y_lim = ax.get_ylim()
+        ax.add_patch(Rectangle((t_start, y_lim[0] - 1.0),
+                               t_end - t_start, y_lim[1] - y_lim[0] + 1.0,
+                               alpha = 0.2, color = 'grey'))
+        ax.set_ylabel('TKE [m^2/s^2] | noise [m/s]')
+        ax.set_xlabel('time [s]')
 
     plt.show()
 
@@ -255,15 +269,12 @@ def evaluate_sliding_window_path(wind_data, scale, terrain, grid_dimensions, net
     ax.set_ylabel('unbiased prediction error [m/s]')
 
     ax = plt.subplot(2,1,2)
-    ax.set_title("Correlation factor")
-    ax.plot(prediction_errors['we_pearson_r'], label='we pearson')
-    ax.plot(prediction_errors['wn_pearson_r'], label='wn pearson')
-    ax.plot(prediction_errors['wu_pearson_r'], label='wu pearson')
-    ax.plot(prediction_errors['we_spear_r'], label='we spearman')
-    ax.plot(prediction_errors['wn_spear_r'], label='wn spearman')
-    ax.plot(prediction_errors['wu_spear_r'], label='wu spearman')
+    ax.set_title("Error standard deviation")
+    ax.plot(prediction_errors['we_std'], label='we std')
+    ax.plot(prediction_errors['wn_std'], label='wn std')
+    ax.plot(prediction_errors['wu_std'], label='wu std')
     ax.legend()
-    ax.set_ylabel('correlation factor [-]')
+    ax.set_ylabel('error standard deviation [m^2/s^2]')
     ax.set_xlabel('window number [-]')
 
     #plot_correlation(predictions)
@@ -296,7 +307,7 @@ def evaluate_sliding_window_blocks(wind_data, scale, terrain, grid_dimensions, n
         else:
             prediction = prediction_sparse(wind_data, grid_dimensions, t_start, t_end, terrain, net, scale, device, config)['pred'].cpu().squeeze()
 
-        masked_error_abs = (measurement - prediction).abs() * mask
+        masked_error_abs = (measurement - prediction[:3]).abs() * mask
 
         prediction_errors['ux'].append(
              masked_error_abs[0].sum() / mask.sum())
@@ -367,12 +378,10 @@ def evaluate_prediction_cross_flight_forward(wind_data, scale, terrain, grid_dim
     print('\tAverage unbiased absolute error ux: ', prediction_errors['we_unbiased'][0])
     print('\tAverage unbiased absolute error uy: ', prediction_errors['wn_unbiased'][0])
     print('\tAverage unbiased absolute error uz: ', prediction_errors['wu_unbiased'][0])
-    print('\tPearson R ux: ', prediction_errors['we_pearson_r'][0])
-    print('\tPearson R uy: ', prediction_errors['wn_pearson_r'][0])
-    print('\tPearson R uz: ', prediction_errors['wu_pearson_r'][0])
-    print('\tSpearman R ux: ', prediction_errors['we_spear_r'][0])
-    print('\tSpearman R uy: ', prediction_errors['wn_spear_r'][0])
-    print('\tSpearman R uz: ', prediction_errors['wu_spear_r'][0])
+    print('\tError std ux: ', prediction_errors['we_std'][0])
+    print('\tError std uy: ', prediction_errors['wn_std'][0])
+    print('\tError std uz: ', prediction_errors['wu_std'][0])
+
 
     print('Prediction Metric Validation Log:')
     print('\tAverage absolute error ux: ', prediction_errors['we_val'][0])
@@ -384,19 +393,20 @@ def evaluate_prediction_cross_flight_forward(wind_data, scale, terrain, grid_dim
     print('\tAverage unbiased absolute error ux: ', prediction_errors['we_unbiased_val'][0])
     print('\tAverage unbiased absolute error uy: ', prediction_errors['wn_unbiased_val'][0])
     print('\tAverage unbiased absolute error uz: ', prediction_errors['wu_unbiased_val'][0])
-    print('\tPearson R ux: ', prediction_errors['we_pearson_r_val'][0])
-    print('\tPearson R uy: ', prediction_errors['wn_pearson_r_val'][0])
-    print('\tPearson R uz: ', prediction_errors['wu_pearson_r_val'][0])
-    print('\tSpearman R ux: ', prediction_errors['we_spear_r_val'][0])
-    print('\tSpearman R uy: ', prediction_errors['wn_spear_r_val'][0])
-    print('\tSpearman R uz: ', prediction_errors['wu_spear_r_val'][0])
+    print('\tError std ux: ', prediction_errors['we_std_val'][0])
+    print('\tError std uy: ', prediction_errors['wn_std_val'][0])
+    print('\tError std uz: ', prediction_errors['wu_std_val'][0])
 
     plot_correlation([wind_data_prediction], "Correlation plots input flight")
     plot_correlation([wind_data_validation], "Correlation plots validation flight")
 
     # plot the prediction
+    num_plots = 3
+    if 'turb_pred' in wind_data_prediction.keys():
+        num_plots = 4
+
     plt.figure()
-    ax = plt.subplot(3,1,1)
+    ax = plt.subplot(num_plots,1,1)
     ax.plot(wind_data['time_gps'], wind_data['we_pred'], label='pred input')
     ax.plot(wind_data_validation['time_gps'], wind_data_validation['we_pred'], label='pred validation')
     ax.plot(wind_data['time_gps'], wind_data['we'], label='measurements input')
@@ -408,7 +418,7 @@ def evaluate_prediction_cross_flight_forward(wind_data, scale, terrain, grid_dim
     ax.legend()
     ax.set_ylabel('ux | we [m/s]')
 
-    ax = plt.subplot(3,1,2)
+    ax = plt.subplot(num_plots,1,2)
     ax.plot(wind_data['time_gps'], wind_data['wn_pred'], label='pred input')
     ax.plot(wind_data_validation['time_gps'], wind_data_validation['wn_pred'], label='pred validation')
     ax.plot(wind_data['time_gps'], wind_data['wn'], label='measurements input')
@@ -419,7 +429,7 @@ def evaluate_prediction_cross_flight_forward(wind_data, scale, terrain, grid_dim
                            alpha = 0.2, color = 'grey'))
     ax.set_ylabel('uy | wn [m/s]')
 
-    ax = plt.subplot(3,1,3)
+    ax = plt.subplot(num_plots,1,3)
     ax.plot(wind_data['time_gps'], wind_data['wu_pred'], label='pred input')
     ax.plot(wind_data_validation['time_gps'], wind_data_validation['wu_pred'], label='pred validation')
     ax.plot(wind_data['time_gps'], -wind_data['wd'], label='measurements input')
@@ -430,6 +440,25 @@ def evaluate_prediction_cross_flight_forward(wind_data, scale, terrain, grid_dim
                            alpha = 0.2, color = 'grey'))
     ax.set_ylabel('uz | wu [m/s]')
     ax.set_xlabel('time [s]')
+
+    if 'turb_pred' in wind_data_prediction.keys():
+        measured_tke = 0.5 * ((wind_data['wn_raw']-wind_data['wn'])**2 +
+                              (wind_data['we_raw']-wind_data['we'])**2 +
+                              (wind_data['wd_raw']-wind_data['wd'])**2)
+        measured_tke_val = 0.5 * ((wind_data_validation['wn_raw']-wind_data_validation['wn'])**2 +
+                                  (wind_data_validation['we_raw']-wind_data_validation['we'])**2 +
+                                  (wind_data_validation['wd_raw']-wind_data_validation['wd'])**2)
+        ax = plt.subplot(num_plots,1,4)
+        ax.plot(wind_data['time_gps'], wind_data['turb_pred'], label='pred input')
+        ax.plot(wind_data_validation['time_gps'], wind_data_validation['turb_pred'], label='pred validation')
+        ax.plot(wind_data['time_gps'], measured_tke, label='measurement input')
+        ax.plot(wind_data_validation['time_gps'], measured_tke_val, label='measurement validation')
+        y_lim = ax.get_ylim()
+        ax.add_patch(Rectangle((t_start, y_lim[0] - 1.0),
+                               t_end - t_start, y_lim[1] - y_lim[0] + 1.0,
+                               alpha = 0.2, color = 'grey'))
+        ax.set_ylabel('TKE [m^2/s^2] | noise [m/s]')
+        ax.set_xlabel('time [s]')
 
     plt.show()
 
@@ -534,21 +563,15 @@ def evaluate_prediction_cross_flight_sliding_window(wind_data, scale, terrain, g
     ax.set_ylabel('unbiased prediction error [m/s]')
 
     ax = plt.subplot(2,1,2)
-    ax.set_title("Correlation factor")
-    ax.plot(prediction_errors['we_pearson_r'], label='we pearson')
-    ax.plot(prediction_errors['wn_pearson_r'], label='wn pearson')
-    ax.plot(prediction_errors['wu_pearson_r'], label='wu pearson')
-    ax.plot(prediction_errors['we_spear_r'], label='we spearman')
-    ax.plot(prediction_errors['wn_spear_r'], label='wn spearman')
-    ax.plot(prediction_errors['wu_spear_r'], label='wu spearman')
-    ax.plot(prediction_errors['we_pearson_r_val'], label='we pearson validation')
-    ax.plot(prediction_errors['wn_pearson_r_val'], label='wn pearson validation')
-    ax.plot(prediction_errors['wu_pearson_r_val'], label='wu pearson validation')
-    ax.plot(prediction_errors['we_spear_r_val'], label='we spearman validation')
-    ax.plot(prediction_errors['wn_spear_r_val'], label='wn spearman validation')
-    ax.plot(prediction_errors['wu_spear_r_val'], label='wu spearman validation')
+    ax.set_title("Error standard deviation")
+    ax.plot(prediction_errors['wn_std'], label='we std')
+    ax.plot(prediction_errors['we_std'], label='wn std')
+    ax.plot(prediction_errors['wu_std'], label='wu std')
+    ax.plot(prediction_errors['we_std_val'], label='we std validation')
+    ax.plot(prediction_errors['wn_std_val'], label='wn std validation')
+    ax.plot(prediction_errors['wu_std_val'], label='wu std validation')
     ax.legend()
-    ax.set_ylabel('correlation factor [-]')
+    ax.set_ylabel('std [m^2/s^2]')
     ax.set_xlabel('window number [-]')
 
     plot_predictions(wind_data, predictions, vlines, use_gps_time = True, title="Input flight")
@@ -567,12 +590,9 @@ def compute_error(prediction_data, errors, field_appendix = ""):
               'we_unbiased',
               'wn_unbiased',
               'wu_unbiased',
-              'we_spear_r',
-              'wn_spear_r',
-              'wu_spear_r',
-              'we_pearson_r',
-              'wn_pearson_r',
-              'wu_pearson_r',]
+              'we_std',
+              'wn_std',
+              'wu_std',]
 
     for f in fields:
         if not (f  + field_appendix) in errors.keys():
@@ -605,20 +625,12 @@ def compute_error(prediction_data, errors, field_appendix = ""):
         errors['wu_unbiased' + field_appendix].append(
             np.mean(np.abs(-(prediction_data['wd'] - np.mean(prediction_data['wd'])) - (prediction_data['wu_pred'] - np.mean(prediction_data['wu_pred'])))))
 
-        # slightly distort the prediction if it is constant because correlation cannot handle constant values
-        errors['we_spear_r' + field_appendix].append(
-            spearmanr(prediction_data['we'], prediction_data['we_pred']).correlation)
-        errors['wn_spear_r' + field_appendix].append(
-            spearmanr(prediction_data['wn'], prediction_data['wn_pred']).correlation)
-        errors['wu_spear_r' + field_appendix].append(
-            spearmanr(-prediction_data['wd'], prediction_data['wu_pred']).correlation)
-
-        errors['we_pearson_r' + field_appendix].append(
-            pearsonr(prediction_data['we'], prediction_data['we_pred'])[0])
-        errors['wn_pearson_r' + field_appendix].append(
-            pearsonr(prediction_data['wn'], prediction_data['wn_pred'])[0])
-        errors['wu_pearson_r' + field_appendix].append(
-            pearsonr(-prediction_data['wd'], prediction_data['wu_pred'])[0])
+        errors['we_std' + field_appendix].append(
+            np.std(prediction_data['we'] - prediction_data['we_pred']))
+        errors['wn_std' + field_appendix].append(
+            np.std(prediction_data['wn'] - prediction_data['wn_pred']))
+        errors['wu_std' + field_appendix].append(
+            np.std(-prediction_data['wd'] - prediction_data['wu_pred']))
 
     else:
         for f in fields:
@@ -646,10 +658,17 @@ def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False
          time = wind_data['time_gps']
     else:
         time = wind_data['time'] * 1e-6
+
+    num_plots = 3
+    if 'turb_pred' in predictions[0].keys():
+        num_plots = 4
+
     plt.figure()
-    ax1 = plt.subplot(3,1,1)
-    ax2 = plt.subplot(3,1,2)
-    ax3 = plt.subplot(3,1,3)
+    ax1 = plt.subplot(num_plots,1,1)
+    ax2 = plt.subplot(num_plots,1,2)
+    ax3 = plt.subplot(num_plots,1,3)
+    if 'turb_pred' in predictions[0].keys():
+        ax4 = plt.subplot(num_plots,1,4)
 
     if title:
         ax1.set_title(title)
@@ -659,6 +678,8 @@ def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False
     ax1.set_prop_cycle('color', [cm(1.0*i/num_colors) for i in range(num_colors)])
     ax2.set_prop_cycle('color', [cm(1.0*i/num_colors) for i in range(num_colors)])
     ax3.set_prop_cycle('color', [cm(1.0*i/num_colors) for i in range(num_colors)])
+    if 'turb_pred' in predictions[0].keys():
+        ax4.set_prop_cycle('color', [cm(1.0*i/num_colors) for i in range(num_colors)])
 
     if 'we_raw' in wind_data.keys():
         ax1.plot(time, wind_data['we_raw'], color='grey', alpha=0.5, label='raw measurements')
@@ -670,6 +691,11 @@ def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False
     ax1.plot(time, wind_data['we'], color='black', label='measurements')
     ax2.plot(time, wind_data['wn'], color='black', label='measurements')
     ax3.plot(time, -wind_data['wd'], color='black', label='measurements')
+    if 'turb_pred' in predictions[0].keys():
+        measured_tke = 0.5 * ((wind_data['wn_raw']-wind_data['wn'])**2 +
+                              (wind_data['we_raw']-wind_data['we'])**2 +
+                              (wind_data['wd_raw']-wind_data['wd'])**2)
+        ax4.plot(time, measured_tke, color='black', label='measurements')
 
     for i, pred in enumerate(predictions):
         if use_gps_time:
@@ -680,6 +706,8 @@ def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False
         ax1.plot(time_pred, pred['we_pred'], label='pred window ' + str(i))
         ax2.plot(time_pred, pred['wn_pred'], label='pred window ' + str(i))
         ax3.plot(time_pred, pred['wu_pred'], label='pred window ' + str(i))
+        if 'turb_pred' in pred.keys():
+            ax4.plot(time_pred, pred['turb_pred'], label='pred window ' + str(i))
 
     ylim = np.array(ax1.get_ylim())
     text_y = ylim[1]
@@ -691,6 +719,8 @@ def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False
             ax1.axvline(x=vl, color='grey', alpha=0.5)
             ax2.axvline(x=vl, color='grey', alpha=0.5)
             ax3.axvline(x=vl, color='grey', alpha=0.5)
+            if 'turb_pred' in predictions[0].keys():
+                ax4.axvline(x=vl, color='grey', alpha=0.5)
 
             if i > 0:
                 ax1.text((vl - vl_old) * 0.5 + vl_old, text_y, str(i - 1),
@@ -701,6 +731,10 @@ def plot_predictions(wind_data, predictions, vlines = None, use_gps_time = False
     ax1.set_ylabel('ux | we [m/s]')
     ax2.set_ylabel('uy | wn [m/s]')
     ax3.set_ylabel('uz | wu [m/s]')
-    ax3.set_xlabel('time [s]')
+    if 'turb_pred' in predictions[0].keys():
+        ax4.set_ylabel('tke [m^2/s^2]')
+        ax4.set_xlabel('time [s]')
+    else:
+        ax3.set_xlabel('time [s]')
 
     ax1.legend(bbox_to_anchor=(1.01, 1), loc='upper left', borderaxespad=0.)
