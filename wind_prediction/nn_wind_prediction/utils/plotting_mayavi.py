@@ -139,7 +139,8 @@ def mlab_plot_slice(title, input_data, terrain, terrain_mode='blocks', terrain_u
 
         return ui
 
-def mlab_plot_measurements(measurements, mask, terrain, terrain_mode='blocks', terrain_uniform_color=False, blocking=True, white_background=True):
+def mlab_plot_measurements(measurements, mask, terrain, terrain_mode='blocks', terrain_uniform_color=False, blocking=True,
+                           white_background=True):
     '''
     Visualize the measurements using mayavi
     The inputs are assumed to be torch tensors.
@@ -150,9 +151,9 @@ def mlab_plot_measurements(measurements, mask, terrain, terrain_mode='blocks', t
         measurement_idx = mask.squeeze().nonzero(as_tuple=False).cpu().numpy()
 
         if white_background:
-            mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
+            fig = mlab.figure(fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
         else:
-            mlab.figure()
+            fig = mlab.figure()
 
         mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
 
@@ -173,7 +174,7 @@ def mlab_plot_measurements(measurements, mask, terrain, terrain_mode='blocks', t
             mlab.show()
 
 def mlab_plot_prediction(prediction, terrain, terrain_mode='blocks', terrain_uniform_color=False,
-                         prediction_channels=None, blocking=True, white_background=True, quiver_mask_points=20):
+                         prediction_channels=None, blocking=True, white_background=True, quiver_mask_points=50):
     '''
     Visualize the prediction using mayavi
     The inputs are assumed to be torch tensors.
@@ -192,6 +193,7 @@ def mlab_plot_prediction(prediction, terrain, terrain_mode='blocks', terrain_uni
         mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
 
         mlab.quiver3d(prediction_np[0], prediction_np[1], prediction_np[2], mask_points = quiver_mask_points)
+
 
         # slice plot
         ui = mlab_plot_slice('Prediction', prediction_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
@@ -233,6 +235,9 @@ def mlab_plot_error(error, terrain, error_mode='norm', terrain_mode='blocks', te
             mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
 
             mlab.scalarbar(vol, title='Prediction Error Norm [m/s]', label_fmt='%.1f')
+
+#             mlab_animate_rotate(False)
+
 
         elif error_mode == error_modes[1]:
             # one figure per channel
@@ -328,3 +333,26 @@ def mlab_plot_uncertainty(uncertainty, terrain, uncertainty_mode=0, terrain_mode
             mlab.show()
 
         return [ui]
+
+def mlab_animate_rotate(save=True, magnification=10):
+    '''
+    Animate the current figure by rotating it around the z-axis and the current focal point
+    '''
+    @mlab.animate(delay=50)
+    def anim():
+        """Animate the b1 box."""
+        iter = 0
+        while 1:
+            current_view = mlab.view()
+            mlab.view(azimuth=current_view[0] + 2,
+                      elevation=current_view[1] * 0 + 85,
+                      distance=current_view[2] * 0 + 150,
+                      focalpoint=current_view[3])
+
+            if save:
+                mlab.savefig('/tmp/frame_' + str(iter).zfill(3) +'.png', magnification=magnification)
+                iter += 1
+            yield
+
+    anim()
+    mlab.show()
