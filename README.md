@@ -21,7 +21,8 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
 1. Python3 (at least version 3.6) is required, usually it is already present. If not install it with:
    `sudo apt-get install python3.6`
 
-2. Install (Cuda)[https://developer.nvidia.com/cuda-zone] if a graphics card is present and (PyTorch)[https://pytorch.org/get-started/locally/] according to your CUDA, Ubuntu, and Python version. At least PyTorch 1.6.0 is required.
+2. Install (Cuda)[https://developer.nvidia.com/cuda-zone] if a graphics card is present and (PyTorch)[https://pytorch.org/get-started/locally/] according to your CUDA, Ubuntu, and Python version. At least PyTorch 1.9.0 is required.
+   Earlier Pytorch Version have some Cudnn issues with Cuda 11.1.
 
 3. Install the following required python packages:
    `pip3 install tensorboardX lz4 numpy tqdm matplotlib scipy pandas h5py interpolation termcolor pyyaml scikit-learn`
@@ -52,17 +53,17 @@ If you have trouble installing `llvmlite` on Ubuntu 18.04 (a dependency of `inte
 
 On the leonhard cluster, you need to perform a few setup steps
 
-1. Load python 3.7.4 for gpu and h5py python package, you can load all required modules by executing the `cluster_setup.sh` script:
-   `module load python_gpu/3.7.4 hdf5/1.10.1`
+1. Load python 3.7.4 and h5py python package, you can load all required modules by executing the `cluster_setup.sh` script:
+   `module load python/3.7.4 hdf5 cuda/11.1.1 cudnn/8.1.0.77`
    
 2. Install required packages:
    `python -m pip install --user tqdm interpolation`
    
-3. Setup to use PyTorch 1.6.0:
+3. Setup to use PyTorch 1.9.0:
    ~~~
    bsub -Is -W 4:00 -R "rusage[mem=4096, ngpus_excl_p=1]" bash
-   module load magma/2.2.0 libffi/3.2.1 python_gpu/3.7.4 eth_proxy
-   pip install --user torch==1.6.0
+   module load magma/2.2.0 libffi/3.2.1 python/3.7.4 eth_proxy cuda/11.1.1 cudnn/8.1.0.77
+   pip3 install pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/cu111/torch_stable.html --user
    python -c 'import torch; print(torch.__version__); print("cuda avail: {0}".format(torch.cuda.is_available()))'
    ~~~
    (Packages will be installed in `$HOME/.local/lib64/python3.7/site-packages`)
