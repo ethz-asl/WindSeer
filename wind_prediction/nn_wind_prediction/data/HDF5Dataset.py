@@ -274,6 +274,7 @@ class HDF5Dataset(Dataset):
                 dx = dy = 16.6444
                 dz = 11.5789
                 turbulent_velocity_field, _ = generate_turbulence.generate_turbulence_spectral(int(self.__nx * 1.5), int(self.__ny * 1.5), int(self.__ny * 1.5), dx, dy, dz)
+                turbulent_velocity_field /= np.max(np.abs(turbulent_velocity_field)) # scale the field to have a maximum value of 1
                 turbulent_velocity_fields += [torch.from_numpy(turbulent_velocity_field.astype(np.float32)).unsqueeze(0)]
             self.__turbulent_velocity_fields = torch.cat(turbulent_velocity_fields, 0)
 
