@@ -327,15 +327,19 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
         # rescale the labels and predictions
         for i, channel in enumerate(channels_to_predict):
             if channel == 'terrain':
+                input[i] *= params.data[channel + '_scaling']
                 pred[i] *= params.data[channel + '_scaling']
                 label[i] *= params.data[channel + '_scaling']
             elif channel.startswith('u') or channel == 'nut':
+                input[i] *= scale * params.data[channel +'_scaling']
                 pred[i] *= scale * params.data[channel +'_scaling']
                 label[i] *= scale * params.data[channel + '_scaling']
             elif channel == 'p' or channel == 'turb':
+                input[i] *= scale * scale * params.data[channel + '_scaling']
                 pred[i] *= scale * scale * params.data[channel + '_scaling']
                 label[i] *= scale * scale * params.data[channel + '_scaling']
             elif channel == 'epsilon':
+                input[i] *= scale * scale * scale * params.data[channel + '_scaling']
                 pred[i] *= scale * scale * scale * params.data[channel + '_scaling']
                 label[i] *= scale * scale * scale * params.data[channel + '_scaling']
 
