@@ -124,8 +124,32 @@ class EDNNParameters(object):
         if 'max_fraction_of_sparse_data' in self.data.keys():
             kwargs['max_fraction_of_sparse_data'] = self.data['max_fraction_of_sparse_data']
 
-        if 'min_fraction_of_sparse_data' in self.data.keys():
-            kwargs['min_fraction_of_sparse_data'] = self.data['min_fraction_of_sparse_data']
+        if 'use_system_random' in self.data.keys():
+            kwargs['use_system_random'] = self.data['use_system_random']
+
+        if 'trajectory_min_length' in self.data.keys():
+            kwargs['trajectory_min_length'] = self.data['trajectory_min_length']
+
+        if 'trajectory_max_length' in self.data.keys():
+            kwargs['trajectory_max_length'] = self.data['trajectory_max_length']
+
+        if 'trajectory_min_segment_length' in self.data.keys():
+            kwargs['trajectory_min_segment_length'] = self.data['trajectory_min_segment_length']
+
+        if 'trajectory_max_segment_length' in self.data.keys():
+            kwargs['trajectory_max_segment_length'] = self.data['trajectory_max_segment_length']
+
+        if 'trajectory_step_size' in self.data.keys():
+            kwargs['trajectory_step_size'] = self.data['trajectory_step_size']
+
+        if 'trajectory_max_iter' in self.data.keys():
+            kwargs['trajectory_max_iter'] = self.data['trajectory_max_iter']
+
+        if 'trajectory_start_weighting_mode' in self.data.keys():
+            kwargs['trajectory_start_weighting_mode'] = self.data['trajectory_start_weighting_mode']
+
+        if 'trajectory_length_short_focus' in self.data.keys():
+            kwargs['trajectory_length_short_focus'] = self.data['trajectory_length_short_focus']
 
         return kwargs
 
