@@ -60,6 +60,12 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # load the model parameter
 params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yaml')
 
+if not args.compute_prediction_metrics and not args.compute_prediction_error:
+    # for a single prediction set the number of turbulence fields to 1
+    if 'n_turb_fields' in params.data.keys():
+        if params.data['n_turb_fields'] > 0:
+            params.data['n_turb_fields'] = 1
+
 # load dataset
 testset = nn_data.HDF5Dataset(args.dataset,
                               augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
