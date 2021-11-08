@@ -108,6 +108,9 @@ data:
     trajectory_max_iter: 50
     trajectory_start_weighting_mode: 0
     trajectory_length_short_focus: False
+    input_smoothing: False
+    input_smoothing_interpolation: True
+    input_smoothing_interpolation_linear: True
 
 # model parameters
 model:

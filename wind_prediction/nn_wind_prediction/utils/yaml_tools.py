@@ -151,6 +151,16 @@ class EDNNParameters(object):
         if 'trajectory_length_short_focus' in self.data.keys():
             kwargs['trajectory_length_short_focus'] = self.data['trajectory_length_short_focus']
 
+        if 'input_smoothing' in self.data.keys():
+            kwargs['input_smoothing'] = self.data['input_smoothing']
+
+        if 'input_smoothing_interpolation' in self.data.keys():
+            kwargs['input_smoothing_interpolation'] = self.data['input_smoothing_interpolation']
+
+        if 'input_smoothing_interpolation_linear' in self.data.keys():
+            kwargs['input_smoothing_interpolation_linear'] = self.data['input_smoothing_interpolation_linear']
+
+
         return kwargs
 
     def model_kwargs(self):
