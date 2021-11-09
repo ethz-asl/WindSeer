@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 import sys
 from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
+from scipy.spatial.qhull import QhullError
 
 class DataInterpolation:
     def __init__(self, device, num_channels, nx, ny, nz):
@@ -69,11 +70,15 @@ def interpolate_sparse_data(data, mask, grid_dimensions, linear=True):
         inter_nearest = NearestNDInterpolator(points, data[i, indices[:,0], indices[:,1], indices[:,2]].detach().cpu().numpy())
 
         if linear:
-            inter_linear = LinearNDInterpolator(points, data[i, indices[:,0], indices[:,1], indices[:,2]].detach().cpu().numpy())
-            vals = inter_linear(Z, Y, X)
-            vals_nearest = inter_nearest(Z, Y, X)
-            mask = np.isnan(vals)
-            vals[mask] = vals_nearest[mask]
+            try:
+                inter_linear = LinearNDInterpolator(points, data[i, indices[:,0], indices[:,1], indices[:,2]].detach().cpu().numpy())
+                vals = inter_linear(Z, Y, X)
+                vals_nearest = inter_nearest(Z, Y, X)
+                mask = np.isnan(vals)
+                vals[mask] = vals_nearest[mask]
+            except QhullError:
+                # if there is no convex hull only nearest interpolation is possible
+                vals = inter_nearest(Z, Y, X)
         else:
             vals = inter_nearest(Z, Y, X)
 
