@@ -58,7 +58,20 @@ if 'uy'  in config.params['model']['input_channels']:
 if 'uz'  in config.params['model']['input_channels']:
     input_idx.append(2)
 
-input = torch.cat([terrain, measurement[:, input_idx], mask.unsqueeze(0)], dim = 1)
+# fill the holes in the input if requested
+input_measurement = measurement
+if 'input_smoothing' in nn_params.data.keys():
+    if nn_params.data['input_smoothing']:
+        input_measurement = utils.get_smooth_data(measurement[0],
+                                                  mask[0].bool(),
+                                                  nn_params.model['model_args']['grid_size'],
+                                                  nn_params.data['input_smoothing_interpolation'],
+                                                  nn_params.data['input_smoothing_interpolation_linear']).unsqueeze(0)
+
+
+
+
+input = torch.cat([terrain, input_measurement[:, input_idx], mask.unsqueeze(0)], dim = 1)
 
 with torch.no_grad():
     prediction = utils.predict(net, input, scale, config.params['model'])

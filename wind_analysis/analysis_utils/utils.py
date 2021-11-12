@@ -4,6 +4,7 @@ import torch
 from torch.optim.optimizer import Optimizer
 
 import nn_wind_prediction.data as nn_data
+import nn_wind_prediction.utils as nn_utils
 from .bin_log_data import bin_log_data
 from .extract_cosmo_data import get_cosmo_cell
 from .get_mapgeo_terrain import get_terrain
@@ -284,3 +285,18 @@ def predict(net, input, scale, config):
             raise ValueError('Unknown channel: ' + channel)
 
     return prediction
+
+def get_smooth_data(data, mask, grid_size, interpolation, linear_interpolation):
+    if interpolation:
+        return nn_utils.interpolate_sparse_data(data, mask, grid_size, linear_interpolation)
+    else:
+        data_smoothed = torch.ones_like(data)
+        scale = data.sum(-1).sum(-1).sum(-1) / mask.sum()
+
+        data_smoothed *= scale.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+
+        for i in range(data.shape[0]):
+            data_smoothed[i, mask] = data[i, mask]
+
+        return data_smoothed
+
