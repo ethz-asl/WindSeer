@@ -128,7 +128,6 @@ if args.save:
         z_int = []
         for f in args.factors:
             nz = int(n * args.height_ratio)
-            print(nz)
             x_grid = (np.linspace(0,n-1,n) - 0.5 * n) * args.resolution_hor / float(f) + args.x_shift
             y_grid = (np.linspace(0,n-1,n) - 0.5 * n) * args.resolution_hor / float(f) + args.y_shift
             z_grid = (np.linspace(0,nz-1,nz) - 2.5) * args.resolution_ver / float(f)
@@ -179,8 +178,48 @@ if args.save:
                 ds_file.create_group(key)
                 ds_file[key].create_dataset('terrain', data=terrain)
 
+                # convert the prediction lines
+                ds_file[key].create_group('lines')
+
+                ds_file[key]['lines'].create_group('lineA_2m')
+                ds_file[key]['lines'].create_group('lineA_5m')
+                t = np.linspace(-200, 200, 401)
+                x = np.cos(31.0/180.0*np.pi) * t
+                y = np.sin(31.0/180.0*np.pi) * t
+                z = grid_interpolator((y,x))
+
+                ds_file[key]['lines']['lineA_2m'].create_dataset('x', data=x_inter(x))
+                ds_file[key]['lines']['lineA_2m'].create_dataset('y', data=y_inter(y))
+                ds_file[key]['lines']['lineA_2m'].create_dataset('z', data=z_inter(z + 2.0))
+                ds_file[key]['lines']['lineA_2m'].create_dataset('terrain', data=z_inter(z))
+                ds_file[key]['lines']['lineA_2m'].create_dataset('dist', data=t)
+                ds_file[key]['lines']['lineA_5m'].create_dataset('x', data=x_inter(x))
+                ds_file[key]['lines']['lineA_5m'].create_dataset('y', data=y_inter(y))
+                ds_file[key]['lines']['lineA_5m'].create_dataset('z', data=z_inter(z + 5.0))
+                ds_file[key]['lines']['lineA_5m'].create_dataset('terrain', data=z_inter(z))
+                ds_file[key]['lines']['lineA_5m'].create_dataset('dist', data=t)
+
+                ds_file[key]['lines'].create_group('lineB_2m')
+                ds_file[key]['lines'].create_group('lineB_5m')
+                x = np.cos(0.0) * t
+                y = np.sin(0.0) * t
+                z = grid_interpolator((y,x))
+
+                ds_file[key]['lines']['lineB_2m'].create_dataset('x', data=x_inter(x))
+                ds_file[key]['lines']['lineB_2m'].create_dataset('y', data=y_inter(y))
+                ds_file[key]['lines']['lineB_2m'].create_dataset('z', data=z_inter(z + 2.0))
+                ds_file[key]['lines']['lineB_2m'].create_dataset('terrain', data=z_inter(z))
+                ds_file[key]['lines']['lineB_2m'].create_dataset('dist', data=t)
+                ds_file[key]['lines']['lineB_5m'].create_dataset('x', data=x_inter(x))
+                ds_file[key]['lines']['lineB_5m'].create_dataset('y', data=y_inter(y))
+                ds_file[key]['lines']['lineB_5m'].create_dataset('z', data=z_inter(z + 5.0))
+                ds_file[key]['lines']['lineB_5m'].create_dataset('terrain', data=z_inter(z))
+                ds_file[key]['lines']['lineB_5m'].create_dataset('dist', data=t)
+
+                # Add the mast measurements
+                ds_file[key].create_group('masts')
                 for ms_post in meas.keys():
-                    ds_file[key].create_group(ms_post)
+                    ds_file[key]['masts'].create_group(ms_post)
                     for d_key in meas[ms_post].keys():
                         if d_key == 'pos':
                             pos_idx = copy.copy(meas[ms_post][d_key])
@@ -188,9 +227,9 @@ if args.save:
                             pos_idx[:,1] = y_inter(pos_idx[:,1])
                             pos_idx[:,2] = z_inter(pos_idx[:,2])
 
-                            ds_file[key][ms_post].create_dataset(d_key, data=pos_idx)
+                            ds_file[key]['masts'][ms_post].create_dataset(d_key, data=pos_idx)
                         else:
-                            ds_file[key][ms_post].create_dataset(d_key, data=meas[ms_post][d_key])
+                            ds_file[key]['masts'][ms_post].create_dataset(d_key, data=meas[ms_post][d_key])
 
         ds_file.close()
 
