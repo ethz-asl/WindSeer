@@ -11,7 +11,7 @@ import nn_wind_prediction.models as models
 import nn_wind_prediction.utils as nn_utils
 from analysis_utils import utils
 
-def predict_case(dataset, net, index, input_mast, config):
+def predict_case(dataset, net, index, input_mast, config, speedup_profiles=False, reference_mast=None):
     # load the data
     h5_file = h5py.File(dataset, 'r')
     scale_keys = list(h5_file.keys())
@@ -20,7 +20,7 @@ def predict_case(dataset, net, index, input_mast, config):
     terrain = torch.from_numpy(h5_file[scale_keys[index]]['terrain'][...])
     input_meas = torch.zeros(tuple([3]) + tuple(terrain.shape))
     input_mask = torch.zeros(tuple(terrain.shape))
-    ds_input = h5_file[scale_keys[args.index]][input_mast]
+    ds_input = h5_file[scale_keys[args.index]]['masts'][input_mast]
     # shuffle measurements according to height making sure that we fill always the highest value into the respective cell
     positions = ds_input['pos'][...]
     u_vel = ds_input['u'][...]
@@ -35,6 +35,7 @@ def predict_case(dataset, net, index, input_mast, config):
 
         if (u*u + v*v + w+w) > 0.0:
             meas_idx = np.round(positions[idx]).astype(np.int)
+            print(meas_idx)
             if meas_idx.min() >=0 and meas_idx[0] < input_mask.shape[2] and meas_idx[1] < input_mask.shape[1] and meas_idx[2] < input_mask.shape[0]:
                 input_mask[meas_idx[2], meas_idx[1], meas_idx[0]] = 1
                 input_meas[0,meas_idx[2], meas_idx[1], meas_idx[0]] = u
@@ -109,24 +110,82 @@ def predict_case(dataset, net, index, input_mast, config):
         'in_bounds_3d': [],
         }
 
-    for mast in ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'M8', 'M9']:
-        if mast in h5_file[scale_keys[index]].keys():
-            ds_mast = h5_file[scale_keys[index]][mast]
-            positions = ds_mast['pos'][...]
+    for mast in h5_file[scale_keys[index]]['masts'].keys():
+        ds_mast = h5_file[scale_keys[index]]['masts'][mast]
+        positions = ds_mast['pos'][...]
 
-            u_meas = ds_mast['u'][...]
-            v_meas = ds_mast['v'][...]
-            w_meas = ds_mast['w'][...]
-            s_meas = ds_mast['s'][...]
-            tke_meas = ds_mast['tke'][...]
+        u_meas = ds_mast['u'][...]
+        v_meas = ds_mast['v'][...]
+        w_meas = ds_mast['w'][...]
+        s_meas = ds_mast['s'][...]
+        tke_meas = ds_mast['tke'][...]
 
-            lower_bound = (positions < 0).any(axis=1)
-            upper_bound = (positions > [nx-1, ny-1, nz-1]).any(axis=1)
+        lower_bound = (positions < 0).any(axis=1)
+        upper_bound = (positions > [nx-1, ny-1, nz-1]).any(axis=1)
 
-            extrapolated = [lb or ub for lb, ub in zip(lower_bound, upper_bound)]
-            in_bounds = [not e for e in extrapolated]
+        extrapolated = [lb or ub for lb, ub in zip(lower_bound, upper_bound)]
+        in_bounds = [not e for e in extrapolated]
 
-            positions_clipped = copy.copy(positions)
+        positions_clipped = copy.copy(positions)
+        positions_clipped[:, 0] = positions_clipped[:, 0].clip(0, nx-1)
+        positions_clipped[:, 1] = positions_clipped[:, 1].clip(0, ny-1)
+        positions_clipped[:, 2] = positions_clipped[:, 2].clip(0, nz-1)
+
+        u_pred = u_interpolator(np.fliplr(positions_clipped))
+        v_pred = v_interpolator(np.fliplr(positions_clipped))
+        w_pred = w_interpolator(np.fliplr(positions_clipped))
+        s_pred = np.sqrt(u_pred**2 + v_pred**2 + w_pred**2)
+        if tke_interpolator:
+            tke_pred = tke_interpolator(np.fliplr(positions_clipped))
+
+        meas_3d_available = u_meas != 0
+
+        results['s_meas'].extend(s_meas)
+        results['s_pred'].extend(s_pred)
+
+        results['u_meas'].extend(u_meas[meas_3d_available])
+        results['v_meas'].extend(v_meas[meas_3d_available])
+        results['w_meas'].extend(w_meas[meas_3d_available])
+        results['tke_meas'].extend(tke_meas[meas_3d_available])
+
+        results['u_pred'].extend(u_pred[meas_3d_available])
+        results['v_pred'].extend(v_pred[meas_3d_available])
+        results['w_pred'].extend(w_pred[meas_3d_available])
+        if tke_interpolator:
+            results['tke_pred'].extend(tke_pred[meas_3d_available])
+
+        labels_all = [mast + '_' + "{:.2f}".format(positions[idx, 2]) for idx in range(len(s_meas))]
+        labels_3d = [mast + '_' + "{:.2f}".format(positions[idx, 2]) for idx in range(len(s_meas)) if meas_3d_available[idx]]
+
+        results['labels_all'].extend(labels_all)
+        results['labels_3d'].extend(labels_3d)
+        results['extrapolated'].extend(extrapolated)
+        results['in_bounds'].extend(in_bounds)
+        results['extrapolated_3d'].extend([e for e, a in zip(extrapolated, meas_3d_available) if a])
+        results['in_bounds_3d'].extend([i for i, a in zip(in_bounds, meas_3d_available) if a])
+
+    for key in results.keys():
+        if 'meas' in key or 'pred' in key:
+            results[key] = np.array(results[key])
+
+    ret = {
+        'results': results,
+        'turb_predicted': turb_predicted,
+        'prediction': prediction,
+        'input': input,
+        'terrain': terrain,
+        }
+
+    if speedup_profiles:
+        ret['profiles'] = {}
+        ds_lines = h5_file[scale_keys[args.index]]['lines']
+        for line_key in ds_lines.keys():
+
+            x = ds_lines[line_key]['x'][...]
+            y = ds_lines[line_key]['y'][...]
+            z = ds_lines[line_key]['z'][...]
+
+            positions_clipped = copy.copy(np.stack((x,y,z), axis=1))
             positions_clipped[:, 0] = positions_clipped[:, 0].clip(0, nx-1)
             positions_clipped[:, 1] = positions_clipped[:, 1].clip(0, ny-1)
             positions_clipped[:, 2] = positions_clipped[:, 2].clip(0, nz-1)
@@ -135,40 +194,26 @@ def predict_case(dataset, net, index, input_mast, config):
             v_pred = v_interpolator(np.fliplr(positions_clipped))
             w_pred = w_interpolator(np.fliplr(positions_clipped))
             s_pred = np.sqrt(u_pred**2 + v_pred**2 + w_pred**2)
-            if tke_interpolator:
-                tke_pred = tke_interpolator(np.fliplr(positions_clipped))
 
-            meas_3d_available = u_meas != 0
+            if reference_mast:
+                ds_mast = h5_file[scale_keys[index]]['masts'][reference_mast]
+                positions = ds_mast['pos'][...]
+                s_meas = ds_mast['s'][...]
 
-            results['s_meas'].extend(s_meas)
-            results['s_pred'].extend(s_pred)
+                idx_ref = np.argmin(np.abs(positions[:,2] - z[0]))
+                s_ref = s_meas[idx_ref]
 
-            results['u_meas'].extend(u_meas[meas_3d_available])
-            results['v_meas'].extend(v_meas[meas_3d_available])
-            results['w_meas'].extend(w_meas[meas_3d_available])
-            results['tke_meas'].extend(tke_meas[meas_3d_available])
+            else:
+                s_ref = s_pred[0]
 
-            results['u_pred'].extend(u_pred[meas_3d_available])
-            results['v_pred'].extend(v_pred[meas_3d_available])
-            results['w_pred'].extend(w_pred[meas_3d_available])
-            if tke_interpolator:
-                results['tke_pred'].extend(tke_pred[meas_3d_available])
+            ret['profiles'][line_key] = {
+                'terrain': ds_lines[line_key]['terrain'][...],
+                'dist': ds_lines[line_key]['dist'][...],
+                'z': z,
+                'speedup': (s_pred - s_ref) / s_ref,
+                }
 
-            labels_all = [mast + '_' + "{:.2f}".format(positions[idx, 2]) for idx in range(len(s_meas))]
-            labels_3d = [mast + '_' + "{:.2f}".format(positions[idx, 2]) for idx in range(len(s_meas)) if meas_3d_available[idx]]
-
-            results['labels_all'].extend(labels_all)
-            results['labels_3d'].extend(labels_3d)
-            results['extrapolated'].extend(extrapolated)
-            results['in_bounds'].extend(in_bounds)
-            results['extrapolated_3d'].extend([e for e, a in zip(extrapolated, meas_3d_available) if a])
-            results['in_bounds_3d'].extend([i for i, a in zip(in_bounds, meas_3d_available) if a])
-
-    for key in results.keys():
-        if 'meas' in key or 'pred' in key:
-            results[key] = np.array(results[key])
-
-    return results, turb_predicted, prediction, input, terrain
+    return ret
 
 parser = argparse.ArgumentParser(description='Predict the flow based on the sparse measurements')
 parser.add_argument('-d', dest='dataset', required=True, help='The dataset file')
@@ -176,9 +221,11 @@ parser.add_argument('-m', dest='input_mast', required=True, help='The input meas
 parser.add_argument('-i', dest='index', default=0, type=int, help='Index of the case in the dataset used for the prediction')
 parser.add_argument('-model_dir', dest='model_dir', required=True, help='The directory of the model')
 parser.add_argument('-model_version', dest='model_version', default='latest', help='The model version')
+parser.add_argument('-reference_mast', help='The reference mast (used for the speedup calculation)')
 parser.add_argument('--mayavi', action='store_true', help='Generate some extra plots using mayavi')
 parser.add_argument('--no_gpu', action='store_true', help='Force CPU prediction')
 parser.add_argument('--benchmark', action='store_true', help='Benchmark the prediction by looping through all input masks')
+parser.add_argument('--profile', action='store_true', help='Compute the speedup profiles along lines')
 args = parser.parse_args()
 
 if args.no_gpu:
@@ -206,34 +253,32 @@ if args.benchmark:
 
     h5_file = h5py.File(args.dataset, 'r')
     scale_keys = list(h5_file.keys())
-    mast_keys = list(h5_file[scale_keys[args.index]].keys())
+    mast_keys = list(h5_file[scale_keys[args.index]]['masts'].keys())
     h5_file.close()
 
-    for mast in ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'M8', 'M9']:
-        if mast in mast_keys:
-            ret = predict_case(args.dataset, net, args.index, mast, config)
-            if ret:
-                results_case, turb_predicted, _, _, _ = ret
-                results[mast] = results_case
-            else:
-                print('Input mast outside the prediction region')
+    for mast in mast_keys:
+        ret = predict_case(args.dataset, net, args.index, mast, config)
+        if ret:
+            results[mast] = ret['results']
+        else:
+            print('Input mast outside the prediction region')
 
     all_measurements = {}
     for key in results.keys():
         print('---------------------------------------------------')
         print('Prediction using mast: ' + key)
-        print('Error U: ' + str(np.mean(np.abs(results[key]['u_meas'] - results[key]['u_pred']))))
-        print('Error V: ' + str(np.mean(np.abs(results[key]['v_meas'] - results[key]['v_pred']))))
-        print('Error W: ' + str(np.mean(np.abs(results[key]['w_meas'] - results[key]['w_pred']))))
-        if turb_predicted:
-            print('Error TKE: ' + str(np.mean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred']))))
-        print('Error S: ' + str(np.mean(np.abs(results[key]['s_meas'] - results[key]['s_pred']))))
-        print('Error U rel: ' + str(np.mean(np.abs(results[key]['u_meas'] - results[key]['u_pred'])/np.abs(results[key]['u_meas']))))
-        print('Error V rel: ' + str(np.mean(np.abs(results[key]['v_meas'] - results[key]['v_pred'])/np.abs(results[key]['v_meas']))))
-        print('Error W rel: ' + str(np.mean(np.abs(results[key]['w_meas'] - results[key]['w_pred'])/np.abs(results[key]['w_meas']))))
-        if turb_predicted:
-            print('Error TKE rel: ' + str(np.mean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred'])/np.abs(results[key]['tke_meas']))))
-        print('Error S rel: ' + str(np.mean(np.abs(results[key]['s_meas'] - results[key]['s_pred'])/np.abs(results[key]['s_meas']))))
+        print('Error U: ' + str(np.nanmean(np.abs(results[key]['u_meas'] - results[key]['u_pred']))))
+        print('Error V: ' + str(np.nanmean(np.abs(results[key]['v_meas'] - results[key]['v_pred']))))
+        print('Error W: ' + str(np.nanmean(np.abs(results[key]['w_meas'] - results[key]['w_pred']))))
+        if ret['turb_predicted']:
+            print('Error TKE: ' + str(np.nanmean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred']))))
+        print('Error S: ' + str(np.nanmean(np.abs(results[key]['s_meas'] - results[key]['s_pred']))))
+        print('Error U rel: ' + str(np.nanmean(np.abs(results[key]['u_meas'] - results[key]['u_pred'])/np.abs(results[key]['u_meas']))))
+        print('Error V rel: ' + str(np.nanmean(np.abs(results[key]['v_meas'] - results[key]['v_pred'])/np.abs(results[key]['v_meas']))))
+        print('Error W rel: ' + str(np.nanmean(np.abs(results[key]['w_meas'] - results[key]['w_pred'])/np.abs(results[key]['w_meas']))))
+        if ret['turb_predicted']:
+            print('Error TKE rel: ' + str(np.nanmean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred'])/np.abs(results[key]['tke_meas']))))
+        print('Error S rel: ' + str(np.nanmean(np.abs(results[key]['s_meas'] - results[key]['s_pred'])/np.abs(results[key]['s_meas']))))
 
         for field in results[key].keys():
             if 'meas' in field or 'pred' in field:
@@ -245,18 +290,18 @@ if args.benchmark:
 
     print('---------------------------------------------------')
     print('Prediction error all masts')
-    print('Error U: ' + str(np.mean(np.abs(all_measurements['u_meas'] - all_measurements['u_pred']))))
-    print('Error V: ' + str(np.mean(np.abs(all_measurements['v_meas'] - all_measurements['v_pred']))))
-    print('Error W: ' + str(np.mean(np.abs(all_measurements['w_meas'] - all_measurements['w_pred']))))
-    if turb_predicted:
-        print('Error TKE: ' + str(np.mean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred']))))
-    print('Error S: ' + str(np.mean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred']))))
-    print('Error U rel: ' + str(np.mean(np.abs(all_measurements['u_meas'] - all_measurements['u_pred'])/np.abs(all_measurements['u_meas']))))
-    print('Error V rel: ' + str(np.mean(np.abs(all_measurements['v_meas'] - all_measurements['v_pred'])/np.abs(all_measurements['v_meas']))))
-    print('Error W rel: ' + str(np.mean(np.abs(all_measurements['w_meas'] - all_measurements['w_pred'])/np.abs(all_measurements['w_meas']))))
-    if turb_predicted:
-        print('Error TKE rel: ' + str(np.mean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred'])/np.abs(all_measurements['tke_meas']))))
-    print('Error S rel: ' + str(np.mean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred'])/np.abs(all_measurements['s_meas']))))
+    print('Error U: ' + str(np.nanmean(np.abs(all_measurements['u_meas'] - all_measurements['u_pred']))))
+    print('Error V: ' + str(np.nanmean(np.abs(all_measurements['v_meas'] - all_measurements['v_pred']))))
+    print('Error W: ' + str(np.nanmean(np.abs(all_measurements['w_meas'] - all_measurements['w_pred']))))
+    if ret['turb_predicted']:
+        print('Error TKE: ' + str(np.nanmean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred']))))
+    print('Error S: ' + str(np.nanmean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred']))))
+    print('Error U rel: ' + str(np.nanmean(np.abs(all_measurements['u_meas'] - all_measurements['u_pred'])/np.abs(all_measurements['u_meas']))))
+    print('Error V rel: ' + str(np.nanmean(np.abs(all_measurements['v_meas'] - all_measurements['v_pred'])/np.abs(all_measurements['v_meas']))))
+    print('Error W rel: ' + str(np.nanmean(np.abs(all_measurements['w_meas'] - all_measurements['w_pred'])/np.abs(all_measurements['w_meas']))))
+    if ret['turb_predicted']:
+        print('Error TKE rel: ' + str(np.nanmean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred'])/np.abs(all_measurements['tke_meas']))))
+    print('Error S rel: ' + str(np.nanmean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred'])/np.abs(all_measurements['s_meas']))))
     print('---------------------------------------------------')
 
     plt.figure()
@@ -291,7 +336,7 @@ if args.benchmark:
     plt.legend()
     plt.title('W')
 
-    if turb_predicted:
+    if ret['turb_predicted']:
         plt.figure()
         for key in results.keys():
             plt.plot(results[key]['tke_meas'], results[key]['tke_pred'], 'o', label=key)
@@ -304,32 +349,30 @@ if args.benchmark:
     plt.show()
 
 else:
-    ret = predict_case(args.dataset, net, args.index, args.input_mast, config)
+    ret = predict_case(args.dataset, net, args.index, args.input_mast, config, args.profile, args.reference_mast)
     
     if not ret:
         raise ValueError('No prediction because input mast not in prediction domain')
 
-    results, turb_predicted, prediction, input, terrain = ret
-
-    x_all = np.linspace(0, len(results['labels_all'])-1, len(results['labels_all']))
-    x_3d = np.linspace(0, len(results['labels_3d'])-1, len(results['labels_3d']))
+    x_all = np.linspace(0, len(ret['results']['labels_all'])-1, len(ret['results']['labels_all']))
+    x_3d = np.linspace(0, len(ret['results']['labels_3d'])-1, len(ret['results']['labels_3d']))
 
     num_plots = 3
-    if turb_predicted:
+    if ret['turb_predicted']:
         num_plots = 4
     fig, ah = plt.subplots(num_plots, 1, squeeze=False)
     ah[0][0].set_title('Prediction vs Measurement')
-    ah[0][0].plot(x_3d, results['u_meas'], 'sr', label='measurements')
-    ah[0][0].plot(x_3d[results['extrapolated_3d']], results['u_pred'][results['extrapolated_3d']], '^c', label='prediction extrapolated')
-    ah[0][0].plot(x_3d[results['in_bounds_3d']], results['u_pred'][results['in_bounds_3d']], 'ob', label='prediction')
+    ah[0][0].plot(x_3d, ret['results']['u_meas'], 'sr', label='measurements')
+    ah[0][0].plot(x_3d[ret['results']['extrapolated_3d']], ret['results']['u_pred'][ret['results']['extrapolated_3d']], '^c', label='prediction extrapolated')
+    ah[0][0].plot(x_3d[ret['results']['in_bounds_3d']], ret['results']['u_pred'][ret['results']['in_bounds_3d']], 'ob', label='prediction')
 
-    ah[1][0].plot(x_3d, results['v_meas'], 'sr', label='measurements')
-    ah[1][0].plot(x_3d[results['extrapolated_3d']], results['v_pred'][results['extrapolated_3d']], '^c', label='prediction extrapolated')
-    ah[1][0].plot(x_3d[results['in_bounds_3d']], results['v_pred'][results['in_bounds_3d']], 'ob', label='prediction')
+    ah[1][0].plot(x_3d, ret['results']['v_meas'], 'sr', label='measurements')
+    ah[1][0].plot(x_3d[ret['results']['extrapolated_3d']], ret['results']['v_pred'][ret['results']['extrapolated_3d']], '^c', label='prediction extrapolated')
+    ah[1][0].plot(x_3d[ret['results']['in_bounds_3d']], ret['results']['v_pred'][ret['results']['in_bounds_3d']], 'ob', label='prediction')
 
-    ah[2][0].plot(x_3d, results['w_meas'], 'sr', label='measurements')
-    ah[2][0].plot(x_3d[results['extrapolated_3d']], results['w_pred'][results['extrapolated_3d']], '^c', label='prediction extrapolated')
-    ah[2][0].plot(x_3d[results['in_bounds_3d']], results['w_pred'][results['in_bounds_3d']], 'ob', label='prediction')
+    ah[2][0].plot(x_3d, ret['results']['w_meas'], 'sr', label='measurements')
+    ah[2][0].plot(x_3d[ret['results']['extrapolated_3d']], ret['results']['w_pred'][ret['results']['extrapolated_3d']], '^c', label='prediction extrapolated')
+    ah[2][0].plot(x_3d[ret['results']['in_bounds_3d']], ret['results']['w_pred'][ret['results']['in_bounds_3d']], 'ob', label='prediction')
 
     ah[0][0].set_ylabel('U [m/s]')
     ah[1][0].set_ylabel('V [m/s]')
@@ -340,29 +383,29 @@ else:
 
     ah[0][0].legend()
 
-    if turb_predicted:
-        ah[3][0].plot(x_3d, results['tke_meas'], 'sr', label='measurements')
-        ah[3][0].plot(x_3d[results['extrapolated_3d']], results['tke_pred'][results['extrapolated_3d']], '^c', label='prediction extrapolated')
-        ah[3][0].plot(x_3d[results['in_bounds_3d']], results['tke_pred'][results['in_bounds_3d']], 'ob', label='prediction')
+    if ret['turb_predicted']:
+        ah[3][0].plot(x_3d, ret['results']['tke_meas'], 'sr', label='measurements')
+        ah[3][0].plot(x_3d[ret['results']['extrapolated_3d']], ret['results']['tke_pred'][ret['results']['extrapolated_3d']], '^c', label='prediction extrapolated')
+        ah[3][0].plot(x_3d[ret['results']['in_bounds_3d']], ret['results']['tke_pred'][ret['results']['in_bounds_3d']], 'ob', label='prediction')
         ah[3][0].set_ylabel('TKE [m^2/s^2]')
 
         ah[2][0].axes.xaxis.set_visible(False)
-        ah[3][0].set_xticks(np.arange(len(results['labels_3d'])))
-        ah[3][0].set_xticklabels(results['labels_3d'], rotation='vertical')
+        ah[3][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
+        ah[3][0].set_xticklabels(ret['results']['labels_3d'], rotation='vertical')
 
     else:
-        ah[2][0].set_xticks(np.arange(len(results['labels_3d'])))
-        ah[2][0].set_xticklabels(results['labels_3d'], rotation='vertical')
+        ah[2][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
+        ah[2][0].set_xticklabels(ret['results']['labels_3d'], rotation='vertical')
 
     fig, ah = plt.subplots(num_plots, 1, squeeze=False)
     ah[0][0].set_title('Prediction Errors')
-    ah[0][0].plot(x_3d[results['extrapolated_3d']], results['u_meas'][results['extrapolated_3d']] - results['u_pred'][results['extrapolated_3d']], '^c', label='extrapolated')
-    ah[1][0].plot(x_3d[results['extrapolated_3d']], results['v_meas'][results['extrapolated_3d']] - results['v_pred'][results['extrapolated_3d']], '^c', label='extrapolated')
-    ah[2][0].plot(x_3d[results['extrapolated_3d']], results['w_meas'][results['extrapolated_3d']] - results['w_pred'][results['extrapolated_3d']], '^c', label='extrapolated')
+    ah[0][0].plot(x_3d[ret['results']['extrapolated_3d']], ret['results']['u_meas'][ret['results']['extrapolated_3d']] - ret['results']['u_pred'][ret['results']['extrapolated_3d']], '^c', label='extrapolated')
+    ah[1][0].plot(x_3d[ret['results']['extrapolated_3d']], ret['results']['v_meas'][ret['results']['extrapolated_3d']] - ret['results']['v_pred'][ret['results']['extrapolated_3d']], '^c', label='extrapolated')
+    ah[2][0].plot(x_3d[ret['results']['extrapolated_3d']], ret['results']['w_meas'][ret['results']['extrapolated_3d']] - ret['results']['w_pred'][ret['results']['extrapolated_3d']], '^c', label='extrapolated')
 
-    ah[0][0].plot(x_3d[results['in_bounds_3d']], results['u_meas'][results['in_bounds_3d']] - results['u_pred'][results['in_bounds_3d']], 'ob', label='in bounds')
-    ah[1][0].plot(x_3d[results['in_bounds_3d']], results['v_meas'][results['in_bounds_3d']] - results['v_pred'][results['in_bounds_3d']], 'ob', label='in bounds')
-    ah[2][0].plot(x_3d[results['in_bounds_3d']], results['w_meas'][results['in_bounds_3d']] - results['w_pred'][results['in_bounds_3d']], 'ob', label='in bounds')
+    ah[0][0].plot(x_3d[ret['results']['in_bounds_3d']], ret['results']['u_meas'][ret['results']['in_bounds_3d']] - ret['results']['u_pred'][ret['results']['in_bounds_3d']], 'ob', label='in bounds')
+    ah[1][0].plot(x_3d[ret['results']['in_bounds_3d']], ret['results']['v_meas'][ret['results']['in_bounds_3d']] - ret['results']['v_pred'][ret['results']['in_bounds_3d']], 'ob', label='in bounds')
+    ah[2][0].plot(x_3d[ret['results']['in_bounds_3d']], ret['results']['w_meas'][ret['results']['in_bounds_3d']] - ret['results']['w_pred'][ret['results']['in_bounds_3d']], 'ob', label='in bounds')
 
     ah[0][0].set_ylabel('Error U [m/s]')
     ah[1][0].set_ylabel('Error V [m/s]')
@@ -373,28 +416,28 @@ else:
 
     ah[0][0].legend()
 
-    if turb_predicted:
-        ah[3][0].plot(x_3d[results['extrapolated_3d']], results['tke_meas'][results['extrapolated_3d']] - results['tke_pred'][results['extrapolated_3d']], '^c', label='extrapolated')
-        ah[3][0].plot(x_3d[results['in_bounds_3d']], results['tke_meas'][results['in_bounds_3d']] - results['tke_pred'][results['in_bounds_3d']], 'ob', label='in bounds')
+    if ret['turb_predicted']:
+        ah[3][0].plot(x_3d[ret['results']['extrapolated_3d']], ret['results']['tke_meas'][ret['results']['extrapolated_3d']] - ret['results']['tke_pred'][ret['results']['extrapolated_3d']], '^c', label='extrapolated')
+        ah[3][0].plot(x_3d[ret['results']['in_bounds_3d']], ret['results']['tke_meas'][ret['results']['in_bounds_3d']] - ret['results']['tke_pred'][ret['results']['in_bounds_3d']], 'ob', label='in bounds')
         ah[3][0].set_ylabel('Error TKE [m^2/s^2]')
 
         ah[2][0].axes.xaxis.set_visible(False)
-        ah[3][0].set_xticks(np.arange(len(results['labels_3d'])))
-        ah[3][0].set_xticklabels(results['labels_3d'], rotation='vertical')
+        ah[3][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
+        ah[3][0].set_xticklabels(ret['results']['labels_3d'], rotation='vertical')
 
     else:
-        ah[2][0].set_xticks(np.arange(len(results['labels_3d'])))
-        ah[2][0].set_xticklabels(results['labels_3d'], rotation='vertical')
+        ah[2][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
+        ah[2][0].set_xticklabels(ret['results']['labels_3d'], rotation='vertical')
 
     fig, ah = plt.subplots(num_plots, 1, squeeze=False)
     ah[0][0].set_title('Relative Prediction Errors')
-    ah[0][0].plot(x_3d[results['extrapolated_3d']], (results['u_meas'][results['extrapolated_3d']] - results['u_pred'][results['extrapolated_3d']]) / np.abs(results['u_meas'][results['extrapolated_3d']]), '^c', label='extrapolated')
-    ah[1][0].plot(x_3d[results['extrapolated_3d']], (results['v_meas'][results['extrapolated_3d']] - results['v_pred'][results['extrapolated_3d']]) / np.abs(results['v_meas'][results['extrapolated_3d']]), '^c', label='extrapolated')
-    ah[2][0].plot(x_3d[results['extrapolated_3d']], (results['w_meas'][results['extrapolated_3d']] - results['w_pred'][results['extrapolated_3d']]) / np.abs(results['w_meas'][results['extrapolated_3d']]), '^c', label='extrapolated')
+    ah[0][0].plot(x_3d[ret['results']['extrapolated_3d']], (ret['results']['u_meas'][ret['results']['extrapolated_3d']] - ret['results']['u_pred'][ret['results']['extrapolated_3d']]) / np.abs(ret['results']['u_meas'][ret['results']['extrapolated_3d']]), '^c', label='extrapolated')
+    ah[1][0].plot(x_3d[ret['results']['extrapolated_3d']], (ret['results']['v_meas'][ret['results']['extrapolated_3d']] - ret['results']['v_pred'][ret['results']['extrapolated_3d']]) / np.abs(ret['results']['v_meas'][ret['results']['extrapolated_3d']]), '^c', label='extrapolated')
+    ah[2][0].plot(x_3d[ret['results']['extrapolated_3d']], (ret['results']['w_meas'][ret['results']['extrapolated_3d']] - ret['results']['w_pred'][ret['results']['extrapolated_3d']]) / np.abs(ret['results']['w_meas'][ret['results']['extrapolated_3d']]), '^c', label='extrapolated')
 
-    ah[0][0].plot(x_3d[results['in_bounds_3d']], (results['u_meas'][results['in_bounds_3d']] - results['u_pred'][results['in_bounds_3d']]) / np.abs(results['u_meas'][results['in_bounds_3d']]), 'ob', label='in bounds')
-    ah[1][0].plot(x_3d[results['in_bounds_3d']], (results['v_meas'][results['in_bounds_3d']] - results['v_pred'][results['in_bounds_3d']]) / np.abs(results['v_meas'][results['in_bounds_3d']]), 'ob', label='in bounds')
-    ah[2][0].plot(x_3d[results['in_bounds_3d']], (results['w_meas'][results['in_bounds_3d']] - results['w_pred'][results['in_bounds_3d']]) / np.abs(results['w_meas'][results['in_bounds_3d']]), 'ob', label='in bounds')
+    ah[0][0].plot(x_3d[ret['results']['in_bounds_3d']], (ret['results']['u_meas'][ret['results']['in_bounds_3d']] - ret['results']['u_pred'][ret['results']['in_bounds_3d']]) / np.abs(ret['results']['u_meas'][ret['results']['in_bounds_3d']]), 'ob', label='in bounds')
+    ah[1][0].plot(x_3d[ret['results']['in_bounds_3d']], (ret['results']['v_meas'][ret['results']['in_bounds_3d']] - ret['results']['v_pred'][ret['results']['in_bounds_3d']]) / np.abs(ret['results']['v_meas'][ret['results']['in_bounds_3d']]), 'ob', label='in bounds')
+    ah[2][0].plot(x_3d[ret['results']['in_bounds_3d']], (ret['results']['w_meas'][ret['results']['in_bounds_3d']] - ret['results']['w_pred'][ret['results']['in_bounds_3d']]) / np.abs(ret['results']['w_meas'][ret['results']['in_bounds_3d']]), 'ob', label='in bounds')
 
     ah[0][0].set_ylabel('Error Rel U [-]')
     ah[1][0].set_ylabel('Error Rel V [-]')
@@ -405,70 +448,80 @@ else:
 
     ah[0][0].legend()
 
-    if turb_predicted:
-        ah[3][0].plot(x_3d[results['extrapolated_3d']], (results['tke_meas'][results['extrapolated_3d']] - results['tke_pred'][results['extrapolated_3d']]) / np.abs(results['tke_meas'][results['extrapolated_3d']]), '^c', label='extrapolated')
-        ah[3][0].plot(x_3d[results['in_bounds_3d']], (results['tke_meas'][results['in_bounds_3d']] - results['tke_pred'][results['in_bounds_3d']]) / np.abs(results['tke_meas'][results['in_bounds_3d']]), 'ob', label='in bounds')
+    if ret['turb_predicted']:
+        ah[3][0].plot(x_3d[ret['results']['extrapolated_3d']], (ret['results']['tke_meas'][ret['results']['extrapolated_3d']] - ret['results']['tke_pred'][ret['results']['extrapolated_3d']]) / np.abs(ret['results']['tke_meas'][ret['results']['extrapolated_3d']]), '^c', label='extrapolated')
+        ah[3][0].plot(x_3d[ret['results']['in_bounds_3d']], (ret['results']['tke_meas'][ret['results']['in_bounds_3d']] - ret['results']['tke_pred'][ret['results']['in_bounds_3d']]) / np.abs(ret['results']['tke_meas'][ret['results']['in_bounds_3d']]), 'ob', label='in bounds')
         ah[3][0].set_ylabel('Error Rel TKE [-]')
 
         ah[2][0].axes.xaxis.set_visible(False)
-        ah[3][0].set_xticks(np.arange(len(results['labels_3d'])))
-        ah[3][0].set_xticklabels(results['labels_3d'], rotation='vertical')
+        ah[3][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
+        ah[3][0].set_xticklabels(ret['results']['labels_3d'], rotation='vertical')
 
     else:
-        ah[2][0].set_xticks(np.arange(len(results['labels_3d'])))
-        ah[2][0].set_xticklabels(results['labels_3d'], rotation='vertical')
+        ah[2][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
+        ah[2][0].set_xticklabels(ret['results']['labels_3d'], rotation='vertical')
 
 
     fig, ah = plt.subplots(1, 1, squeeze=False)
     ah[0][0].set_title('Prediction vs Measurement Magnitude')
-    ah[0][0].plot(x_all, results['s_meas'], 'sr', label='measurements')
-    ah[0][0].plot(x_all[results['extrapolated']], results['s_pred'][results['extrapolated']], '^c', label='prediction extrapolated')
-    ah[0][0].plot(x_all[results['in_bounds']], results['s_pred'][results['in_bounds']], 'ob', label='prediction')
+    ah[0][0].plot(x_all, ret['results']['s_meas'], 'sr', label='measurements')
+    ah[0][0].plot(x_all[ret['results']['extrapolated']], ret['results']['s_pred'][ret['results']['extrapolated']], '^c', label='prediction extrapolated')
+    ah[0][0].plot(x_all[ret['results']['in_bounds']], ret['results']['s_pred'][ret['results']['in_bounds']], 'ob', label='prediction')
 
     ah[0][0].set_ylabel('Magnitude [m/s]')
 
-    ah[0][0].set_xticks(np.arange(len(results['labels_all'])))
-    ah[0][0].set_xticklabels(results['labels_all'], rotation='vertical')
+    ah[0][0].set_xticks(np.arange(len(ret['results']['labels_all'])))
+    ah[0][0].set_xticklabels(ret['results']['labels_all'], rotation='vertical')
     ah[0][0].legend()
 
     fig, ah = plt.subplots(1, 1, squeeze=False)
     ah[0][0].set_title('Prediction Magnitude Error')
-    ah[0][0].plot(x_all[results['extrapolated']], results['s_meas'][results['extrapolated']] - results['s_pred'][results['extrapolated']], '^c', label='extrapolated')
-    ah[0][0].plot(x_all[results['in_bounds']], results['s_meas'][results['in_bounds']] - results['s_pred'][results['in_bounds']], 'ob', label='in bounds')
+    ah[0][0].plot(x_all[ret['results']['extrapolated']], ret['results']['s_meas'][ret['results']['extrapolated']] - ret['results']['s_pred'][ret['results']['extrapolated']], '^c', label='extrapolated')
+    ah[0][0].plot(x_all[ret['results']['in_bounds']], ret['results']['s_meas'][ret['results']['in_bounds']] - ret['results']['s_pred'][ret['results']['in_bounds']], 'ob', label='in bounds')
 
     ah[0][0].set_ylabel('Error Magnitude [m/s]')
 
-    ah[0][0].set_xticks(np.arange(len(results['labels_all'])))
-    ah[0][0].set_xticklabels(results['labels_all'], rotation='vertical')
+    ah[0][0].set_xticks(np.arange(len(ret['results']['labels_all'])))
+    ah[0][0].set_xticklabels(ret['results']['labels_all'], rotation='vertical')
     ah[0][0].legend()
 
     # Display results
     print('---------------------------------------------------')
     print('Prediction using mast: ' + args.input_mast)
-    print('Error U: ' + str(np.mean(np.abs(results['u_meas'] - results['u_pred']))))
-    print('Error V: ' + str(np.mean(np.abs(results['v_meas'] - results['v_pred']))))
-    print('Error W: ' + str(np.mean(np.abs(results['w_meas'] - results['w_pred']))))
-    if turb_predicted:
-        print('Error TKE: ' + str(np.mean(np.abs(results['tke_meas'] - results['tke_pred']))))
-    print('Error S: ' + str(np.mean(np.abs(results['s_meas'] - results['s_pred']))))
-    print('Error U rel: ' + str(np.mean(np.abs(results['u_meas'] - results['u_pred'])/np.abs(results['u_meas']))))
-    print('Error V rel: ' + str(np.mean(np.abs(results['v_meas'] - results['v_pred'])/np.abs(results['v_meas']))))
-    print('Error W rel: ' + str(np.mean(np.abs(results['w_meas'] - results['w_pred'])/np.abs(results['w_meas']))))
-    if turb_predicted:
-        print('Error TKE rel: ' + str(np.mean(np.abs(results['tke_meas'] - results['tke_pred'])/np.abs(results['tke_meas']))))
-    print('Error S rel: ' + str(np.mean(np.abs(results['s_meas'] - results['s_pred'])/np.abs(results['s_meas']))))
+    print('Error U: ' + str(np.nanmean(np.abs(ret['results']['u_meas'] - ret['results']['u_pred']))))
+    print('Error V: ' + str(np.nanmean(np.abs(ret['results']['v_meas'] - ret['results']['v_pred']))))
+    print('Error W: ' + str(np.nanmean(np.abs(ret['results']['w_meas'] - ret['results']['w_pred']))))
+    if ret['turb_predicted']:
+        print('Error TKE: ' + str(np.nanmean(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred']))))
+    print('Error S: ' + str(np.nanmean(np.abs(ret['results']['s_meas'] - ret['results']['s_pred']))))
+    print('Error U rel: ' + str(np.nanmean(np.abs(ret['results']['u_meas'] - ret['results']['u_pred'])/np.abs(ret['results']['u_meas']))))
+    print('Error V rel: ' + str(np.nanmean(np.abs(ret['results']['v_meas'] - ret['results']['v_pred'])/np.abs(ret['results']['v_meas']))))
+    print('Error W rel: ' + str(np.nanmean(np.abs(ret['results']['w_meas'] - ret['results']['w_pred'])/np.abs(ret['results']['w_meas']))))
+    if ret['turb_predicted']:
+        print('Error TKE rel: ' + str(np.nanmean(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred'])/np.abs(ret['results']['tke_meas']))))
+    print('Error S rel: ' + str(np.nanmean(np.abs(ret['results']['s_meas'] - ret['results']['s_pred'])/np.abs(ret['results']['s_meas']))))
     print('---------------------------------------------------')
+
+    if args.profile:
+        for line_key in ret['profiles'].keys():
+            plt.figure()
+            plt.plot(ret['profiles'][line_key]['dist'], ret['profiles'][line_key]['speedup'])
+            plt.xlabel('Dist [cells]')
+            plt.ylabel('Speedup [-]')
+            plt.xlim([-100, 150])
+            plt.ylim([-1, 1])
+            plt.title(line_key)
 
     if args.mayavi:
         ui = []
 
         ui.append(
-            nn_utils.mlab_plot_prediction(prediction['pred'], terrain, terrain_mode='blocks', terrain_uniform_color=True,
+            nn_utils.mlab_plot_prediction(ret['prediction']['pred'], ret['terrain'], terrain_mode='blocks', terrain_uniform_color=True,
                                           prediction_channels=config.data['label_channels'], blocking=False))
 
 
     nn_utils.plot_prediction(config.data['label_channels'],
-                             prediction = prediction['pred'][0].cpu().detach(),
+                             prediction = ret['prediction']['pred'][0].cpu().detach(),
                              provided_input_channels = config.data['input_channels'],
-                             input = input[0].cpu().detach(),
-                             terrain = terrain.cpu().squeeze())
+                             input = ret['input'][0].cpu().detach(),
+                             terrain = ret['terrain'].cpu().squeeze())
