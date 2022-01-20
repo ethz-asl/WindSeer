@@ -11,16 +11,16 @@ import nn_wind_prediction.models as models
 import nn_wind_prediction.utils as nn_utils
 from analysis_utils import utils
 
-def predict_case(dataset, net, index, input_mast, config, speedup_profiles=False, reference_mast=None):
+def predict_case(dataset, net, index, input_mast, experiment_name, config, speedup_profiles=False, reference_mast=None):
     # load the data
     h5_file = h5py.File(dataset, 'r')
-    scale_keys = list(h5_file.keys())
-    print('Input data: ', scale_keys[index], 'mast', input_mast)
+    scale_keys = list(h5_file['terrain'].keys())
+    print('Input data: ', experiment_name, ', scale: ', scale_keys[index], 'mast', input_mast)
 
-    terrain = torch.from_numpy(h5_file[scale_keys[index]]['terrain'][...])
+    terrain = torch.from_numpy(h5_file['terrain'][scale_keys[index]][...])
     input_meas = torch.zeros(tuple([3]) + tuple(terrain.shape))
     input_mask = torch.zeros(tuple(terrain.shape))
-    ds_input = h5_file[scale_keys[args.index]]['masts'][input_mast]
+    ds_input = h5_file['measurement'][args.experiment][scale_keys[args.index]][input_mast]
     # shuffle measurements according to height making sure that we fill always the highest value into the respective cell
     positions = ds_input['pos'][...]
     u_vel = ds_input['u'][...]
@@ -110,8 +110,8 @@ def predict_case(dataset, net, index, input_mast, config, speedup_profiles=False
         'in_bounds_3d': [],
         }
 
-    for mast in h5_file[scale_keys[index]]['masts'].keys():
-        ds_mast = h5_file[scale_keys[index]]['masts'][mast]
+    for mast in h5_file['measurement'][args.experiment][scale_keys[args.index]].keys():
+        ds_mast = h5_file['measurement'][args.experiment][scale_keys[args.index]][mast]
         positions = ds_mast['pos'][...]
 
         u_meas = ds_mast['u'][...]
@@ -178,7 +178,7 @@ def predict_case(dataset, net, index, input_mast, config, speedup_profiles=False
 
     if speedup_profiles:
         ret['profiles'] = {}
-        ds_lines = h5_file[scale_keys[args.index]]['lines']
+        ds_lines = h5_file['lines'][scale_keys[args.index]]
         for line_key in ds_lines.keys():
 
             x = ds_lines[line_key]['x'][...]
@@ -196,7 +196,7 @@ def predict_case(dataset, net, index, input_mast, config, speedup_profiles=False
             s_pred = np.sqrt(u_pred**2 + v_pred**2 + w_pred**2)
 
             if reference_mast:
-                ds_mast = h5_file[scale_keys[index]]['masts'][reference_mast]
+                ds_mast = h5_file['measurement'][args.experiment][scale_keys[args.index]][reference_mast]
                 positions = ds_mast['pos'][...]
                 s_meas = ds_mast['s'][...]
 
@@ -218,6 +218,7 @@ def predict_case(dataset, net, index, input_mast, config, speedup_profiles=False
 parser = argparse.ArgumentParser(description='Predict the flow based on the sparse measurements')
 parser.add_argument('-d', dest='dataset', required=True, help='The dataset file')
 parser.add_argument('-m', dest='input_mast', required=True, help='The input measurement mast')
+parser.add_argument('-e', dest='experiment', required=True, help='The experiment name')
 parser.add_argument('-i', dest='index', default=0, type=int, help='Index of the case in the dataset used for the prediction')
 parser.add_argument('-model_dir', dest='model_dir', required=True, help='The directory of the model')
 parser.add_argument('-model_version', dest='model_version', default='latest', help='The model version')
@@ -252,12 +253,13 @@ if args.benchmark:
     results = {}
 
     h5_file = h5py.File(args.dataset, 'r')
-    scale_keys = list(h5_file.keys())
-    mast_keys = list(h5_file[scale_keys[args.index]]['masts'].keys())
+    scale_keys = list(h5_file['terrain'].keys())
+
+    mast_keys = list(h5_file['measurement'][args.experiment][scale_keys[args.index]].keys())
     h5_file.close()
 
     for mast in mast_keys:
-        ret = predict_case(args.dataset, net, args.index, mast, config)
+        ret = predict_case(args.dataset, net, args.index, mast, args.experiment, config)
         if ret:
             results[mast] = ret['results']
         else:
@@ -349,7 +351,7 @@ if args.benchmark:
     plt.show()
 
 else:
-    ret = predict_case(args.dataset, net, args.index, args.input_mast, config, args.profile, args.reference_mast)
+    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config, args.profile, args.reference_mast)
     
     if not ret:
         raise ValueError('No prediction because input mast not in prediction domain')

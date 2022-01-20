@@ -106,75 +106,84 @@ if args.save:
         measurements_dict.append(ms_dict)
 
 
-    for meas, name in zip(measurements_dict, experiment_names):
-        ds_file = h5py.File('askervein_' + name + '.hdf5', 'w')
-        for i, n in enumerate(args.n_grid):
-            for f, terrain, x_inter, y_inter, z_inter in zip(args.factors, terrain_grids[i], x_interpolators[i], y_interpolators[i], z_interpolators[i]):
-                key = 'scale_' + str(f) + '_n_' + str(n)
-                ds_file.create_group(key)
-                ds_file[key].create_dataset('terrain', data=terrain)
+    ds_file = h5py.File('askervein.hdf5', 'w')
+    ds_file.create_group('terrain')
+    ds_file.create_group('lines')
+    ds_file.create_group('measurement')
+    for name in experiment_names:
+        ds_file['measurement'].create_group(name)
 
-                # convert the prediction lines
-                ds_file[key].create_group('lines')
+    for i, n in enumerate(args.n_grid):
+        for f, terrain, x_inter, y_inter, z_inter in zip(args.factors, terrain_grids[i], x_interpolators[i], y_interpolators[i], z_interpolators[i]):
+            key = 'scale_' + str(f) + '_n_' + str(n)
+            ds_file['terrain'].create_dataset(key, data=terrain)
 
-                # line A
-                t = np.linspace(0, 1500, 301)
-                start = np.array([414.0, 1080.0]) - measurement_offset #ASW85
-                end = np.array([1262.0, 1975.0]) - measurement_offset #ANE40
-                dir = (end - start)
-                dir /= np.linalg.norm(dir)
-                positions = np.expand_dims(start, 1) + np.expand_dims(t, 0) * np.expand_dims(dir, 1)
-                z = grid_interpolator((positions[1],positions[0]))
-                # minimum distance to ht
-                idx_center = np.argmin(np.linalg.norm(positions - np.expand_dims((np.array([984, 1695]) - measurement_offset), 1), axis=0))
-                t -= idx_center * (t[1] - t[0])                
-                ds_file[key]['lines'].create_group('lineA_10m')
-                ds_file[key]['lines']['lineA_10m'].create_dataset('x', data=x_inter(positions[0]))
-                ds_file[key]['lines']['lineA_10m'].create_dataset('y', data=y_inter(positions[1]))
-                ds_file[key]['lines']['lineA_10m'].create_dataset('z', data=z_inter(z + 10.0))
-                ds_file[key]['lines']['lineA_10m'].create_dataset('terrain', data=z_inter(z))
-                ds_file[key]['lines']['lineA_10m'].create_dataset('dist', data=t)
+            # convert the prediction lines
+            ds_file['lines'].create_group(key)
 
-                # line AA
-                t = np.linspace(0, 1500, 301)
-                start = np.array([670.0, 778.0]) - measurement_offset #AASW90
-                end = np.array([1674.0, 1844.0]) - measurement_offset #AANE60
-                dir = (end - start)
-                dir /= np.linalg.norm(dir)
-                positions = np.expand_dims(start, 1) + np.expand_dims(t, 0) * np.expand_dims(dir, 1)
-                z = grid_interpolator((positions[1],positions[0]))
-                # minimum distance to ht
-                idx_center = np.argmin(np.linalg.norm(positions - np.expand_dims((np.array([984, 1695]) - measurement_offset), 1), axis=0))
-                t -= idx_center * (t[1] - t[0])                
-                ds_file[key]['lines'].create_group('lineAA_10m')
-                ds_file[key]['lines']['lineAA_10m'].create_dataset('x', data=x_inter(positions[0]))
-                ds_file[key]['lines']['lineAA_10m'].create_dataset('y', data=y_inter(positions[1]))
-                ds_file[key]['lines']['lineAA_10m'].create_dataset('z', data=z_inter(z + 10.0))
-                ds_file[key]['lines']['lineAA_10m'].create_dataset('terrain', data=z_inter(z))
-                ds_file[key]['lines']['lineAA_10m'].create_dataset('dist', data=t)
+            # line A
+            t = np.linspace(0, 1500, 301)
+            start = np.array([414.0, 1080.0]) - measurement_offset #ASW85
+            end = np.array([1262.0, 1975.0]) - measurement_offset #ANE40
+            dir = (end - start)
+            dir /= np.linalg.norm(dir)
+            positions = np.expand_dims(start, 1) + np.expand_dims(t, 0) * np.expand_dims(dir, 1)
+            z = grid_interpolator((positions[1],positions[0]))
+            # minimum distance to ht
+            idx_center = np.argmin(np.linalg.norm(positions - np.expand_dims((np.array([984, 1695]) - measurement_offset), 1), axis=0))
+            t -= idx_center * (t[1] - t[0])
+            ds_file['lines'][key].create_group('lineA_10m')
+            ds_file['lines'][key]['lineA_10m'].create_dataset('x', data=x_inter(positions[0]))
+            ds_file['lines'][key]['lineA_10m'].create_dataset('y', data=y_inter(positions[1]))
+            ds_file['lines'][key]['lineA_10m'].create_dataset('z', data=z_inter(z + 10.0))
+            ds_file['lines'][key]['lineA_10m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineA_10m'].create_dataset('dist', data=t)
 
-                # line B
-                t = np.linspace(0, 2200, 441)
-                start = np.array([2237.0, 543.0]) - measurement_offset #BSE170
-                end = np.array([844.0, 1833.0]) - measurement_offset #BNW20
-                dir = (end - start)
-                dir /= np.linalg.norm(dir)
-                positions = np.expand_dims(start, 1) + np.expand_dims(t, 0) * np.expand_dims(dir, 1)
-                z = grid_interpolator((positions[1],positions[0]))
-                # minimum distance to ht
-                idx_center = np.argmin(np.linalg.norm(positions - np.expand_dims((np.array([984, 1695]) - measurement_offset), 1), axis=0))
-                t -= idx_center * (t[1] - t[0])                
-                ds_file[key]['lines'].create_group('lineB_10m')
-                ds_file[key]['lines']['lineB_10m'].create_dataset('x', data=x_inter(positions[0]))
-                ds_file[key]['lines']['lineB_10m'].create_dataset('y', data=y_inter(positions[1]))
-                ds_file[key]['lines']['lineB_10m'].create_dataset('z', data=z_inter(z + 10.0))
-                ds_file[key]['lines']['lineB_10m'].create_dataset('terrain', data=z_inter(z))
-                ds_file[key]['lines']['lineB_10m'].create_dataset('dist', data=t)
+            # line AA
+            t = np.linspace(0, 1500, 301)
+            start = np.array([670.0, 778.0]) - measurement_offset #AASW90
+            end = np.array([1674.0, 1844.0]) - measurement_offset #AANE60
+            dir = (end - start)
+            dir /= np.linalg.norm(dir)
+            positions = np.expand_dims(start, 1) + np.expand_dims(t, 0) * np.expand_dims(dir, 1)
+            z = grid_interpolator((positions[1],positions[0]))
+            # minimum distance to ht
+            idx_center = np.argmin(np.linalg.norm(positions - np.expand_dims((np.array([984, 1695]) - measurement_offset), 1), axis=0))
+            t -= idx_center * (t[1] - t[0])
+            ds_file['lines'][key].create_group('lineAA_10m')
+            ds_file['lines'][key]['lineAA_10m'].create_dataset('x', data=x_inter(positions[0]))
+            ds_file['lines'][key]['lineAA_10m'].create_dataset('y', data=y_inter(positions[1]))
+            ds_file['lines'][key]['lineAA_10m'].create_dataset('z', data=z_inter(z + 10.0))
+            ds_file['lines'][key]['lineAA_10m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineAA_10m'].create_dataset('dist', data=t)
+
+            # line B
+            t = np.linspace(0, 2200, 441)
+            start = np.array([2237.0, 543.0]) - measurement_offset #BSE170
+            end = np.array([844.0, 1833.0]) - measurement_offset #BNW20
+            dir = (end - start)
+            dir /= np.linalg.norm(dir)
+            positions = np.expand_dims(start, 1) + np.expand_dims(t, 0) * np.expand_dims(dir, 1)
+            z = grid_interpolator((positions[1],positions[0]))
+            # minimum distance to ht
+            idx_center = np.argmin(np.linalg.norm(positions - np.expand_dims((np.array([984, 1695]) - measurement_offset), 1), axis=0))
+            t -= idx_center * (t[1] - t[0])
+            ds_file['lines'][key].create_group('lineB_10m')
+            ds_file['lines'][key]['lineB_10m'].create_dataset('x', data=x_inter(positions[0]))
+            ds_file['lines'][key]['lineB_10m'].create_dataset('y', data=y_inter(positions[1]))
+            ds_file['lines'][key]['lineB_10m'].create_dataset('z', data=z_inter(z + 10.0))
+            ds_file['lines'][key]['lineB_10m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineB_10m'].create_dataset('dist', data=t)
+
+            for meas, name in zip(measurements_dict, experiment_names):
+                if not name in ds_file['measurement'].keys():
+                    ds_file['measurement'].create_group(name)
+
+                ds_file['measurement'][name].create_group(key)
 
                 # Add the mast measurements
-                ds_file[key].create_group('masts')
                 for ms_post in meas.keys():
-                    ds_file[key]['masts'].create_group(ms_post)
+                    ds_file['measurement'][name][key].create_group(ms_post)
                     for d_key in meas[ms_post].keys():
                         if d_key == 'pos':
                             pos_idx = copy.copy(meas[ms_post][d_key])
@@ -182,11 +191,11 @@ if args.save:
                             pos_idx[:,1] = y_inter(pos_idx[:,1])
                             pos_idx[:,2] = z_inter(pos_idx[:,2])
 
-                            ds_file[key]['masts'][ms_post].create_dataset(d_key, data=pos_idx)
+                            ds_file['measurement'][name][key][ms_post].create_dataset(d_key, data=pos_idx)
                         else:
-                            ds_file[key]['masts'][ms_post].create_dataset(d_key, data=meas[ms_post][d_key])
+                            ds_file['measurement'][name][key][ms_post].create_dataset(d_key, data=meas[ms_post][d_key])
 
-        ds_file.close()
+    ds_file.close()
 
 if args.plot:
     for meas, name in zip(measurements, experiment_names):

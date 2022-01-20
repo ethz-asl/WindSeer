@@ -11,24 +11,6 @@ from scipy import ndimage
 import torch
 import zipfile
 
-def set_axes_equal(ax):
-    x_limits = ax.get_xlim3d()
-    y_limits = ax.get_ylim3d()
-    z_limits = ax.get_zlim3d()
-
-    x_range = abs(x_limits[1] - x_limits[0])
-    x_middle = np.mean(x_limits)
-    y_range = abs(y_limits[1] - y_limits[0])
-    y_middle = np.mean(y_limits)
-    z_range = abs(z_limits[1] - z_limits[0])
-    z_middle = np.mean(z_limits)
-
-    plot_radius = 0.5*max([x_range, y_range, z_range])
-
-    ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
-    ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
-    ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
-
 def read_grd(infile):
     with open(infile, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=' ')
@@ -170,56 +152,66 @@ if args.save:
 
         measurements_dict.append(ms_dict)
 
-    for meas, meas_names, name in zip(measurements_dict, measurements_names, names):
-        ds_file = h5py.File('bolund_' + name + '.hdf5', 'w')
-        for i, n in enumerate(args.n_grid):
-            for f, terrain, x_inter, y_inter, z_inter in zip(args.factors, terrain_grids[i], x_interpolators[i], y_interpolators[i], z_interpolators[i]):
-                key = 'scale_' + str(f) + '_n_' + str(n)
-                ds_file.create_group(key)
-                ds_file[key].create_dataset('terrain', data=terrain)
+    ds_file = h5py.File('bolund.hdf5', 'w')
+    ds_file.create_group('terrain')
+    ds_file.create_group('lines')
+    ds_file.create_group('measurement')
+    for name in names:
+        ds_file['measurement'].create_group(name)
 
-                # convert the prediction lines
-                ds_file[key].create_group('lines')
+    for i, n in enumerate(args.n_grid):
+        for f, terrain, x_inter, y_inter, z_inter in zip(args.factors, terrain_grids[i], x_interpolators[i], y_interpolators[i], z_interpolators[i]):
+            key = 'scale_' + str(f) + '_n_' + str(n)
+            ds_file['terrain'].create_dataset(key, data=terrain)
 
-                ds_file[key]['lines'].create_group('lineA_2m')
-                ds_file[key]['lines'].create_group('lineA_5m')
-                t = np.linspace(-200, 200, 401)
-                x = np.cos(31.0/180.0*np.pi) * t
-                y = np.sin(31.0/180.0*np.pi) * t
-                z = grid_interpolator((y,x))
+            # convert the prediction lines
+            ds_file['lines'].create_group(key)
 
-                ds_file[key]['lines']['lineA_2m'].create_dataset('x', data=x_inter(x))
-                ds_file[key]['lines']['lineA_2m'].create_dataset('y', data=y_inter(y))
-                ds_file[key]['lines']['lineA_2m'].create_dataset('z', data=z_inter(z + 2.0))
-                ds_file[key]['lines']['lineA_2m'].create_dataset('terrain', data=z_inter(z))
-                ds_file[key]['lines']['lineA_2m'].create_dataset('dist', data=t)
-                ds_file[key]['lines']['lineA_5m'].create_dataset('x', data=x_inter(x))
-                ds_file[key]['lines']['lineA_5m'].create_dataset('y', data=y_inter(y))
-                ds_file[key]['lines']['lineA_5m'].create_dataset('z', data=z_inter(z + 5.0))
-                ds_file[key]['lines']['lineA_5m'].create_dataset('terrain', data=z_inter(z))
-                ds_file[key]['lines']['lineA_5m'].create_dataset('dist', data=t)
+            ds_file['lines'][key].create_group('lineA_2m')
+            ds_file['lines'][key].create_group('lineA_5m')
+            t = np.linspace(-200, 200, 401)
+            x = np.cos(31.0/180.0*np.pi) * t
+            y = np.sin(31.0/180.0*np.pi) * t
+            z = grid_interpolator((y,x))
 
-                ds_file[key]['lines'].create_group('lineB_2m')
-                ds_file[key]['lines'].create_group('lineB_5m')
-                x = np.cos(0.0) * t
-                y = np.sin(0.0) * t
-                z = grid_interpolator((y,x))
+            ds_file['lines'][key]['lineA_2m'].create_dataset('x', data=x_inter(x))
+            ds_file['lines'][key]['lineA_2m'].create_dataset('y', data=y_inter(y))
+            ds_file['lines'][key]['lineA_2m'].create_dataset('z', data=z_inter(z + 2.0))
+            ds_file['lines'][key]['lineA_2m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineA_2m'].create_dataset('dist', data=t)
+            ds_file['lines'][key]['lineA_5m'].create_dataset('x', data=x_inter(x))
+            ds_file['lines'][key]['lineA_5m'].create_dataset('y', data=y_inter(y))
+            ds_file['lines'][key]['lineA_5m'].create_dataset('z', data=z_inter(z + 5.0))
+            ds_file['lines'][key]['lineA_5m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineA_5m'].create_dataset('dist', data=t)
 
-                ds_file[key]['lines']['lineB_2m'].create_dataset('x', data=x_inter(x))
-                ds_file[key]['lines']['lineB_2m'].create_dataset('y', data=y_inter(y))
-                ds_file[key]['lines']['lineB_2m'].create_dataset('z', data=z_inter(z + 2.0))
-                ds_file[key]['lines']['lineB_2m'].create_dataset('terrain', data=z_inter(z))
-                ds_file[key]['lines']['lineB_2m'].create_dataset('dist', data=t)
-                ds_file[key]['lines']['lineB_5m'].create_dataset('x', data=x_inter(x))
-                ds_file[key]['lines']['lineB_5m'].create_dataset('y', data=y_inter(y))
-                ds_file[key]['lines']['lineB_5m'].create_dataset('z', data=z_inter(z + 5.0))
-                ds_file[key]['lines']['lineB_5m'].create_dataset('terrain', data=z_inter(z))
-                ds_file[key]['lines']['lineB_5m'].create_dataset('dist', data=t)
+            ds_file['lines'][key].create_group('lineB_2m')
+            ds_file['lines'][key].create_group('lineB_5m')
+            x = np.cos(0.0) * t
+            y = np.sin(0.0) * t
+            z = grid_interpolator((y,x))
+
+            ds_file['lines'][key]['lineB_2m'].create_dataset('x', data=x_inter(x))
+            ds_file['lines'][key]['lineB_2m'].create_dataset('y', data=y_inter(y))
+            ds_file['lines'][key]['lineB_2m'].create_dataset('z', data=z_inter(z + 2.0))
+            ds_file['lines'][key]['lineB_2m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineB_2m'].create_dataset('dist', data=t)
+            ds_file['lines'][key]['lineB_5m'].create_dataset('x', data=x_inter(x))
+            ds_file['lines'][key]['lineB_5m'].create_dataset('y', data=y_inter(y))
+            ds_file['lines'][key]['lineB_5m'].create_dataset('z', data=z_inter(z + 5.0))
+            ds_file['lines'][key]['lineB_5m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineB_5m'].create_dataset('dist', data=t)
+
+            # add the measurements
+            for meas, meas_names, name in zip(measurements_dict, measurements_names, names):
+                if not name in ds_file['measurement'].keys():
+                    ds_file['measurement'].create_group(name)
+
+                ds_file['measurement'][name].create_group(key)
 
                 # Add the mast measurements
-                ds_file[key].create_group('masts')
                 for ms_post in meas.keys():
-                    ds_file[key]['masts'].create_group(ms_post)
+                    ds_file['measurement'][name][key].create_group(ms_post)
                     for d_key in meas[ms_post].keys():
                         if d_key == 'pos':
                             pos_idx = copy.copy(meas[ms_post][d_key])
@@ -227,11 +219,11 @@ if args.save:
                             pos_idx[:,1] = y_inter(pos_idx[:,1])
                             pos_idx[:,2] = z_inter(pos_idx[:,2])
 
-                            ds_file[key]['masts'][ms_post].create_dataset(d_key, data=pos_idx)
+                            ds_file['measurement'][name][key][ms_post].create_dataset(d_key, data=pos_idx)
                         else:
-                            ds_file[key]['masts'][ms_post].create_dataset(d_key, data=meas[ms_post][d_key])
+                            ds_file['measurement'][name][key][ms_post].create_dataset(d_key, data=meas[ms_post][d_key])
 
-        ds_file.close()
+    ds_file.close()
 
 if args.plot:
     for meas, name in zip(measurements, names):
