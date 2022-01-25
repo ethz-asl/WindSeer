@@ -15,19 +15,36 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
     # load the data
     h5_file = h5py.File(dataset, 'r')
     scale_keys = list(h5_file['terrain'].keys())
+    if index >= len(scale_keys):
+        print("Requested index out of bounds, available scale keys:")
+        print(scale_keys)
+        exit()
+
+    if not experiment_name in h5_file['measurement'].keys():
+        print('Requested experiment not present in the dataset. Available experiments:')
+        print(list(h5_file['measurement'].keys()))
+        exit()
+
+    if not input_mast in h5_file['measurement'][args.experiment][scale_keys[args.index]].keys():
+        print('Requested input mast not present in the dataset. Available experiments:')
+        print(list(h5_file['measurement'][args.experiment][scale_keys[args.index]].keys()))
+        exit()
+
     print('Input data: ', experiment_name, ', scale: ', scale_keys[index], 'mast', input_mast)
 
     terrain = torch.from_numpy(h5_file['terrain'][scale_keys[index]][...])
     input_meas = torch.zeros(tuple([3]) + tuple(terrain.shape))
     input_mask = torch.zeros(tuple(terrain.shape))
-    ds_input = h5_file['measurement'][args.experiment][scale_keys[args.index]][input_mast]
+    ds_input = h5_file['measurement'][experiment_name][scale_keys[args.index]][input_mast]
     # shuffle measurements according to height making sure that we fill always the highest value into the respective cell
     positions = ds_input['pos'][...]
     u_vel = ds_input['u'][...]
     v_vel = ds_input['v'][...]
     w_vel = ds_input['w'][...]
+    tke_available = 'tke' in ds_input.keys()
 
     idx_shuffle = np.argsort(positions[:,2])
+    print('Measurement indices:')
     for idx in idx_shuffle:
         u = u_vel[idx]
         v = v_vel[idx]
@@ -36,11 +53,12 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
         if (u*u + v*v + w+w) > 0.0:
             meas_idx = np.round(positions[idx]).astype(np.int)
             print(meas_idx)
+
             if meas_idx.min() >=0 and meas_idx[0] < input_mask.shape[2] and meas_idx[1] < input_mask.shape[1] and meas_idx[2] < input_mask.shape[0]:
                 input_mask[meas_idx[2], meas_idx[1], meas_idx[0]] = 1
-                input_meas[0,meas_idx[2], meas_idx[1], meas_idx[0]] = u
-                input_meas[1,meas_idx[2], meas_idx[1], meas_idx[0]] = v
-                input_meas[2,meas_idx[2], meas_idx[1], meas_idx[0]] = w
+                input_meas[0,meas_idx[2], meas_idx[1], meas_idx[0]] = u.item()
+                input_meas[1,meas_idx[2], meas_idx[1], meas_idx[0]] = v.item()
+                input_meas[2,meas_idx[2], meas_idx[1], meas_idx[0]] = w.item()
 
     # remove any samples inside the terrain
     input_mask *= terrain > 0
@@ -84,7 +102,7 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
     v_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,1].cpu().detach().numpy())
     w_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,2].cpu().detach().numpy())
 
-    if config.model['model_args']['use_turbulence']:
+    if config.model['model_args']['use_turbulence'] and tke_available:
         tke_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,3].cpu().detach().numpy()) 
         turb_predicted = True
     else:
@@ -118,7 +136,8 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
         v_meas = ds_mast['v'][...]
         w_meas = ds_mast['w'][...]
         s_meas = ds_mast['s'][...]
-        tke_meas = ds_mast['tke'][...]
+        if tke_available:
+            tke_meas = ds_mast['tke'][...]
 
         lower_bound = (positions < 0).any(axis=1)
         upper_bound = (positions > [nx-1, ny-1, nz-1]).any(axis=1)
@@ -146,7 +165,8 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
         results['u_meas'].extend(u_meas[meas_3d_available])
         results['v_meas'].extend(v_meas[meas_3d_available])
         results['w_meas'].extend(w_meas[meas_3d_available])
-        results['tke_meas'].extend(tke_meas[meas_3d_available])
+        if tke_available:
+            results['tke_meas'].extend(tke_meas[meas_3d_available])
 
         results['u_pred'].extend(u_pred[meas_3d_available])
         results['v_pred'].extend(v_pred[meas_3d_available])
@@ -170,7 +190,7 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
 
     ret = {
         'results': results,
-        'turb_predicted': turb_predicted,
+        'turb_predicted': turb_predicted and tke_available,
         'prediction': prediction,
         'input': input,
         'terrain': terrain,
