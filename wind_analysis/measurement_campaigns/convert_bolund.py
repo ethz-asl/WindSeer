@@ -204,9 +204,6 @@ if args.save:
 
             # add the measurements
             for meas, meas_names, name in zip(measurements_dict, measurements_names, names):
-                if not name in ds_file['measurement'].keys():
-                    ds_file['measurement'].create_group(name)
-
                 ds_file['measurement'][name].create_group(key)
 
                 # Add the mast measurements

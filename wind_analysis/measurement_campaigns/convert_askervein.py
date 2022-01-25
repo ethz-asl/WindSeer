@@ -176,9 +176,6 @@ if args.save:
             ds_file['lines'][key]['lineB_10m'].create_dataset('dist', data=t)
 
             for meas, name in zip(measurements_dict, experiment_names):
-                if not name in ds_file['measurement'].keys():
-                    ds_file['measurement'].create_group(name)
-
                 ds_file['measurement'][name].create_group(key)
 
                 # Add the mast measurements
