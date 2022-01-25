@@ -196,7 +196,10 @@ def mlab_plot_prediction(prediction, terrain, terrain_mode='blocks', terrain_uni
 
 
         # slice plot
-        ui = mlab_plot_slice('Prediction', prediction_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
+        if prediction_np.shape[1] == prediction_np.shape[2] and prediction_np.shape[1] == prediction_np.shape[3]:
+            ui = mlab_plot_slice('Prediction', prediction_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
+        else:
+            ui = []
 
         mlab.outline(extent=[0, terrain_shape[2]-1, 0, terrain_shape[1]-1, 0, terrain_shape[0]-1])
 
@@ -263,7 +266,10 @@ def mlab_plot_error(error, terrain, error_mode='norm', terrain_mode='blocks', te
         else:
             raise ValueError('Unknown error plotting mode: ' + str(error_mode) + ' supported: ' + str(error_modes))
 
-        ui = mlab_plot_slice('Prediction Error', error_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
+        if error_np.shape[1] == error_np.shape[2] and error_np.shape[1] == error_np.shape[3]:
+            ui = mlab_plot_slice('Prediction Error', error_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
+        else:
+            ui = []
 
         if blocking:
             mlab.show()
@@ -327,7 +333,10 @@ def mlab_plot_uncertainty(uncertainty, terrain, uncertainty_mode=0, terrain_mode
         else:
             raise ValueError('Unknown uncertainty plotting mode: ' + str(uncertainty_mode) + ' supported: ' + str(uncertainty_modes))
 
-        ui = mlab_plot_slice('Uncertainty', uncertainty_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
+        if uncertainty_np.shape[1] == uncertainty_np.shape[2] and uncertainty_np.shape[1] == uncertainty_np.shape[3]:
+            ui = mlab_plot_slice('Uncertainty', uncertainty_np, terrain, terrain_mode, terrain_uniform_color, prediction_channels, False, white_background)
+        else:
+            ui = []
 
         if blocking:
             mlab.show()
