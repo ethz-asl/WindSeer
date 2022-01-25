@@ -18,3 +18,5 @@ mprofile*
 *.npy
 *.npz
 *.tif
+*.hdf5
+*.nc
