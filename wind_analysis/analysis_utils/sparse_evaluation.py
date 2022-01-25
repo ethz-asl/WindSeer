@@ -6,7 +6,7 @@ import torch
 
 from .bin_log_data import bin_log_data, extract_window_wind_data
 from .interpolation import interpolate_flight_path
-from .utils import predict
+from .utils import predict, get_smooth_data
 
 def prediction_sparse(wind_data, grid_dimensions, t_start, t_end, terrain, net, scale, device, config, use_gps_time = False):
     with torch.no_grad():
@@ -17,9 +17,6 @@ def prediction_sparse(wind_data, grid_dimensions, t_start, t_end, terrain, net, 
                                                t_end = t_end,
                                                use_gps_time = use_gps_time)
 
-        measurement = measurement.unsqueeze(0).float()
-        mask = mask.unsqueeze(0).float()
-
         input_idx = []
         if 'ux'  in config.params['model']['input_channels']:
             input_idx.append(0)
@@ -27,6 +24,16 @@ def prediction_sparse(wind_data, grid_dimensions, t_start, t_end, terrain, net, 
             input_idx.append(1)
         if 'uz'  in config.params['model']['input_channels']:
             input_idx.append(2)
+
+        if config.params['model']['input_smoothing']:
+            measurement = get_smooth_data(measurement,
+                                          mask.bool(),
+                                          config.params['model']['grid_size'],
+                                          config.params['model']['input_smoothing_interpolation'],
+                                          config.params['model']['input_smoothing_interpolation_linear'])
+
+        measurement = measurement.unsqueeze(0).float()
+        mask = mask.unsqueeze(0).float()
 
         input = torch.cat([terrain, measurement[:, input_idx], mask.unsqueeze(0)], dim = 1)
 
