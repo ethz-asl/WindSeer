@@ -25,7 +25,7 @@ if config.params['measurements']['type'] != 'log':
 # load the NN
 if config.params['evaluation']['compute_baseline']:
     net = None
-    
+
     config.params['model'] = {}
     config.params['model']['input_channels'] = ['ux', 'uy', 'uz']
     config.params['model']['label_channels'] = ['ux', 'uy', 'uz']
@@ -48,6 +48,14 @@ else:
     config.params['model']['input_channels'] = nn_params.data['input_channels']
     config.params['model']['label_channels'] = nn_params.data['label_channels']
     config.params['model']['autoscale'] = nn_params.data['autoscale']
+    config.params['model']['grid_size'] = nn_params.model['model_args']['grid_size']
+
+    if 'input_smoothing' in nn_params.data.keys():
+        config.params['model']['input_smoothing'] = nn_params.data['input_smoothing']
+        config.params['model']['input_smoothing_interpolation'] = nn_params.data['input_smoothing_interpolation']
+        config.params['model']['input_smoothing_interpolation_linear'] = nn_params.data['input_smoothing_interpolation_linear']
+    else:
+        config.params['model']['input_smoothing'] = False
     
     for key in nn_params.data.keys():
         if 'scaling' in key:
