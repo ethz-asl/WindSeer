@@ -520,6 +520,7 @@ def compute_prediction_metrics(net, device, params, loader_testset, save=True, s
     median_absolute_error = []
     explained_variance_score = []
     r2_score = []
+    trajectory_size = []
 
     for i, data in tqdm(enumerate(loader_testset), total=len(loader_testset)):
         inputs = data[0]
@@ -561,12 +562,18 @@ def compute_prediction_metrics(net, device, params, loader_testset, save=True, s
         explained_variance_score += [metrics.explained_variance_score(labels, outputs)]
         r2_score += [metrics.r2_score(labels, outputs)]
 
+        if params.data['input_mode'] > 2:
+            trajectory_size += [inputs[0,-1].sum()]
+        else:
+            trajectory_size +=[0]
+
     prediction_metrics = pd.DataFrame({'mean_squared_error': mean_squared_error,
                                        'mean_absolute_error': mean_absolute_error,
                                        'max_error': max_error,
                                        'median_absolute_error': median_absolute_error,
                                        'explained_variance_score' : explained_variance_score,
-                                       'r2_score': r2_score})
+                                       'r2_score': r2_score,
+                                       'trajectory_size': trajectory_size})
 
     # printing
     if show:
