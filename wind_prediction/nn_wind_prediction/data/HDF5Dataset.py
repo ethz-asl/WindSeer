@@ -42,6 +42,10 @@ class HDF5Dataset(Dataset):
 
     __default_scaling_dict = {'terrain': 1.0, 'ux': 1.0, 'uy': 1.0, 'uz': 1.0, 'turb': 1.0, 'p': 1.0, 'epsilon': 1.0, 'nut': 1.0}
     __lock = threading.Lock()
+    __min_num_cells = np.inf
+    __max_num_cells = 0
+    __num_samples = 0
+    __average_num_cells = 0
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -299,11 +303,6 @@ class HDF5Dataset(Dataset):
 
         # avoids printing a warning multiple times
         self.__augmentation_warning_printed = False
-
-        self.__min_num_cells = self.__nx * self.__ny * self.__nz
-        self.__max_num_cells = 0
-        self.__num_samples = 0
-        self.__average_num_cells = 0
 
         if verbose:
             print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
