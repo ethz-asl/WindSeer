@@ -142,8 +142,8 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 outputs[2] *= scale * params.data['uz_scaling']
 
                 if 'turb' in  params.data['label_channels']:
-                    labels[3] *= scale * scale * params.data['turbulence_scaling']
-                    outputs[3] *= scale * scale * params.data['turbulence_scaling']
+                    labels[3] *= scale * scale * params.data['turb_scaling']
+                    outputs[3] *= scale * scale * params.data['turb_scaling']
 
             elif len(labels.shape) == 3:
                 labels[0] *= scale * params.data['ux_scaling']
@@ -152,8 +152,8 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 outputs[1] *= scale * params.data['uz_scaling']
 
                 if 'turb' in  params.data['label_channels']:
-                    labels[3] *= scale * scale * params.data['turbulence_scaling']
-                    outputs[3] *= scale * scale * params.data['turbulence_scaling']
+                    labels[3] *= scale * scale * params.data['turb_scaling']
+                    outputs[3] *= scale * scale * params.data['turb_scaling']
 
             else:
                 print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
@@ -445,7 +445,7 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                         outputs[2] *= scale * params.data['uz_scaling']
 
                         if 'turb' in model['params'].data['label_channels']:
-                            outputs[3] *= scale * scale * params.data['turbulence_scaling']
+                            outputs[3] *= scale * scale * params.data['turb_scaling']
 
                         outputs = outputs.cpu()
 
@@ -475,7 +475,7 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 inputs[2] *= scale * params.data['uy_scaling']
                 inputs[3] *= scale * params.data['uz_scaling']
                 if 'turb' in model['params'].data['label_channels']:
-                    labels[3] *= scale * scale * params.data['turbulence_scaling']
+                    labels[3] *= scale * scale * params.data['turb_scaling']
 
                 inputs, labels = inputs.cpu(), labels.cpu()
 
@@ -573,7 +573,7 @@ def compute_prediction_metrics(net, device, params, loader_testset, save=True, s
         print(' ')
         print('Metrics for prediction quality computed over entire test dataset:\n')
         for column in list(prediction_metrics):
-            print(column + ' :', prediction_metrics[column][0])
+            print(column + ' :', np.mean(prediction_metrics[column]))
     if save:
         prediction_metrics.to_csv('./prediction_metrics_' + model_name + '.csv')
 
