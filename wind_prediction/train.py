@@ -148,8 +148,10 @@ else:
 
 scheduler = StepLR(optimizer, step_size=run_params.run['learning_rate_decay_step_size'],
                    gamma=run_params.run['learning_rate_decay'])
-scheduler.last_epoch = warm_start_epoch
 
+if warm_start_epoch > 0:
+    for i in range(warm_start_epoch):
+        scheduler.step()
 
 # save the model parameter in the beginning
 run_params.save(model_dir)
