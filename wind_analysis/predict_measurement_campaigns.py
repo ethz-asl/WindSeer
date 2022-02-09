@@ -1,17 +1,28 @@
 import argparse
 import copy
+import matplotlib.colors as colors
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import numpy as np
 import h5py
 import random
-from scipy.interpolate import RegularGridInterpolator
+from scipy.interpolate import RegularGridInterpolator, griddata
 import torch
 
 import nn_wind_prediction.models as models
 import nn_wind_prediction.utils as nn_utils
 from analysis_utils import utils
 
-def predict_case(dataset, net, index, input_mast, experiment_name, config, speedup_profiles=False, reference_mast=None):
+def masts_to_string(input):
+    out = ''
+
+    for ele in input:
+        out += str(ele)
+        out += ' '
+
+    return out
+
+def predict_case(dataset, net, index, input_mast, experiment_name, config, speedup_profiles=False, reference_mast=None, predict_lidar=False):
     # load the data
     h5_file = h5py.File(dataset, 'r')
     scale_keys = list(h5_file['terrain'].keys())
@@ -25,40 +36,43 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
         print(list(h5_file['measurement'].keys()))
         exit()
 
-    if not input_mast in h5_file['measurement'][args.experiment][scale_keys[args.index]].keys():
-        print('Requested input mast not present in the dataset. Available experiments:')
-        print(list(h5_file['measurement'][args.experiment][scale_keys[args.index]].keys()))
-        exit()
+    for mast in input_mast:
+        if not mast in h5_file['measurement'][args.experiment][scale_keys[args.index]].keys():
+            print('Requested input mast not present in the dataset. Available experiments:')
+            print(list(h5_file['measurement'][args.experiment][scale_keys[args.index]].keys()))
+            exit()
 
-    print('Input data: ', experiment_name, ', scale: ', scale_keys[index], 'mast', input_mast)
+    print('Input data:', experiment_name, '| scale:', scale_keys[index], '| mast:', masts_to_string(input_mast))
 
     terrain = torch.from_numpy(h5_file['terrain'][scale_keys[index]][...])
     input_meas = torch.zeros(tuple([3]) + tuple(terrain.shape))
     input_mask = torch.zeros(tuple(terrain.shape))
-    ds_input = h5_file['measurement'][experiment_name][scale_keys[args.index]][input_mast]
-    # shuffle measurements according to height making sure that we fill always the highest value into the respective cell
-    positions = ds_input['pos'][...]
-    u_vel = ds_input['u'][...]
-    v_vel = ds_input['v'][...]
-    w_vel = ds_input['w'][...]
-    tke_available = 'tke' in ds_input.keys()
-
-    idx_shuffle = np.argsort(positions[:,2])
     print('Measurement indices:')
-    for idx in idx_shuffle:
-        u = u_vel[idx]
-        v = v_vel[idx]
-        w = w_vel[idx]
 
-        if (u*u + v*v + w+w) > 0.0:
-            meas_idx = np.round(positions[idx]).astype(np.int)
-            print(meas_idx)
+    for mast in input_mast:
+        ds_input = h5_file['measurement'][experiment_name][scale_keys[args.index]][mast]
+        # shuffle measurements according to height making sure that we fill always the highest value into the respective cell
+        positions = ds_input['pos'][...]
+        u_vel = ds_input['u'][...]
+        v_vel = ds_input['v'][...]
+        w_vel = ds_input['w'][...]
+        tke_available = 'tke' in ds_input.keys()
 
-            if meas_idx.min() >=0 and meas_idx[0] < input_mask.shape[2] and meas_idx[1] < input_mask.shape[1] and meas_idx[2] < input_mask.shape[0]:
-                input_mask[meas_idx[2], meas_idx[1], meas_idx[0]] = 1
-                input_meas[0,meas_idx[2], meas_idx[1], meas_idx[0]] = u.item()
-                input_meas[1,meas_idx[2], meas_idx[1], meas_idx[0]] = v.item()
-                input_meas[2,meas_idx[2], meas_idx[1], meas_idx[0]] = w.item()
+        idx_shuffle = np.argsort(positions[:,2])
+        for idx in idx_shuffle:
+            u = u_vel[idx]
+            v = v_vel[idx]
+            w = w_vel[idx]
+
+            if (u*u + v*v + w+w) > 0.0:
+                meas_idx = np.round(positions[idx]).astype(np.int)
+                print(meas_idx)
+
+                if meas_idx.min() >=0 and meas_idx[0] < input_mask.shape[2] and meas_idx[1] < input_mask.shape[1] and meas_idx[2] < input_mask.shape[0]:
+                    input_mask[meas_idx[2], meas_idx[1], meas_idx[0]] = 1
+                    input_meas[0,meas_idx[2], meas_idx[1], meas_idx[0]] = u.item()
+                    input_meas[1,meas_idx[2], meas_idx[1], meas_idx[0]] = v.item()
+                    input_meas[2,meas_idx[2], meas_idx[1], meas_idx[0]] = w.item()
 
     # remove any samples inside the terrain
     input_mask *= terrain > 0
@@ -98,13 +112,13 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
     # compute the error of the prediction compared to the measurements
     nz, ny, nx = prediction['pred'].shape[2:]
 
-    u_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,0].cpu().detach().numpy())
-    v_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,1].cpu().detach().numpy())
-    w_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,2].cpu().detach().numpy())
+    u_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,0].cpu().detach().numpy(), bounds_error=False, fill_value=np.nan)
+    v_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,1].cpu().detach().numpy(), bounds_error=False, fill_value=np.nan)
+    w_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,2].cpu().detach().numpy(), bounds_error=False, fill_value=np.nan)
 
-    if config.model['model_args']['use_turbulence'] and tke_available:
-        tke_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,3].cpu().detach().numpy()) 
-        turb_predicted = True
+    if config.model['model_args']['use_turbulence']:
+        tke_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), prediction['pred'][0,3].cpu().detach().numpy(), bounds_error=False, fill_value=np.nan)
+        turb_predicted = tke_available
     else:
         tke_interpolator = None
         turb_predicted = False
@@ -233,11 +247,52 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
                 'speedup': (s_pred - s_ref) / s_ref,
                 }
 
+    if predict_lidar:
+        ds_lidar = h5_file['lidar']
+        ret['lidar'] = {}
+        if experiment_name in ds_lidar.keys():
+            ds_lidar_case = ds_lidar[experiment_name][scale_keys[args.index]]
+            for scan in ds_lidar_case.keys():
+                ret['lidar'][scan] = {}
+
+                x = ds_lidar_case[scan]['x'][...]
+                y = ds_lidar_case[scan]['y'][...]
+                z = ds_lidar_case[scan]['z'][...]
+                vel = ds_lidar_case[scan]['vel'][...]
+                azimuth_angle = ds_lidar_case[scan]['azimuth_angle'][...]
+                elevation_angle = ds_lidar_case[scan]['elevation_angle'][...]
+
+                positions = copy.copy(np.stack((x.ravel(),y.ravel(),z.ravel()), axis=1))
+                u_pred = u_interpolator(np.fliplr(positions))
+                v_pred = v_interpolator(np.fliplr(positions))
+                w_pred = w_interpolator(np.fliplr(positions))
+
+                dir_vec_x = np.repeat((np.sin(azimuth_angle) * np.cos(elevation_angle))[:, np.newaxis], x.shape[1], axis=1).ravel()
+                dir_vec_y = np.repeat((np.cos(azimuth_angle) * np.cos(elevation_angle))[:, np.newaxis], x.shape[1], axis=1).ravel()
+                dir_vec_z = np.repeat(np.sin(elevation_angle)[:, np.newaxis], x.shape[1], axis=1).ravel()
+
+                vel_projected = (u_pred * dir_vec_x + v_pred * dir_vec_y + w_pred * dir_vec_z)
+                ret['lidar'][scan]['x'] = x.ravel()
+                ret['lidar'][scan]['y'] = y.ravel()
+                ret['lidar'][scan]['z'] = z.ravel()
+                ret['lidar'][scan]['pred'] = vel_projected
+                ret['lidar'][scan]['meas'] = vel.ravel()
+
+                terrain_interpolator = RegularGridInterpolator((np.linspace(0,nz-1,nz),np.linspace(0,ny-1,ny),np.linspace(0,nx-1,nx)), terrain.cpu().detach().numpy(), bounds_error=False, fill_value=None, method='nearest')
+                ret['lidar'][scan]['terrain'] = terrain_interpolator(np.fliplr(positions))
+
+                if tke_interpolator:
+                    ret['lidar'][scan]['tke'] = tke_interpolator(np.fliplr(positions))
+
+        else:
+            print('No Lidar scans available for this timestamp. Available scans:')
+            print(ds_lidar.keys())
+
     return ret
 
 parser = argparse.ArgumentParser(description='Predict the flow based on the sparse measurements')
 parser.add_argument('-d', dest='dataset', required=True, help='The dataset file')
-parser.add_argument('-m', dest='input_mast', required=True, help='The input measurement mast')
+parser.add_argument('-m', dest='input_mast', required=True, nargs='+', help='The input measurement mast')
 parser.add_argument('-e', dest='experiment', required=True, help='The experiment name')
 parser.add_argument('-i', dest='index', default=0, type=int, help='Index of the case in the dataset used for the prediction')
 parser.add_argument('-model_dir', dest='model_dir', required=True, help='The directory of the model')
@@ -247,6 +302,7 @@ parser.add_argument('--mayavi', action='store_true', help='Generate some extra p
 parser.add_argument('--no_gpu', action='store_true', help='Force CPU prediction')
 parser.add_argument('--benchmark', action='store_true', help='Benchmark the prediction by looping through all input masks')
 parser.add_argument('--profile', action='store_true', help='Compute the speedup profiles along lines')
+parser.add_argument('--lidar', action='store_true', help='Compute the velocities along the lidar planes')
 args = parser.parse_args()
 
 if args.no_gpu:
@@ -279,7 +335,7 @@ if args.benchmark:
     h5_file.close()
 
     for mast in mast_keys:
-        ret = predict_case(args.dataset, net, args.index, mast, args.experiment, config)
+        ret = predict_case(args.dataset, net, args.index, [mast], args.experiment, config)
         if ret:
             results[mast] = ret['results']
         else:
@@ -371,7 +427,7 @@ if args.benchmark:
     plt.show()
 
 else:
-    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config, args.profile, args.reference_mast)
+    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config, args.profile, args.reference_mast, args.lidar)
     
     if not ret:
         raise ValueError('No prediction because input mast not in prediction domain')
@@ -509,7 +565,7 @@ else:
 
     # Display results
     print('---------------------------------------------------')
-    print('Prediction using mast: ' + args.input_mast)
+    print('Prediction using mast: ' + masts_to_string(args.input_mast))
     print('Error U: ' + str(np.nanmean(np.abs(ret['results']['u_meas'] - ret['results']['u_pred']))))
     print('Error V: ' + str(np.nanmean(np.abs(ret['results']['v_meas'] - ret['results']['v_pred']))))
     print('Error W: ' + str(np.nanmean(np.abs(ret['results']['w_meas'] - ret['results']['w_pred']))))
@@ -533,6 +589,52 @@ else:
             plt.xlim([-100, 150])
             plt.ylim([-1, 1])
             plt.title(line_key)
+
+    if args.lidar:
+        for lidar_key in ret['lidar'].keys():
+            resolution = 4.0
+            x_local = ret['lidar'][lidar_key]['x'] - ret['lidar'][lidar_key]['x'].min()
+            y_local = ret['lidar'][lidar_key]['y'] - ret['lidar'][lidar_key]['y'].min()
+            z = ret['lidar'][lidar_key]['z']
+            dist = np.sqrt(x_local**2 + y_local**2)
+            dist_resampled = np.linspace(0, int(dist.max()), int(int(dist.max()+1) / resolution))
+            min_z = np.max((z.min(), 0))
+            max_z = np.min((z.max(), ret['prediction']['pred'].shape[2]))
+            z_resampled =  np.linspace(min_z, max_z, int(int(max_z-min_z+1) / resolution))
+
+            D_grid, Z_grid = np.meshgrid(dist_resampled, z_resampled, indexing='xy')
+            measured = griddata((dist, z), ret['lidar'][lidar_key]['meas'], (D_grid, Z_grid), method='linear')
+            predicted = griddata((dist, z), ret['lidar'][lidar_key]['pred'], (D_grid, Z_grid), method='linear')
+
+            cmap_terrain = colors.LinearSegmentedColormap.from_list('custom', colors.to_rgba_array(['grey', 'grey']), 2)
+            terrain = griddata((dist, z), ret['lidar'][lidar_key]['terrain'], (D_grid, Z_grid), method='nearest')
+            no_terrain = np.logical_not(np.logical_not(terrain.astype(bool)))
+            terrain_mask = np.ma.masked_where(no_terrain, no_terrain)
+
+            min_val = np.nanmin((np.nanmin(measured), np.nanmin(predicted)))
+            max_val = np.nanmax((np.nanmax(measured), np.nanmax(predicted)))
+
+            fig, ah = plt.subplots(2, 2, squeeze=False)
+            ah[0][0].set_title('Prediction')
+            im = ah[0][0].imshow(predicted, origin='lower', vmin=min_val, vmax=max_val, cmap=cm.jet)
+            fig.colorbar(im, ax=ah[0][0])
+            ah[0][0].imshow(terrain_mask, cmap=cmap_terrain, origin='lower')
+
+            ah[1][0].set_title('Measurement')
+            im = ah[1][0].imshow(measured, origin='lower', vmin=min_val, vmax=max_val, cmap=cm.jet)
+            fig.colorbar(im, ax=ah[1][0])
+            ah[1][0].imshow(terrain_mask, cmap=cmap_terrain, origin='lower')
+
+            ah[0][1].set_title('Error')
+            im = ah[0][1].imshow(measured - predicted, origin='lower', cmap=cm.jet)
+            fig.colorbar(im, ax=ah[0][1])
+            ah[0][1].imshow(terrain_mask, cmap=cmap_terrain, origin='lower')
+
+            if 'tke' in ret['lidar'][lidar_key].keys():
+                tke = griddata((dist, z), ret['lidar'][lidar_key]['tke'], (D_grid, Z_grid), method='linear')
+                ah[1][1].set_title('TKE predicted')
+                ah[1][1].imshow(tke, origin='lower', cmap=cm.jet)
+                ah[1][1].imshow(terrain_mask, cmap=cmap_terrain, origin='lower')
 
     if args.mayavi:
         ui = []
