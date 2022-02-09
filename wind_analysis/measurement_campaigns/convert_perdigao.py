@@ -11,6 +11,7 @@ from osgeo import gdal
 import re
 from scipy.interpolate import LinearNDInterpolator, interp1d
 from scipy import ndimage
+from scipy.ndimage.filters import uniform_filter
 import torch
 
 import pyproj
@@ -71,6 +72,11 @@ tower_positions = {
     'v06': {'x': 33704.27, 'y': 5238.11},
     'v07': {'x': 33388.58, 'y': 5457.11}
     }    
+
+def sliding_std(in_arr, window_size):
+    c1 = uniform_filter(in_arr, window_size*2, mode='constant', origin = -window_size)
+    c2 = uniform_filter(in_arr * in_arr, window_size*2, mode='constant', origin = -window_size)
+    return (np.sqrt(c2 - c1*c1))[:-window_size*2 + 1]
 
 def get_terrain_tif(filename):
     dataset = gdal.Open(filename, gdal.GA_ReadOnly)
@@ -194,9 +200,48 @@ def get_tower_data(filename, tower_id, heights):
 def get_time_key(seconds):
     return str(datetime.timedelta(seconds=seconds))
 
+def get_lidar_data(filename):
+    data_dict = read_nc_file(filename, ['position_x', 'position_y', 'position_z', 'range', 'time',
+                                        'VEL', 'CNR', 'azimuth_angle', 'elevation_angle', 'elevation_sweep'])
+    # the data consists of several sweeps
+    data_dict['elevation_sweep'][0] = np.nanmax(data_dict['elevation_sweep']) - 0.1 # fix the first nan value
+    period = np.argmax(data_dict['elevation_sweep'])
+    num_sweeps = np.sum(data_dict['elevation_sweep'] > data_dict['elevation_sweep'].max() - 0.2)
+
+
+    elevation_angle = np.radians(data_dict['elevation_angle'])[:period]
+    try:
+        azimuth_angle = np.radians(data_dict['azimuth_angle'])[:period]
+    except IndexError:
+        # it is a 0 dim array
+        azimuth_angle = np.radians(data_dict['azimuth_angle'])
+
+    if period * num_sweeps != len(data_dict['elevation_angle']):
+        print('Elevation sweep data for the lidar could not be properly parsed:')
+        print(filename)
+        exit()
+
+    out_dict = {}
+    out_dict['x'] = data_dict['position_x'] + (np.sin(azimuth_angle) * np.cos(elevation_angle))[:, np.newaxis] * data_dict['range']
+    out_dict['y'] = data_dict['position_y'] + (np.cos(azimuth_angle) * np.cos(elevation_angle))[:, np.newaxis] * data_dict['range']
+    out_dict['z'] = data_dict['position_z'] + np.sin(elevation_angle[:, np.newaxis]) * data_dict['range']
+    out_dict['elevation_angle'] = elevation_angle
+    out_dict['azimuth_angle'] = azimuth_angle
+
+    vel = np.zeros((num_sweeps, period, len(data_dict['range'])))
+    for i in range(num_sweeps):
+        mask = data_dict['CNR'][i*period:(i+1)*period] < -20.0
+        vel[i] = data_dict['VEL'][i*period:(i+1)*period].copy()
+        vel[i][mask] = np.nan
+
+    out_dict['vel'] = np.nanmean(vel, axis=0)
+ 
+    return out_dict
+
 parser = argparse.ArgumentParser(description='Convert the Bolund data from the zip files to the hdf5 format')
 parser.add_argument('-t', dest='terrain_file', required=True, help='Filename of the terrain zip file')
 parser.add_argument('-m', dest='measurement_file', required=True, help='Filename of the measurement zip file')
+parser.add_argument('-l', dest='lidar_folder', default='perdigao_lidar_data', help='Folder containing the lidar data')
 parser.add_argument('-p', dest='plot', action='store_true', help='Plot the data from the different cases')
 parser.add_argument('-s', dest='save', action='store_true', help='Convert and save the data in different hdf5 datasets')
 parser.add_argument('-rh', dest='resolution_hor', type=float, default=16.64, help='The horizontal resolution of the grid')
@@ -267,6 +312,44 @@ for data, heights, twr in zip(tower_data, tower_heights, tower_names):
     if len(heights) > 0:
         measurements_dict[twr] = ms_dict
 
+
+# load the lidar data if available
+filename = args.measurement_file.split('/')[-1]
+datestring = filename.split('.')[0].split('_')[-1]
+lidar_filenames = [f for f in os.listdir(args.lidar_folder) if os.path.isfile(os.path.join(args.lidar_folder, f))]
+lidar_data = {}
+for lfn in lidar_filenames:
+    if datestring in lfn:
+        l_data = get_lidar_data(os.path.join(args.lidar_folder, lfn))
+        for key in l_data.keys():
+            if isinstance(l_data[key], np.ma.MaskedArray):
+                l_data[key] = l_data[key].filled(np.nan)
+        timestring = lfn.split('.')[0].split('_')[-1].replace(datestring,"")
+        scanner_key = lfn.split('.')[0].split('_')[0]
+        # one recording takes about 10 minutes, use the middle as the timestamp since the string indicates the end of the recording
+        timestamp = int(timestring[0:2]) * 3600 + int(timestring[2:4]) * 60 + int(timestring[4:6]) - 300
+        time_idx = np.argmin(np.abs(times - timestamp))
+        
+        l_data['x'] -= x_center
+        l_data['y'] -= y_center
+        l_data['z'] -= z_offset
+
+        # set all values occluded by terrain to NAN
+        z_terr = terrain_interpolator(l_data['x'], l_data['y'])
+        mask = (z_terr + 20) > l_data['z']
+        for ray in mask:
+            invalid_idx = np.argmax(ray==True)
+            # argmax returns 0 if there is no True in the ray
+            if ray[invalid_idx] == True:
+                ray[invalid_idx:] = True
+
+        l_data['vel'][mask] = np.nan
+
+        if not time_idx in lidar_data.keys():
+            lidar_data[time_idx] = {}
+ 
+        lidar_data[time_idx][scanner_key] = l_data  
+
 if args.save:
     terrain_grids = []
     x_interpolators = []
@@ -302,12 +385,11 @@ if args.save:
         y_interpolators.append(y_int)
         z_interpolators.append(z_int)
 
-    filename = args.measurement_file.split('/')[-1]
-    datestring = filename.split('.')[0].split('_')[-1]
     ds_file = h5py.File('perdigao_' + datestring + '.hdf5', 'w')
     ds_file.create_group('terrain')
     ds_file.create_group('lines')
     ds_file.create_group('measurement')
+    ds_file.create_group('lidar')
 
     for t in times:
         ds_file['measurement'].create_group(get_time_key(t))
@@ -342,6 +424,24 @@ if args.save:
                             ds_file['measurement'][t_key][s_key][ms_post].create_dataset('s', data=measurements_dict[ms_post][d_key][:, i])
                         else:
                             ds_file['measurement'][t_key][s_key][ms_post].create_dataset(d_key, data=measurements_dict[ms_post][d_key][:, i])
+
+            # Add the lidar scans
+            for i in lidar_data.keys():
+                t_key = get_time_key(times[i])
+
+                if not t_key in ds_file['lidar'].keys():
+                    ds_file['lidar'].create_group(t_key)
+
+                ds_file['lidar'][t_key].create_group(s_key)
+
+                for lidar_id in lidar_data[i].keys():
+                    ds_file['lidar'][t_key][s_key].create_group(lidar_id)
+                    ds_file['lidar'][t_key][s_key][lidar_id].create_dataset('x', data=x_inter(lidar_data[i][lidar_id]['x']))
+                    ds_file['lidar'][t_key][s_key][lidar_id].create_dataset('y', data=y_inter(lidar_data[i][lidar_id]['y']))
+                    ds_file['lidar'][t_key][s_key][lidar_id].create_dataset('z', data=z_inter(lidar_data[i][lidar_id]['z']))
+                    ds_file['lidar'][t_key][s_key][lidar_id].create_dataset('vel', data=lidar_data[i][lidar_id]['vel'])
+                    ds_file['lidar'][t_key][s_key][lidar_id].create_dataset('elevation_angle', data=lidar_data[i][lidar_id]['elevation_angle'])
+                    ds_file['lidar'][t_key][s_key][lidar_id].create_dataset('azimuth_angle', data=lidar_data[i][lidar_id]['azimuth_angle'])
 
             # Add the hourly averaged measurements
             for i in range(24):
