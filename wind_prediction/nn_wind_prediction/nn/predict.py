@@ -302,6 +302,291 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
 
         return prediction_errors, losses, worst_index, maxloss
 
+def sample_prediction_error(net, device, params, loss_fn, testset, index, num_predictions):
+    #Compute the average loss
+    with torch.no_grad():
+        losses = {
+            'loss_total': np.zeros(len(testset)),
+            'loss_ux': np.zeros(len(testset)),
+            'loss_uy': np.zeros(len(testset)),
+            'loss_uz': np.zeros(len(testset)),
+            'loss_turb': np.zeros(len(testset)),
+        }
+
+        prediction_errors = {
+            'all_tot_mean': [],
+            'all_tot_max': [],
+            'all_tot_median': [],
+            'all_hor_mean': [],
+            'all_hor_max': [],
+            'all_hor_median': [],
+            'all_ver_mean': [],
+            'all_ver_max': [],
+            'all_ver_median': [],
+            'all_turb_mean': [],
+            'all_turb_max': [],
+            'all_turb_median': [],
+
+            'all_tot_mean_rel': [],
+            'all_tot_max_rel': [],
+            'all_tot_median_rel': [],
+            'all_hor_mean_rel': [],
+            'all_hor_max_rel': [],
+            'all_hor_median_rel': [],
+            'all_ver_mean_rel': [],
+            'all_ver_max_rel': [],
+            'all_ver_median_rel': [],
+            'all_turb_mean_rel': [],
+            'all_turb_max_rel': [],
+            'all_turb_median_rel': [],
+
+            'low_tot_mean': [],
+            'low_tot_max': [],
+            'low_tot_median': [],
+            'low_hor_mean': [],
+            'low_hor_max': [],
+            'low_hor_median': [],
+            'low_ver_mean': [],
+            'low_ver_max': [],
+            'low_ver_median': [],
+            'low_turb_mean': [],
+            'low_turb_max': [],
+            'low_turb_median': [],
+
+            'low_tot_mean_rel': [],
+            'low_tot_max_rel': [],
+            'low_tot_median_rel': [],
+            'low_hor_mean_rel': [],
+            'low_hor_max_rel': [],
+            'low_hor_median_rel': [],
+            'low_ver_mean_rel': [],
+            'low_ver_max_rel': [],
+            'low_ver_median_rel': [],
+            'low_turb_mean_rel': [],
+            'low_turb_max_rel': [],
+            'low_turb_median_rel': [],
+
+            'high_tot_mean': [],
+            'high_tot_max': [],
+            'high_tot_median': [],
+            'high_hor_mean': [],
+            'high_hor_max': [],
+            'high_hor_median': [],
+            'high_ver_mean': [],
+            'high_ver_max': [],
+            'high_ver_median': [],
+            'high_turb_mean': [],
+            'high_turb_max': [],
+            'high_turb_median': [],
+
+            'high_tot_mean_rel': [],
+            'high_tot_max_rel': [],
+            'high_tot_median_rel': [],
+            'high_hor_mean_rel': [],
+            'high_hor_max_rel': [],
+            'high_hor_median_rel': [],
+            'high_ver_mean_rel': [],
+            'high_ver_max_rel': [],
+            'high_ver_median_rel': [],
+            'high_turb_mean_rel': [],
+            'high_turb_max_rel': [],
+            'high_turb_median_rel': [],
+        }
+
+        try:
+            predict_uncertainty = params.model['model_args']['predict_uncertainty']
+        except KeyError as e:
+            predict_uncertainty = False
+            print('predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False')
+
+        for i in tqdm(range(num_predictions), total=num_predictions):
+            data = testset[index]
+            inputs = data[0].unsqueeze(0)
+            labels = data[1].unsqueeze(0)
+
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            if (inputs.shape[0] > 1):
+                raise Exception('To compute the prediction error a batchsize of 1 is required')
+
+            outputs = net(inputs)['pred']
+
+            # move the tensors to the cpu
+            outputs.squeeze_()
+            labels.squeeze_()
+
+            # scale the values to the actual velocities
+            d3 = (len(list(outputs.size())) > 3)
+
+            scale = 1.0
+            if params.data['autoscale']:
+                scale = data[3].item()
+
+            if len(labels.shape) == 4:
+                labels[0] *= scale * params.data['ux_scaling']
+                labels[1] *= scale * params.data['uy_scaling']
+                labels[2] *= scale * params.data['uz_scaling']
+                outputs[0] *= scale * params.data['ux_scaling']
+                outputs[1] *= scale * params.data['uy_scaling']
+                outputs[2] *= scale * params.data['uz_scaling']
+
+                if 'turb' in  params.data['label_channels']:
+                    labels[3] *= scale * scale * params.data['turb_scaling']
+                    outputs[3] *= scale * scale * params.data['turb_scaling']
+
+            elif len(labels.shape) == 3:
+                labels[0] *= scale * params.data['ux_scaling']
+                labels[1] *= scale * params.data['uz_scaling']
+                outputs[0] *= scale * params.data['ux_scaling']
+                outputs[1] *= scale * params.data['uz_scaling']
+
+                if 'turb' in  params.data['label_channels']:
+                    labels[3] *= scale * scale * params.data['turb_scaling']
+                    outputs[3] *= scale * scale * params.data['turb_scaling']
+
+            else:
+                print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
+                raise ValueError
+
+            # compute the overall loss
+            if predict_uncertainty:
+                num_channels = outputs.shape[1]
+                dloss = loss_fn(outputs[:int(num_channels/2)], labels)
+            else:
+                dloss = loss_fn(outputs, labels)
+            losses['loss_total'][i] = dloss
+
+            # compute the losses of the individual channels
+            if len(labels.shape) == 4:
+                losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
+                losses['loss_uy'][i] = loss_fn(outputs[1], labels[1])
+                losses['loss_uz'][i] = loss_fn(outputs[2], labels[2])
+                if 'turb' in  params.data['label_channels']:
+                    losses['loss_turb'][i] = loss_fn(outputs[3], labels[3])
+
+            elif len(labels.shape) == 3:
+                losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
+                losses['loss_uz'][i] = loss_fn(outputs[1], labels[1])
+                if 'turb' in  params.data['label_channels']:
+                    losses['loss_turb'][i] = loss_fn(outputs[2], labels[2])
+
+            else:
+                print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
+                raise ValueError
+
+            # compute the prediction errors and extract the data
+            error_stats = utils.prediction_error.compute_prediction_error(labels,
+                                                                          outputs,
+                                                                          inputs[0,0] * params.data['terrain_scaling'],
+                                                                          predict_uncertainty, device,
+                                                                          'turb' in  params.data['label_channels'])
+            for key in error_stats.keys():
+                if not np.isnan(error_stats[key]):
+                    prediction_errors[key].append(error_stats[key])
+
+        for key in prediction_errors.keys():
+            prediction_errors[key] = np.array(prediction_errors[key])
+
+        # print the results over the full dataset
+        print('INFO: Average loss on sample: %s' % (np.mean(losses['loss_total'])))
+        print('INFO: Average loss on sample for ux: %s' % (np.mean(losses['loss_ux'])))
+        print('INFO: Average loss on sample for uy: %s' % (np.mean(losses['loss_uy'])))
+        print('INFO: Average loss on sample for uz: %s' % (np.mean(losses['loss_uz'])))
+        print('INFO: Average loss on sample for turbulence: %s' % (np.mean(losses['loss_turb'])))
+
+        print('INFO: Full domain errors, absolute:')
+        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['all_tot_mean'])))
+        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_hor_mean'])))
+        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['all_ver_mean'])))
+        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['all_turb_mean'])))
+        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['all_tot_median'])))
+        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['all_hor_median'])))
+        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_ver_median'])))
+        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['all_turb_median'])))
+        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['all_tot_max'])))
+        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['all_hor_max'])))
+        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['all_ver_max'])))
+        print('\tmax tubulence velocity error:     %s [J/kg]' % (np.mean(prediction_errors['all_turb_max'])))
+        print('')
+
+        print('INFO: Full domain errors, relative:')
+        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['all_tot_mean_rel'])))
+        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['all_hor_mean_rel'])))
+        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['all_ver_mean_rel'])))
+        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['all_turb_mean_rel'])))
+        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['all_tot_median_rel'])))
+        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['all_hor_median_rel'])))
+        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['all_ver_median_rel'])))
+        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['all_turb_median_rel'])))
+        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['all_tot_max_rel'])))
+        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['all_hor_max_rel'])))
+        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['all_ver_max_rel'])))
+        print('\tmax tubulence velocity error:     %s' % (np.mean(prediction_errors['all_turb_max_rel'])))
+        print('')
+
+        print('INFO: High above terrain errors, absolute:')
+        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['high_tot_mean'])))
+        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_hor_mean'])))
+        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['high_ver_mean'])))
+        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['high_turb_mean'])))
+        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['high_tot_median'])))
+        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['high_hor_median'])))
+        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_ver_median'])))
+        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['high_turb_median'])))
+        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['high_tot_max'])))
+        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['high_hor_max'])))
+        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['high_ver_max'])))
+        print('\tmax turbulent kinetic energy error:     %s [J/kg]' % (np.mean(prediction_errors['high_turb_max'])))
+        print('')
+
+        print('INFO: High above terrain errors, relative:')
+        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['high_tot_mean_rel'])))
+        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['high_hor_mean_rel'])))
+        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['high_ver_mean_rel'])))
+        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['high_turb_mean_rel'])))
+        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['high_tot_median_rel'])))
+        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['high_hor_median_rel'])))
+        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['high_ver_median_rel'])))
+        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['high_turb_median_rel'])))
+        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['high_tot_max_rel'])))
+        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['high_hor_max_rel'])))
+        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['high_ver_max_rel'])))
+        print('\tmax turbulent kinetic energy error:     %s' % (np.mean(prediction_errors['high_turb_max_rel'])))
+        print('')
+
+        print('INFO: Close to terrain errors, absolute:')
+        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['low_tot_mean'])))
+        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_hor_mean'])))
+        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['low_ver_mean'])))
+        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['low_turb_mean'])))
+        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_tot_median'])))
+        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['low_hor_median'])))
+        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_ver_median'])))
+        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['low_turb_median'])))
+        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['low_tot_max'])))
+        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['low_hor_max'])))
+        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_ver_max'])))
+        print('\tmax turbulent kinetic energy error:     %s [J/kg]' % (np.mean(prediction_errors['low_turb_max'])))
+        print('')
+
+        print('INFO: Close to terrain errors, relative:')
+        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['low_tot_mean_rel'])))
+        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['low_hor_mean_rel'])))
+        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['low_ver_mean_rel'])))
+        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['low_turb_mean_rel'])))
+        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['low_tot_median_rel'])))
+        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['low_hor_median_rel'])))
+        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['low_ver_median_rel'])))
+        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['low_turb_median_rel'])))
+        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['low_tot_max_rel'])))
+        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['low_hor_max_rel'])))
+        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['low_ver_max_rel'])))
+        print('\tmax turbulent kinetic energy error:     %s' % (np.mean(prediction_errors['low_turb_max_rel'])))
+        print('')
+
+        return prediction_errors, losses
+
+
 def predict_channels(input, label, scale, device, net, params, channels_to_plot, dataset,
                      input_channels = None, plot_divergence = False, loss_fn = None, savename=None, mayavi=False):
     with torch.no_grad():

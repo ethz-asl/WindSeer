@@ -41,6 +41,9 @@ parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='
 parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
 parser.add_argument('-s', dest='seed', type=int, default=0, help='If larger than 0 this sets the seed of the random number generator')
 parser.add_argument('--mayavi', action='store_true', help='Generate some extra plots using mayavi')
+parser.add_argument('-cse', dest='compute_single_error', action='store_true', help='If set the velocity prediction errors over a single sample is computed')
+parser.add_argument('-n', dest='n_iter', type=int, default=100, help='The number of forward passes for the single sample evaluation')
+
 
 args = parser.parse_args()
 args.print_loss = args.print_loss or print_loss
@@ -140,6 +143,10 @@ if args.compute_prediction_metrics:
 
 # prediction criterion
 criterion = torch.nn.MSELoss()
+
+if args.compute_single_error:
+    prediction_errors, losses = nn_custom.sample_prediction_error(net, device, params, criterion, testset, args.index, args.n_iter)
+    np.savez('prediction_errors_' + args.model_name + '_' + str(args.index) + '.npz', prediction_errors=prediction_errors, losses=losses)
 
 # compute the errors on the dataset
 if args.compute_prediction_error and all(elem in params.data['label_channels'] for elem in ['ux', 'uy', 'uz']):
