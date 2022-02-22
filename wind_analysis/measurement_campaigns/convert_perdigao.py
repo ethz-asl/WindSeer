@@ -78,36 +78,33 @@ def sliding_std(in_arr, window_size):
     c2 = uniform_filter(in_arr * in_arr, window_size*2, mode='constant', origin = -window_size)
     return (np.sqrt(c2 - c1*c1))[:-window_size*2 + 1]
 
-def get_terrain_tif(filename):
+def get_terrain_tif(filename, lon_center, lat_center):
     dataset = gdal.Open(filename, gdal.GA_ReadOnly)
-    geoTransform = dataset.GetGeoTransform()    
-    if not (geoTransform == (2000000.0, 25.0, 0.0, 3000000.0, 0.0, -25.0)):
-        print('This function expect the eu_dem_v11_E20N20.tif as an input file')
-        exit()
+    geoTransform = dataset.GetGeoTransform()
 
-    x_start = 31750
-    y_start = 38500
-    num_elements = 1000
-    Z_geo = dataset.GetRasterBand(1).ReadAsArray(x_start, y_start, num_elements, num_elements)
+    Z_geo = dataset.GetRasterBand(1).ReadAsArray()
 
-    minx = geoTransform[0]
-    maxy = geoTransform[3]
-    maxx = minx + geoTransform[1] * dataset.RasterXSize
-    miny = maxy + geoTransform[5] * dataset.RasterYSize
-
-    x, y = np.meshgrid(np.arange(num_elements) + x_start, np.arange(num_elements) + y_start)
+    x, y = np.meshgrid(np.arange(dataset.RasterXSize), np.arange(dataset.RasterYSize), indexing='xy')
     X_geo = geoTransform[0] + x * geoTransform[1] + y * geoTransform[2]
     Y_geo = geoTransform[3] + x * geoTransform[4] + y * geoTransform[5]
 
-    proj1 = pyproj.Proj(init='epsg:3035')
+    projection_string = dataset.GetProjection().split('PROJ4","')[-1].split('"]')[0]
+    proj1 = pyproj.Proj(projection_string)
     proj2 = pyproj.Proj(init='epsg:4326')
     X_wgs84, Y_wgs84, Z_wgs84 = pyproj.transform(proj1, proj2, X_geo, Y_geo, Z_geo)
 
+    # cut the data to an extent of +-3 km around the center
+    distance = (X_wgs84 - lon_center)**2 + (Y_wgs84 - lat_center)**2
+    idx_center = np.unravel_index(np.argmin(distance), distance.shape)
+    size_x_half = int(np.abs(3100.0 / geoTransform[1]))
+    size_y_half = int(np.abs(3100.0 / geoTransform[5]))
+
     terrain_dict = {
-        'lat': Y_wgs84,
-        'lon': X_wgs84,
-        'z': Z_wgs84,
+        'lat': Y_wgs84[idx_center[0]-size_y_half:idx_center[0]+size_y_half, idx_center[1]-size_x_half:idx_center[1]+size_x_half],
+        'lon': X_wgs84[idx_center[0]-size_y_half:idx_center[0]+size_y_half, idx_center[1]-size_x_half:idx_center[1]+size_x_half],
+        'z': Z_wgs84[idx_center[0]-size_y_half:idx_center[0]+size_y_half, idx_center[1]-size_x_half:idx_center[1]+size_x_half],
         }
+
     return terrain_dict
 
 def get_terrain_nc(filename, wgs84_to_local, x_center, y_center):
@@ -257,7 +254,9 @@ args = parser.parse_args()
 wgs84_to_local = pyproj.Proj("+proj=tmerc +lat_0=39.66825833333333 +lon_0=-8.133108333333334 +k=1 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs")
 
 # center of the map 
-x_center, y_center = wgs84_to_local(-7.739925, 39.710497)
+lat_center = 39.710497
+lon_center = -7.739925
+x_center, y_center = wgs84_to_local(lon_center, lat_center)
 z_offset = 250.0 # roughtly the height of the lowest tower
 
 # load the terrain data
@@ -265,7 +264,7 @@ if args.terrain_file.lower().endswith(('.nc')):
     terrain_dict = get_terrain_nc(args.terrain_file, wgs84_to_local, x_center, y_center)
 
 elif args.terrain_file.lower().endswith(('.tif')):
-    terrain_dict = get_terrain_tif(args.terrain_file)
+    terrain_dict = get_terrain_tif(args.terrain_file, lon_center, lat_center)
 
 else:
     print('Unknown terrain file type: ', args.terrain_file)
@@ -274,7 +273,8 @@ else:
 x_terrain, y_terrain = wgs84_to_local(terrain_dict['lon'], terrain_dict['lat'])
 terrain_interpolator = LinearNDInterpolator(list(zip(x_terrain.ravel() - x_center,
                                                      y_terrain.ravel() - y_center)),
-                                                     terrain_dict['z'].ravel() - z_offset)
+                                                     terrain_dict['z'].ravel() - z_offset,
+                                                     fill_value = 0.0)
 
 # load the measurements
 tower_data = []
@@ -371,10 +371,10 @@ if args.save:
 
             X_grid, Y_grid = np.meshgrid(x_grid, y_grid, indexing='xy')
             # check the lower bound of the cell for terrain occlusion
-            Z_terrain = terrain_interpolator((Y_grid, X_grid)) - 0.5 * args.resolution_ver / float(f)
+            Z_terrain = terrain_interpolator((X_grid, Y_grid)) - 0.5 * args.resolution_ver / float(f)
 
             # we need to extend the domain in z temporarily since negative heights can be present in the larger terrain patches
-            num_extra_cells = int(np.ceil(np.abs(Z_terrain.min() / args.resolution_ver * float(f))))
+            num_extra_cells = int(np.ceil(np.abs(np.nanmin(Z_terrain) / args.resolution_ver * float(f))))
             z_grid_tmp = (np.linspace(-num_extra_cells,nz-1,nz+num_extra_cells) - 2.5) * args.resolution_ver / float(f)
             is_free = z_grid_tmp[:, np.newaxis, np.newaxis] > Z_terrain[np.newaxis, :, :]
             dist_field = ndimage.distance_transform_edt(is_free).astype(np.float32)
@@ -384,6 +384,8 @@ if args.save:
         x_interpolators.append(x_int)
         y_interpolators.append(y_int)
         z_interpolators.append(z_int)
+
+    print('Terrain interpolation finished ....')
 
     ds_file = h5py.File('perdigao_' + datestring + '.hdf5', 'w')
     ds_file.create_group('terrain')
