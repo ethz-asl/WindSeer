@@ -4,6 +4,7 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
+from osgeo import gdal
 from scipy.interpolate import RegularGridInterpolator, interp1d
 from scipy import ndimage
 from scipy.io import loadmat
@@ -14,6 +15,36 @@ def read_mat_terrain(infile):
     data = loadmat(infile)
 
     return np.squeeze(data['x']), np.squeeze(data['y']), data['X'], data['Y'], data['Z']
+
+def get_terrain_tif(filename):
+    dataset = gdal.Open(filename, gdal.GA_ReadOnly)
+
+    geoTransform = dataset.GetGeoTransform()
+    x_grid = geoTransform[0] + np.arange(dataset.RasterXSize) * geoTransform[1] + np.arange(dataset.RasterYSize) * geoTransform[2]
+    y_grid = geoTransform[3] + np.arange(dataset.RasterXSize) * geoTransform[4] + np.arange(dataset.RasterYSize) * geoTransform[5]
+
+
+    terrain_offset = np.array([75383, 823737])
+    idx_ht_x = np.argmin(np.abs(x_grid-terrain_offset[0]))
+    idx_ht_y = np.argmin(np.abs(y_grid-terrain_offset[1]))
+
+    # extract a 5km x 5km patch
+    num_elements = int(5000.0 / geoTransform[1])
+    num_elements_half = int(0.5 * num_elements)
+    start_idx_x = int(idx_ht_x - num_elements_half)
+    start_idx_y = int(idx_ht_y - num_elements_half)
+    Z_geo = dataset.GetRasterBand(1).ReadAsArray(start_idx_x, start_idx_y, num_elements, num_elements)
+
+    x, y = np.meshgrid(np.arange(dataset.RasterXSize)[idx_ht_x-num_elements_half:idx_ht_x-num_elements_half+num_elements],
+                       np.arange(dataset.RasterYSize)[idx_ht_y-num_elements_half:idx_ht_y-num_elements_half+num_elements])
+    X_geo = geoTransform[0] + x * geoTransform[1] + y * geoTransform[2] - terrain_offset[0]
+    Y_geo = geoTransform[3] + x * geoTransform[4] + y * geoTransform[5] - terrain_offset[1]
+
+    X_geo = np.flipud(X_geo)
+    Y_geo = np.flipud(Y_geo)
+    Z_geo = np.flipud(Z_geo)
+
+    return X_geo[0], Y_geo[:, 0], X_geo, Y_geo, Z_geo
 
 parser = argparse.ArgumentParser(description='Convert the Bolund data from the zip files to the hdf5 format')
 parser.add_argument('-t', dest='terrain_file', required=True, help='Filename of the terrain zip file')
@@ -30,7 +61,15 @@ parser.add_argument('-y_shift', dest='y_shift', type=float, default=0.0, help='S
 args = parser.parse_args()
 
 # load the terrain data
-x, y, X, Y, Z = read_mat_terrain(args.terrain_file)
+if args.terrain_file.lower().endswith(('.mat')):
+    x, y, X, Y, Z = read_mat_terrain(args.terrain_file)
+
+elif args.terrain_file.lower().endswith(('.tif')):
+    x, y, X, Y, Z = get_terrain_tif(args.terrain_file)
+
+else:
+    print('Unknown terrain file type: ', args.terrain_file)
+    exit()
 
 # load the measurements
 experiment_names = ['TU25', 'TU30A', 'TU30B', 'TU01A', 'TU01B', 'TU01C', 'TU01D', 'TU03A', 'TU03B', 'TU05A', 'TU05B', 'TU05C', 'TU07B']
@@ -234,4 +273,5 @@ if args.plot:
         ax.set_ylabel('Northing (m)')
         ax.set_zlabel('Altitude (m)')
         ax.set_title(name)
+
     plt.show()
