@@ -22,7 +22,7 @@ def masts_to_string(input):
 
     return out
 
-def predict_case(dataset, net, index, input_mast, experiment_name, config, speedup_profiles=False, reference_mast=None, predict_lidar=False):
+def predict_case(dataset, net, index, input_mast, experiment_name, config, compute_baseline, speedup_profiles=False, reference_mast=None, predict_lidar=False):
     # load the data
     h5_file = h5py.File(dataset, 'r')
     scale_keys = list(h5_file['terrain'].keys())
@@ -47,8 +47,10 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
     terrain = torch.from_numpy(h5_file['terrain'][scale_keys[index]][...])
     input_meas = torch.zeros(tuple([3]) + tuple(terrain.shape))
     input_mask = torch.zeros(tuple(terrain.shape))
+    u_in = []
+    v_in = []
+    w_in = []
     print('Measurement indices:')
-
     for mast in input_mast:
         ds_input = h5_file['measurement'][experiment_name][scale_keys[args.index]][mast]
         # shuffle measurements according to height making sure that we fill always the highest value into the respective cell
@@ -56,6 +58,9 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
         u_vel = ds_input['u'][...]
         v_vel = ds_input['v'][...]
         w_vel = ds_input['w'][...]
+        u_in.extend(ds_input['u'][...])
+        v_in.extend(ds_input['v'][...])
+        w_in.extend(ds_input['w'][...])
         tke_available = 'tke' in ds_input.keys()
 
         idx_shuffle = np.argsort(positions[:,2])
@@ -106,8 +111,24 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
 
     input = torch.cat([terrain.unsqueeze(0).unsqueeze(0), input_measurement[input_idx].unsqueeze(0), input_mask.unsqueeze(0).unsqueeze(0)], dim = 1)
 
-    with torch.no_grad():
-        prediction = utils.predict(net, input, None, config.data)
+    if compute_baseline:
+        u_mean = np.mean(u_in)
+        v_mean = np.mean(v_in)
+        w_mean = np.mean(w_in)
+
+        num_channels = 3
+        if config.model['model_args']['use_turbulence']:
+            num_channels = 4
+        prediction = {'pred': torch.ones(tuple([1, num_channels]) + tuple(terrain.shape))}
+        prediction['pred'][0,0] *= u_mean
+        prediction['pred'][0,1] *= v_mean
+        prediction['pred'][0,2] *= w_mean
+        if config.model['model_args']['use_turbulence']:
+            prediction['pred'][0,2] *= 0
+
+    else:
+        with torch.no_grad():
+            prediction = utils.predict(net, input, None, config.data)
 
     # compute the error of the prediction compared to the measurements
     nz, ny, nx = prediction['pred'].shape[2:]
@@ -214,7 +235,6 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, speed
         ret['profiles'] = {}
         ds_lines = h5_file['lines'][scale_keys[args.index]]
         for line_key in ds_lines.keys():
-
             x = ds_lines[line_key]['x'][...]
             y = ds_lines[line_key]['y'][...]
             z = ds_lines[line_key]['z'][...]
@@ -303,6 +323,7 @@ parser.add_argument('--no_gpu', action='store_true', help='Force CPU prediction'
 parser.add_argument('--benchmark', action='store_true', help='Benchmark the prediction by looping through all input masks')
 parser.add_argument('--profile', action='store_true', help='Compute the speedup profiles along lines')
 parser.add_argument('--lidar', action='store_true', help='Compute the velocities along the lidar planes')
+parser.add_argument('--baseline', action='store_true', help='Compute the baseline (average of measurements)')
 args = parser.parse_args()
 
 if args.no_gpu:
@@ -335,7 +356,7 @@ if args.benchmark:
     h5_file.close()
 
     for mast in mast_keys:
-        ret = predict_case(args.dataset, net, args.index, [mast], args.experiment, config)
+        ret = predict_case(args.dataset, net, args.index, [mast], args.experiment, config, args.baseline)
         if ret:
             results[mast] = ret['results']
         else:
@@ -427,7 +448,7 @@ if args.benchmark:
     plt.show()
 
 else:
-    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config, args.profile, args.reference_mast, args.lidar)
+    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config, args.baseline, args.profile, args.reference_mast, args.lidar)
     
     if not ret:
         raise ValueError('No prediction because input mast not in prediction domain')
@@ -566,18 +587,18 @@ else:
     # Display results
     print('---------------------------------------------------')
     print('Prediction using mast: ' + masts_to_string(args.input_mast))
-    print('Error U: ' + str(np.nanmean(np.abs(ret['results']['u_meas'] - ret['results']['u_pred']))))
-    print('Error V: ' + str(np.nanmean(np.abs(ret['results']['v_meas'] - ret['results']['v_pred']))))
-    print('Error W: ' + str(np.nanmean(np.abs(ret['results']['w_meas'] - ret['results']['w_pred']))))
+    print('Error U: ' + str(np.nanmean(np.abs(ret['results']['u_meas'] - ret['results']['u_pred']))), '+-', str(np.nanstd(np.abs(ret['results']['u_meas'] - ret['results']['u_pred']))))
+    print('Error V: ' + str(np.nanmean(np.abs(ret['results']['v_meas'] - ret['results']['v_pred']))), '+-', str(np.nanstd(np.abs(ret['results']['v_meas'] - ret['results']['v_pred']))))
+    print('Error W: ' + str(np.nanmean(np.abs(ret['results']['w_meas'] - ret['results']['w_pred']))), '+-', str(np.nanstd(np.abs(ret['results']['w_meas'] - ret['results']['w_pred']))))
     if ret['turb_predicted']:
-        print('Error TKE: ' + str(np.nanmean(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred']))))
-    print('Error S: ' + str(np.nanmean(np.abs(ret['results']['s_meas'] - ret['results']['s_pred']))))
-    print('Error U rel: ' + str(np.nanmean(np.abs(ret['results']['u_meas'] - ret['results']['u_pred'])/np.abs(ret['results']['u_meas']))))
-    print('Error V rel: ' + str(np.nanmean(np.abs(ret['results']['v_meas'] - ret['results']['v_pred'])/np.abs(ret['results']['v_meas']))))
-    print('Error W rel: ' + str(np.nanmean(np.abs(ret['results']['w_meas'] - ret['results']['w_pred'])/np.abs(ret['results']['w_meas']))))
+        print('Error TKE: ' + str(np.nanmean(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred']))), '+-', str(np.nanstd(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred']))))
+    print('Error S: ' + str(np.nanmean(np.abs(ret['results']['s_meas'] - ret['results']['s_pred']))), '+-', str(np.nanstd(np.abs(ret['results']['s_meas'] - ret['results']['s_pred']))))
+    print('Error U rel: ' + str(np.nanmean(np.abs(ret['results']['u_meas'] - ret['results']['u_pred'])/np.abs(ret['results']['u_meas']))), '+-', str(np.nanstd(np.abs(ret['results']['u_meas'] - ret['results']['u_pred'])/np.abs(ret['results']['u_meas']))))
+    print('Error V rel: ' + str(np.nanmean(np.abs(ret['results']['v_meas'] - ret['results']['v_pred'])/np.abs(ret['results']['v_meas']))), '+-', str(np.nanstd(np.abs(ret['results']['v_meas'] - ret['results']['v_pred'])/np.abs(ret['results']['v_meas']))))
+    print('Error W rel: ' + str(np.nanmean(np.abs(ret['results']['w_meas'] - ret['results']['w_pred'])/np.abs(ret['results']['w_meas']))), '+-', str(np.nanstd(np.abs(ret['results']['w_meas'] - ret['results']['w_pred'])/np.abs(ret['results']['w_meas']))))
     if ret['turb_predicted']:
-        print('Error TKE rel: ' + str(np.nanmean(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred'])/np.abs(ret['results']['tke_meas']))))
-    print('Error S rel: ' + str(np.nanmean(np.abs(ret['results']['s_meas'] - ret['results']['s_pred'])/np.abs(ret['results']['s_meas']))))
+        print('Error TKE rel: ' + str(np.nanmean(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred'])/np.abs(ret['results']['tke_meas']))), '+-', str(np.nanstd(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred'])/np.abs(ret['results']['tke_meas']))))
+    print('Error S rel: ' + str(np.nanmean(np.abs(ret['results']['s_meas'] - ret['results']['s_pred'])/np.abs(ret['results']['s_meas']))), '+-', str(np.nanstd(np.abs(ret['results']['s_meas'] - ret['results']['s_pred'])/np.abs(ret['results']['s_meas']))))
     print('---------------------------------------------------')
 
     if args.profile:
