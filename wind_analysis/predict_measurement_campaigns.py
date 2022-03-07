@@ -453,16 +453,16 @@ if args.benchmark:
             print('Error TKE: ' + str(np.nanmean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred'])))  + ' +- ' + str(np.nanstd(np.abs(results[key]['tke_meas'] - results[key]['tke_pred']))))
         print('Error S: ' + str(np.nanmean(np.abs(results[key]['s_meas'] - results[key]['s_pred']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['s_meas'] - results[key]['s_pred']))))
 
-        stats = pearsonr(results[key]['u_meas'], results[key]['u_pred'])
+        stats = pearsonr(results[key]['u_meas'][~np.isnan(results[key]['u_meas'])], results[key]['u_pred'][~np.isnan(results[key]['u_meas'])])
         print('Pearson Corr U: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-        stats = pearsonr(results[key]['v_meas'], results[key]['v_pred'])
+        stats = pearsonr(results[key]['v_meas'][~np.isnan(results[key]['v_meas'])], results[key]['v_pred'][~np.isnan(results[key]['v_meas'])])
         print('Pearson Corr V: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-        stats = pearsonr(results[key]['w_meas'], results[key]['w_pred'])
+        stats = pearsonr(results[key]['w_meas'][~np.isnan(results[key]['w_meas'])], results[key]['w_pred'][~np.isnan(results[key]['w_meas'])])
         print('Pearson Corr W: ' + str(stats[0]) + ', p: ' + str(stats[1]))
         if turbulence_predicted:
-            stats = pearsonr(results[key]['tke_meas'], results[key]['tke_pred'])
+            stats = pearsonr(results[key]['tke_meas'][~np.isnan(results[key]['tke_meas'])], results[key]['tke_pred'][~np.isnan(results[key]['tke_meas'])])
             print('Pearson Corr TKE: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-        stats = pearsonr(results[key]['s_meas'], results[key]['s_pred'])
+        stats = pearsonr(results[key]['s_meas'][~np.isnan(results[key]['s_meas'])], results[key]['s_pred'][~np.isnan(results[key]['s_meas'])])
         print('Pearson Corr S: ' + str(stats[0]) + ', p: ' + str(stats[1]))
 
         for field in results[key].keys():
@@ -482,16 +482,16 @@ if args.benchmark:
         print('Error TKE: ' + str(np.nanmean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred']))))
     print('Error S: ' + str(np.nanmean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['s_meas'] - all_measurements['s_pred']))))
 
-    stats = pearsonr(all_measurements['u_meas'], all_measurements['u_pred'])
+    stats = pearsonr(all_measurements['u_meas'][~np.isnan(all_measurements['u_meas'])], all_measurements['u_pred'][~np.isnan(all_measurements['u_meas'])])
     print('Pearson Corr U: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-    stats = pearsonr(all_measurements['v_meas'], all_measurements['v_pred'])
+    stats = pearsonr(all_measurements['v_meas'][~np.isnan(all_measurements['v_meas'])], all_measurements['v_pred'][~np.isnan(all_measurements['v_meas'])])
     print('Pearson Corr V: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-    stats = pearsonr(all_measurements['w_meas'], all_measurements['w_pred'])
+    stats = pearsonr(all_measurements['w_meas'][~np.isnan(all_measurements['w_meas'])], all_measurements['w_pred'][~np.isnan(all_measurements['w_meas'])])
     print('Pearson Corr W: ' + str(stats[0]) + ', p: ' + str(stats[1]))
     if turbulence_predicted:
-        stats = pearsonr(all_measurements['tke_meas'], all_measurements['tke_pred'])
+        stats = pearsonr(all_measurements['tke_meas'][~np.isnan(all_measurements['tke_meas'])], all_measurements['tke_pred'][~np.isnan(all_measurements['tke_meas'])])
         print('Pearson Corr TKE: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-    stats = pearsonr(all_measurements['s_meas'], all_measurements['s_pred'])
+    stats = pearsonr(all_measurements['s_meas'][~np.isnan(all_measurements['s_meas'])], all_measurements['s_pred'][~np.isnan(all_measurements['s_meas'])])
     print('Pearson Corr S: ' + str(stats[0]) + ', p: ' + str(stats[1]))
     print('---------------------------------------------------')
 
@@ -686,16 +686,16 @@ else:
         print('Error TKE: ' + str(np.nanmean(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred']))), '+-', str(np.nanstd(np.abs(ret['results']['tke_meas'] - ret['results']['tke_pred']))))
     print('Error S: ' + str(np.nanmean(np.abs(ret['results']['s_meas'] - ret['results']['s_pred']))), '+-', str(np.nanstd(np.abs(ret['results']['s_meas'] - ret['results']['s_pred']))))
 
-    stats = pearsonr(ret['results']['u_meas'], ret['results']['u_pred'])
+    stats = pearsonr(ret['results']['u_meas'][~np.isnan(ret['results']['u_meas'])], ret['results']['u_pred'][~np.isnan(ret['results']['u_meas'])])
     print('Pearson Corr U: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-    stats = pearsonr(ret['results']['v_meas'], ret['results']['v_pred'])
+    stats = pearsonr(ret['results']['v_meas'][~np.isnan(ret['results']['v_meas'])], ret['results']['v_pred'][~np.isnan(ret['results']['v_meas'])])
     print('Pearson Corr V: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-    stats = pearsonr(ret['results']['w_meas'], ret['results']['w_pred'])
+    stats = pearsonr(ret['results']['w_meas'][~np.isnan(ret['results']['w_meas'])], ret['results']['w_pred'][~np.isnan(ret['results']['w_meas'])])
     print('Pearson Corr W: ' + str(stats[0]) + ', p: ' + str(stats[1]))
     if ret['turb_predicted']:
-        stats = pearsonr(ret['results']['tke_meas'], ret['results']['tke_pred'])
+        stats = pearsonr(ret['results']['tke_meas'][~np.isnan(ret['results']['tke_meas'])], ret['results']['tke_pred'][~np.isnan(ret['results']['tke_meas'])])
         print('Pearson Corr TKE: ' + str(stats[0]) + ', p: ' + str(stats[1]))
-    stats = pearsonr(ret['results']['s_meas'], ret['results']['s_pred'])
+    stats = pearsonr(ret['results']['s_meas'][~np.isnan(ret['results']['s_meas'])], ret['results']['s_pred'][~np.isnan(ret['results']['s_meas'])])
     print('Pearson Corr S: ' + str(stats[0]) + ', p: ' + str(stats[1]))
     print('---------------------------------------------------')
 
