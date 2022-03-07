@@ -13,6 +13,13 @@ import nn_wind_prediction.models as models
 import nn_wind_prediction.utils as nn_utils
 from analysis_utils import utils
 
+try:
+    import GPy
+    gpy_available = True
+except ImportError:
+    print('GPy could not get imported, GPR baseline not available')
+    gpy_available = False
+
 def masts_to_string(input):
     out = ''
 
@@ -22,7 +29,7 @@ def masts_to_string(input):
 
     return out
 
-def predict_case(dataset, net, index, input_mast, experiment_name, config, compute_baseline, speedup_profiles=False, reference_mast=None, predict_lidar=False):
+def predict_case(dataset, net, index, input_mast, experiment_name, config, compute_baseline, speedup_profiles=False, reference_mast=None, predict_lidar=False, gpr_baseline=False):
     # load the data
     h5_file = h5py.File(dataset, 'r')
     scale_keys = list(h5_file['terrain'].keys())
@@ -50,6 +57,7 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, compu
     u_in = []
     v_in = []
     w_in = []
+    pos_in = []
     print('Measurement indices:')
     for mast in input_mast:
         ds_input = h5_file['measurement'][experiment_name][scale_keys[args.index]][mast]
@@ -61,6 +69,7 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, compu
         u_in.extend(ds_input['u'][...])
         v_in.extend(ds_input['v'][...])
         w_in.extend(ds_input['w'][...])
+        pos_in.append(positions)
         tke_available = 'tke' in ds_input.keys()
 
         idx_shuffle = np.argsort(positions[:,2])
@@ -112,23 +121,64 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, compu
     input = torch.cat([terrain.unsqueeze(0).unsqueeze(0), input_measurement[input_idx].unsqueeze(0), input_mask.unsqueeze(0).unsqueeze(0)], dim = 1)
 
     if compute_baseline:
-        u_mean = np.mean(u_in)
-        v_mean = np.mean(v_in)
-        w_mean = np.mean(w_in)
+        # clean up data (remove invalid input samples
+        scale = float(scale_keys[args.index].split('_')[1])
+        u_in = np.array(u_in)
+        v_in = np.array(v_in)
+        w_in = np.array(w_in)
+        tot_vel = u_in**2 + v_in**2 + w_in**2
+        u_in = u_in[tot_vel>0]
+        v_in = v_in[tot_vel>0]
+        w_in = w_in[tot_vel>0]
+
+        pos_in_gp = None
+        for pos in pos_in:
+            if pos_in_gp is None:
+                pos_in_gp = pos
+            else:
+                pos_in_gp = np.concatenate((pos_in_gp, pos))
+
+        pos_in_gp = pos_in_gp[tot_vel>0] / scale
 
         num_channels = 3
         if config.model['model_args']['use_turbulence']:
             num_channels = 4
-        prediction = {'pred': torch.ones(tuple([1, num_channels]) + tuple(terrain.shape))}
-        prediction['pred'][0,0] *= u_mean
-        prediction['pred'][0,1] *= v_mean
-        prediction['pred'][0,2] *= w_mean
-        if config.model['model_args']['use_turbulence']:
-            prediction['pred'][0,2] *= 0
+
+        if gpr_baseline and not gpy_available:
+            print('GPR baseline requested but GPy not available')
+
+        if gpr_baseline and gpy_available:
+            kernel_u = GPy.kern.RBF(input_dim=3, variance=47.625, lengthscale=6.716)
+            gpm_u = GPy.models.GPRegression(pos_in_gp, u_in[:,np.newaxis]-u_in.mean(), kernel_u)
+            kernel_v = GPy.kern.RBF(input_dim=3, variance=47.625, lengthscale=6.716)
+            gpm_v = GPy.models.GPRegression(pos_in_gp, v_in[:,np.newaxis]-v_in.mean(), kernel_v)
+            kernel_w = GPy.kern.RBF(input_dim=3, variance=31.576, lengthscale=6.905)
+            gpm_w = GPy.models.GPRegression(pos_in_gp, w_in[:,np.newaxis]-w_in.mean(), kernel_w)
+
+            Z, Y, X = torch.meshgrid(torch.linspace(0, terrain.shape[0]-1, terrain.shape[0]), torch.linspace(0, terrain.shape[1]-1, terrain.shape[1]), torch.linspace(0, terrain.shape[2]-1, terrain.shape[2]))
+
+            grid_pos = torch.stack((X.ravel(), Y.ravel(), Z.ravel())).T
+
+            prediction = {'pred': torch.zeros(tuple([1, num_channels]) + tuple(terrain.shape))}
+            prediction['pred'][0,0] = torch.from_numpy(gpm_u.predict(grid_pos.numpy() / scale)[0].reshape(X.shape))+u_in.mean()
+            prediction['pred'][0,1] = torch.from_numpy(gpm_v.predict(grid_pos.numpy() / scale)[0].reshape(X.shape))+v_in.mean()
+            prediction['pred'][0,2] = torch.from_numpy(gpm_w.predict(grid_pos.numpy() / scale)[0].reshape(X.shape))+w_in.mean()
+
+        else:
+            u_mean = np.mean(u_in)
+            v_mean = np.mean(v_in)
+            w_mean = np.mean(w_in)
+
+            prediction = {'pred': torch.ones(tuple([1, num_channels]) + tuple(terrain.shape))}
+            prediction['pred'][0,0] *= u_mean
+            prediction['pred'][0,1] *= v_mean
+            prediction['pred'][0,2] *= w_mean
+            if config.model['model_args']['use_turbulence']:
+                prediction['pred'][0,3] *= 0
 
     else:
         with torch.no_grad():
-            prediction = utils.predict(net, input, None, config.data)
+            prediction = utils.predict(net, input.clone(), None, config.data)
 
     # compute the error of the prediction compared to the measurements
     nz, ny, nx = prediction['pred'].shape[2:]
@@ -323,7 +373,9 @@ parser.add_argument('--no_gpu', action='store_true', help='Force CPU prediction'
 parser.add_argument('--benchmark', action='store_true', help='Benchmark the prediction by looping through all input masks')
 parser.add_argument('--profile', action='store_true', help='Compute the speedup profiles along lines')
 parser.add_argument('--lidar', action='store_true', help='Compute the velocities along the lidar planes')
-parser.add_argument('--baseline', action='store_true', help='Compute the baseline (average of measurements)')
+parser.add_argument('--baseline', action='store_true', help='Compute the baseline (average of measurements / GPR)')
+parser.add_argument('--gpr', action='store_true', help='Compute the baseline using GPR instead of averaging')
+
 args = parser.parse_args()
 
 if args.no_gpu:
@@ -356,9 +408,10 @@ if args.benchmark:
     h5_file.close()
 
     for mast in mast_keys:
-        ret = predict_case(args.dataset, net, args.index, [mast], args.experiment, config, args.baseline)
+        ret = predict_case(args.dataset, net, args.index, [mast], args.experiment, config, args.baseline, gpr_baseline=args.gpr)
         if ret:
             results[mast] = ret['results']
+            turbulence_predicted = ret['turb_predicted']
         else:
             print('Input mast outside the prediction region')
 
@@ -366,18 +419,18 @@ if args.benchmark:
     for key in results.keys():
         print('---------------------------------------------------')
         print('Prediction using mast: ' + key)
-        print('Error U: ' + str(np.nanmean(np.abs(results[key]['u_meas'] - results[key]['u_pred']))))
-        print('Error V: ' + str(np.nanmean(np.abs(results[key]['v_meas'] - results[key]['v_pred']))))
-        print('Error W: ' + str(np.nanmean(np.abs(results[key]['w_meas'] - results[key]['w_pred']))))
-        if ret['turb_predicted']:
-            print('Error TKE: ' + str(np.nanmean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred']))))
-        print('Error S: ' + str(np.nanmean(np.abs(results[key]['s_meas'] - results[key]['s_pred']))))
-        print('Error U rel: ' + str(np.nanmean(np.abs(results[key]['u_meas'] - results[key]['u_pred'])/np.abs(results[key]['u_meas']))))
-        print('Error V rel: ' + str(np.nanmean(np.abs(results[key]['v_meas'] - results[key]['v_pred'])/np.abs(results[key]['v_meas']))))
-        print('Error W rel: ' + str(np.nanmean(np.abs(results[key]['w_meas'] - results[key]['w_pred'])/np.abs(results[key]['w_meas']))))
-        if ret['turb_predicted']:
-            print('Error TKE rel: ' + str(np.nanmean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred'])/np.abs(results[key]['tke_meas']))))
-        print('Error S rel: ' + str(np.nanmean(np.abs(results[key]['s_meas'] - results[key]['s_pred'])/np.abs(results[key]['s_meas']))))
+        print('Error U: ' + str(np.nanmean(np.abs(results[key]['u_meas'] - results[key]['u_pred']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['u_meas'] - results[key]['u_pred']))))
+        print('Error V: ' + str(np.nanmean(np.abs(results[key]['v_meas'] - results[key]['v_pred']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['v_meas'] - results[key]['v_pred']))))
+        print('Error W: ' + str(np.nanmean(np.abs(results[key]['w_meas'] - results[key]['w_pred']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['w_meas'] - results[key]['w_pred']))))
+        if turbulence_predicted:
+            print('Error TKE: ' + str(np.nanmean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred'])))  + ' +- ' + str(np.nanstd(np.abs(results[key]['tke_meas'] - results[key]['tke_pred']))))
+        print('Error S: ' + str(np.nanmean(np.abs(results[key]['s_meas'] - results[key]['s_pred']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['s_meas'] - results[key]['s_pred']))))
+        print('Error U rel: ' + str(np.nanmean(np.abs(results[key]['u_meas'] - results[key]['u_pred'])/np.abs(results[key]['u_meas']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['u_meas'] - results[key]['u_pred'])/np.abs(results[key]['u_meas']))))
+        print('Error V rel: ' + str(np.nanmean(np.abs(results[key]['v_meas'] - results[key]['v_pred'])/np.abs(results[key]['v_meas']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['v_meas'] - results[key]['v_pred'])/np.abs(results[key]['v_meas']))))
+        print('Error W rel: ' + str(np.nanmean(np.abs(results[key]['w_meas'] - results[key]['w_pred'])/np.abs(results[key]['w_meas']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['w_meas'] - results[key]['w_pred'])/np.abs(results[key]['w_meas']))))
+        if turbulence_predicted:
+            print('Error TKE rel: ' + str(np.nanmean(np.abs(results[key]['tke_meas'] - results[key]['tke_pred'])/np.abs(results[key]['tke_meas']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['tke_meas'] - results[key]['tke_pred'])/np.abs(results[key]['tke_meas']))))
+        print('Error S rel: ' + str(np.nanmean(np.abs(results[key]['s_meas'] - results[key]['s_pred'])/np.abs(results[key]['s_meas']))) + ' +- ' + str(np.nanstd(np.abs(results[key]['s_meas'] - results[key]['s_pred'])/np.abs(results[key]['s_meas']))))
 
         for field in results[key].keys():
             if 'meas' in field or 'pred' in field:
@@ -389,18 +442,18 @@ if args.benchmark:
 
     print('---------------------------------------------------')
     print('Prediction error all masts')
-    print('Error U: ' + str(np.nanmean(np.abs(all_measurements['u_meas'] - all_measurements['u_pred']))))
-    print('Error V: ' + str(np.nanmean(np.abs(all_measurements['v_meas'] - all_measurements['v_pred']))))
-    print('Error W: ' + str(np.nanmean(np.abs(all_measurements['w_meas'] - all_measurements['w_pred']))))
-    if ret['turb_predicted']:
-        print('Error TKE: ' + str(np.nanmean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred']))))
-    print('Error S: ' + str(np.nanmean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred']))))
-    print('Error U rel: ' + str(np.nanmean(np.abs(all_measurements['u_meas'] - all_measurements['u_pred'])/np.abs(all_measurements['u_meas']))))
-    print('Error V rel: ' + str(np.nanmean(np.abs(all_measurements['v_meas'] - all_measurements['v_pred'])/np.abs(all_measurements['v_meas']))))
-    print('Error W rel: ' + str(np.nanmean(np.abs(all_measurements['w_meas'] - all_measurements['w_pred'])/np.abs(all_measurements['w_meas']))))
-    if ret['turb_predicted']:
-        print('Error TKE rel: ' + str(np.nanmean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred'])/np.abs(all_measurements['tke_meas']))))
-    print('Error S rel: ' + str(np.nanmean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred'])/np.abs(all_measurements['s_meas']))))
+    print('Error U: ' + str(np.nanmean(np.abs(all_measurements['u_meas'] - all_measurements['u_pred']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['u_meas'] - all_measurements['u_pred']))))
+    print('Error V: ' + str(np.nanmean(np.abs(all_measurements['v_meas'] - all_measurements['v_pred']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['v_meas'] - all_measurements['v_pred']))))
+    print('Error W: ' + str(np.nanmean(np.abs(all_measurements['w_meas'] - all_measurements['w_pred']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['w_meas'] - all_measurements['w_pred']))))
+    if turbulence_predicted:
+        print('Error TKE: ' + str(np.nanmean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred']))))
+    print('Error S: ' + str(np.nanmean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['s_meas'] - all_measurements['s_pred']))))
+    print('Error U rel: ' + str(np.nanmean(np.abs(all_measurements['u_meas'] - all_measurements['u_pred'])/np.abs(all_measurements['u_meas']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['u_meas'] - all_measurements['u_pred'])/np.abs(all_measurements['u_meas']))))
+    print('Error V rel: ' + str(np.nanmean(np.abs(all_measurements['v_meas'] - all_measurements['v_pred'])/np.abs(all_measurements['v_meas']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['v_meas'] - all_measurements['v_pred'])/np.abs(all_measurements['v_meas']))))
+    print('Error W rel: ' + str(np.nanmean(np.abs(all_measurements['w_meas'] - all_measurements['w_pred'])/np.abs(all_measurements['w_meas']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['w_meas'] - all_measurements['w_pred'])/np.abs(all_measurements['w_meas']))))
+    if turbulence_predicted:
+        print('Error TKE rel: ' + str(np.nanmean(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred'])/np.abs(all_measurements['tke_meas']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['tke_meas'] - all_measurements['tke_pred'])/np.abs(all_measurements['tke_meas']))))
+    print('Error S rel: ' + str(np.nanmean(np.abs(all_measurements['s_meas'] - all_measurements['s_pred'])/np.abs(all_measurements['s_meas']))) + ' +- ' + str(np.nanstd(np.abs(all_measurements['s_meas'] - all_measurements['s_pred'])/np.abs(all_measurements['s_meas']))))
     print('---------------------------------------------------')
 
     plt.figure()
@@ -435,7 +488,7 @@ if args.benchmark:
     plt.legend()
     plt.title('W')
 
-    if ret['turb_predicted']:
+    if turbulence_predicted:
         plt.figure()
         for key in results.keys():
             plt.plot(results[key]['tke_meas'], results[key]['tke_pred'], 'o', label=key)
@@ -448,7 +501,7 @@ if args.benchmark:
     plt.show()
 
 else:
-    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config, args.baseline, args.profile, args.reference_mast, args.lidar)
+    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config, args.baseline, args.profile, args.reference_mast, args.lidar, args.gpr)
     
     if not ret:
         raise ValueError('No prediction because input mast not in prediction domain')
@@ -661,8 +714,11 @@ else:
         ui = []
 
         ui.append(
-            nn_utils.mlab_plot_prediction(ret['prediction']['pred'], ret['terrain'], terrain_mode='blocks', terrain_uniform_color=True,
+            nn_utils.mlab_plot_prediction(ret['prediction']['pred'], ret['terrain'], terrain_mode='blocks', terrain_uniform_color=False,
                                           prediction_channels=config.data['label_channels'], blocking=False))
+
+        nn_utils.mlab_plot_measurements(ret['input'][0, 1:-1], ret['input'][0, -1], ret['terrain'], terrain_mode='blocks',
+                                     terrain_uniform_color=False, blocking=False)
 
 
     nn_utils.plot_prediction(config.data['label_channels'],
