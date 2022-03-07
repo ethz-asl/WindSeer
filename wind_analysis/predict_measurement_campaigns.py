@@ -1,5 +1,6 @@
 import argparse
 import copy
+from itertools import compress
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -29,7 +30,7 @@ def masts_to_string(input):
 
     return out
 
-def predict_case(dataset, net, index, input_mast, experiment_name, config, compute_baseline, speedup_profiles=False, reference_mast=None, predict_lidar=False, gpr_baseline=False):
+def predict_case(dataset, net, index, input_mast, experiment_name, config, compute_baseline, speedup_profiles=False, reference_mast=None, predict_lidar=False, gpr_baseline=False, extrapolate_pred=False):
     # load the data
     h5_file = h5py.File(dataset, 'r')
     scale_keys = list(h5_file['terrain'].keys())
@@ -244,6 +245,30 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, compu
 
         meas_3d_available = u_meas != 0
 
+        positions_labels = copy.copy(positions)
+
+        if not extrapolate_pred:
+            positions_labels = copy.copy(positions[in_bounds,:])
+
+            u_meas = u_meas[in_bounds]
+            v_meas = v_meas[in_bounds]
+            w_meas = w_meas[in_bounds]
+            s_meas = s_meas[in_bounds]
+            if tke_available:
+                tke_meas = tke_meas[in_bounds]
+
+            u_pred = u_pred[in_bounds]
+            v_pred = v_pred[in_bounds]
+            w_pred = w_pred[in_bounds]
+            s_pred = s_pred[in_bounds]
+            if tke_available:
+                tke_pred = tke_pred[in_bounds]
+
+            meas_3d_available = list(compress(meas_3d_available, in_bounds))
+            extrapolated = list(compress(extrapolated, in_bounds))
+            in_bounds = list(compress(in_bounds, in_bounds))
+
+
         results['s_meas'].extend(s_meas)
         results['s_pred'].extend(s_pred)
 
@@ -259,8 +284,8 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, compu
         if tke_interpolator:
             results['tke_pred'].extend(tke_pred[meas_3d_available])
 
-        labels_all = [mast + '_' + "{:.2f}".format(positions[idx, 2]) for idx in range(len(s_meas))]
-        labels_3d = [mast + '_' + "{:.2f}".format(positions[idx, 2]) for idx in range(len(s_meas)) if meas_3d_available[idx]]
+        labels_all = [mast + '_' + "{:.2f}".format(positions_labels[idx, 2]) for idx in range(len(s_meas))]
+        labels_3d = [mast + '_' + "{:.2f}".format(positions_labels[idx, 2]) for idx in range(len(s_meas)) if meas_3d_available[idx]]
 
         results['labels_all'].extend(labels_all)
         results['labels_3d'].extend(labels_3d)
@@ -375,6 +400,7 @@ parser.add_argument('--profile', action='store_true', help='Compute the speedup 
 parser.add_argument('--lidar', action='store_true', help='Compute the velocities along the lidar planes')
 parser.add_argument('--baseline', action='store_true', help='Compute the baseline (average of measurements / GPR)')
 parser.add_argument('--gpr', action='store_true', help='Compute the baseline using GPR instead of averaging')
+parser.add_argument('--extrapolate', action='store_true', help='Extrapolate predictions to mast positions outside the domain.')
 
 args = parser.parse_args()
 
@@ -408,7 +434,7 @@ if args.benchmark:
     h5_file.close()
 
     for mast in mast_keys:
-        ret = predict_case(args.dataset, net, args.index, [mast], args.experiment, config, args.baseline, gpr_baseline=args.gpr)
+        ret = predict_case(args.dataset, net, args.index, [mast], args.experiment, config, args.baseline, gpr_baseline=args.gpr, extrapolate_pred=args.extrapolate)
         if ret:
             results[mast] = ret['results']
             turbulence_predicted = ret['turb_predicted']
@@ -501,7 +527,8 @@ if args.benchmark:
     plt.show()
 
 else:
-    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config, args.baseline, args.profile, args.reference_mast, args.lidar, args.gpr)
+    ret = predict_case(args.dataset, net, args.index, args.input_mast, args.experiment, config,
+                       args.baseline, args.profile, args.reference_mast, args.lidar, args.gpr, args.extrapolate)
     
     if not ret:
         raise ValueError('No prediction because input mast not in prediction domain')
@@ -613,7 +640,6 @@ else:
         ah[2][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
         ah[2][0].set_xticklabels(ret['results']['labels_3d'], rotation='vertical')
 
-
     fig, ah = plt.subplots(1, 1, squeeze=False)
     ah[0][0].set_title('Prediction vs Measurement Magnitude')
     ah[0][0].plot(x_all, ret['results']['s_meas'], 'sr', label='measurements')
@@ -719,7 +745,6 @@ else:
 
         nn_utils.mlab_plot_measurements(ret['input'][0, 1:-1], ret['input'][0, -1], ret['terrain'], terrain_mode='blocks',
                                      terrain_uniform_color=False, blocking=False)
-
 
     nn_utils.plot_prediction(config.data['label_channels'],
                              prediction = ret['prediction']['pred'][0].cpu().detach(),
