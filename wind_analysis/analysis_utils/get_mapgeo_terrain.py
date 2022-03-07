@@ -6,14 +6,12 @@ try:
 except ImportError:
     print("'numpy' is not installed. Use the command below to install it:")
     print("     sudo apt-get install python-numpy")
-    exit()
 
 try:
     from osgeo import gdal
 except ImportError:
     print("'pygdal' is not installed. Use the command below to install it:")
     print("     pip3 install pygdal==2.3.2.4")
-    exit()
 
 try:
     from scipy.interpolate import RectBivariateSpline
@@ -21,7 +19,6 @@ try:
 except ImportError:
     print("'scipy' is not installed. Use the command below to install it:")
     print("     pip3 install scipy")
-    exit()
 
 
 def plot_terrain_patch(x_img, y_img, z_img, x_p, y_p, z_p):
