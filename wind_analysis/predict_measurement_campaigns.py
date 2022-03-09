@@ -443,6 +443,7 @@ if args.benchmark:
             print('Input mast outside the prediction region')
 
     all_measurements = {}
+    pearson_r = {'u': [], 'v': [], 'w': [], 'tke': [], 's': []}
     for key in results.keys():
         print('---------------------------------------------------')
         print('Prediction using mast: ' + key)
@@ -455,15 +456,20 @@ if args.benchmark:
 
         stats = pearsonr(results[key]['u_meas'][~np.isnan(results[key]['u_meas'])], results[key]['u_pred'][~np.isnan(results[key]['u_meas'])])
         print('Pearson Corr U: ' + str(stats[0]) + ', p: ' + str(stats[1]))
+        pearson_r['u'].append(stats[0])
         stats = pearsonr(results[key]['v_meas'][~np.isnan(results[key]['v_meas'])], results[key]['v_pred'][~np.isnan(results[key]['v_meas'])])
         print('Pearson Corr V: ' + str(stats[0]) + ', p: ' + str(stats[1]))
+        pearson_r['v'].append(stats[0])
         stats = pearsonr(results[key]['w_meas'][~np.isnan(results[key]['w_meas'])], results[key]['w_pred'][~np.isnan(results[key]['w_meas'])])
         print('Pearson Corr W: ' + str(stats[0]) + ', p: ' + str(stats[1]))
+        pearson_r['w'].append(stats[0])
         if turbulence_predicted:
             stats = pearsonr(results[key]['tke_meas'][~np.isnan(results[key]['tke_meas'])], results[key]['tke_pred'][~np.isnan(results[key]['tke_meas'])])
             print('Pearson Corr TKE: ' + str(stats[0]) + ', p: ' + str(stats[1]))
+            pearson_r['tke'].append(stats[0])
         stats = pearsonr(results[key]['s_meas'][~np.isnan(results[key]['s_meas'])], results[key]['s_pred'][~np.isnan(results[key]['s_meas'])])
         print('Pearson Corr S: ' + str(stats[0]) + ', p: ' + str(stats[1]))
+        pearson_r['s'].append(stats[0])
 
         for field in results[key].keys():
             if 'meas' in field or 'pred' in field:
@@ -493,6 +499,14 @@ if args.benchmark:
         print('Pearson Corr TKE: ' + str(stats[0]) + ', p: ' + str(stats[1]))
     stats = pearsonr(all_measurements['s_meas'][~np.isnan(all_measurements['s_meas'])], all_measurements['s_pred'][~np.isnan(all_measurements['s_meas'])])
     print('Pearson Corr S: ' + str(stats[0]) + ', p: ' + str(stats[1]))
+    print('---------------------------------------------------')
+    print('Pearson corr per case, then averaged over all cases')
+    print('U:   ' + str(np.nanmean(pearson_r['u'])))
+    print('V:   ' + str(np.nanmean(pearson_r['v'])))
+    print('W:   ' + str(np.nanmean(pearson_r['w'])))
+    if turbulence_predicted:
+        print('TKE: ' + str(np.nanmean(pearson_r['tke'])))
+    print('S:   ' + str(np.nanmean(pearson_r['s'])))
     print('---------------------------------------------------')
 
     plt.figure()
