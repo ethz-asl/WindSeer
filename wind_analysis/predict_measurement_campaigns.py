@@ -341,7 +341,15 @@ def predict_case(dataset, net, index, input_mast, experiment_name, config, compu
                 'dist': ds_lines[line_key]['dist'][...],
                 'z': z,
                 'speedup': (s_pred - s_ref) / s_ref,
+                's_pred': s_pred,
+                'u_pred': u_pred,
+                'v_pred': v_pred,
+                'w_pred': w_pred,
                 }
+
+            if tke_interpolator:
+                tke_pred = tke_interpolator(np.fliplr(positions_clipped))
+                ret['profiles'][line_key]['tke_pred'] = tke_pred
 
     if predict_lidar:
         ds_lidar = h5_file['lidar']
@@ -402,6 +410,7 @@ parser.add_argument('--lidar', action='store_true', help='Compute the velocities
 parser.add_argument('--baseline', action='store_true', help='Compute the baseline (average of measurements / GPR)')
 parser.add_argument('--gpr', action='store_true', help='Compute the baseline using GPR instead of averaging')
 parser.add_argument('--extrapolate', action='store_true', help='Extrapolate predictions to mast positions outside the domain.')
+parser.add_argument('--save', action='store_true', help='Save the prediction results')
 
 args = parser.parse_args()
 
@@ -559,6 +568,25 @@ else:
     
     if not ret:
         raise ValueError('No prediction because input mast not in prediction domain')
+
+    if args.save:
+        if args.baseline:
+            if args.gpr:
+                model_name = 'GPR'
+            else:
+                model_name = 'AVG'
+        else:
+            if args.model_dir.split('/')[-1] is '':
+                model_name = args.model_dir.split('/')[-2]
+            else:
+                model_name = args.model_dir.split('/')[-1]
+
+        savename = args.dataset.split('/')[-1].split('.')[0] + '_' + args.experiment + '_' + args.input_mast[0] + '_' + model_name
+        savedata = [ret['results']]
+        if 'profiles' in ret.keys():
+            savedata.append(ret['profiles'])
+        np.save(savename, savedata)
+        exit()
 
     x_all = np.linspace(0, len(ret['results']['labels_all'])-1, len(ret['results']['labels_all']))
     x_3d = np.linspace(0, len(ret['results']['labels_3d'])-1, len(ret['results']['labels_3d']))
