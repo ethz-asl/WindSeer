@@ -20,3 +20,4 @@ mprofile*
 *.tif
 *.hdf5
 *.nc
+*.txt
