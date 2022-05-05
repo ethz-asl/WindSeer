@@ -21,3 +21,4 @@ mprofile*
 *.hdf5
 *.nc
 *.txt
+*.csv
