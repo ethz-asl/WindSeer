@@ -276,6 +276,7 @@ terrain_interpolator = LinearNDInterpolator(list(zip(x_terrain.ravel() - x_cente
                                                      terrain_dict['z'].ravel() - z_offset,
                                                      fill_value = 0.0)
 
+
 # load the measurements
 tower_data = []
 tower_heights = []
@@ -311,7 +312,6 @@ for data, heights, twr in zip(tower_data, tower_heights, tower_names):
 
     if len(heights) > 0:
         measurements_dict[twr] = ms_dict
-
 
 # load the lidar data if available
 filename = args.measurement_file.split('/')[-1]
@@ -405,6 +405,49 @@ if args.save:
             s_key = 'scale_' + str(f) + '_n_' + str(n)
             ds_file.create_group(s_key)
             ds_file['terrain'].create_dataset(s_key, data=terrain)
+
+            # convert the prediction lines
+            ds_file['lines'].create_group(s_key)
+
+            # line TSE
+            t = np.linspace(0, 2500, 501) - 100
+            start = measurements_dict['tse01']['pos'][0, :2]
+            end = measurements_dict['tse13']['pos'][0, :2]
+            dir = (end - start)
+            dir /= np.linalg.norm(dir)
+            positions = np.expand_dims(start, 1) + np.expand_dims(t, 0) * np.expand_dims(dir, 1)
+            z = terrain_interpolator((positions[0],positions[1]))
+
+            # minimum distance to center mast
+            idx_center = np.argmin(np.linalg.norm(positions - np.expand_dims(measurements_dict['tse09']['pos'][0, :2], 1), axis=0))
+            t -= idx_center * (t[1] - t[0]) - 100
+
+            ds_file['lines'][s_key].create_group('lineTSE_30m')
+            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset('x', data=x_inter(positions[0]))
+            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset('y', data=y_inter(positions[1]))
+            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset('z', data=z_inter(z + 30.0))
+            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset('terrain', data=z)
+            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset('dist', data=t)
+
+            # line TNW
+            t = np.linspace(0, 2500, 501) - 200
+            start = measurements_dict['tnw01']['pos'][0, :2]
+            end = measurements_dict['tnw11']['pos'][0, :2]
+            dir = (end - start)
+            dir /= np.linalg.norm(dir)
+            positions = np.expand_dims(start, 1) + np.expand_dims(t, 0) * np.expand_dims(dir, 1)
+
+            z = terrain_interpolator((positions[0],positions[1]))
+            # minimum distance to center mast
+            idx_center = np.argmin(np.linalg.norm(positions - np.expand_dims(measurements_dict['tnw07']['pos'][0, :2], 1), axis=0))
+            t -= idx_center * (t[1] - t[0]) - 200
+
+            ds_file['lines'][s_key].create_group('lineTNW_20m')
+            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset('x', data=x_inter(positions[0]))
+            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset('y', data=y_inter(positions[1]))
+            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset('z', data=z_inter(z + 20.0))
+            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset('terrain', data=z)
+            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset('dist', data=t)
 
             # Add the mast measurements
             for i in range(len(times)):

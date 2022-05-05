@@ -175,7 +175,7 @@ if args.save:
             ds_file['lines'][key]['lineA_10m'].create_dataset('x', data=x_inter(positions[0]))
             ds_file['lines'][key]['lineA_10m'].create_dataset('y', data=y_inter(positions[1]))
             ds_file['lines'][key]['lineA_10m'].create_dataset('z', data=z_inter(z + 10.0))
-            ds_file['lines'][key]['lineA_10m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineA_10m'].create_dataset('terrain', data=z)
             ds_file['lines'][key]['lineA_10m'].create_dataset('dist', data=t)
 
             # line AA
@@ -193,7 +193,7 @@ if args.save:
             ds_file['lines'][key]['lineAA_10m'].create_dataset('x', data=x_inter(positions[0]))
             ds_file['lines'][key]['lineAA_10m'].create_dataset('y', data=y_inter(positions[1]))
             ds_file['lines'][key]['lineAA_10m'].create_dataset('z', data=z_inter(z + 10.0))
-            ds_file['lines'][key]['lineAA_10m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineAA_10m'].create_dataset('terrain', data=z)
             ds_file['lines'][key]['lineAA_10m'].create_dataset('dist', data=t)
 
             # line B
@@ -211,7 +211,7 @@ if args.save:
             ds_file['lines'][key]['lineB_10m'].create_dataset('x', data=x_inter(positions[0]))
             ds_file['lines'][key]['lineB_10m'].create_dataset('y', data=y_inter(positions[1]))
             ds_file['lines'][key]['lineB_10m'].create_dataset('z', data=z_inter(z + 10.0))
-            ds_file['lines'][key]['lineB_10m'].create_dataset('terrain', data=z_inter(z))
+            ds_file['lines'][key]['lineB_10m'].create_dataset('terrain', data=z)
             ds_file['lines'][key]['lineB_10m'].create_dataset('dist', data=t)
 
             for meas, name in zip(measurements_dict, experiment_names):
