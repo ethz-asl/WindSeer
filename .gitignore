@@ -22,3 +22,5 @@ mprofile*
 *.nc
 *.txt
 *.csv
+*.tiff
+*.sh

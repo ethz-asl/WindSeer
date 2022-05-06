@@ -7,12 +7,14 @@ import nn_wind_prediction.models as models
 import nn_wind_prediction.utils as nn_utils
 from analysis_utils import utils
 from analysis_utils.ulog_utils import extract_wind_data, filter_wind_data
-from analysis_utils.sparse_evaluation import evaluate_flight_log
+from analysis_utils.sparse_evaluation import evaluate_flight_loiters
+from analysis_utils.loiter_detection import detect_loiters
 
 parser = argparse.ArgumentParser(description='Evaluate the model performance on real flight data using a sliding window')
 parser.add_argument('config_yaml', help='Input yaml config')
 parser.add_argument('-model_dir', dest='model_dir', required=True, help='The directory of the model')
 parser.add_argument('-model_version', dest='model_version', default='latest', help='The model version')
+parser.add_argument('--paths', action='store_true', help='Plot the flight paths with mayavi')
 args = parser.parse_args()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -61,17 +63,36 @@ else:
         if 'scaling' in key:
             config.params['model'][key] = nn_params.data[key]
 
-# load the data
+# load the wind data
+flight_data = []
 _, terrain, _, _, scale, wind_data, grid_dimensions = utils.load_measurements(config.params['measurements'], config.params['model'])
 
-wind_data_validation = []
-if not config.params['evaluation']['validation_file'] is None:
-    for val_file in config.params['evaluation']['validation_file']:
-        wd_val = extract_wind_data(val_file, False)
-        if config.params['measurements']['log']['filter_window_size'] > 0:
-                wd_val = filter_wind_data(wd_val, config.params['measurements']['log']['filter_window_size'])
-        wind_data_validation.append(wd_val)
+loiters = detect_loiters(wind_data, config.params['loiter_detection'])
+name = config.params['measurements']['log']['filename'].split('.')[0].split('/')[-1]
+flight_data.append({'wind_data': wind_data, 'loiter_data': loiters, 'name': name})
+
+for val_file in config.params['measurements']['log']['validation_flights']:
+    name = val_file.split('.')[0].split('/')[-1]
+    wind_data_validation = extract_wind_data(val_file, False)
+    if config.params['measurements']['log']['filter_window_size'] > 0:
+        wind_data_validation = filter_wind_data(wind_data_validation, config.params['measurements']['log']['filter_window_size'])
+
+    loiters = detect_loiters(wind_data_validation, config.params['loiter_detection'])
+    flight_data.append({'wind_data': wind_data_validation, 'loiter_data': loiters, 'name': name})
 
 config.params['model']['input_channels'] += ['mask']
 
-evaluate_flight_log(wind_data, scale, terrain, grid_dimensions, net, config, device, wind_data_validation)
+if args.paths:
+    x_res = (grid_dimensions['x_max'] - grid_dimensions['x_min'])/grid_dimensions['n_cells']
+    y_res = (grid_dimensions['y_max'] - grid_dimensions['y_min'])/grid_dimensions['n_cells']
+    z_res = (grid_dimensions['z_max'] - grid_dimensions['z_min'])/grid_dimensions['n_cells']
+    trajectories = []
+    for fd in flight_data:
+        data = {'x': (fd['wind_data']['x'] - grid_dimensions['x_min'])/x_res,
+                'y': (fd['wind_data']['y'] - grid_dimensions['y_min'])/y_res,
+                'z': (fd['wind_data']['alt'] - grid_dimensions['z_min'])/z_res}     
+        trajectories.append(data)
+
+    nn_utils.mlab_plot_trajectories(trajectories, terrain, terrain_mode='blocks', terrain_uniform_color=False, blocking=False)
+
+evaluate_flight_loiters(flight_data, scale, terrain, grid_dimensions, net, config, device)
