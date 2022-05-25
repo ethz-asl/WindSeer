@@ -15,6 +15,15 @@ def get_clocktime(log_file):
         return None
 
 
+def get_gridtime(log_file):
+    with open(log_file, 'r') as fh:
+        for line in reversed(list(fh)):
+            xt = re.search('Finished meshing in = (\d*\.?\d+)', line)
+            if xt is not None:
+                return float(xt.group(1))
+        return None
+
+
 def estimate_times(cases_dir):
     # Extract the final ClockTime value (in s) for each converged run
     # Return two dictionaries (converged and un.) with keys of the case run name
@@ -23,9 +32,16 @@ def estimate_times(cases_dir):
     # element 2 is W2 and so on until convergence failed.
     converged_times = {}
     unconverged_times = {}
+    mesh_times = {}
     subdirs = os.listdir(cases_dir)
 
     for dir in tqdm(subdirs):
+        # Check the mesh times
+        meshlog = os.path.join(cases_dir, dir, 'simpleFoam', "snappyHexMesh.log")
+        if os.path.exists(meshlog):
+            grid_time = get_gridtime(meshlog)
+            if grid_time:
+                mesh_times[dir] = grid_time
 
         # Always start with W1 - if it did't converge we didn't try the later
         # wind speeds
@@ -34,6 +50,7 @@ def estimate_times(cases_dir):
             continue
 
         # First check for simpleFoam2.err (this was a file I created)
+        # If it isn't there, then the first round failed, and we didn't continue
         if not os.path.exists(os.path.join(wdir, "simpleFoam2.err")): continue
 
         # If it's an empty file, there was no error and the solution converged
@@ -46,9 +63,9 @@ def estimate_times(cases_dir):
         t1 = get_clocktime(os.path.join(wdir, "simpleFoam2.log"))
         if error_size != 0:
             # If there was an error, get the two times anyway
-            unconverged_times[dir] = [t0, t1]
+            unconverged_times[dir] = [t0 + t1]
             continue
-        converged_times[dir] = [t0, t1]
+        converged_times[dir] = [t0 + t1]
 
         # Now get all the remaining wind speeds
         wind = 2
@@ -69,34 +86,43 @@ def estimate_times(cases_dir):
             wind += 1
             wdir = os.path.join(cases_dir, dir, 'W{0}'.format(wind))
 
-    return converged_times, unconverged_times
+    return converged_times, unconverged_times, mesh_times
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run through a directory and estimate computational times')
     parser.add_argument('cases_dir', type=str, nargs=1, help='Root input directory (with cases as subdirs)')
     args = parser.parse_args()
-    converged_times, unconverged_times = estimate_times(args.cases_dir[0])
+    converged_times, unconverged_times, mesh_times = estimate_times(args.cases_dir[0])
 
     print('Stats for {0}'.format(args.cases_dir[0]))
+
+    t_mesh = np.array(list(mesh_times.values()))
+    print('Mesh times:')
+    print('    Total meshes: {0}'.format(len(t_mesh)))
+    print('    Total time {0:0.2f} hrs'.format(np.nansum(t_mesh)/3600.0))
+    print('    Average time {0:0.2f} min'.format(np.nanmean(t_mesh)/60.0))
 
     print('Converged:')
     t_full = [t for t in converged_times.values()]
     t_all = np.concatenate(t_full).astype(float)
-    w0_times = np.array([(t[0] + t[1]) for t in t_full])
-    wn_times = np.concatenate([t[2:] for t in t_full]).astype(float)
+    w0_times = np.array([t[0] for t in t_full])
+    wn_times = np.concatenate([t[1:] for t in t_full]).astype(float)
 
-    print('Total time for {0} runs: {1:0.2f} hours'.format(len(t_all), np.nansum(t_all)/3600.0))
-    print('Full average time: {0:0.2f} mins'.format(np.nanmean(t_all)/60.0))
-    print('W1 average times: {0:0.2f} mins'.format(np.nanmean(w0_times) / 60.0))
-    print('W2+ average times: {0:0.2f} mins'.format(np.nanmean(wn_times) / 60.0))
+    print('    Terrains for which at least one solution converged: {0}'.format(len(t_full)))
+    print('    Total time for {0} runs: {1:0.2f} hours'.format(len(t_all), np.nansum(t_all)/3600.0))
+    print('    Full average time: {0:0.2f} mins'.format(np.nanmean(t_all)/60.0))
+    print('    W1 average times: {0:0.2f} mins'.format(np.nanmean(w0_times) / 60.0))
+    print('    W2+ average times: {0:0.2f} mins'.format(np.nanmean(wn_times) / 60.0))
 
     print('Unconverged:')
     t_full = [t for t in unconverged_times.values()]
     t_all = np.concatenate(t_full).astype(float)
-
-    print('Total time for {0} runs: {1:0.2f} hours'.format(len(t_all), np.nansum(t_all)/3600.0))
-    print('Full average time: {0:0.2f} mins'.format(np.nanmean(t_all)/60.0))
+    print('    Terrains for which at least one solution did not converge: {0}'.format(len(t_full)))
+    print('    Total time for {0} runs: {1:0.2f} hours'.format(len(t_all), np.nansum(t_all)/3600.0))
+    print('    Full average time: {0:0.2f} mins'.format(np.nanmean(t_all)/60.0))
+    print()
+    print()
 
 
 
