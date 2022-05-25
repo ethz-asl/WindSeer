@@ -1,0 +1,41 @@
+Stats for /media/intel_data2/3d/openfoam_cases/batch02_F
+Converged:
+Total time for 1066 runs: 660.25 hours
+Full average time: 37.16 mins
+W1 average times: 302.09 mins
+W2+ average times: 18.22 mins
+Unconverged:
+Total time for 110 runs: 358.74 hours
+Full average time: 195.68 mins
+
+Stats for /media/intel_data/3d/openfoam_cases/batch03_F/
+Converged:
+Total time for 957 runs: 728.50 hours
+Full average time: 45.67 mins
+W1 average times: 220.45 mins
+W2+ average times: 35.53 mins
+Unconverged:
+Total time for 161 runs: 840.51 hours
+Full average time: 313.23 mins
+
+Stats for /media/intel_data/3d/openfoam_cases/batch04_F/
+Converged:
+Total time for 2486 runs: 1803.18 hours
+Full average time: 43.54 mins
+W1 average times: 359.47 mins
+W2+ average times: 21.21 mins
+Unconverged:
+Total time for 102 runs: 416.22 hours
+Full average time: 254.83 mins
+
+Stats for /media/intel_data/3d/openfoam_cases/batch05_N
+Converged:
+Total time for 2843 runs: 2104.75 hours
+Full average time: 44.42 mins
+W1 average times: 340.67 mins
+W2+ average times: 24.88 mins
+Unconverged:
+Total time for 323 runs: 1474.40 hours
+Full average time: 273.88 mins
+
+
