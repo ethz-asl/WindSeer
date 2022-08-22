@@ -5,10 +5,15 @@ class KwargsParser():
 
     def get_safe(self, key, default_val, type = None, verbose=False):
         try:
-            if type is not None:
-                return type(self.kwargs[key])
+            if isinstance(self.kwargs[key], str):
+                val = self.kwargs[key].replace(',', '')
             else:
-                self.kwargs[key]
+                val = self.kwargs[key]
+
+            if type is not None:
+                return type(val)
+            else:
+                return val
 
         except KeyError:
             if verbose:

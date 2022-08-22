@@ -43,7 +43,22 @@ class ModelBase(nn.Module):
                 except:
                     pass
                 try:
-                    torch.nn.init.normal_(m.bias, mean=0.0, std=0.02)
+                    torch.nn.init.normal_(m.bias.data, mean=0.0, std=0.02)
+                except:
+                    pass
+
+        self.apply(init_weights)
+
+    def set_receptive_field_params(self):
+        def init_weights(m):
+            if (type(m) != type(self)):
+                try:
+                    m.weight.data *= 0
+                    m.weight.data += 0.01
+                except:
+                    pass
+                try:
+                    m.bias.data *= 0
                 except:
                     pass
 

@@ -5,7 +5,7 @@ measurements:
 
     cfd:
         filename: '/tmp/test.hdf5'
-        index: 165
+        index: 0
         kwargs: {input_mode: 5,
                  additive_gaussian_noise: True,
                  max_gaussian_noise_std: 0.2,
@@ -26,15 +26,37 @@ measurements:
                  }
 
     log:
-        filename: 'data/chasseral/20201128_ezg4_chasseral_flight01_fpr_wind.hdf5'
+        filename: 'data/chasseral/EZG3_20210928_Chasseral_flight01_fpr_wind.hdf5'
         cosmo_file: 'data/cosmo-1_ethz_ana_const.nc'
         geotiff_file: 'data/chasseral/chasseral_5.tif'
+        filter_window_size: 1001 # filter size of the moving average filter, no filtering if set to 0, must be uneven
         distance_field: True
+        use_cosmo_grid: False
+        enforce_grid_size: True
         num_cells: 64
         horizontal_overflow: 10 # number of horizontal extra cells to build the distance field
-        alt_offset: 150 # offset of the takeoff position for the lower z-bound [m]
+        alt_offset: 200 # offset of the takeoff position for the lower z-bound [m]
         d_horizontal: 1100 # horizontal domain extent [m]
         d_vertical: 700 # vertical domain extent [m]
-        t_start:  # Use data from this time onwards from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
-        t_end:  # Use data up to this time from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
-        
+        t_start: 0 # Use data from this time onwards from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
+        t_end: 60 # Use data up to this time from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
+
+evaluation:
+    # Modes:
+    # 0: Single flight, take a window as an input and predict/compare the wind for the rest of the flight along the path
+    # 1: Single flight, take a sliding window as an input and predict/compare the wind for the full flight or a small window along the path
+    # 2: Single flight, take a sliding window as an input and predict/compare the wind for the full flight or a small window in the binned version
+    # 3: Multi flight, take a window as an input and predict/compare the wind for the rest of the flight and to the validation flight
+    # 4: Multi flight, take a sliding window as an input and predict/compare the wind for the full flight or a small window along the path for the validation flight
+    mode: 4
+    t_start: 0 # Use data from this time onwards from the log file, relative to the first timestamp (0 for negative values) [s]
+    dt_input: 120 # Window size of the input for the sliding window approach [s]
+    dt_pred: 120 # Window size of the prediction for the sliding window approach [s]
+    compute_baseline: False
+    baseline_method: 'averaging' # 'averaging', 'zero'
+    full_flight: False # Indicates if for the sliding window evaluation the flight should be predicted
+    cumulative: False # Indicates if for the sliding window evaluation the data from the beginning of the flight up to time t should be used
+    validation_file: ['data/chasseral/EZG6_20210928_Chasseral_flight01_fpr_wind.hdf5']
+    plot_turbulence: false # display the turbulence if it is predicted
+    single_figure: True # Put all flights in one figure (only applies to mode 4)
+    plot_magnitude: True # Plot the horizontal magnitude and direction instead of the north and east component

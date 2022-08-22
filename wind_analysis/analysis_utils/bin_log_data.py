@@ -250,25 +250,35 @@ def interpolate_flight_data_gpr(wind_data, grid_dimensions, verbose = False, pre
 
     return wind, variance, mask, prediction
 
-def bin_log_data(wind_data, grid_dimensions, method = 'binning', verbose = False, full_field = False, t_start = None, t_end = None):
-    t_init = wind_data['time'][0] * 1e-6
-
+def extract_window_wind_data(wind_data, t_start, t_end, use_gps_time = False):
     # extract the relevant data if t_start or t_end are set
     if t_end is not None or t_start is not None:
         if t_start is None:
-            t_start = 0.0
-        elif t_start < 0.0:
-            t_start = 0.0
+            t_start = -np.inf
 
         if t_end is None:
             t_end = np.inf
-        elif t_end < 0.0:
+        elif t_end < t_start:
             t_end = np.inf
 
-        t_rel = wind_data['time'] * 1e-6 - t_init
-        idx = np.logical_and(t_rel >= t_start, t_rel <= t_end)
+        if use_gps_time:
+            t_sec = wind_data['time_gps']
+        else:
+            t_sec = wind_data['time'] * 1e-6
+
+        idx = np.logical_and(t_sec >= t_start, t_sec <= t_end)
+
+        wind_out = {}
         for key in wind_data.keys():
-            wind_data[key] = wind_data[key][idx]
+            wind_out[key] = wind_data[key][idx]
+
+        return wind_out
+
+    else:
+        return wind_data
+
+def bin_log_data(wind_data, grid_dimensions, method = 'binning', verbose = False, full_field = False, t_start = None, t_end = None, use_gps_time = False):
+    wind_data = extract_window_wind_data(wind_data, t_start, t_end, use_gps_time)
 
     if method == 'binning':
         return bin_log_data_binning(wind_data, grid_dimensions, verbose)

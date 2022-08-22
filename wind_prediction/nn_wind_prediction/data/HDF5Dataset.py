@@ -42,6 +42,10 @@ class HDF5Dataset(Dataset):
 
     __default_scaling_dict = {'terrain': 1.0, 'ux': 1.0, 'uy': 1.0, 'uz': 1.0, 'turb': 1.0, 'p': 1.0, 'epsilon': 1.0, 'nut': 1.0}
     __lock = threading.Lock()
+    __min_num_cells = np.inf
+    __max_num_cells = 0
+    __num_samples = 0
+    __average_num_cells = 0
 
     def __init__(self, filename, input_channels, label_channels, **kwargs):
         '''
@@ -162,6 +166,9 @@ class HDF5Dataset(Dataset):
         if self.__input_mode == 3 or self.__input_mode == 4:
             self.__max_fraction_of_sparse_data = parser.get_safe('max_fraction_of_sparse_data', 1.0, float, verbose)
             self.__min_fraction_of_sparse_data = parser.get_safe('min_fraction_of_sparse_data', 0.0, float, verbose)
+            self.__input_smoothing = parser.get_safe('input_smoothing', False, bool, verbose)
+            self.__input_smoothing_interpolation = parser.get_safe('input_smoothing_interpolation', True, bool, verbose)
+            self.__input_smoothing_interpolation_linear = parser.get_safe('input_smoothing_interpolation_linear', True, bool, verbose)
 
         if self.__input_mode == 5:
             self.__trajectory_min_length = parser.get_safe('trajectory_min_length', 30, int, verbose)
@@ -172,6 +179,9 @@ class HDF5Dataset(Dataset):
             self.__trajectory_max_iter = parser.get_safe('trajectory_max_iter', 50, int, verbose)
             self.__trajectory_start_weighting_mode = parser.get_safe('trajectory_start_weighting_mode', 0, int, verbose)
             self.__trajectory_length_short_focus = parser.get_safe('trajectory_length_short_focus', False, bool, verbose)
+            self.__input_smoothing = parser.get_safe('input_smoothing', False, bool, verbose)
+            self.__input_smoothing_interpolation = parser.get_safe('input_smoothing_interpolation', True, bool, verbose)
+            self.__input_smoothing_interpolation_linear = parser.get_safe('input_smoothing_interpolation_linear', True, bool, verbose)
 
         if self.__augmentation:
             self.__augmentation_mode = parser.get_safe('augmentation_mode', 0, int, verbose)
@@ -274,6 +284,7 @@ class HDF5Dataset(Dataset):
                 dx = dy = 16.6444
                 dz = 11.5789
                 turbulent_velocity_field, _ = generate_turbulence.generate_turbulence_spectral(int(self.__nx * 1.5), int(self.__ny * 1.5), int(self.__ny * 1.5), dx, dy, dz)
+                turbulent_velocity_field /= np.max(np.abs(turbulent_velocity_field)) # scale the field to have a maximum value of 1
                 turbulent_velocity_fields += [torch.from_numpy(turbulent_velocity_field.astype(np.float32)).unsqueeze(0)]
             self.__turbulent_velocity_fields = torch.cat(turbulent_velocity_fields, 0)
 
@@ -292,11 +303,6 @@ class HDF5Dataset(Dataset):
 
         # avoids printing a warning multiple times
         self.__augmentation_warning_printed = False
-
-        self.__min_num_cells = self.__nx * self.__ny * self.__nz
-        self.__max_num_cells = 0
-        self.__num_samples = 0
-        self.__average_num_cells = 0
 
         if verbose:
             print('HDF5Dataset: ' + filename + ' contains {} samples'.format(self.__num_files))
@@ -494,6 +500,10 @@ class HDF5Dataset(Dataset):
 
                 # compose output
                 input_data[1:] *= mask
+
+                if self.__input_smoothing:
+                    input_data[1:] = self.__get_smooth_data(input_data[1:], mask, ds)
+
                 input = torch.cat([input_data, mask.float().unsqueeze(0)])
 
             elif (self.__input_mode == 4):
@@ -503,6 +513,9 @@ class HDF5Dataset(Dataset):
 
                 # compose output
                 input_data[1:] *= mask
+                if self.__input_smoothing:
+                    input_data[1:] = self.__get_smooth_data(input_data[1:], mask, ds)
+
                 input = torch.cat([input_data, mask.float().unsqueeze(0)])
 
             elif (self.__input_mode == 5):
@@ -512,6 +525,10 @@ class HDF5Dataset(Dataset):
 
                 # compose output
                 input_data[1:] *= mask
+
+                if self.__input_smoothing:
+                    input_data[1:] = self.__get_smooth_data(input_data[1:], mask, ds)
+
                 input = torch.cat([input_data, mask.float().unsqueeze(0)])
 
             elif (self.__input_mode == 6):
@@ -1014,3 +1031,17 @@ class HDF5Dataset(Dataset):
         # handling for zero samples which create NaNs
         W[torch.isnan(W)] = 1.0
         return W
+
+    def __get_smooth_data(self, data, mask, grid_size):
+        if self.__input_smoothing_interpolation:
+            return utils.interpolate_sparse_data(data, mask, grid_size, self.__input_smoothing_interpolation_linear)
+        else:
+            data_smoothed = torch.ones_like(data)
+            scale = data.sum(-1).sum(-1).sum(-1) / mask.sum()
+
+            data_smoothed *= scale.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+
+            for i in range(data.shape[0]):
+                data_smoothed[i, mask] = data[i, mask]
+
+            return data_smoothed

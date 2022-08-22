@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import sys
+from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
+from scipy.spatial.qhull import QhullError
 
 class DataInterpolation:
     def __init__(self, device, num_channels, nx, ny, nz):
@@ -46,3 +48,40 @@ class DataInterpolation:
         corners = input.index_select(3, torch.tensor([0,shape[3]-1])).index_select(4, torch.tensor([0,shape[4]-1]))
 
         return F.interpolate(corners, size=shape[2:], mode='trilinear', align_corners=True)
+
+def interpolate_sparse_data(data, mask, grid_dimensions, linear=True):
+    if len(data.squeeze().shape) != 4:
+        raise ValueError('The prediction is assumed to be a 4D tensor (channels, z, y, x)')
+
+    indices = torch.nonzero(mask)
+    points = indices.float()
+    points[:, 0] *= grid_dimensions[2]
+    points[:, 1] *= grid_dimensions[1]
+    points[:, 2] *= grid_dimensions[0]
+
+    Z, Y, X = np.meshgrid(np.linspace(0, mask.shape[0]-1, mask.shape[0])*grid_dimensions[2].item(),
+                          np.linspace(0, mask.shape[1]-1, mask.shape[1])*grid_dimensions[1].item(),
+                          np.linspace(0, mask.shape[2]-1, mask.shape[2])*grid_dimensions[0].item(), indexing='ij')
+
+    data_interpolated = torch.zeros_like(data)
+
+    # loop over channels
+    for i in range(data.shape[0]):
+        inter_nearest = NearestNDInterpolator(points, data[i, indices[:,0], indices[:,1], indices[:,2]].detach().cpu().numpy())
+
+        if linear:
+            try:
+                inter_linear = LinearNDInterpolator(points, data[i, indices[:,0], indices[:,1], indices[:,2]].detach().cpu().numpy())
+                vals = inter_linear(Z, Y, X)
+                vals_nearest = inter_nearest(Z, Y, X)
+                mask = np.isnan(vals)
+                vals[mask] = vals_nearest[mask]
+            except QhullError:
+                # if there is no convex hull only nearest interpolation is possible
+                vals = inter_nearest(Z, Y, X)
+        else:
+            vals = inter_nearest(Z, Y, X)
+
+        data_interpolated[i] = torch.from_numpy(vals)
+
+    return data_interpolated

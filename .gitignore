@@ -17,3 +17,10 @@ mprofile*
 *_tmp.py
 *.npy
 *.npz
+*.tif
+*.hdf5
+*.nc
+*.txt
+*.csv
+*.tiff
+*.sh

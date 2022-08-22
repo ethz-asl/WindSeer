@@ -59,7 +59,7 @@ if __name__ == "__main__":
     error_counter = 0
     test_counter = 0
 
-    default_config = {'batchsize': 1, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
+    default_config = {'batchsize': 2, 'n_x': 8, 'n_y': 8, 'n_z': 8, 'n_downsample_layers': 2,'interpolation_mode': 'nearest',
                     'align_corners': False, 'skipping': True, 'use_terrain_mask': True, 'pooling_method': 'striding',
                     'use_fc_layers': True, 'fc_scaling': 2, 'use_mapping_layer': False, 'potential_flow': False,
                     'activation_type': 'LeakyReLU', 'activation_args': {'negative_slope': 0.1}, 'predict_uncertainty': False,
@@ -208,6 +208,11 @@ if __name__ == "__main__":
     config = default_config.copy()
     config['use_sparse_convolution'] = True
     configs.append(config)
+
+    print("--------------------------------------------------------")
+    print("SplitNet tests")
+    for kwarg in configs:
+        error_counter, test_counter = test_model(models.SplitNet, True, kwarg['batchsize'], error_counter, test_counter, **kwarg)
 
     print("--------------------------------------------------------")
     print("ModelEDNN2D tests")

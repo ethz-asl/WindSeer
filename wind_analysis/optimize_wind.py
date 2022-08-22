@@ -57,7 +57,7 @@ loss_fn = utils.get_loss_fn(config.params['loss'])
 
 wind_opt = WindOptimizer(net, loss_fn, device)
 
-measurement, terrain, ground_truth, mask, scale, wind_data = utils.load_measurements(config.params['measurements'], config.params['model'])
+measurement, terrain, ground_truth, mask, scale, _, _ = utils.load_measurements(config.params['measurements'], config.params['model'])
 
 measurement = measurement.to(device)
 terrain = terrain.to(device)

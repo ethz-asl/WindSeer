@@ -4,11 +4,12 @@ import torch
 from torch.optim.optimizer import Optimizer
 
 import nn_wind_prediction.data as nn_data
+import nn_wind_prediction.utils as nn_utils
 from .bin_log_data import bin_log_data
 from .extract_cosmo_data import get_cosmo_cell
 from .get_mapgeo_terrain import get_terrain
 from .input_fn_definitions import *
-from .ulog_utils import extract_wind_data
+from .ulog_utils import extract_wind_data, filter_wind_data
 
 class SimpleStepOptimizer(Optimizer):
     def __init__(self, params, lr=1e-4):
@@ -114,8 +115,19 @@ def get_input_fn(config, measurement, mask):
         raise ValueError('Invalid input_fn type: ' + config['type'])
 
 def load_measurements(config, config_model):
+    # manually add uz if it was not present in the input channels since we want to return all the velocities as measurements
+    measurement_channels = ['terrain', 'ux', 'uy', 'uz']
+    return_variance = False
+    if 'turb' in config_model['label_channels']:
+        return_variance = True
+        measurement_channels += ['turb']
+
+    for ch in config_model['input_channels']:
+        if not ch in measurement_channels:
+            raise ValueError('Model has an input channel that is currently not supported: ', ch, 'supported: ', measurement_channels)
+
     if config['type'] == 'cfd':
-        dataset = nn_data.HDF5Dataset(config['cfd']['filename'], config_model['input_channels'],
+        dataset = nn_data.HDF5Dataset(config['cfd']['filename'], measurement_channels,
                                       config_model['label_channels'], augmentation = False,
                                       return_grid_size = True, **config['cfd']['kwargs'])
         data = dataset[config['cfd']['index']]
@@ -135,26 +147,50 @@ def load_measurements(config, config_model):
 
         wind_data = None
 
-    elif config['type'] == 'log':
+        grid_dimensions = None
 
+    elif config['type'] == 'log':
         wind_data = extract_wind_data(config['log']['filename'], False)
 
+        if config['log']['filter_window_size'] > 0:
+            wind_data = filter_wind_data(wind_data, config['log']['filter_window_size'])
+
         # determine the grid dimension
-        if 'cosmo_file' in config['log'].keys():
+        if config['log']['use_cosmo_grid']:
+            if not 'cosmo_file' in config['log'].keys():
+                print('Cosmo file not specified, using the manually defined grid')
+                config['log']['use_cosmo_grid'] = False
+
+        if config['log']['use_cosmo_grid']:
             grid_dimensions = get_cosmo_cell(config['log']['cosmo_file'], wind_data['lat'][0], wind_data['lon'][0],
                                              wind_data['alt'].min() - config['log']['alt_offset'], config['log']['d_horizontal'], config['log']['d_vertical'])
             grid_dimensions['n_cells'] = config['log']['num_cells']
-    
+
         else:
-            grid_dimensions = {
-                'n_cells': config['log']['num_cells'],
-                'x_min': wind_data['x'].min() - 1.0,
-                'x_max': wind_data['x'].max() + 1.0,
-                'y_min': wind_data['y'].min() - 1.0,
-                'y_max': wind_data['y'].max() + 1.0,
-                'z_min': wind_data['alt'].min() - 20.0,
-                'z_max': wind_data['alt'].max() + 1.0,
-            }
+            if config['log']['enforce_grid_size']:
+                # center the grid around the takeoff location
+                grid_dimensions = {
+                    'n_cells': config['log']['num_cells'],
+                    'x_min': wind_data['x'][0] - 0.5 * config['log']['d_horizontal'],
+                    'x_max': wind_data['x'][0] + 0.5 * config['log']['d_horizontal'],
+                    'y_min': wind_data['y'][0] - 0.5 * config['log']['d_horizontal'],
+                    'y_max': wind_data['y'][0] + 0.5 * config['log']['d_horizontal'],
+                    'z_min': wind_data['alt'].min() - config['log']['alt_offset'],
+                    'z_max': wind_data['alt'].min() - config['log']['alt_offset'] + config['log']['d_vertical'],
+                }
+
+            else:
+                # adjust the grid size based on the flight data
+                print('Warning: This does not preserve the normal grid size and could lead to issues when using the network for a prediction')
+                grid_dimensions = {
+                    'n_cells': config['log']['num_cells'],
+                    'x_min': wind_data['x'].min() - 1.0,
+                    'x_max': wind_data['x'].max() + 1.0,
+                    'y_min': wind_data['y'].min() - 1.0,
+                    'y_max': wind_data['y'].max() + 1.0,
+                    'z_min': wind_data['alt'].min() - 20.0,
+                    'z_max': wind_data['alt'].max() + 1.0,
+                }
     
             # force the grid to be square
             if (grid_dimensions['x_max'] - grid_dimensions['x_min']) > (grid_dimensions['y_max'] - grid_dimensions['y_min']):
@@ -179,15 +215,24 @@ def load_measurements(config, config_model):
 
         terrain = torch.from_numpy(full_block.astype(np.float32))
 
+        t_start = None
+        t_end = None
+        if config['log']['t_start'] is not None:
+            t_start = config['log']['t_start'] + wind_data['time'][0] * 1e-6
+
+        if config['log']['t_end'] is not None:
+            t_end = config['log']['t_end'] + wind_data['time'][0] * 1e-6
 
         measurement, variance, mask, prediction = bin_log_data(wind_data,
                                                                grid_dimensions,
                                                                method = 'binning',
-                                                               t_start = config['log']['t_start'],
-                                                               t_end = config['log']['t_end'])
+                                                               t_start = t_start,
+                                                               t_end = t_end)
 
         terrain = terrain.unsqueeze(0).unsqueeze(0).float()
         measurement = measurement.unsqueeze(0).float()
+        if return_variance:
+            measurement = torch.cat([measurement, variance.float().sum(dim=0).unsqueeze(0).unsqueeze(0)], dim=1)
         mask = mask.unsqueeze(0).float()
 
         # mask the measurements by the terrain to avoid having nonzero measurements inside the terrain
@@ -210,7 +255,7 @@ def load_measurements(config, config_model):
     else:
         scale = None
 
-    return measurement, terrain, label, mask, scale, wind_data
+    return measurement, terrain, label, mask, scale, wind_data, grid_dimensions
 
 def predict(net, input, scale, config):
     if input.shape[1] != len(config['input_channels']):
@@ -240,3 +285,18 @@ def predict(net, input, scale, config):
             raise ValueError('Unknown channel: ' + channel)
 
     return prediction
+
+def get_smooth_data(data, mask, grid_size, interpolation, linear_interpolation):
+    if interpolation:
+        return nn_utils.interpolate_sparse_data(data, mask, grid_size, linear_interpolation)
+    else:
+        data_smoothed = torch.ones_like(data)
+        scale = data.sum(-1).sum(-1).sum(-1) / mask.sum()
+
+        data_smoothed *= scale.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+
+        for i in range(data.shape[0]):
+            data_smoothed[i, mask] = data[i, mask]
+
+        return data_smoothed
+

@@ -6,21 +6,18 @@ try:
 except ImportError:
     print("'numpy' is not installed. Use the command below to install it:")
     print("     sudo apt-get install python-numpy")
-    exit()
 
 try:
     from scipy.io import netcdf
 except ImportError:
     print("'scipy' is not installed. Use the command below to install it:")
     print("     sudo apt-get install python-scipy")
-    exit()
 
 try:
     import pyproj
 except ImportError:
     print("'pyproj' is not installed. Use the command below to install it:")
     print("     pip3 install pyproj")
-    exit()
 
 def above_line_check(x1, y1, x2, y2, x_test, y_test):
     # fit a line y = a * x + b

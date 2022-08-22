@@ -14,12 +14,12 @@ from torch.utils.data import DataLoader
 
 #------ Params to modidify ---------------------------
 compute_dataset_statistics = False
-plot_sample_num = 0
+plot_sample_num = 450
 input_dataset = '../wind_prediction/data/test.hdf5'
 nx = 64
 ny = 64
 nz = 64
-input_mode = 1
+input_mode = 4
 augmentation = True
 augmentation_mode = 0
 augmentation_kwargs = {
@@ -37,6 +37,9 @@ terrain_scaling = 1.0
 stride_hor = 1
 stride_vert = 1
 autoscale = False
+
+input_smoothing = True
+input_smoothing_interpolation = True
 
 additive_gaussian_noise = True
 max_gaussian_noise_std = 0.0
@@ -70,7 +73,7 @@ def main():
                                       max_gaussian_noise_std=max_gaussian_noise_std, n_turb_fields=n_turb_fields,
                                       max_normalized_turb_scale=max_normalized_turb_scale, max_normalized_bias_scale=max_normalized_bias_scale,
                                       only_z_velocity_bias=only_z_velocity_bias, max_fraction_of_sparse_data=max_fraction_of_sparse_data,
-                                      min_fraction_of_sparse_data=min_fraction_of_sparse_data)
+                                      min_fraction_of_sparse_data=min_fraction_of_sparse_data, input_smoothing=input_smoothing, input_smoothing_interpolation=input_smoothing_interpolation)
 
     dbloader = torch.utils.data.DataLoader(db, batch_size=1,
                                               shuffle=False, num_workers=4)

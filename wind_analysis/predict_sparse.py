@@ -40,7 +40,7 @@ for key in nn_params.data.keys():
         config.params['model'][key] = nn_params.data[key]
 
 # load the data
-measurement, terrain, ground_truth, mask, scale, wind_data = utils.load_measurements(config.params['measurements'], config.params['model'])
+measurement, terrain, ground_truth, mask, scale, _, _ = utils.load_measurements(config.params['measurements'], config.params['model'])
 
 config.params['model']['input_channels'] += ['mask']
 
@@ -58,14 +58,27 @@ if 'uy'  in config.params['model']['input_channels']:
 if 'uz'  in config.params['model']['input_channels']:
     input_idx.append(2)
 
-input = torch.cat([terrain, measurement[:, input_idx], mask.unsqueeze(0)], dim = 1)
+# fill the holes in the input if requested
+input_measurement = measurement
+if 'input_smoothing' in nn_params.data.keys():
+    if nn_params.data['input_smoothing']:
+        input_measurement = utils.get_smooth_data(measurement[0],
+                                                  mask[0].bool(),
+                                                  nn_params.model['model_args']['grid_size'],
+                                                  nn_params.data['input_smoothing_interpolation'],
+                                                  nn_params.data['input_smoothing_interpolation_linear']).unsqueeze(0)
+
+
+
+
+input = torch.cat([terrain, input_measurement[:, input_idx], mask.unsqueeze(0)], dim = 1)
 
 with torch.no_grad():
     prediction = utils.predict(net, input, scale, config.params['model'])
 
 if args.mayavi:
     ui = []
-    nn_utils.mlab_plot_measurements(measurement, mask, terrain, terrain_mode='blocks', terrain_uniform_color=True, blocking=False)
+    nn_utils.mlab_plot_measurements(measurement[:,:3], mask, terrain, terrain_mode='blocks', terrain_uniform_color=True, blocking=False)
 
     ui.append(
         nn_utils.mlab_plot_prediction(prediction['pred'], terrain, terrain_mode='blocks', terrain_uniform_color=True,

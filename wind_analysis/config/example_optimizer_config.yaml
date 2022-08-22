@@ -45,7 +45,10 @@ measurements:
         filename: 'data/chasseral/20201128_ezg4_chasseral_flight04_fpr_wind.hdf5'
         cosmo_file: 'data/cosmo-1_ethz_ana_const.nc'
         geotiff_file: 'data/chasseral/chasseral.tif'
+        filter_window_size: 3001 # filter size of the moving average filter, no filtering if set to 0, must be uneven
         distance_field: True
+        use_cosmo_grid: False
+        enforce_grid_size: True
         horizontal_overflow: 10 # number of horizontal extra cells to build the distance field
         num_cells: 64
         alt_offset: 200 # offset of the takeoff position for the lower z-bound [m]

@@ -90,19 +90,29 @@ def plot_cosmo_corners(ax, cosmo_corners, x_terr, y_terr, z_terr, origin=(0.0, 0
                       cw[0], cw[1], cw[2], colors=get_colors(cw, Vlims=Vlims), length=5.0)
 
 
-def plot_vertical_profile(z_terr, cosmo_corner, wind_est, alt, t, fig=None, ax=None):
-    if ax is None or fig is None:
-        fig, ax = plt.subplots()
+def plot_vertical_profile(z_terr, cosmo_corner, wind_est, alt, t):
+    fig, ax = plt.subplots(1,2)
+    # magnitude
     vv = np.sqrt(cosmo_corner[0,:]**2+ cosmo_corner[1,:]**2)
-    ht, = ax.plot(vv, z_terr)
+    ht, = ax[0].plot(vv, z_terr)
     v3 = np.sqrt(wind_est[0,:]**2+ wind_est[1,:]**2)
-    h2 = ax.scatter(v3, alt, c=t, s=15)
-    ax.grid(b=True, which='both')
-    ax.set_xlabel('Wind speed (m/s)')
-    ax.set_ylabel('Alt, m')
-    ax.set_ylim(np.floor(alt.min()/100)*100, np.ceil(alt.max()/100)*100)
-    hl = ax.legend([ht, h2], ['COSMO profile', 'UAV data'])
-    hc = fig.colorbar(h2, ax=ax)
+    h2 = ax[0].scatter(v3, alt, c=t, s=15)
+    ax[0].grid(b=True, which='both')
+    ax[0].set_xlabel('Wind speed [m/s]')
+    ax[0].set_ylabel('Alt, m')
+    ax[0].set_ylim(np.floor(alt.min()/100)*100, np.ceil(alt.max()/100)*100)
+
+    # direction
+    dir_cosmo = np.degrees(np.arctan2(-cosmo_corner[0,:], -cosmo_corner[1,:])) % 360
+    dir_wind = np.degrees(np.arctan2(-wind_est[0,:], -wind_est[1,:])) % 360
+    h_dc, = ax[1].plot(dir_cosmo, z_terr)
+    h_dm = ax[1].scatter(dir_wind, alt, c=t, s=15)
+    ax[1].grid(b=True, which='both')
+    ax[1].set_xlabel('Wind Direction [deg]')
+    ax[1].set_ylim(np.floor(alt.min()/100)*100, np.ceil(alt.max()/100)*100)
+    hl_2 = ax[1].legend([h_dc, h_dm], ['COSMO profile', 'UAV data'])
+
+    hc = fig.colorbar(h_dm, ax=ax[1])
     hc.set_label('Mission time (s)')
     return fig, ax
 
