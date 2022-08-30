@@ -16,6 +16,7 @@ lsf.o*
 *.nc
 *.txt
 *.csv
+*.tar
 *.tiff
 *.sh
 *.egg-info*

@@ -338,6 +338,7 @@ class HDF5Dataset(Dataset):
         self._input_channels = []
         self._input_indices = []
         self._label_indices = []
+        self._label_channels = []
         self._input_velocities_indices = []
         self._data_velocity_indices = []
 
@@ -354,6 +355,7 @@ class HDF5Dataset(Dataset):
                         self._input_velocities_indices += [len(self._input_indices) - 1]
                 if channel in label_channels:
                     self._label_indices += [index]
+                    self._label_channels += [channel]
                 index += 1
 
         self._input_indices = torch.LongTensor(self._input_indices)
@@ -787,6 +789,17 @@ class HDF5Dataset(Dataset):
             List of input channels
         '''
         return self._input_channels
+
+    def get_label_channels(self):
+        '''
+        Get the list of label channels.
+
+        Returns
+        -------
+        channels : list of str
+            List of label channels
+        '''
+        return self._label_channels
 
     def get_ds(self):
         '''

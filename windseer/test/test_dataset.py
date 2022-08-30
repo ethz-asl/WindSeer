@@ -155,6 +155,12 @@ class TestHDF5Dataset(unittest.TestCase):
         input_channels = dataset.get_input_channels()
         self.assertEqual(input_channels, ['terrain', 'ux', 'uy', 'uz', 'mask'])
 
+    def test_getlabelchannels(self):
+        config = copy.deepcopy(default_config)
+        dataset = HDF5Dataset(**config)
+        label_channels = dataset.get_label_channels()
+        self.assertEqual(label_channels, ['ux', 'uy', 'uz', 'turb'])
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Test the HDF5Dataset class')
