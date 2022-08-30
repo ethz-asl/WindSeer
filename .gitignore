@@ -4,17 +4,11 @@ YS*/
 *.log
 *.stl
 *.eMesh
-.idea/
-tf_test/data/
-tmp/
-tf_test/fig/
 *.swp
 .*
 lsf.o*
 *__pycache__*
-mprofile*
 *.tp
-*_tmp.py
 *.npy
 *.npz
 *.tif
@@ -24,3 +18,4 @@ mprofile*
 *.csv
 *.tiff
 *.sh
+*.egg-info*
