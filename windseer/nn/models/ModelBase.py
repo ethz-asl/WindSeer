@@ -1,21 +1,35 @@
 import torch
 import torch.nn as nn
 
-'''
-Base Model
-'''
+
 class ModelBase(nn.Module):
+    '''
+    Model base class.
+    '''
+
     def __init__(self, **kwargs):
         super(ModelBase, self).__init__()
-        
+
         self.num_inputs = None
         self.num_outputs = None
 
     def new_epoch_callback(self, epoch):
+        '''
+        Callback executed at the beginning of each epoch.
+
+        Parameters
+        ----------
+        epoch : int
+            Current epoch
+        '''
         # nothing to do here
         return
 
     def freeze_model(self):
+        '''
+        Freeze all model weights.
+        '''
+
         def freeze_weights(m):
             for params in m.parameters():
                 params.requires_grad = False
@@ -23,6 +37,10 @@ class ModelBase(nn.Module):
         self.apply(freeze_weights)
 
     def unfreeze_model(self):
+        '''
+        Unfreeze all model weights.
+        '''
+
         def unfreeze_weights(m):
             for params in m.parameters():
                 params.requires_grad = True
@@ -30,12 +48,32 @@ class ModelBase(nn.Module):
         self.apply(unfreeze_weights)
 
     def get_num_inputs(self):
+        '''
+        Get the number of input channels.
+
+        Returns
+        -------
+        num_inputs : float
+            Number of input channels
+        '''
         return self.num_inputs
 
     def get_num_outputs(self):
+        '''
+        Get the number of output channels.
+
+        Returns
+        -------
+        num_inputs : float
+            Number of output channels
+        '''
         return self.num_outputs
 
     def init_params(self):
+        '''
+        Custom parameter initialization.
+        '''
+
         def init_weights(m):
             if (type(m) != type(self)):
                 try:
@@ -50,6 +88,10 @@ class ModelBase(nn.Module):
         self.apply(init_weights)
 
     def set_receptive_field_params(self):
+        '''
+        Configure the parameter to visualize the receptive field.
+        '''
+
         def init_weights(m):
             if (type(m) != type(self)):
                 try:
