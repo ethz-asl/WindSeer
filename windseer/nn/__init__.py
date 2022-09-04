@@ -1,3 +1,4 @@
-__all__ = ['models']
+__all__ = ['models', 'losses']
 
 from .models import *
+from .losses import *
