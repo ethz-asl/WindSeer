@@ -4,9 +4,21 @@ import os
 import yaml
 
 
-class EDNNParameters(object):
+class WindseerParams(object):
+    '''
+    Class handling and loading the parameter for windseer
+    from a yaml file.
+    '''
 
-    def __init__(self, yaml_config, verbose = True):
+    def __init__(self, yaml_config, verbose=True):
+        '''
+        Parameters
+        ----------
+        yaml_config : str
+            Filename of the yaml file
+        verbose : bool, default: True
+            Print additional information to the console
+        '''
         self.yaml_file = yaml_config
         run_parameters = self.load_yaml(self.yaml_file, verbose)
         self.model = run_parameters['model']
@@ -15,9 +27,23 @@ class EDNNParameters(object):
         self.loss = run_parameters['loss']
         self.name = self._build_name()
 
-
     @staticmethod
-    def load_yaml(file, verbose = True):
+    def load_yaml(file, verbose=True):
+        '''
+        Loading the parameter from a yaml file.
+
+        Parameters
+        ----------
+        file : str
+            Filename of the yaml file
+        verbose : bool, default: True
+            Print additional information to the console
+
+        Returns
+        -------
+        params : dict
+            Loaded parameter dictionary
+        '''
         if verbose:
             print("Using YAML config: {0}".format(file))
         with open(file, 'rt') as fh:
@@ -25,66 +51,59 @@ class EDNNParameters(object):
 
         label_channels = run_parameters['data']['label_channels']
 
-        run_parameters['model']['model_args']['use_turbulence'] = 'turb' in label_channels
+        run_parameters['model']['model_args']['use_turbulence'
+                                              ] = 'turb' in label_channels
         run_parameters['model']['model_args']['use_pressure'] = 'p' in label_channels
-        run_parameters['model']['model_args']['use_epsilon'] = 'epsilon' in label_channels
+        run_parameters['model']['model_args']['use_epsilon'
+                                              ] = 'epsilon' in label_channels
         run_parameters['model']['model_args']['use_nut'] = 'nut' in label_channels
-        run_parameters['model']['model_args']['n_epochs'] = run_parameters['run']['n_epochs']
+        run_parameters['model']['model_args']['n_epochs'] = run_parameters['run'][
+            'n_epochs']
 
         return run_parameters
 
-    @staticmethod
-    def _letter_switch(value, letter=None):
-        if isinstance(value, str):
-            letter=value[0]
-            value=letter.isupper()
-        if value:
-            return letter.upper()
-        else:
-            return letter.lower()
-
     def _build_name(self):
+        '''
+        Get the name of the configuration
+
+        Returns
+        -------
+        name : str
+            Configuration name
+        '''
         name = self.model['name_prefix']
-
-        # don't use it for now as the order is random
-#         name = self.model['name_prefix']+'_'
-#         for key in self.model['model_args']:
-#             print(key)
-#             try:
-#                 if isinstance(self.model['model_args'][key], bool):
-#                     name += self._letter_switch(self.model['model_args'][key], key[0])
-#
-#                 else:
-#                     val = float(self.model['model_args'][key])
-#                     name += self._letter_switch(False, key[0])
-#                     name += '{0:d}'.format(self.model['model_args'][key])
-#
-#             except:
-#                 if isinstance(self.model['model_args'][key], str):
-#                     name += self._letter_switch(self.model['model_args'][key])
-
         return name
 
     def Dataset_kwargs(self):
-        kwargs = {'stride_hor': self.data['stride_hor'],
-                'stride_vert': self.data['stride_vert'],
-                'input_channels': self.data['input_channels'],
-                'label_channels': self.data['label_channels'],
-                'scaling_ux': self.data['ux_scaling'],
-                'scaling_uy': self.data['uy_scaling'],
-                'scaling_uz': self.data['uz_scaling'],
-                'scaling_turb': self.data['turb_scaling'],
-                'scaling_p': self.data['p_scaling'],
-                'scaling_epsilon': self.data['epsilon_scaling'],
-                'scaling_nut': self.data['nut_scaling'],
-                'scaling_terrain': self.data['terrain_scaling'],
-                'input_mode': self.data['input_mode'],
-                'nx': self.model['model_args']['n_x'],
-                'ny': self.model['model_args']['n_y'],
-                'nz': self.model['model_args']['n_z'],
-                'autoscale': self.data['autoscale'],
-                'loss_weighting_fn': self.loss['loss_weighting_fn'],
-                'loss_weighting_clamp': self.loss['loss_weighting_clamp']}
+        '''
+        Get the dataset kwargs.
+
+        Returns
+        -------
+        kwargs : dict
+            Dataset kwargs
+        '''
+        kwargs = {
+            'stride_hor': self.data['stride_hor'],
+            'stride_vert': self.data['stride_vert'],
+            'input_channels': self.data['input_channels'],
+            'label_channels': self.data['label_channels'],
+            'scaling_ux': self.data['ux_scaling'],
+            'scaling_uy': self.data['uy_scaling'],
+            'scaling_uz': self.data['uz_scaling'],
+            'scaling_turb': self.data['turb_scaling'],
+            'scaling_p': self.data['p_scaling'],
+            'scaling_epsilon': self.data['epsilon_scaling'],
+            'scaling_nut': self.data['nut_scaling'],
+            'scaling_terrain': self.data['terrain_scaling'],
+            'input_mode': self.data['input_mode'],
+            'nx': self.model['model_args']['n_x'],
+            'ny': self.model['model_args']['n_y'],
+            'nz': self.model['model_args']['n_z'],
+            'autoscale': self.data['autoscale'],
+            'loss_weighting_fn': self.loss['loss_weighting_fn'],
+            'loss_weighting_clamp': self.loss['loss_weighting_clamp']
+            }
 
         if 'verbose' in self.data.keys():
             kwargs['verbose'] = self.data['verbose']
@@ -122,7 +141,8 @@ class EDNNParameters(object):
             kwargs['only_z_velocity_bias'] = self.data['only_z_velocity_bias']
 
         if 'max_fraction_of_sparse_data' in self.data.keys():
-            kwargs['max_fraction_of_sparse_data'] = self.data['max_fraction_of_sparse_data']
+            kwargs['max_fraction_of_sparse_data'] = self.data[
+                'max_fraction_of_sparse_data']
 
         if 'use_system_random' in self.data.keys():
             kwargs['use_system_random'] = self.data['use_system_random']
@@ -134,10 +154,12 @@ class EDNNParameters(object):
             kwargs['trajectory_max_length'] = self.data['trajectory_max_length']
 
         if 'trajectory_min_segment_length' in self.data.keys():
-            kwargs['trajectory_min_segment_length'] = self.data['trajectory_min_segment_length']
+            kwargs['trajectory_min_segment_length'] = self.data[
+                'trajectory_min_segment_length']
 
         if 'trajectory_max_segment_length' in self.data.keys():
-            kwargs['trajectory_max_segment_length'] = self.data['trajectory_max_segment_length']
+            kwargs['trajectory_max_segment_length'] = self.data[
+                'trajectory_max_segment_length']
 
         if 'trajectory_step_size' in self.data.keys():
             kwargs['trajectory_step_size'] = self.data['trajectory_step_size']
@@ -146,41 +168,74 @@ class EDNNParameters(object):
             kwargs['trajectory_max_iter'] = self.data['trajectory_max_iter']
 
         if 'trajectory_start_weighting_mode' in self.data.keys():
-            kwargs['trajectory_start_weighting_mode'] = self.data['trajectory_start_weighting_mode']
+            kwargs['trajectory_start_weighting_mode'] = self.data[
+                'trajectory_start_weighting_mode']
 
         if 'trajectory_length_short_focus' in self.data.keys():
-            kwargs['trajectory_length_short_focus'] = self.data['trajectory_length_short_focus']
+            kwargs['trajectory_length_short_focus'] = self.data[
+                'trajectory_length_short_focus']
 
         if 'input_smoothing' in self.data.keys():
             kwargs['input_smoothing'] = self.data['input_smoothing']
 
         if 'input_smoothing_interpolation' in self.data.keys():
-            kwargs['input_smoothing_interpolation'] = self.data['input_smoothing_interpolation']
+            kwargs['input_smoothing_interpolation'] = self.data[
+                'input_smoothing_interpolation']
 
         if 'input_smoothing_interpolation_linear' in self.data.keys():
-            kwargs['input_smoothing_interpolation_linear'] = self.data['input_smoothing_interpolation_linear']
-
+            kwargs['input_smoothing_interpolation_linear'] = self.data[
+                'input_smoothing_interpolation_linear']
 
         return kwargs
 
     def model_kwargs(self):
+        '''
+        Get the model kwargs.
+
+        Returns
+        -------
+        kwargs : dict
+            Model kwargs
+        '''
         return self.model['model_args']
 
     def pass_grid_size_to_loss(self, grid_size):
         '''
-        Small function to pass the grid size to the kwargs of the loss functions that need it.
+        Pass the grid size to the kwargs of the loss functions that need it.
+
+
+        Parameters
+        ----------
+        grid_size : list of int
+            Grid size in meter
         '''
         for i, loss_component in enumerate(self.loss['loss_components']):
             if 'DivergenceFree' in loss_component or 'VelocityGradient' in loss_component:
                 self.loss[loss_component + '_kwargs']['grid_size'] = grid_size
 
     def save(self, dir=None):
+        '''
+        Save the parameter to a yaml file.
+
+        Parameters
+        ----------
+        dir : str or None, default: None
+            Folder name, if not set the model folder is used
+        '''
         if dir is None:
             dir = self.name
         with open(os.path.join(dir, 'params.yaml'), 'wt') as fh:
-            yaml.safe_dump({'run': self.run, 'loss': self.loss, 'data': self.data, 'model': self.model}, fh)
+            yaml.safe_dump({
+                'run': self.run,
+                'loss': self.loss,
+                'data': self.data,
+                'model': self.model
+                }, fh)
 
     def print(self):
+        '''
+        Print the parameter to the console.
+        '''
         print('Train Settings:')
         print('\tWarm start:\t\t', self.run['warm_start'])
         print('\tLearning rate step size:', self.run['learning_rate_decay_step_size'])
@@ -195,7 +250,9 @@ class EDNNParameters(object):
         if len(self.loss['loss_components']) > 1:
             print('\tLearn loss scaling factors:\t', self.loss['learn_scaling'])
         for i, loss_component in enumerate(self.loss['loss_components']):
-            print('\t'+loss_component, 'kwargs :',self.loss[loss_component + '_kwargs'])
+            print(
+                '\t' + loss_component, 'kwargs :', self.loss[loss_component + '_kwargs']
+                )
         print(' ')
         print('Model Settings:')
         print('\t Model prefix:\t\t', self.model['name_prefix'])
@@ -209,7 +266,7 @@ class EDNNParameters(object):
         print('\t\t', self.run['optimizer_kwargs'])
         print(' ')
         print('Dataset Settings:')
-        print('\tInput channels:\t',self.data['input_channels'])
+        print('\tInput channels:\t', self.data['input_channels'])
         print('\tLabel channels:\t', self.data['label_channels'])
         print('\tUx scaling:\t\t', self.data['ux_scaling'])
         print('\tUy scaling:\t\t', self.data['uy_scaling'])
@@ -223,9 +280,23 @@ class EDNNParameters(object):
         print('\tAugmentation mode:\t', self.data['augmentation_mode'])
         print('\tAugmentation params:\t', self.data['augmentation_kwargs'])
 
-        
+
 class BasicParameters(object):
+    '''
+    Base class for handling yaml parameter files.
+    '''
+
     def __init__(self, yaml_config, subdict=None):
+        '''
+        Loading the parameter from a yaml file.
+
+        Parameters
+        ----------
+        yaml_config : str
+            Filename of the yaml file
+        subdict : str or None, default: None
+            Only extract a subgroup of the parameter file
+        '''
         self.subdict = subdict
         self.yaml_file = yaml_config
         if subdict is None:
@@ -235,14 +306,37 @@ class BasicParameters(object):
 
     @staticmethod
     def _load_yaml(file, str='Using YAML config: '):
+        '''
+        Loading the parameter from a yaml file.
+
+        Parameters
+        ----------
+        file : str
+            Filename of the yaml file
+        str : str
+            Information string displayed when loading the file
+
+        Returns
+        -------
+        params : dict
+            Loaded parameter dictionary
+        '''
         print("{0} {1}".format(str, file))
         with open(file, 'rt') as fh:
             run_parameters = yaml.safe_load(fh)
         return run_parameters
 
-    def _save(self, dir=None, file='params.yaml'):
-        if dir is None:
-            dir = self.name
+    def _save(self, dir, file='params.yaml'):
+        '''
+        Saving the parameter to a yaml file.
+
+        Parameters
+        ----------
+        dir : str
+            Directory name where to store the params
+        file : str, default: params.yaml
+            Filename
+        '''
         with open(os.path.join(dir, file), 'wt') as fh:
             if self.subdict is None:
                 yaml.safe_dump(fh)
@@ -256,58 +350,136 @@ class BasicParameters(object):
 
 
 class COSMOParameters(BasicParameters):
+    '''
+    Class handling yaml file containing the COSMO params.
+    '''
+
     def __init__(self, yaml_config):
+        '''
+        Parameters
+        ----------
+        yaml_config : str
+            Filename of the yaml file
+        '''
         super(COSMOParameters, self).__init__(yaml_config, subdict='cosmo')
-        if ('time' not in self.params) or (self.params['time'].lower() == 'auto'):
+        try:
+            auto_time = self.params['time'].lower() == 'auto'
+        except:
+            auto_time = False
+
+        if ('time' not in self.params) or (auto_time):
             try:
                 # Assume time is last two digits of filename
                 bn = os.path.splitext(os.path.basename(self.params['file']))[0]
                 self.params['time'] = int(bn[-2:])
             except:
-                print('Automatic time extraction failed on file: {0}. Setting time to 00'.format(self.params['file']))
+                print(
+                    'Automatic time extraction failed on file: {0}. Setting time to 00'
+                    .format(self.params['file'])
+                    )
                 self.params['time'] = 0
 
     def load_yaml(self, file):
+        '''
+        Loading the parameter from a yaml file.
+
+        Parameters
+        ----------
+        file : str
+            Filename of the yaml file
+
+        Returns
+        -------
+        params : dict
+            Loaded parameter dictionary
+        '''
         return self._load_yaml(file, "Using YAML COSMO config: ")
 
     def save(self, dir=None):
+        '''
+        Saving the parameter to a yaml file.
+        The filename is set to cosmo.yaml
+
+        Parameters
+        ----------
+        dir : str
+            Directory name where to store the params
+        '''
         self._save(dir, 'cosmo.yaml')
 
     def print(self):
+        '''
+        Print the parameter to the console.
+        '''
         self._print('COSMO parameters:')
 
     def get_cosmo_time(self, target_time):
+        '''
+        Get the relative time of the requested COSMO data
+
+        Parameters
+        ----------
+        target_time : int
+            Target time
+
+        Returns
+        -------
+        delta_t : int
+            Relative timestamp
+        '''
         delta_t = target_time - self.params['time']
         if delta_t < 0:
-            print('WARNING: Requested time {0} is before COSMO time {1}, returning time index 0'.format(target_time, self.params['time']))
+            print(
+                'WARNING: Requested time {0} is before COSMO time {1}, returning time index 0'
+                .format(target_time, self.params['time'])
+                )
         return delta_t
 
 
 class UlogParameters(BasicParameters):
+    '''
+    Class handling yaml file containing the ulog params.
+    '''
 
     def __init__(self, yaml_file):
+        '''
+        Parameters
+        ----------
+        yaml_file : str
+            Filename of the yaml file
+        '''
         super(UlogParameters, self).__init__(yaml_file, subdict='ulog')
 
     def load_yaml(self, file):
+        '''
+        Loading the parameter from a yaml file.
+
+        Parameters
+        ----------
+        file : str
+            Filename of the yaml file
+
+        Returns
+        -------
+        params : dict
+            Loaded parameter dictionary
+        '''
         return self._load_yaml(file, "Using YAML ulog config: ")
 
     def save(self, dir=None):
+        '''
+        Saving the parameter to a yaml file.
+        The filename is set to ulog.yaml
+
+        Parameters
+        ----------
+        dir : str
+            Directory name where to store the params
+        '''
         self._save(dir, 'ulog.yaml')
 
     def print(self):
+        '''
+        Print the parameter to the console.
+        '''
         self._print('Ulog parameters:')
-
-
-class FlightParameters(BasicParameters):
-
-    def __init__(self, yaml_file):
-        super(FlightParameters, self).__init__(yaml_file, subdict='flight')
-
-    def load_yaml(self, file):
-        return self._load_yaml(file, "Using YAML flight config: ")
-
-    def save(self, dir=None):
-        self._save(dir, 'flight.yaml')
-
-    def print(self):
-        self._print('Flight parameters:')

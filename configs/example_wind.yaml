@@ -1,0 +1,13 @@
+cosmo:
+  file: 'cosmo-1_fcst_2018112300.nc'
+  time: 'auto'
+  terrain_file: 'cosmo-1_ana_const.nc'
+  terrain_tiff: 'terrain.tif'
+  rotate: 0.0
+  scale: 1.0
+  prediction_prefix: ''
+
+ulog:
+  file: 'flight.ulg'
+  filtered_file: 'wind.hdf5'
+  
