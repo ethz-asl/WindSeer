@@ -1,4 +1,4 @@
-from .derivation import divergence
+from windseer.utils import divergence
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as colors
