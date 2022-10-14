@@ -57,12 +57,14 @@ net, params = utils.load_model(
 # get input
 input = torch.randn(4, args.n_grid, args.n_grid, args.n_grid).to(device).unsqueeze(0)
 
+
 def start_timer():
     gc.collect()
     torch.cuda.empty_cache()
     torch.cuda.reset_max_memory_allocated()
     torch.cuda.synchronize()
     return time.time()
+
 
 with torch.no_grad():
     with torch.cuda.amp.autocast(args.mixedprecision):
