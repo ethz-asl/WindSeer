@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 import h5py
-import nn_wind_prediction.utils as utils
-import nn_wind_prediction.data as nn_data
+import windseer.utils as utils
+import windseer.data as nn_data
+import windseer.plotting as plotting
 import numpy as np
 import time
 import torch
@@ -11,161 +12,191 @@ from tqdm import tqdm
 from sklearn import metrics
 import pandas as pd
 
-def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
-    #Compute the average loss
+
+def get_prediction(input, label, scale, device, net, params, verbose=False):
+    '''
+    Get a prediction from the neural network and rescale all tensors.
+
+    Parameters
+    ----------
+    input : torch.Tensor
+        Input tensor
+    label : torch.Tensor
+        Label tensor
+    scale : torch.Tensor
+        Scale of the sample
+    device : torch.Device
+        Device where the computations are executed
+    net : torch.Module
+        Fully trained neural network that is evaluated
+    params : WindseerParams
+        Parameter dictionary
+    verbose : bool, defualt : True
+        Flag indicating if the prediction times are printed to the console
+
+    Returns
+    -------
+    prediction : dict
+        Dictionary with the network predictions
+    input_rescaled : torch.Tensor
+        Rescaled input tensor
+    label_rescaled : torch.Tensor
+        Rescaled label tensor
+    '''
+    with torch.no_grad():
+        input, label = input.to(device), label.to(device)
+        if verbose:
+            torch.cuda.synchronize()
+            start_time = time.time()
+
+        if not len(input.shape) == len(label.shape):
+            raise ValueError(
+                'The input and label tensor are expected to have the same number of dimensions'
+                )
+
+        if len(input.shape) == 4:
+            input = input.unsqueeze(0)
+            label = label.unsqueeze(0)
+        elif len(input.shape) < 4 or len(input.shape) > 5:
+            raise ValueError('Expected a 4D or 5D tensor')
+
+        prediction = net(input)
+
+        if verbose:
+            torch.cuda.synchronize()
+            print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
+
+        prediction['pred'] = utils.rescale_tensor(
+            prediction['pred'], params.data['label_channels'], scale, params
+            )
+        label_rescaled = utils.rescale_tensor(
+            label, params.data['label_channels'], scale, params
+            )
+        input_rescaled = utils.rescale_tensor(
+            input, params.data['input_channels'], scale, params
+            )
+
+        return prediction, input_rescaled, label_rescaled
+
+
+def compute_prediction_error(
+        net,
+        device,
+        params,
+        loss_fn,
+        testset,
+        single_sample=False,
+        sample_index=0,
+        num_predictions=100,
+        print_output=True
+    ):
+    '''
+    Compute the aggregated prediction errors of a dataset or a single sample.
+    Assumes that ux, uy, uz, and optionally the TKE are predicted.
+
+    Parameters
+    ----------
+    net : torch.Module
+        Fully trained neural network that is evaluated
+    device : torch.Device
+        Device where the computations are executed
+    params : WindseerParams
+        Parameter dictionary
+    loss_fn : CombinedLoss
+        Loss function
+    testset : HDF5Dataset
+        Test dataset
+    single_sample : bool, default : False
+        Flag indicating if the dataset error is computed or multiple rounds for a single sample
+    sample_index : int, default : 0
+        In case of a single sample this indicates the sample that is used
+    num_predictions : int, default : 100
+        In case of a single sample this indicates how many predictions are executed
+    print_output : bool, defualt : True
+        Flag indicating if the errors are printed to the console
+
+    Returns
+    -------
+    prediction_errors : dict
+        Dictionary with the prediction errors
+    losses : dict
+        Dictionary with the losses
+    worst_index : int
+        Index of the sample with the highest loss
+    maxloss : torch.Tensor
+        Highest loss value
+    '''
+    for channel in ['ux', 'uy', 'uz']:
+        if not channel in params.data['label_channels']:
+            raise ValueError('This script assumes that ' + channel + ' is predicted')
+
+    for channel in params.data['label_channels']:
+        if not channel in ['ux', 'uy', 'uz', 'turb']:
+            raise ValueError('Encountered unexpeted label channel: ' + channel)
+
     with torch.no_grad():
         worst_index = -1
-        maxloss = -200000.0 #arbitrary large negative number, the loss should always be higher than that number
+        maxloss = -np.inf
+
+        if single_sample:
+            num_iterations = num_predictions
+        else:
+            num_iterations = len(testset)
 
         losses = {
-            'loss_total': np.zeros(len(loader_testset)),
-            'loss_ux': np.zeros(len(loader_testset)),
-            'loss_uy': np.zeros(len(loader_testset)),
-            'loss_uz': np.zeros(len(loader_testset)),
-            'loss_turb': np.zeros(len(loader_testset)),
-        }
+            'loss_total': np.zeros(num_iterations),
+            'loss_ux': np.zeros(num_iterations),
+            'loss_uy': np.zeros(num_iterations),
+            'loss_uz': np.zeros(num_iterations),
+            'loss_turb': np.zeros(num_iterations),
+            }
 
-        prediction_errors = {
-            'all_tot_mean': [],
-            'all_tot_max': [],
-            'all_tot_median': [],
-            'all_hor_mean': [],
-            'all_hor_max': [],
-            'all_hor_median': [],
-            'all_ver_mean': [],
-            'all_ver_max': [],
-            'all_ver_median': [],
-            'all_turb_mean': [],
-            'all_turb_max': [],
-            'all_turb_median': [],
+        metrics_dataset = {
+            'mse': np.zeros(num_iterations),
+            'mae': np.zeros(num_iterations),
+            'max_error': np.zeros(num_iterations),
+            'median_absolute_error': np.zeros(num_iterations),
+            'explained_variance_score': np.zeros(num_iterations),
+            'r2_score': np.zeros(num_iterations),
+            'trajectory_length': np.zeros(num_iterations),
+            }
 
-            'all_tot_mean_rel': [],
-            'all_tot_max_rel': [],
-            'all_tot_median_rel': [],
-            'all_hor_mean_rel': [],
-            'all_hor_max_rel': [],
-            'all_hor_median_rel': [],
-            'all_ver_mean_rel': [],
-            'all_ver_max_rel': [],
-            'all_ver_median_rel': [],
-            'all_turb_mean_rel': [],
-            'all_turb_max_rel': [],
-            'all_turb_median_rel': [],
-
-            'low_tot_mean': [],
-            'low_tot_max': [],
-            'low_tot_median': [],
-            'low_hor_mean': [],
-            'low_hor_max': [],
-            'low_hor_median': [],
-            'low_ver_mean': [],
-            'low_ver_max': [],
-            'low_ver_median': [],
-            'low_turb_mean': [],
-            'low_turb_max': [],
-            'low_turb_median': [],
-
-            'low_tot_mean_rel': [],
-            'low_tot_max_rel': [],
-            'low_tot_median_rel': [],
-            'low_hor_mean_rel': [],
-            'low_hor_max_rel': [],
-            'low_hor_median_rel': [],
-            'low_ver_mean_rel': [],
-            'low_ver_max_rel': [],
-            'low_ver_median_rel': [],
-            'low_turb_mean_rel': [],
-            'low_turb_max_rel': [],
-            'low_turb_median_rel': [],
-
-            'high_tot_mean': [],
-            'high_tot_max': [],
-            'high_tot_median': [],
-            'high_hor_mean': [],
-            'high_hor_max': [],
-            'high_hor_median': [],
-            'high_ver_mean': [],
-            'high_ver_max': [],
-            'high_ver_median': [],
-            'high_turb_mean': [],
-            'high_turb_max': [],
-            'high_turb_median': [],
-
-            'high_tot_mean_rel': [],
-            'high_tot_max_rel': [],
-            'high_tot_median_rel': [],
-            'high_hor_mean_rel': [],
-            'high_hor_max_rel': [],
-            'high_hor_median_rel': [],
-            'high_ver_mean_rel': [],
-            'high_ver_max_rel': [],
-            'high_ver_median_rel': [],
-            'high_turb_mean_rel': [],
-            'high_turb_max_rel': [],
-            'high_turb_median_rel': [],
-        }
+        prediction_errors = {}
+        for domain in ['all_', 'low_', 'high_']:
+            for property in ['tot_', 'hor_', 'ver_', 'turb_']:
+                for metric in ['mean', 'max', 'median']:
+                    for relative in ['', '_rel']:
+                        prediction_errors[domain + property + metric + relative] = []
 
         try:
             predict_uncertainty = params.model['model_args']['predict_uncertainty']
         except KeyError as e:
             predict_uncertainty = False
-            print('predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False')
+            print(
+                'predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False'
+                )
 
-        for i, data in tqdm(enumerate(loader_testset), total=len(loader_testset)):
-            inputs = data[0]
-            labels = data[1]
-
-            inputs, labels = inputs.to(device), labels.to(device)
-
-            if (inputs.shape[0] > 1):
-                raise Exception('To compute the prediction error a batchsize of 1 is required')
-
-            outputs = net(inputs)['pred']
-
-            # move the tensors to the cpu
-            outputs.squeeze_()
-            labels.squeeze_()
-
-            # scale the values to the actual velocities
-            d3 = (len(list(outputs.size())) > 3)
+        for i in tqdm(range(num_iterations), total=num_iterations):
+            if single_sample:
+                data = testset[sample_index]
+            else:
+                data = testset[i]
 
             scale = 1.0
             if params.data['autoscale']:
                 scale = data[3].item()
 
-            if len(labels.shape) == 4:
-                labels[0] *= scale * params.data['ux_scaling']
-                labels[1] *= scale * params.data['uy_scaling']
-                labels[2] *= scale * params.data['uz_scaling']
-                outputs[0] *= scale * params.data['ux_scaling']
-                outputs[1] *= scale * params.data['uy_scaling']
-                outputs[2] *= scale * params.data['uz_scaling']
-
-                if 'turb' in  params.data['label_channels']:
-                    labels[3] *= scale * scale * params.data['turb_scaling']
-                    outputs[3] *= scale * scale * params.data['turb_scaling']
-
-            elif len(labels.shape) == 3:
-                labels[0] *= scale * params.data['ux_scaling']
-                labels[1] *= scale * params.data['uz_scaling']
-                outputs[0] *= scale * params.data['ux_scaling']
-                outputs[1] *= scale * params.data['uz_scaling']
-
-                if 'turb' in  params.data['label_channels']:
-                    labels[3] *= scale * scale * params.data['turb_scaling']
-                    outputs[3] *= scale * scale * params.data['turb_scaling']
-
-            else:
-                print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
-                raise ValueError
+            prediction, inputs, labels = get_prediction(
+                data[0], data[1], scale, device, net, params
+                )
 
             # compute the overall loss
-            if predict_uncertainty:
-                num_channels = outputs.shape[1]
-                dloss = loss_fn(outputs[:int(num_channels/2)], labels)
-            else:
-                dloss = loss_fn(outputs, labels)
+            dloss = loss_fn(prediction, labels, inputs)
             losses['loss_total'][i] = dloss
+
+            outputs = prediction['pred']
+            outputs.squeeze_()
+            labels.squeeze_()
 
             # find the worst prediction
             if dloss > maxloss:
@@ -173,29 +204,45 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
                 worst_index = i
 
             # compute the losses of the individual channels
-            if len(labels.shape) == 4:
-                losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
-                losses['loss_uy'][i] = loss_fn(outputs[1], labels[1])
-                losses['loss_uz'][i] = loss_fn(outputs[2], labels[2])
-                if 'turb' in  params.data['label_channels']:
-                    losses['loss_turb'][i] = loss_fn(outputs[3], labels[3])
+            mse_loss = torch.nn.MSELoss()
+            index = 0
+            for channel in ['ux', 'uy', 'uz', 'turb']:
+                losses['loss_' + channel][i] = mse_loss(outputs[index], labels[index])
+                index += 1
 
-            elif len(labels.shape) == 3:
-                losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
-                losses['loss_uz'][i] = loss_fn(outputs[1], labels[1])
-                if 'turb' in  params.data['label_channels']:
-                    losses['loss_turb'][i] = loss_fn(outputs[2], labels[2])
+            # compute the error metrics
+            outputs_metrics = outputs.view(outputs.shape[0],
+                                           -1).permute(1, 0).cpu().detach()
+            labels_metrics = labels.view(labels.shape[0], -1).permute(1,
+                                                                      0).cpu().detach()
 
+            metrics_dataset['mse'][i] = metrics.mean_squared_error(
+                labels_metrics, outputs_metrics
+                )
+            metrics_dataset['mae'][i] = metrics.mean_absolute_error(
+                labels_metrics, outputs_metrics
+                )
+            metrics_dataset['max_error'][i] = (labels_metrics -
+                                               outputs_metrics).abs().max().item()
+            metrics_dataset['median_absolute_error'][i] = metrics.median_absolute_error(
+                labels_metrics, outputs_metrics
+                )
+            metrics_dataset['explained_variance_score'][
+                i] = metrics.explained_variance_score(labels_metrics, outputs_metrics)
+            metrics_dataset['r2_score'][i] = metrics.r2_score(
+                labels_metrics, outputs_metrics
+                )
+
+            if params.data['input_mode'] > 2:
+                metrics_dataset['trajectory_length'][i] = inputs[0, -1].sum()
             else:
-                print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
-                raise ValueError
+                metrics_dataset['trajectory_length'][i] = 0
 
             # compute the prediction errors and extract the data
-            error_stats = utils.prediction_error.compute_prediction_error(labels,
-                                                                          outputs,
-                                                                          inputs[0,0] * params.data['terrain_scaling'],
-                                                                          predict_uncertainty, device,
-                                                                          'turb' in  params.data['label_channels'])
+            error_stats = utils.compute_prediction_error(
+                labels, outputs, inputs[0, 0], device, 'turb'
+                in params.data['label_channels']
+                )
             for key in error_stats.keys():
                 if not np.isnan(error_stats[key]):
                     prediction_errors[key].append(error_stats[key])
@@ -203,401 +250,127 @@ def dataset_prediction_error(net, device, params, loss_fn, loader_testset):
         for key in prediction_errors.keys():
             prediction_errors[key] = np.array(prediction_errors[key])
 
-        # print the results over the full dataset
-        print('INFO: Average loss on test set: %s' % (np.mean(losses['loss_total'])))
-        print('INFO: Average loss on test set for ux: %s' % (np.mean(losses['loss_ux'])))
-        print('INFO: Average loss on test set for uy: %s' % (np.mean(losses['loss_uy'])))
-        print('INFO: Average loss on test set for uz: %s' % (np.mean(losses['loss_uz'])))
-        print('INFO: Average loss on test set for turbulence: %s' % (np.mean(losses['loss_turb'])))
+        if print_output:
+            print(
+                'INFO: Average loss on test set: %s' % (np.mean(losses['loss_total']))
+                )
+            print(
+                'INFO: Average loss on test set for ux: %s' %
+                (np.mean(losses['loss_ux']))
+                )
+            print(
+                'INFO: Average loss on test set for uy: %s' %
+                (np.mean(losses['loss_uy']))
+                )
+            print(
+                'INFO: Average loss on test set for uz: %s' %
+                (np.mean(losses['loss_uz']))
+                )
+            print(
+                'INFO: Average loss on test set for turbulence: %s' %
+                (np.mean(losses['loss_turb']))
+                )
+            print('')
 
-        print('INFO: Full domain errors, absolute:')
-        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['all_tot_mean'])))
-        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_hor_mean'])))
-        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['all_ver_mean'])))
-        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['all_turb_mean'])))
-        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['all_tot_median'])))
-        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['all_hor_median'])))
-        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_ver_median'])))
-        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['all_turb_median'])))
-        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['all_tot_max'])))
-        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['all_hor_max'])))
-        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['all_ver_max'])))
-        print('\tmax tubulence velocity error:     %s [J/kg]' % (np.mean(prediction_errors['all_turb_max'])))
-        print('')
+            for key in metrics_dataset.keys():
+                print(
+                    'INFO: ' + key + ': ' + '{}'.format(np.mean(metrics_dataset[key]))
+                    )
+            print('')
 
-        print('INFO: Full domain errors, relative:')
-        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['all_tot_mean_rel'])))
-        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['all_hor_mean_rel'])))
-        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['all_ver_mean_rel'])))
-        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['all_turb_mean_rel'])))
-        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['all_tot_median_rel'])))
-        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['all_hor_median_rel'])))
-        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['all_ver_median_rel'])))
-        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['all_turb_median_rel'])))
-        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['all_tot_max_rel'])))
-        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['all_hor_max_rel'])))
-        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['all_ver_max_rel'])))
-        print('\tmax tubulence velocity error:     %s' % (np.mean(prediction_errors['all_turb_max_rel'])))
-        print('')
+            for domain, txt_domain in zip(['all_', 'high_', 'low_'], [
+                'INFO: Full domain errors', 'INFO: High above terrain errors',
+                'INFO: Close to terrain errors'
+                ]):
+                for rel, txt_relative in zip(['', '_rel'], ['absolute', 'relative']):
+                    print(txt_domain + ', ' + txt_relative + ':')
 
-        print('INFO: High above terrain errors, absolute:')
-        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['high_tot_mean'])))
-        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_hor_mean'])))
-        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['high_ver_mean'])))
-        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['high_turb_mean'])))
-        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['high_tot_median'])))
-        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['high_hor_median'])))
-        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_ver_median'])))
-        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['high_turb_median'])))
-        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['high_tot_max'])))
-        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['high_hor_max'])))
-        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['high_ver_max'])))
-        print('\tmax turbulent kinetic energy error:     %s [J/kg]' % (np.mean(prediction_errors['high_turb_max'])))
-        print('')
+                    for metric in ['mean', 'median', 'max']:
+                        for property, txt_property in zip([
+                            'tot_', 'hor_', 'ver_', 'turb_'
+                            ], [' total ', ' horizontal ', ' vertical ', ' TKE ']):
+                            print(
+                                '\t' + metric + txt_property + 'error: {}'.format(
+                                    np.mean(
+                                        prediction_errors[domain + property + metric +
+                                                          rel]
+                                        )
+                                    )
+                                )
+                    print('')
 
-        print('INFO: High above terrain errors, relative:')
-        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['high_tot_mean_rel'])))
-        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['high_hor_mean_rel'])))
-        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['high_ver_mean_rel'])))
-        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['high_turb_mean_rel'])))
-        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['high_tot_median_rel'])))
-        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['high_hor_median_rel'])))
-        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['high_ver_median_rel'])))
-        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['high_turb_median_rel'])))
-        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['high_tot_max_rel'])))
-        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['high_hor_max_rel'])))
-        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['high_ver_max_rel'])))
-        print('\tmax turbulent kinetic energy error:     %s' % (np.mean(prediction_errors['high_turb_max_rel'])))
-        print('')
+        return prediction_errors, losses, metrics_dataset, worst_index, maxloss
 
-        print('INFO: Close to terrain errors, absolute:')
-        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['low_tot_mean'])))
-        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_hor_mean'])))
-        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['low_ver_mean'])))
-        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['low_turb_mean'])))
-        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_tot_median'])))
-        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['low_hor_median'])))
-        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_ver_median'])))
-        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['low_turb_median'])))
-        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['low_tot_max'])))
-        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['low_hor_max'])))
-        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_ver_max'])))
-        print('\tmax turbulent kinetic energy error:     %s [J/kg]' % (np.mean(prediction_errors['low_turb_max'])))
-        print('')
 
-        print('INFO: Close to terrain errors, relative:')
-        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['low_tot_mean_rel'])))
-        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['low_hor_mean_rel'])))
-        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['low_ver_mean_rel'])))
-        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['low_turb_mean_rel'])))
-        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['low_tot_median_rel'])))
-        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['low_hor_median_rel'])))
-        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['low_ver_median_rel'])))
-        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['low_turb_median_rel'])))
-        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['low_tot_max_rel'])))
-        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['low_hor_max_rel'])))
-        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['low_ver_max_rel'])))
-        print('\tmax turbulent kinetic energy error:     %s' % (np.mean(prediction_errors['low_turb_max_rel'])))
-        print('')
+def predict_and_visualize(
+        dataset,
+        index,
+        device,
+        net,
+        params,
+        channels_to_plot,
+        plot_divergence=False,
+        loss_fn=None,
+        savename=None,
+        plottools=False,
+        mayavi=False,
+        blocking=False,
+        mayavi_configs={}
+    ):
+    '''
+    Predict the flow with the network and visualize the results.
 
-        return prediction_errors, losses, worst_index, maxloss
+    Parameters
+    ----------
+    dataset : HDF5Dataset
+        HDF5Dataset class
+    index : int
+        Index of the sample in the dataset that is used
+    device : torch.Device
+        Device where the computations are executed
+    net : torch.Module
+        Fully trained neural network that is evaluated
+    params : WindseerParams
+        Parameter dictionary
+    channels_to_plot : str or list of str
+        Indicates which channels should be plotted, either 'all' or a list of the channels
+    plot_divergence : bool, default: False
+        Indicates if the divergence of the prediction should be plotted
+    loss_fn : CombinedLoss
+        Loss function
+    savename : None or str, default: None
+        Savename for the prediction tensor, if not None the prediction is saved
+    plottools : bool, default : False
+        Indicates if the prediction should be visualized with the plottools methods
+    mayavi : bool, default : False
+        Indicates if the prediction should be visualized with the mayavi methods
+    blocking : bool, default : False
+        Indicates if at the end the blocking plt.show() is called
+    mayavi_configs : dict, default : empty dict
+        Configuration parameter for the mayavi plots
+    '''
+    input_channels = dataset.get_input_channels()
 
-def sample_prediction_error(net, device, params, loss_fn, testset, index, num_predictions):
-    #Compute the average loss
     with torch.no_grad():
-        losses = {
-            'loss_total': np.zeros(len(testset)),
-            'loss_ux': np.zeros(len(testset)),
-            'loss_uy': np.zeros(len(testset)),
-            'loss_uz': np.zeros(len(testset)),
-            'loss_turb': np.zeros(len(testset)),
-        }
+        data = dataset[index]
+        input = data[0]
+        label = data[1]
+        scale = 1.0
+        if params.data['autoscale']:
+            scale = data[3].item()
 
-        prediction_errors = {
-            'all_tot_mean': [],
-            'all_tot_max': [],
-            'all_tot_median': [],
-            'all_hor_mean': [],
-            'all_hor_max': [],
-            'all_hor_median': [],
-            'all_ver_mean': [],
-            'all_ver_max': [],
-            'all_ver_median': [],
-            'all_turb_mean': [],
-            'all_turb_max': [],
-            'all_turb_median': [],
+        prediction, inputs, labels = get_prediction(
+            input, label, scale, device, net, params, True
+            )
 
-            'all_tot_mean_rel': [],
-            'all_tot_max_rel': [],
-            'all_tot_median_rel': [],
-            'all_hor_mean_rel': [],
-            'all_hor_max_rel': [],
-            'all_hor_median_rel': [],
-            'all_ver_mean_rel': [],
-            'all_ver_max_rel': [],
-            'all_ver_median_rel': [],
-            'all_turb_mean_rel': [],
-            'all_turb_max_rel': [],
-            'all_turb_median_rel': [],
-
-            'low_tot_mean': [],
-            'low_tot_max': [],
-            'low_tot_median': [],
-            'low_hor_mean': [],
-            'low_hor_max': [],
-            'low_hor_median': [],
-            'low_ver_mean': [],
-            'low_ver_max': [],
-            'low_ver_median': [],
-            'low_turb_mean': [],
-            'low_turb_max': [],
-            'low_turb_median': [],
-
-            'low_tot_mean_rel': [],
-            'low_tot_max_rel': [],
-            'low_tot_median_rel': [],
-            'low_hor_mean_rel': [],
-            'low_hor_max_rel': [],
-            'low_hor_median_rel': [],
-            'low_ver_mean_rel': [],
-            'low_ver_max_rel': [],
-            'low_ver_median_rel': [],
-            'low_turb_mean_rel': [],
-            'low_turb_max_rel': [],
-            'low_turb_median_rel': [],
-
-            'high_tot_mean': [],
-            'high_tot_max': [],
-            'high_tot_median': [],
-            'high_hor_mean': [],
-            'high_hor_max': [],
-            'high_hor_median': [],
-            'high_ver_mean': [],
-            'high_ver_max': [],
-            'high_ver_median': [],
-            'high_turb_mean': [],
-            'high_turb_max': [],
-            'high_turb_median': [],
-
-            'high_tot_mean_rel': [],
-            'high_tot_max_rel': [],
-            'high_tot_median_rel': [],
-            'high_hor_mean_rel': [],
-            'high_hor_max_rel': [],
-            'high_hor_median_rel': [],
-            'high_ver_mean_rel': [],
-            'high_ver_max_rel': [],
-            'high_ver_median_rel': [],
-            'high_turb_mean_rel': [],
-            'high_turb_max_rel': [],
-            'high_turb_median_rel': [],
-        }
-
+        pred = prediction['pred'].squeeze()
+        input = inputs.squeeze()
+        label = labels.squeeze()
+        terrain = input[0].squeeze()
         try:
-            predict_uncertainty = params.model['model_args']['predict_uncertainty']
+            uncertainty = prediction['logvar'].squeeze()
         except KeyError as e:
-            predict_uncertainty = False
-            print('predict_wind_and_turbulence: predict_uncertainty key not available, setting default value: False')
-
-        for i in tqdm(range(num_predictions), total=num_predictions):
-            data = testset[index]
-            inputs = data[0].unsqueeze(0)
-            labels = data[1].unsqueeze(0)
-
-            inputs, labels = inputs.to(device), labels.to(device)
-
-            if (inputs.shape[0] > 1):
-                raise Exception('To compute the prediction error a batchsize of 1 is required')
-
-            outputs = net(inputs)['pred']
-
-            # move the tensors to the cpu
-            outputs.squeeze_()
-            labels.squeeze_()
-
-            # scale the values to the actual velocities
-            d3 = (len(list(outputs.size())) > 3)
-
-            scale = 1.0
-            if params.data['autoscale']:
-                scale = data[3].item()
-
-            if len(labels.shape) == 4:
-                labels[0] *= scale * params.data['ux_scaling']
-                labels[1] *= scale * params.data['uy_scaling']
-                labels[2] *= scale * params.data['uz_scaling']
-                outputs[0] *= scale * params.data['ux_scaling']
-                outputs[1] *= scale * params.data['uy_scaling']
-                outputs[2] *= scale * params.data['uz_scaling']
-
-                if 'turb' in  params.data['label_channels']:
-                    labels[3] *= scale * scale * params.data['turb_scaling']
-                    outputs[3] *= scale * scale * params.data['turb_scaling']
-
-            elif len(labels.shape) == 3:
-                labels[0] *= scale * params.data['ux_scaling']
-                labels[1] *= scale * params.data['uz_scaling']
-                outputs[0] *= scale * params.data['ux_scaling']
-                outputs[1] *= scale * params.data['uz_scaling']
-
-                if 'turb' in  params.data['label_channels']:
-                    labels[3] *= scale * scale * params.data['turb_scaling']
-                    outputs[3] *= scale * scale * params.data['turb_scaling']
-
-            else:
-                print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
-                raise ValueError
-
-            # compute the overall loss
-            if predict_uncertainty:
-                num_channels = outputs.shape[1]
-                dloss = loss_fn(outputs[:int(num_channels/2)], labels)
-            else:
-                dloss = loss_fn(outputs, labels)
-            losses['loss_total'][i] = dloss
-
-            # compute the losses of the individual channels
-            if len(labels.shape) == 4:
-                losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
-                losses['loss_uy'][i] = loss_fn(outputs[1], labels[1])
-                losses['loss_uz'][i] = loss_fn(outputs[2], labels[2])
-                if 'turb' in  params.data['label_channels']:
-                    losses['loss_turb'][i] = loss_fn(outputs[3], labels[3])
-
-            elif len(labels.shape) == 3:
-                losses['loss_ux'][i] = loss_fn(outputs[0], labels[0])
-                losses['loss_uz'][i] = loss_fn(outputs[1], labels[1])
-                if 'turb' in  params.data['label_channels']:
-                    losses['loss_turb'][i] = loss_fn(outputs[2], labels[2])
-
-            else:
-                print('dataset_prediction_error: unknown dimension of the data:', len(outputs.shape))
-                raise ValueError
-
-            # compute the prediction errors and extract the data
-            error_stats = utils.prediction_error.compute_prediction_error(labels,
-                                                                          outputs,
-                                                                          inputs[0,0] * params.data['terrain_scaling'],
-                                                                          predict_uncertainty, device,
-                                                                          'turb' in  params.data['label_channels'])
-            for key in error_stats.keys():
-                if not np.isnan(error_stats[key]):
-                    prediction_errors[key].append(error_stats[key])
-
-        for key in prediction_errors.keys():
-            prediction_errors[key] = np.array(prediction_errors[key])
-
-        # print the results over the full dataset
-        print('INFO: Average loss on sample: %s' % (np.mean(losses['loss_total'])))
-        print('INFO: Average loss on sample for ux: %s' % (np.mean(losses['loss_ux'])))
-        print('INFO: Average loss on sample for uy: %s' % (np.mean(losses['loss_uy'])))
-        print('INFO: Average loss on sample for uz: %s' % (np.mean(losses['loss_uz'])))
-        print('INFO: Average loss on sample for turbulence: %s' % (np.mean(losses['loss_turb'])))
-
-        print('INFO: Full domain errors, absolute:')
-        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['all_tot_mean'])))
-        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_hor_mean'])))
-        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['all_ver_mean'])))
-        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['all_turb_mean'])))
-        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['all_tot_median'])))
-        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['all_hor_median'])))
-        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['all_ver_median'])))
-        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['all_turb_median'])))
-        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['all_tot_max'])))
-        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['all_hor_max'])))
-        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['all_ver_max'])))
-        print('\tmax tubulence velocity error:     %s [J/kg]' % (np.mean(prediction_errors['all_turb_max'])))
-        print('')
-
-        print('INFO: Full domain errors, relative:')
-        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['all_tot_mean_rel'])))
-        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['all_hor_mean_rel'])))
-        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['all_ver_mean_rel'])))
-        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['all_turb_mean_rel'])))
-        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['all_tot_median_rel'])))
-        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['all_hor_median_rel'])))
-        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['all_ver_median_rel'])))
-        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['all_turb_median_rel'])))
-        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['all_tot_max_rel'])))
-        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['all_hor_max_rel'])))
-        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['all_ver_max_rel'])))
-        print('\tmax tubulence velocity error:     %s' % (np.mean(prediction_errors['all_turb_max_rel'])))
-        print('')
-
-        print('INFO: High above terrain errors, absolute:')
-        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['high_tot_mean'])))
-        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_hor_mean'])))
-        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['high_ver_mean'])))
-        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['high_turb_mean'])))
-        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['high_tot_median'])))
-        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['high_hor_median'])))
-        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['high_ver_median'])))
-        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['high_turb_median'])))
-        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['high_tot_max'])))
-        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['high_hor_max'])))
-        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['high_ver_max'])))
-        print('\tmax turbulent kinetic energy error:     %s [J/kg]' % (np.mean(prediction_errors['high_turb_max'])))
-        print('')
-
-        print('INFO: High above terrain errors, relative:')
-        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['high_tot_mean_rel'])))
-        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['high_hor_mean_rel'])))
-        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['high_ver_mean_rel'])))
-        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['high_turb_mean_rel'])))
-        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['high_tot_median_rel'])))
-        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['high_hor_median_rel'])))
-        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['high_ver_median_rel'])))
-        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['high_turb_median_rel'])))
-        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['high_tot_max_rel'])))
-        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['high_hor_max_rel'])))
-        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['high_ver_max_rel'])))
-        print('\tmax turbulent kinetic energy error:     %s' % (np.mean(prediction_errors['high_turb_max_rel'])))
-        print('')
-
-        print('INFO: Close to terrain errors, absolute:')
-        print('\tmean total velocity error:        %s [m/s]' % (np.mean(prediction_errors['low_tot_mean'])))
-        print('\tmean horizontal velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_hor_mean'])))
-        print('\tmean vertical velocity error:     %s [m/s]' % (np.mean(prediction_errors['low_ver_mean'])))
-        print('\tmean turbulent kinetic energy error:    %s [J/kg]' % (np.mean(prediction_errors['low_turb_mean'])))
-        print('\tmedian total velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_tot_median'])))
-        print('\tmedian horizontal velocity error: %s [m/s]' % (np.mean(prediction_errors['low_hor_median'])))
-        print('\tmedian vertical velocity error:   %s [m/s]' % (np.mean(prediction_errors['low_ver_median'])))
-        print('\tmedian turbulent kinetic energy error:  %s [J/kg]' % (np.mean(prediction_errors['low_turb_median'])))
-        print('\tmax total velocity error:         %s [m/s]' % (np.mean(prediction_errors['low_tot_max'])))
-        print('\tmax horizontal velocity error:    %s [m/s]' % (np.mean(prediction_errors['low_hor_max'])))
-        print('\tmax vertical velocity error:      %s [m/s]' % (np.mean(prediction_errors['low_ver_max'])))
-        print('\tmax turbulent kinetic energy error:     %s [J/kg]' % (np.mean(prediction_errors['low_turb_max'])))
-        print('')
-
-        print('INFO: Close to terrain errors, relative:')
-        print('\tmean total velocity error:        %s' % (np.mean(prediction_errors['low_tot_mean_rel'])))
-        print('\tmean horizontal velocity error:   %s' % (np.mean(prediction_errors['low_hor_mean_rel'])))
-        print('\tmean vertical velocity error:     %s' % (np.mean(prediction_errors['low_ver_mean_rel'])))
-        print('\tmean turbulent kinetic energy error:    %s' % (np.mean(prediction_errors['low_turb_mean_rel'])))
-        print('\tmedian total velocity error:      %s' % (np.mean(prediction_errors['low_tot_median_rel'])))
-        print('\tmedian horizontal velocity error: %s' % (np.mean(prediction_errors['low_hor_median_rel'])))
-        print('\tmedian vertical velocity error:   %s' % (np.mean(prediction_errors['low_ver_median_rel'])))
-        print('\tmedian turbulent kinetic energy error:  %s' % (np.mean(prediction_errors['low_turb_median_rel'])))
-        print('\tmax total velocity error:         %s' % (np.mean(prediction_errors['low_tot_max_rel'])))
-        print('\tmax horizontal velocity error:    %s' % (np.mean(prediction_errors['low_hor_max_rel'])))
-        print('\tmax vertical velocity error:      %s' % (np.mean(prediction_errors['low_ver_max_rel'])))
-        print('\tmax turbulent kinetic energy error:     %s' % (np.mean(prediction_errors['low_turb_max_rel'])))
-        print('')
-
-        return prediction_errors, losses
-
-
-def predict_channels(input, label, scale, device, net, params, channels_to_plot, dataset,
-                     input_channels = None, plot_divergence = False, loss_fn = None, savename=None, mayavi=False):
-    with torch.no_grad():
-        # predict and measure how long it takes
-        input, label = input.to(device), label.to(device)
-        start_time = time.time()
-        output = net(input.unsqueeze(0))
-        pred = output['pred']
-        print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
-        input = input.squeeze()
-        pred = pred.squeeze()
+            uncertainty = None
 
         channels_to_predict = params.data['label_channels']
 
@@ -605,33 +378,11 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
         default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
         for channel in channels_to_predict:
             if channel not in default_channels:
-                raise ValueError('Incorrect label_channel detected: \'{}\', '
-                                 'correct channels are {}'.format(channel, default_channels))
+                raise ValueError(
+                    'Incorrect label_channel detected: \'{}\', '
+                    'correct channels are {}'.format(channel, default_channels)
+                    )
         channels_to_predict = [x for x in default_channels if x in channels_to_predict]
-
-        # rescale the labels and predictions
-        for i, channel in enumerate(channels_to_predict):
-            if channel == 'terrain':
-                input[i] *= params.data[channel + '_scaling']
-                pred[i] *= params.data[channel + '_scaling']
-                label[i] *= params.data[channel + '_scaling']
-            elif channel.startswith('u') or channel == 'nut':
-                input[i] *= scale * params.data[channel +'_scaling']
-                pred[i] *= scale * params.data[channel +'_scaling']
-                label[i] *= scale * params.data[channel + '_scaling']
-            elif channel == 'p' or channel == 'turb':
-                input[i] *= scale * scale * params.data[channel + '_scaling']
-                pred[i] *= scale * scale * params.data[channel + '_scaling']
-                label[i] *= scale * scale * params.data[channel + '_scaling']
-            elif channel == 'epsilon':
-                input[i] *= scale * scale * scale * params.data[channel + '_scaling']
-                pred[i] *= scale * scale * scale * params.data[channel + '_scaling']
-                label[i] *= scale * scale * scale * params.data[channel + '_scaling']
-
-        try:
-            uncertainty = output['logvar'].squeeze()
-        except KeyError as e:
-            uncertainty = None
 
         if loss_fn:
             for i, channel in enumerate(channels_to_predict):
@@ -642,67 +393,130 @@ def predict_channels(input, label, scale, device, net, params, channels_to_plot,
             np.save(savename, pred.cpu().numpy())
 
         if mayavi:
-            terrain = input[0]
+            default_mayavi_configs = {
+                'view_settings': None,
+                'animate': False,
+                'save_animation': False
+                }
+            mayavi_configs = utils.dict_update(default_mayavi_configs, mayavi_configs)
+
             ui = []
 
             if input is not None and input_channels is not None:
                 if 'mask' in input_channels:
-                    utils.mlab_plot_measurements(input[1:-1], input[-1], terrain, terrain_mode='blocks',
-                                                 terrain_uniform_color=True, blocking=False)
+                    plotting.mlab_plot_measurements(
+                        input[1:-1],
+                        input[-1],
+                        terrain,
+                        terrain_mode='blocks',
+                        terrain_uniform_color=True,
+                        blocking=False,
+                        view_settings=mayavi_configs['view_settings'],
+                        animate=mayavi_configs['animate'] == 2,
+                        save_animation=mayavi_configs['save_animation']
+                        )
 
             if uncertainty is not None:
                 ui.append(
-                    utils.mlab_plot_uncertainty(uncertainty, terrain, terrain_uniform_color=True, terrain_mode='blocks',
-                                                prediction_channels=channels_to_predict, blocking=False, uncertainty_mode='norm'))
+                    plotting.mlab_plot_uncertainty(
+                        uncertainty,
+                        terrain,
+                        terrain_uniform_color=True,
+                        terrain_mode='blocks',
+                        prediction_channels=channels_to_predict,
+                        blocking=False,
+                        uncertainty_mode='norm',
+                        view_settings=mayavi_configs['view_settings'],
+                        animate=mayavi_configs['animate'] == 3,
+                        save_animation=mayavi_configs['save_animation']
+                        )
+                    )
 
             ui.append(
-                utils.mlab_plot_prediction(pred, terrain, terrain_mode='blocks', terrain_uniform_color=True,
-                                           prediction_channels=channels_to_predict, blocking=False))
+                plotting.mlab_plot_prediction(
+                    pred,
+                    terrain,
+                    terrain_mode='blocks',
+                    terrain_uniform_color=True,
+                    prediction_channels=channels_to_predict,
+                    blocking=False,
+                    view_settings=mayavi_configs['view_settings'],
+                    animate=mayavi_configs['animate'] == 0,
+                    save_animation=mayavi_configs['save_animation']
+                    )
+                )
 
             ui.append(
-                utils.mlab_plot_error(label - pred, terrain, terrain_uniform_color=True, terrain_mode='blocks',
-                                      prediction_channels=channels_to_predict, blocking=False, error_mode='norm'))
+                plotting.mlab_plot_error(
+                    label - pred,
+                    terrain,
+                    terrain_uniform_color=True,
+                    terrain_mode='blocks',
+                    prediction_channels=channels_to_predict,
+                    blocking=blocking and not plottools,
+                    error_mode='norm',
+                    view_settings=mayavi_configs['view_settings'],
+                    animate=mayavi_configs['animate'] == 1,
+                    save_animation=mayavi_configs['save_animation']
+                    )
+                )
 
-
-        if channels_to_plot:
+        if channels_to_plot and plottools:
             if plot_divergence:
                 ds = nn_data.get_grid_size(dataset)
             else:
                 ds = None
 
-            utils.plot_prediction(provided_prediction_channels = channels_to_predict,
-                                  prediction = pred,
-                                  label = label,
-                                  uncertainty = uncertainty,
-                                  provided_input_channels = input_channels,
-                                  input = input,
-                                  terrain = input[0].squeeze(),
-                                  ds = ds)
+            plotting.plot_prediction(
+                provided_prediction_channels=channels_to_predict,
+                prediction=pred,
+                label=label,
+                uncertainty=uncertainty,
+                provided_input_channels=input_channels,
+                input=input,
+                terrain=input[0].squeeze(),
+                ds=ds,
+                blocking=blocking
+                )
+
 
 def save_prediction_to_database(models_list, device, params, savename, testset):
+    '''
+    Generate a database of predictions for the planning benchmark
+
+    Parameters
+    ----------
+    models_list : list of dict
+        List of the models, each entry in the list contains the model, the params, and a name
+    device : torch.Device
+        Device where the computations are executed
+    params : WindseerParams
+        Parameter dictionary
+    savename : None or str, default: None
+        Savename for the prediction tensor, if not None the prediction is saved
+    testset : HDF5Dataset
+        Test dataset
+    '''
     if len(models_list) == 0:
         print('ERROR: The given model list is empty')
         exit()
 
-    interpolator = utils.interpolation.DataInterpolation(torch.device('cpu'), 3,
-                                                         params.model['model_args']['n_x'],
-                                                         params.model['model_args']['n_y'],
-                                                         params.model['model_args']['n_z'])
+    interpolator = nn_data.interpolation.DataInterpolation(
+        torch.device('cpu'), 3, params.model['model_args']['n_x'],
+        params.model['model_args']['n_y'], params.model['model_args']['n_z']
+        )
 
     with torch.no_grad():
         with h5py.File(savename, 'w') as f:
-            testloader = torch.utils.data.DataLoader(testset, batch_size=1,
-                                                     shuffle=False, num_workers=0)
+            testloader = torch.utils.data.DataLoader(
+                testset, batch_size=1, shuffle=False, num_workers=0
+                )
 
             for i, data in tqdm(enumerate(testloader), total=len(testloader)):
                 # create the group name for this sample
                 samplename = testset.get_name(i)
                 grp = f.create_group(samplename)
                 gridshape = None
-
-                # get the prediction and scale it correctly
-                inputs = data[0]
-                labels = data[1]
 
                 scale = 1.0
                 if params.data['autoscale']:
@@ -711,58 +525,42 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                 else:
                     ds = data[3]
 
-                inputs, labels = inputs.to(device), labels.to(device)
-
                 for model in models_list:
-                    outputs = model['net'](inputs)['pred']
-                    outputs = outputs.squeeze()
+                    prediction, inputs, labels = get_prediction(
+                        data[0], data[1], scale, device, model['net'], model['params']
+                        )
+
+                    outputs = prediction['pred'].squeeze().cpu()
 
                     if gridshape == None:
                         gridshape = outputs.shape[1:4]
                     else:
                         if gridshape != outputs.shape[1:4]:
-                            print('ERROR: Output shape of the models is not consistent, aborting')
+                            print(
+                                'ERROR: Output shape of the models is not consistent, aborting'
+                                )
                             exit()
 
-                    if len(outputs.shape) == 4:
-                        outputs[0] *= scale * params.data['ux_scaling']
-                        outputs[1] *= scale * params.data['uy_scaling']
-                        outputs[2] *= scale * params.data['uz_scaling']
+                    wind = outputs[:3].numpy()
 
-                        if 'turb' in model['params'].data['label_channels']:
-                            outputs[3] *= scale * scale * params.data['turb_scaling']
-
-                        outputs = outputs.cpu()
-
-                        wind = outputs[:3].numpy()
-
-                        if 'turb' in model['params'].data['label_channels']:
-                            turbulence = outputs[3].numpy()
-                        else:
-                            turbulence = np.zeros_like(outputs[0].numpy())
-
+                    if 'turb' in model['params'].data['label_channels']:
+                        turbulence = outputs[3].numpy()
                     else:
-                        print('ERROR: Unknown dimension of the output:', len(outputs.shape))
-                        exit()
+                        turbulence = np.zeros_like(outputs[0].numpy())
 
                     # save the prediction
-                    grp.create_dataset('predictions/' + model['name'] + '/wind', data = wind, dtype='f')
-                    grp.create_dataset('predictions/' + model['name'] + '/turbulence', data = turbulence, dtype='f')
+                    grp.create_dataset(
+                        'predictions/' + model['name'] + '/wind', data=wind, dtype='f'
+                        )
+                    grp.create_dataset(
+                        'predictions/' + model['name'] + '/turbulence',
+                        data=turbulence,
+                        dtype='f'
+                        )
 
                 # prepare the inputs and labels
-                labels = labels.squeeze()
-                inputs = inputs.squeeze()
-
-                labels[0] *= scale * params.data['ux_scaling']
-                labels[1] *= scale * params.data['uy_scaling']
-                labels[2] *= scale * params.data['uz_scaling']
-                inputs[1] *= scale * params.data['ux_scaling']
-                inputs[2] *= scale * params.data['uy_scaling']
-                inputs[3] *= scale * params.data['uz_scaling']
-                if 'turb' in model['params'].data['label_channels']:
-                    labels[3] *= scale * scale * params.data['turb_scaling']
-
-                inputs, labels = inputs.cpu(), labels.cpu()
+                labels = labels.squeeze().cpu()
+                inputs = inputs.squeeze().cpu()
 
                 wind_label = labels[:3].numpy()
 
@@ -772,101 +570,50 @@ def save_prediction_to_database(models_list, device, params, savename, testset):
                     turbulence_label = np.zeros_like(labels[0].numpy())
 
                 # save the reference
-                grp.create_dataset('reference/wind', data = wind_label, dtype='f')
-                grp.create_dataset('reference/turbulence', data = turbulence_label, dtype='f')
+                grp.create_dataset('reference/wind', data=wind_label, dtype='f')
+                grp.create_dataset(
+                    'reference/turbulence', data=turbulence_label, dtype='f'
+                    )
 
                 # if the input and output have the same shape then also save the interpolated input as a prediction
                 if ((outputs.shape[3] == inputs.shape[3]) and
                     (outputs.shape[2] == inputs.shape[2]) and
                     (outputs.shape[1] == inputs.shape[1])):
-                    grp.create_dataset('predictions/interpolated/wind', data = interpolator.edge_interpolation(inputs[1:4]), dtype='f')
-                    grp.create_dataset('predictions/interpolated/turbulence', data = np.zeros_like(turbulence_label), dtype='f')
+                    grp.create_dataset(
+                        'predictions/interpolated/wind',
+                        data=interpolator.edge_interpolation(inputs[1:4]),
+                        dtype='f'
+                        )
+                    grp.create_dataset(
+                        'predictions/interpolated/turbulence',
+                        data=np.zeros_like(turbulence_label),
+                        dtype='f'
+                        )
 
                 # create the no wind prediction
-                grp.create_dataset('predictions/zerowind/wind', data = np.zeros_like(wind_label), dtype='f')
-                grp.create_dataset('predictions/zerowind/turbulence', data = np.zeros_like(turbulence_label), dtype='f')
+                grp.create_dataset(
+                    'predictions/zerowind/wind',
+                    data=np.zeros_like(wind_label),
+                    dtype='f'
+                    )
+                grp.create_dataset(
+                    'predictions/zerowind/turbulence',
+                    data=np.zeros_like(turbulence_label),
+                    dtype='f'
+                    )
 
                 # save the grid information
-                terrain = (outputs.shape[1] - np.count_nonzero(inputs[0].numpy(), 0)) * ds[0][2].item()
-                dset_terr = grp.create_dataset('terrain', data = terrain, dtype='f')
+                terrain = (outputs.shape[1] -
+                           np.count_nonzero(inputs[0].numpy(), 0)) * ds[0][2].item()
+                dset_terr = grp.create_dataset('terrain', data=terrain, dtype='f')
 
-                grp.create_dataset('grid_info/nx', data = gridshape[2], dtype='i')
-                grp.create_dataset('grid_info/ny', data = gridshape[1], dtype='i')
-                grp.create_dataset('grid_info/nz', data = gridshape[0], dtype='i')
+                grp.create_dataset('grid_info/nx', data=gridshape[2], dtype='i')
+                grp.create_dataset('grid_info/ny', data=gridshape[1], dtype='i')
+                grp.create_dataset('grid_info/nz', data=gridshape[0], dtype='i')
 
-                grp.create_dataset('grid_info/resolution_horizontal', data = ds[0][0].item(), dtype='f')
-                grp.create_dataset('grid_info/resolution_vertical', data = ds[0][2].item(), dtype='f')
-
-def compute_prediction_metrics(net, device, params, loader_testset, save=True, show=True):
-    model_name = params.model['name_prefix']
-    mean_squared_error = []
-    mean_absolute_error = []
-    max_error = []
-    median_absolute_error = []
-    explained_variance_score = []
-    r2_score = []
-    trajectory_size = []
-
-    for i, data in tqdm(enumerate(loader_testset), total=len(loader_testset)):
-        inputs = data[0]
-        labels = data[1]
-
-        if inputs.shape[0] != 1:
-            raise ValueError('A data loader with batch size 1 must be used!')
-
-        inputs, labels = inputs.to(device), labels.to(device)
-
-        outputs = net(inputs)['pred']
-
-        scale = 1.0
-        if params.data['autoscale']:
-            scale = data[3].item()
-
-        # rescale the labels and predictions
-        for i, channel in enumerate(params.data['label_channels']):
-            if channel == 'terrain':
-                outputs[:,i] *= params.data[channel + '_scaling']
-                labels[:,i] *= params.data[channel + '_scaling']
-            elif channel.startswith('u') or channel == 'nut':
-                outputs[:,i] *= scale * params.data[channel + '_scaling']
-                labels[:,i] *= scale * params.data[channel + '_scaling']
-            elif channel == 'p' or channel == 'turb':
-                outputs[:,i] *= scale * scale * params.data[channel + '_scaling']
-                labels[:,i] *= scale * scale * params.data[channel + '_scaling']
-            elif channel == 'epsilon':
-                outputs[:,i] *= scale * scale * scale * params.data[channel + '_scaling']
-                labels[:,i] *= scale * scale * scale * params.data[channel + '_scaling']
-
-        outputs = outputs.view(outputs.shape[0], -1).permute(1,0).cpu().detach()
-        labels = labels.view(labels.shape[0], -1).permute(1,0).cpu().detach()
-
-        mean_squared_error += [metrics.mean_squared_error(labels, outputs)]
-        mean_absolute_error += [metrics.mean_absolute_error(labels, outputs)]
-        max_error += [metrics.max_error(labels, outputs)]
-        median_absolute_error += [metrics.median_absolute_error(labels, outputs)]
-        explained_variance_score += [metrics.explained_variance_score(labels, outputs)]
-        r2_score += [metrics.r2_score(labels, outputs)]
-
-        if params.data['input_mode'] > 2:
-            trajectory_size += [inputs[0,-1].sum()]
-        else:
-            trajectory_size +=[0]
-
-    prediction_metrics = pd.DataFrame({'mean_squared_error': mean_squared_error,
-                                       'mean_absolute_error': mean_absolute_error,
-                                       'max_error': max_error,
-                                       'median_absolute_error': median_absolute_error,
-                                       'explained_variance_score' : explained_variance_score,
-                                       'r2_score': r2_score,
-                                       'trajectory_size': trajectory_size})
-
-    # printing
-    if show:
-        print(' ')
-        print('Metrics for prediction quality computed over entire test dataset:\n')
-        for column in list(prediction_metrics):
-            print(column + ' :', np.mean(prediction_metrics[column]))
-    if save:
-        prediction_metrics.to_csv('./prediction_metrics_' + model_name + '.csv')
-
-    return prediction_metrics
+                grp.create_dataset(
+                    'grid_info/resolution_horizontal', data=ds[0][0].item(), dtype='f'
+                    )
+                grp.create_dataset(
+                    'grid_info/resolution_vertical', data=ds[0][2].item(), dtype='f'
+                    )

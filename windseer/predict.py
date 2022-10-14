@@ -2,54 +2,105 @@
 
 from __future__ import print_function
 
+import windseer.data as nn_data
+import windseer.nn as nn
+import windseer.utils as utils
+
 import argparse
-import nn_wind_prediction.data as nn_data
-import nn_wind_prediction.models as models
-import nn_wind_prediction.nn as nn_custom
-import nn_wind_prediction.utils as utils
 import numpy as np
-import torch
 import os
-from torch.utils.data import DataLoader
+import torch
 
-# ----  Default Params --------------------------------------------------------------
-dataset = 'data/test.hdf5'
-index = 0 # plot the prediction for the following sample in the set, 1434
-model_name = 'test_model'
-model_version = 'latest'
-print_loss = False
-compute_prediction_error = False
-compute_prediction_metrics = False
-use_terrain_mask = True # should not be changed to false normally
-plot_worst_prediction = False
-plot_prediction = False
-prediction_level = 10
-num_worker = 0
-add_all = False
-# -----------------------------------------------------------------------------------
-
-parser = argparse.ArgumentParser(description='Script to plot a prediction of the network')
-parser.add_argument('-ds', dest='dataset', default=dataset, help='The test dataset')
-parser.add_argument('-i', dest='index', type=int, default=index, help='The index of the sample in the dataset')
-parser.add_argument('-model_name', dest='model_name', default=model_name, help='The model name')
-parser.add_argument('-model_version', dest='model_version', default=model_version, help='The model version')
-parser.add_argument('-pl', dest='print_loss', action='store_true', help='If the loss used for training should be computed for the sample and then printed')
-parser.add_argument('-cpe', dest='compute_prediction_error', action='store_true', help='If set the velocity prediction errors over the full dataset is computed')
-parser.add_argument('-cpm', dest='compute_prediction_metrics', action='store_true', help='If set prediction quality will be evaluated over the full dataset with a variety of metrics')
-parser.add_argument('-pwp', dest='plot_worst_prediction', action='store_true', help='If set the worst prediction of the input dataset is shown. Needs compute_prediction_error to be true.')
-parser.add_argument('-plot', dest='plot_prediction', action='store_true', help='If set the prediction is plotted')
-parser.add_argument('-save', dest='save_prediction', action='store_true', help='If set the prediction is saved')
-parser.add_argument('-s', dest='seed', type=int, default=0, help='If larger than 0 this sets the seed of the random number generator')
-parser.add_argument('--mayavi', action='store_true', help='Generate some extra plots using mayavi')
-parser.add_argument('-cse', dest='compute_single_error', action='store_true', help='If set the velocity prediction errors over a single sample is computed')
-parser.add_argument('-n', dest='n_iter', type=int, default=100, help='The number of forward passes for the single sample evaluation')
-
-
+parser = argparse.ArgumentParser(
+    description='Script to plot a prediction of the network'
+    )
+parser.add_argument(
+    '-ds', dest='dataset', default='/tmp/test.hdf5', help='Dataset filename'
+    )
+parser.add_argument(
+    '-i',
+    dest='index',
+    type=int,
+    default=0,
+    help='The index of the sample in the dataset'
+    )
+parser.add_argument(
+    '-model', dest='model_dir', default='test_model', help='Model directory path'
+    )
+parser.add_argument(
+    '-model_version', dest='model_version', default='latest', help='The model version'
+    )
+parser.add_argument(
+    '-pl',
+    dest='print_loss',
+    action='store_true',
+    help=
+    'If the loss used for training should be computed for the sample and then printed'
+    )
+parser.add_argument(
+    '-cpe',
+    dest='compute_prediction_error',
+    action='store_true',
+    help='If set the velocity prediction errors over the full dataset is computed'
+    )
+parser.add_argument(
+    '-cse',
+    dest='compute_single_error',
+    action='store_true',
+    help='If set the velocity prediction errors over a single sample is computed'
+    )
+parser.add_argument(
+    '-n',
+    dest='n_iter',
+    type=int,
+    default=100,
+    help='The number of forward passes for the single sample evaluation'
+    )
+parser.add_argument(
+    '-save',
+    dest='save_prediction',
+    action='store_true',
+    help='If set the prediction is saved'
+    )
+parser.add_argument(
+    '-s',
+    dest='seed',
+    type=int,
+    default=0,
+    help='If larger than 0 this sets the seed of the random number generator'
+    )
+parser.add_argument(
+    '--plottools',
+    dest='plottools',
+    action='store_true',
+    help='If set the prediction is plotted'
+    )
+parser.add_argument(
+    '--mayavi', action='store_true', help='Generate some extra plots using mayavi'
+    )
+parser.add_argument(
+    '--azimuth', type=float, help='Set the azimuth angle of the mayavi view'
+    )
+parser.add_argument(
+    '--elevation', type=float, help='Set the elevation angle of the mayavi view'
+    )
+parser.add_argument(
+    '--distance', type=float, help='Set the distance of the mayavi view'
+    )
+parser.add_argument(
+    '--focalpoint', type=float, nargs=3, help='Set the focalpoint of the mayavi view'
+    )
+parser.add_argument(
+    '--animate_mayavi',
+    type=int,
+    default=-1,
+    help=
+    'Animate a mayavi figure (0: prediction plot, 1: error plot, 2: measurement plot, 3 uncertainty plot'
+    )
+parser.add_argument(
+    '--save_animation', action='store_true', help='Save snapshots of the animation'
+    )
 args = parser.parse_args()
-args.print_loss = args.print_loss or print_loss
-args.compute_prediction_error = args.compute_prediction_error or compute_prediction_error
-args.plot_worst_prediction = args.plot_worst_prediction or plot_worst_prediction
-args.plot_prediction = args.plot_prediction or plot_prediction
 
 if args.seed > 0:
     import random
@@ -57,125 +108,116 @@ if args.seed > 0:
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-# check if gpu available
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-# load the model parameter
-params = utils.EDNNParameters('trained_models/' + args.model_name + '/params.yaml')
-
-if not args.compute_prediction_metrics and not args.compute_prediction_error:
-    # for a single prediction set the number of turbulence fields to 1
-    if 'n_turb_fields' in params.data.keys():
-        if params.data['n_turb_fields'] > 0:
-            params.data['n_turb_fields'] = 1
-
-# load dataset
-testset = nn_data.HDF5Dataset(args.dataset,
-                              augmentation = False, return_grid_size = True, **params.Dataset_kwargs())
-testloader = torch.utils.data.DataLoader(testset, batch_size=1, # needs to be one
-                                             shuffle=False, num_workers=num_worker)
-
-# get grid size of test dataset if potential flow is used
-if params.model_kwargs()['potential_flow']:
-    grid_size = nn_data.get_grid_size(args.dataset)
-    params.model_kwargs()['grid_size'] = grid_size
-
-# load the model and its learnt parameters
-NetworkType = getattr(models, params.model['model_type'])
-net = NetworkType(**params.model_kwargs())
-
-# load state dict
-state_dict = torch.load('trained_models/' + args.model_name + '/' + args.model_version + '.model',
-                                                                            map_location=lambda storage, loc: storage)
-
-# load params
-net.load_state_dict(state_dict)
-net.to(device)
-net.eval()
-
-try:
-    net.set_prediction_level(prediction_level)
-except AttributeError:
-    pass
-
-# define combined loss
-loss_fn = nn_custom.CombinedLoss(**params.loss)
-
-# if homoscedastic loss factors were learned during training, recover them
-if loss_fn.learn_scaling:
-    loss_state_dict = torch.load('trained_models/' + args.model_name + '/' + args.model_version + '.loss',
-                                                                            map_location=lambda storage, loc: storage)
-    loss_fn.load_state_dict(loss_state_dict)
-
-# print the loss if requested
-if args.print_loss:
-    with torch.no_grad():
-        i = 0
-        for data in testloader:
-            if i == args.index:
-                input = data[0]
-                label = data[1]
-                input, label = input.to(device), label.to(device)
-                output = net(input)
-                print('\n------------------------------------------------------------')
-                print('\tEvaluation w/ loss(es) used in training\n')
-                for k in range(len(loss_fn.loss_components)):
-                    component_loss = loss_fn.loss_components[k](output, label, input)
-                    print(loss_fn.loss_component_names[k], ':', component_loss.item(), end='')
-
-                    if len(loss_fn.loss_components) >1:
-                        factor = loss_fn.loss_factors[k]
-                        if loss_fn.learn_scaling:
-                            print(', homoscedastic factor :', factor.item())
-                        else:
-                            print(', const factor :', factor.item())
-
-                if len(loss_fn.loss_components) > 1:
-                    print('Combined :', loss_fn(output, label, input).item())
-                print('\n------------------------------------------------------------')
-            i+=1
-
-# compute prediction metrics on dataset if requested
-if args.compute_prediction_metrics:
-    print('\tComputing prediction metrics\n')
-    prediction_metrics = nn_custom.compute_prediction_metrics(net,device,params, testloader, save=True, show=True)
-    print('\n------------------------------------------------------------')
-
-# prediction criterion
-criterion = torch.nn.MSELoss()
-
-if args.compute_single_error:
-    prediction_errors, losses = nn_custom.sample_prediction_error(net, device, params, criterion, testset, args.index, args.n_iter)
-    np.savez('prediction_errors_' + args.model_name + '_' + str(args.index) + '.npz', prediction_errors=prediction_errors, losses=losses)
-
-# compute the errors on the dataset
-if args.compute_prediction_error and all(elem in params.data['label_channels'] for elem in ['ux', 'uy', 'uz']):
-    prediction_errors, losses, worst_index, maxloss = nn_custom.dataset_prediction_error(net, device, params, criterion, testloader)
-    np.savez('prediction_errors_' + args.model_name + '.npz', prediction_errors=prediction_errors, losses=losses)
-
-    if args.plot_worst_prediction:
-        args.index = worst_index
-elif args.compute_prediction_error and not all(elem in params.data['label_channels'] for elem in ['ux', 'uy', 'uz']):
-    print('Warning: cannot compute prediction error database, not all velocity components were provided in label channels')
-
-print('\tSample #{} prediction w/ criterion: '.format(args.index), criterion.__class__.__name__,'\n')
-# predict the wind, compute the loss and plot if requested
-data = testset[args.index]
-input = data[0]
-label = data[1]
-scale = 1.0
-if params.data['autoscale']:
-    scale = data[3].item()
-print('Test index name: {0}'.format(testset.get_name(args.index)))
 if args.save_prediction:
-    savename = 'data/'+os.path.splitext(testset.get_name(args.index))[0]
+    savename = os.path.splitext(testset.get_name(args.index))[0]
 else:
     savename = None
 
-if args.plot_prediction:
-    channels_to_plot = 'all'
-else:
-    channels_to_plot = None
+mayavi_configs = {'view_settings': {}}
+if not args.azimuth is None:
+    mayavi_configs['view_settings']['azimuth'] = args.azimuth
+if not args.elevation is None:
+    mayavi_configs['view_settings']['elevation'] = args.elevation
+if not args.distance is None:
+    mayavi_configs['view_settings']['distance'] = args.distance
+if not args.focalpoint is None:
+    mayavi_configs['view_settings']['focalpoint'] = args.focalpoint
+if len(mayavi_configs['view_settings']) == 0:
+    mayavi_configs['view_settings'] = None
 
-nn_custom.predict_channels(input, label, scale, device, net, params, channels_to_plot, args.dataset, testset.get_input_channels(),
-                           plot_divergence = False, loss_fn=criterion, savename=savename, mayavi=args.mayavi)
+mayavi_configs['animate'] = args.animate_mayavi
+mayavi_configs['save_animation'] = args.save_animation
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+net, params = utils.load_model(
+    args.model_dir, 'latest', args.dataset, device, eval=True
+    )
+
+testset = nn_data.HDF5Dataset(
+    args.dataset, augmentation=False, return_grid_size=True, **params.Dataset_kwargs()
+    )
+
+loss_fn = nn.CombinedLoss(**params.loss)
+if loss_fn.learn_scaling:
+    loss_state_dict = torch.load(
+        os.path.join(args.model_dir, args.model_version + '.loss'),
+        map_location=lambda storage, loc: storage
+        )
+    loss_fn.load_state_dict(loss_state_dict)
+
+if args.print_loss:
+    with torch.no_grad():
+        data = testset[args.index]
+        input = data[0]
+        label = data[1]
+        scale = 1.0
+        if params.data['autoscale']:
+            scale = data[3].item()
+
+        prediction, inputs, labels = nn.get_prediction(
+            input, label, scale, device, net, params, True
+            )
+
+        print('\n------------------------------------------------------------')
+        print('\tEvaluation w/ loss(es) used in training\n')
+        for k in range(len(loss_fn.loss_components)):
+            component_loss = loss_fn.loss_components[k](prediction, labels, inputs)
+            print(loss_fn.loss_component_names[k], ':', component_loss.item(), end='')
+
+            if len(loss_fn.loss_components) > 1:
+                factor = loss_fn.loss_factors[k]
+                if loss_fn.learn_scaling:
+                    print(', homoscedastic factor :', factor.item())
+                else:
+                    print(', const factor :', factor.item())
+
+        if len(loss_fn.loss_components) > 1:
+            print('Combined :', loss_fn(prediction, labels, inputs).item())
+        print('\n------------------------------------------------------------')
+
+model_name = os.path.basename(os.path.normpath(args.model_dir))
+if args.compute_single_error:
+    prediction_errors, losses, metrics, worst_index, maxloss = nn.compute_prediction_error(
+        net,
+        device,
+        params,
+        loss_fn,
+        testset,
+        single_sample=True,
+        num_predictions=args.n_iter,
+        print_output=True
+        )
+
+    np.savez(
+        'prediction_errors_' + model_name + '_sample_' + str(args.index) + '.npz',
+        prediction_errors=prediction_errors,
+        losses=losses
+        )
+
+if args.compute_prediction_error:
+    prediction_errors, losses, metrics, worst_index, maxloss = nn.compute_prediction_error(
+        net, device, params, loss_fn, testset, single_sample=False, print_output=True
+        )
+
+    np.savez(
+        'prediction_errors_' + model_name + '.npz',
+        prediction_errors=prediction_errors,
+        losses=losses
+        )
+
+nn.predict_and_visualize(
+    testset,
+    args.index,
+    device,
+    net,
+    params,
+    'all',
+    plot_divergence=False,
+    loss_fn=torch.nn.MSELoss(),
+    savename=savename,
+    plottools=args.plottools,
+    mayavi=args.mayavi,
+    blocking=True,
+    mayavi_configs=mayavi_configs
+    )

@@ -2,6 +2,7 @@ from collections import Mapping
 import copy
 import torch
 
+
 def dict_update(d, u):
     """
     Update the fields for nested dictionaries.
@@ -21,10 +22,14 @@ def dict_update(d, u):
     out = copy.deepcopy(d)
     for k, v in u.items():
         if isinstance(v, Mapping):
-            out[k] = dict_update(out.get(k, {}), v)
+            if type(out.get(k, {})) is dict:
+                out[k] = dict_update(out.get(k, {}), v)
+            else:
+                out[k] = dict_update({}, v)
         else:
             out[k] = v
     return out
+
 
 def data_to_device(data, device):
     """
@@ -49,6 +54,7 @@ def data_to_device(data, device):
             data[key] = data_to_device(data[key], device)
     return data
 
+
 def tensors_to_dtype(data, dtype):
     """
     Cast all tensors in the dictionary to the requested dtype.
@@ -71,6 +77,7 @@ def tensors_to_dtype(data, dtype):
         elif type(data[key]) is dict:
             data[key] = tensors_to_dtype(data[key], dtype)
     return data
+
 
 def data_unsqueeze(data, dim):
     """

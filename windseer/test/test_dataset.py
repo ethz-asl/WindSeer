@@ -4,7 +4,7 @@ Testcases for the HDF5Dataset
 '''
 
 from windseer.data import HDF5Dataset
-import windseer.utils as windseer_utils
+import windseer.plotting as plotting
 import windseer
 
 import argparse
@@ -102,7 +102,7 @@ def plot_sample(input_mode):
     else:
         input_mask = None
 
-    windseer_utils.plot_sample(
+    plotting.plot_sample(
         input_channels_plotting,
         input,
         label_channels_plotting,

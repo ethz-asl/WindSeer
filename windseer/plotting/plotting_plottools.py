@@ -34,7 +34,8 @@ class PlotUtils():
             tick_fontsize=8,
             cmap=cm.jet,
             terrain_color='grey',
-            invalid_color='white'
+            invalid_color='white',
+            blocking=True
         ):
         '''
         Initializer
@@ -81,6 +82,8 @@ class PlotUtils():
             Color of the terrain
         invalid_color : str, default: white
             Color of invalid pixels (no measurements available for the sparse input)
+        blocking : bool, default: True
+            Indicates if the plot call is blocking by calling plt.show()
         '''
 
         # Input is the prediction, label is CFD
@@ -568,6 +571,8 @@ class PlotUtils():
         # the number of already open figures, used in slider and button callbacks
         self._n_already_open_figures = 0
 
+        self.blocking = blocking
+
     def update_images(self):
         '''
         Updates the images according to the slice and axis which should be displayed. 
@@ -999,7 +1004,8 @@ class PlotUtils():
                     circle.set_radius(0.1)
                 self._buttons[fig_idx].on_clicked(self.radio_callback)
 
-        plt.show()
+        if self.blocking:
+            plt.show()
 
 
 def plot_sample(
@@ -1010,12 +1016,34 @@ def plot_sample(
         channels_to_plot='all',
         input_mask=None,
         ds=None,
-        title_dict=None
+        title_dict=None,
+        blocking=True
     ):
     '''
     Creates the plots according to the input and label data.
     The axes along which the slices are made as well as the location of the slice
     can be set using sliders and buttons in the figure.
+
+    Parameters
+    ----------
+    provided_input_channels : list of str
+        Input channel names
+    input : torch.Tensor
+        Input tensor
+    provided_label_channels : list of str
+        Label channel names
+    label : torch.Tensor
+        Label tensor
+    channels_to_plot : str or list of str, default: all
+        Indicates which channels should be plotted, either 'all' or a list of the channels
+    input_mask : torch.Tensor or None, default: None
+        3D terrain tensor of input mask data indicating known cells [z, y, x].
+    ds : list or None, default: None
+        Cell size of the data grid, used for plotting the divergence field, if set and the data is available the divergency is computed and plotted
+    title_dict :  dict or None, default: None
+        An optional title dict can be passed, if one would like to replace the default titles or plot new channels
+    blocking : bool, default: True
+            Indicates if the plot call is blocking by calling plt.show()
     '''
     if 'terrain' in provided_input_channels:
         terrain = input[provided_input_channels.index('terrain')].squeeze()
@@ -1031,7 +1059,8 @@ def plot_sample(
         terrain=terrain,
         ds=ds,
         input_mask=input_mask,
-        title_dict=title_dict
+        title_dict=title_dict,
+        blocking=blocking
         )
     instance.plot()
 
@@ -1047,12 +1076,40 @@ def plot_prediction(
         measurements=None,
         measurements_mask=None,
         ds=None,
-        title_dict=None
+        title_dict=None,
+        blocking=True
     ):
     '''
     Creates the plots according to the data provided.
     The axes along which the slices are made as well as the location of the slice
     can be set using sliders and buttons in the figure.
+
+    Parameters
+    ----------
+    provided_prediction_channels : list or None, default: None
+        List of the channels of the prediction tensor
+    prediction : torch.Tensor or None, default: None
+        4D prediction tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
+    label : torch.Tensor or None, default: None
+        4D label tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
+    uncertainty : torch.Tensor or None, default: None
+        4D uncertainty tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
+    provided_input_channels : list or None, default: None
+        List of the input channels to the network
+    input : torch.Tensor or None, default: None
+        4D input tensor with [channels, z, y, x]. Channels must be ordered as in provided_input_channels.
+    terrain : torch.Tensor or None, default: None
+        3D terrain tensor of terrain data [z, y, x].
+    measurements : torch.Tensor or None, default: None
+        4D measurement tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
+    measurements_mask : torch,Tensor or None, default: None
+        3D tensor with [z, y, x].
+    ds : list or None, default: None
+        Cell size of the data grid, used for plotting the divergence field, if set and the data is available the divergency is computed and plotted
+    title_dict :  dict or None, default: None
+        An optional title dict can be passed, if one would like to replace the default titles or plot new channels
+    blocking : bool, default: True
+        Indicates if the plot call is blocking by calling plt.show()
     '''
 
     input_mask = None
@@ -1073,7 +1130,8 @@ def plot_prediction(
         measurements_mask=measurements_mask,
         terrain=terrain,
         ds=ds,
-        title_dict=title_dict
+        title_dict=title_dict,
+        blocking=blocking
         )
     instance.plot()
 
@@ -1085,10 +1143,30 @@ def plot_measurement(
         terrain=None,
         variance=None,
         prediction=None,
-        title_dict=None
+        title_dict=None,
+        blocking=True
     ):
     '''
     Create plots of the measurements and the respective variance
+
+    Parameters
+    ----------
+    provided_measurement_channels : list or None, default: None
+        List of the channels of the measurement tensor
+    measurements : torch.Tensor or None, default: None
+        4D measurement tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
+    measurements_mask : torch,Tensor or None, default: None
+        3D tensor with [z, y, x].
+    terrain : torch.Tensor or None, default: None
+        3D terrain tensor of terrain data [z, y, x].
+    variance : torch.Tensor or None, default: None
+        4D measurement variance tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels. 
+    prediction : torch.Tensor or None, default: None
+        4D prediction tensor with [channels, z, y, x]. Channels must be ordered as in provided_prediction_channels.
+    title_dict :  dict or None, default: None
+        An optional title dict can be passed, if one would like to replace the default titles or plot new channels
+    blocking : bool, default: True
+        Indicates if the plot call is blocking by calling plt.show()
     '''
     instance = PlotUtils(
         provided_prediction_channels=provided_measurement_channels,
@@ -1097,12 +1175,29 @@ def plot_measurement(
         measurements_variance=variance,
         terrain=terrain,
         prediction=prediction,
-        title_dict=title_dict
+        title_dict=title_dict,
+        blocking=blocking
         )
     instance.plot()
 
 
 def violin_plot(labels, data, xlabel, ylabel, ylim=None):
+    '''
+    Generate a violin plot.
+
+    Parameters
+    ----------
+    labels : list of str
+        Labels for each data group
+    data : list of array
+        Data that is plotted
+    xlabel : str
+        Label of the x-axis
+    ylabel : str
+        Label of the y-axis
+    ylim : None or list of int
+        If not none specifies the y-axis limits
+    '''
     index = np.arange(len(labels))
 
     fig, ax = plt.subplots()
@@ -1156,6 +1251,18 @@ def violin_plot(labels, data, xlabel, ylabel, ylim=None):
 
 
 def adjacent_values(vals, q1, q3):
+    '''
+    Compute the adjacent values for the violin plot
+
+    Parameters
+    ----------
+    vals : array
+        Data array
+    q1 : float
+        Value of first quartile
+    q3 : float
+        Value of third quartile
+    '''
     upper_adjacent_value = q3 + (q3 - q1) * 1.5
     upper_adjacent_value = np.clip(upper_adjacent_value, q3, vals[-1])
 
