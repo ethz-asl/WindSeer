@@ -2,7 +2,6 @@ import numpy as np
 import sys
 
 def get_measurements(name):
-    #TODO add TKE
     available_runs = ['TU25', 'TU30A', 'TU30B', 'TU01A', 'TU01B', 'TU01C', 'TU01D', 'TU03A', 'TU03B', 'TU05A', 'TU05B', 'TU05C', 'TU07B']
     if name in available_runs:
         return globals()[name]()
