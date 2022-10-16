@@ -20,7 +20,9 @@ def copy_with_check(src, dst):
             copyfile(src, dst)
             print('Copied {0} to {1}'.format(src, dst))
         except:
-            print('Copy failed. Please copy the file manually to the specified location.')
+            print(
+                'Copy failed. Please copy the file manually to the specified location.'
+                )
             raise
 
 
@@ -38,7 +40,9 @@ try:
     print('Loading CH:1903_LV03 projection succeeded!')
     proj_wgs84 = pyproj.Proj(proj='latlong', datum='WGS84')
     print('Loading WGS84 projection succeeded!')
-    [e], [n], [alt] = pyproj.transform(proj_wgs84, proj_ch, [7.438632451], [46.951082814], [248.913])
+    [e], [n], [alt] = pyproj.transform(
+        proj_wgs84, proj_ch, [7.438632451], [46.951082814], [248.913]
+        )
     if abs(e - 6e5) < 1.0 and abs(n - 2e5) < 1.0:
         print('Successful conversion from WGS84 -> LV03')
     else:
@@ -46,4 +50,3 @@ try:
 except:
     print('Loading projection failed!')
     raise
-
