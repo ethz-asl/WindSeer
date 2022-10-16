@@ -1,8 +1,9 @@
 __all__ = [
-    'derivation', 'dict_utils', 'kwargs_handling', 'load_model', 'prediction_error',
+    'bin_log_data', 'derivation', 'dict_utils', 'kwargs_handling', 'load_model', 'prediction_error',
     'rescale_tensor', 'terrain_factor', 'yaml_tools',
     ]
 
+from .bin_log_data import *
 from .derivation import *
 from .dict_utils import *
 from .kwargs_handling import *
