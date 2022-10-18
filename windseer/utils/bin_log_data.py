@@ -140,7 +140,7 @@ def bin_log_data_idw_interpolation(wind_data, grid_dimensions, verbose=False):
     prediction : None
         None since this method does not predict the flow over the full field
     '''
-    eps = 1e-5 # minimum distance to avoid division by 0
+    eps = 1e-5  # minimum distance to avoid division by 0
 
     # Initialize distance lists for the wind_data
     wx = [[[[] for k in range(grid_dimensions['n_cells'])]
@@ -446,6 +446,7 @@ def extract_window_wind_data(wind_data, t_start, t_end, use_gps_time=False):
 
     else:
         return wind_data
+
 
 def bin_log_data(
         wind_data,

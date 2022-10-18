@@ -446,6 +446,30 @@ def predict_and_visualize(
                     )
                 )
 
+            plotting.mlab_plot_streamlines(
+                pred,
+                terrain,
+                terrain_mode='blocks',
+                terrain_uniform_color=True,
+                blocking=False,
+                view_settings=mayavi_configs['view_settings'],
+                animate=mayavi_configs['animate'] == 4,
+                save_animation=mayavi_configs['save_animation'],
+                title='Predicted Flow'
+                )
+
+            plotting.mlab_plot_streamlines(
+                label,
+                terrain,
+                terrain_mode='blocks',
+                terrain_uniform_color=True,
+                blocking=False,
+                view_settings=mayavi_configs['view_settings'],
+                animate=mayavi_configs['animate'] == 5,
+                save_animation=mayavi_configs['save_animation'],
+                title='Label Flow'
+                )
+
             ui.append(
                 plotting.mlab_plot_error(
                     label - pred,

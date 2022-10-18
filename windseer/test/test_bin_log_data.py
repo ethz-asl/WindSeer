@@ -9,7 +9,9 @@ import numpy as np
 import torch
 import unittest
 
+
 class TestBinLogData(unittest.TestCase):
+
     def setUp(self):
         self.grid_dimensions = {
             'n_cells': 2,
@@ -44,10 +46,7 @@ class TestBinLogData(unittest.TestCase):
             use_gps_time=False
             )
 
-        gt_mask = torch.tensor([[[1., 0.],
-                                 [0., 0.]],
-                                 [[0., 1.],
-                                 [1., 0.]]])
+        gt_mask = torch.tensor([[[1., 0.], [0., 0.]], [[0., 1.], [1., 0.]]])
 
         self.assertTrue(torch.allclose(gt_wind1, wind, atol=1e-4))
         self.assertTrue(torch.equal(gt_mask, mask))
@@ -62,10 +61,7 @@ class TestBinLogData(unittest.TestCase):
             use_gps_time=False
             )
 
-        gt_mask = torch.tensor([[[0., 0.],
-                                 [0., 0.]],
-                                 [[0., 1.],
-                                 [1., 0.]]])
+        gt_mask = torch.tensor([[[0., 0.], [0., 0.]], [[0., 1.], [1., 0.]]])
 
         self.assertTrue(torch.equal(gt_wind2, wind))
         self.assertTrue(torch.equal(gt_mask, mask))
@@ -84,40 +80,41 @@ class TestBinLogData(unittest.TestCase):
         self.assertTrue(torch.equal(mask, mask_gps))
 
     def test_binning(self):
-        gt_wind1 = torch.zeros(3,2,2,2)
-        gt_wind1[:,0,0,0] = torch.tensor([1., 7., 2.])
-        gt_wind1[:,1,1,0] = torch.tensor([2., 3., -2.])
-        gt_wind1[:,1,0,1] = torch.tensor([5., -1., -2.])
+        gt_wind1 = torch.zeros(3, 2, 2, 2)
+        gt_wind1[:, 0, 0, 0] = torch.tensor([1., 7., 2.])
+        gt_wind1[:, 1, 1, 0] = torch.tensor([2., 3., -2.])
+        gt_wind1[:, 1, 0, 1] = torch.tensor([5., -1., -2.])
 
-        gt_wind2 = torch.zeros(3,2,2,2)
-        gt_wind2[:,1,1,0] = torch.tensor([2., 3., -2.])
-        gt_wind2[:,1,0,1] = torch.tensor([3., 2., -2.])
+        gt_wind2 = torch.zeros(3, 2, 2, 2)
+        gt_wind2[:, 1, 1, 0] = torch.tensor([2., 3., -2.])
+        gt_wind2[:, 1, 0, 1] = torch.tensor([3., 2., -2.])
 
         self.run_test('binning', gt_wind1, gt_wind2)
 
     def test_interpolation(self):
-        gt_wind1 = torch.zeros(3,2,2,2)
-        gt_wind1[:,0,0,0] = torch.tensor([1., 7., 2.])
-        gt_wind1[:,1,1,0] = torch.tensor([2., 3., -2.])
-        gt_wind1[:,1,0,1] = torch.tensor([7., -4., -2.])
+        gt_wind1 = torch.zeros(3, 2, 2, 2)
+        gt_wind1[:, 0, 0, 0] = torch.tensor([1., 7., 2.])
+        gt_wind1[:, 1, 1, 0] = torch.tensor([2., 3., -2.])
+        gt_wind1[:, 1, 0, 1] = torch.tensor([7., -4., -2.])
 
-        gt_wind2 = torch.zeros(3,2,2,2)
-        gt_wind2[:,1,1,0] = torch.tensor([2., 3., -2.])
-        gt_wind2[:,1,0,1] = torch.tensor([3., 2., -2.])
+        gt_wind2 = torch.zeros(3, 2, 2, 2)
+        gt_wind2[:, 1, 1, 0] = torch.tensor([2., 3., -2.])
+        gt_wind2[:, 1, 0, 1] = torch.tensor([3., 2., -2.])
 
         self.run_test('interpolation', gt_wind1, gt_wind2)
 
     def test_gpr(self):
-        gt_wind1 = torch.zeros(3,2,2,2)
-        gt_wind1[:,0,0,0] = torch.tensor([1.45, 6., 1.43])
-        gt_wind1[:,1,1,0] = torch.tensor([2.25, 2.80, -1.8119])
-        gt_wind1[:,1,0,1] = torch.tensor([6.25, -2.8, -1.9034])
+        gt_wind1 = torch.zeros(3, 2, 2, 2)
+        gt_wind1[:, 0, 0, 0] = torch.tensor([1.45, 6., 1.43])
+        gt_wind1[:, 1, 1, 0] = torch.tensor([2.25, 2.80, -1.8119])
+        gt_wind1[:, 1, 0, 1] = torch.tensor([6.25, -2.8, -1.9034])
 
-        gt_wind2 = torch.zeros(3,2,2,2)
-        gt_wind2[:,1,1,0] = torch.tensor([2., 3., -2.])
-        gt_wind2[:,1,0,1] = torch.tensor([3., 2., -2.])
+        gt_wind2 = torch.zeros(3, 2, 2, 2)
+        gt_wind2[:, 1, 1, 0] = torch.tensor([2., 3., -2.])
+        gt_wind2[:, 1, 0, 1] = torch.tensor([3., 2., -2.])
 
         self.run_test('gpr', gt_wind1, gt_wind2)
+
 
 if __name__ == '__main__':
     unittest.main()

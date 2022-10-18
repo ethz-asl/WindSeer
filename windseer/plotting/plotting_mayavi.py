@@ -805,6 +805,149 @@ def mlab_set_view(view_settings=None, figure=None):
             print('Invalid view settings.')
 
 
+def mlab_plot_streamlines(
+    flow,
+    terrain,
+    terrain_mode='blocks',
+    terrain_uniform_color=False,
+    blocking=True,
+    white_background=True,
+    view_settings=None,
+    animate=False,
+    save_animation=False,
+    title='Streamlines'
+    ):
+    '''
+    Visualize the flow with streamlines using mayavi
+
+    Parameters
+    ----------
+    flow : torch.Tensor
+        Flow tensor
+    terrain : torch.Tensor
+        Terrain tensor
+    terrain_mode : str, default : blocks
+        Terrain mode, either blocks or mesh
+    terrain_uniform_color : bool, default : False
+        Indicates if the terrain is plotted with a uniform color or the terrain colormap
+    blocking : bool, default : True
+        Indicates if the blocking mlab.show() function should be called
+    white_background : bool, default : True
+        Use a white instead of the default grey background
+    view_settings : dict or None, default : None
+        Set the view of the figure if not None
+    animate : bool, default : False
+        Animate the figure by rotating the scene
+    save_animation : bool, default : False
+        Save the snapshots of the animation
+    title : str, default : streamlines
+        Figure title
+    '''
+    if mayavi_available:
+        flow_np = flow.cpu().squeeze().permute(0, 3, 2, 1).numpy()
+        terrain_shape = terrain.squeeze().shape
+
+        if white_background:
+            fig = mlab.figure(figure=title, fgcolor=(0., 0., 0.), bgcolor=(1, 1, 1))
+        else:
+            fig = mlab.figure(figure=title)
+
+        mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color, fig)
+        mlab.outline(
+            extent=[
+                0, terrain_shape[2] - 1, 0, terrain_shape[1] - 1, 0, terrain_shape[0] -
+                1
+                ]
+            )
+
+        if not animate:
+
+            def visualize_flow():
+                f = mlab.flow(
+                    flow_np[0],
+                    flow_np[1],
+                    flow_np[2],
+                    seedtype='plane',
+                    seed_resolution=int(terrain_shape[1] / 8),
+                    seed_scale=2.0,
+                    integration_direction='both',
+                    figure=fig
+                    )
+
+                f.seed.widget.center = [
+                    3, 0.5 * terrain_shape[1], 0.5 * terrain_shape[0]
+                    ]
+
+                f.stream_tracer.maximum_propagation = 500
+                f.update_streamlines = True
+
+            visualize_flow()
+            if animate:
+                mlab_animate_rotate(save_animation, figure=fig)
+
+        else:
+            seed_points = [[1, 1], [1, terrain_shape[1] - 1],
+                           [terrain_shape[0] - 1, terrain_shape[1] - 1],
+                           [terrain_shape[0] - 1, 1], [1, 1]]
+
+            direction = 0
+            if abs(flow_np[0].mean()) > abs(flow_np[1].mean()):
+                if flow_np[0].mean() > 0:
+                    direction = 0
+                else:
+                    direction = 2
+            else:
+                if flow_np[1].mean() > 0:
+                    direction = 3
+                else:
+                    direction = 1
+
+            f = mlab.flow(
+                flow_np[0],
+                flow_np[1],
+                flow_np[2],
+                seedtype='line',
+                seed_resolution=int(terrain_shape[1] / 4),
+                seed_scale=2.0,
+                integration_direction='both',
+                figure=fig
+                )
+            f.stream_tracer.maximum_propagation = 5000
+            f.seed.widget.point1 = seed_points[direction] + [1]
+            f.seed.widget.point2 = seed_points[direction + 1] + [1]
+            f.update_streamlines = True
+
+            @mlab.animate(delay=50, ui=True)
+            def anim():
+                iter = 0
+                while 1:
+                    for h in range(2, terrain_shape[0]):
+                        f.seed.widget.point1 = seed_points[direction] + [h]
+                        f.seed.widget.point2 = seed_points[direction + 1] + [h]
+                        f.update_streamlines = True
+
+                        current_view = mlab.view(figure=fig)
+                        mlab.view(
+                            azimuth=current_view[0] + 2,
+                            elevation=current_view[1],
+                            distance=current_view[2],
+                            focalpoint=current_view[3],
+                            figure=fig
+                            )
+
+                        if save_animation:
+                            mlab.savefig(
+                                '/tmp/frame_' + str(iter).zfill(3) + '.png',
+                                magnification=5,
+                                figure=fig
+                                )
+                            iter += 1
+                        yield
+
+            anim()
+            mlab.show()
+
+
 def mlab_animate_rotate(save=True, magnification=5, figure=None):
     '''
     Animate the current figure by rotating it around the z-axis and the current focal point
