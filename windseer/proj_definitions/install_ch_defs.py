@@ -25,14 +25,15 @@ def copy_with_check(src, dst):
                 )
             raise
 
+proj_folder = os.path.dirname(__file__)
 
 # Copy files to pyproj data directory
-for file in ['CH', 'chenyx06etrs.gsb']:
+for file in ['CH', 'CHENyx06_ETRS.gsb']:
     try:
         destination = os.path.join(pyproj.pyproj_datadir, file)
     except AttributeError:
         destination = os.path.join(pyproj.datadir.get_data_dir(), file)
-    copy_with_check(file, destination)
+    copy_with_check(os.path.join(proj_folder, file), destination)
 
 # Check if it worked:
 try:
