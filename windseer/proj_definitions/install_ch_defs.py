@@ -25,6 +25,7 @@ def copy_with_check(src, dst):
                 )
             raise
 
+
 proj_folder = os.path.dirname(__file__)
 
 # Copy files to pyproj data directory

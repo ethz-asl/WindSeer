@@ -806,16 +806,16 @@ def mlab_set_view(view_settings=None, figure=None):
 
 
 def mlab_plot_streamlines(
-    flow,
-    terrain,
-    terrain_mode='blocks',
-    terrain_uniform_color=False,
-    blocking=True,
-    white_background=True,
-    view_settings=None,
-    animate=False,
-    save_animation=False,
-    title='Streamlines'
+        flow,
+        terrain,
+        terrain_mode='blocks',
+        terrain_uniform_color=False,
+        blocking=True,
+        white_background=True,
+        view_settings=None,
+        animate=False,
+        save_animation=False,
+        title='Streamlines'
     ):
     '''
     Visualize the flow with streamlines using mayavi
