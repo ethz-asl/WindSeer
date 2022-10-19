@@ -248,9 +248,32 @@ def extract_cosmo_data(
     cosmo_projection=pyproj.Proj(proj='latlong', datum='WGS84'),
     output_projection=pyproj.Proj(init="CH:1903_LV03")
     ):
-    """Opens the requested COSMO NetCDF file and extracts all wind profiles that are required to calculate the
+    '''
+    Opens the requested COSMO NetCDF file and extracts all wind profiles that are required to calculate the
     initial wind field for the complete meteo grid domain.
-    """
+
+    Parameters
+    ----------
+    filename : str
+        Path to the cosmo nc file
+    lat_requested : float
+        Requested location, latitude in deg
+    lon_requested : float
+        Requested location, longitude in deg
+    time_requested : int
+        Requested time in hours of the forecast
+    terrain_file : str or None, default : None
+        Path to the terrain file, if None the terrain is assumed to contained in the cosmo nc file
+    cosmo_projection : pyproj.Proj, default : pyproj.Proj(proj='latlong', datum='WGS84')
+        Projection of for the Cosmo frame
+    output_projection : pyproj.Proj, default : pyproj.Proj(init="CH:1903_LV03")
+        Projection of for the local output frame
+
+    Returns
+    -------
+    out : dict
+        Dictionary with the wind and topography data
+    '''
 
     if terrain_file is None:
         terrain_file = filename
@@ -317,15 +340,36 @@ def extract_cosmo_data(
 
 
 def cosmo_corner_wind(cosmo_data, z_target, terrain_height=None, rotate=0.0, scale=1.0):
-    """
+    '''
     Get winds at cosmo corners for specified z heights
     If terrain_height is specified, the winds will be offset to start at the heights specified in the terrain_height
     Otherwise, we just sample directly (heights may not match)
     NOTE: cosmo_wind is from top to bottom (i.e. first element is max height, down to surface at end)...
     BUT: Output is bottom to top
+
     Output wind dimensions: [3, nz, ny, nx]
     First dimension is wind speeds, in order W_East(0), W_North(1), W_Up(2)
-    """
+    Opens the requested COSMO NetCDF file and extracts all wind profiles that are required to calculate the
+    initial wind field for the complete meteo grid domain.
+
+    Parameters
+    ----------
+    cosmo_data : dict
+        Dictionary with the wind and topography data
+    z_target : np.array
+        Array of the requested altitudes
+    terrain_height : str or None, default : None
+        Array with the terrain heights
+    rotate : float, default : 0.0
+        Heading rotation applied to the wind in rad
+    scale : float, default : 1.0
+        scale factor applied to the wind
+
+    Returns
+    -------
+    out : dict
+        Dictionary with the wind and topography data
+    '''
 
     nz, ny, nx = cosmo_data['z'].shape
     winds = np.zeros((3, len(z_target), ny, nx), dtype='float')
