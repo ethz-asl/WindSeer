@@ -13,7 +13,9 @@ from sklearn import metrics
 import pandas as pd
 
 
-def get_prediction(input, label, scale, device, net, params, scale_input=False, verbose=False):
+def get_prediction(
+        input, label, scale, device, net, params, scale_input=False, verbose=False
+    ):
     '''
     Get a prediction from the neural network and rescale all tensors.
 
@@ -21,7 +23,7 @@ def get_prediction(input, label, scale, device, net, params, scale_input=False, 
     ----------
     input : torch.Tensor
         Input tensor
-    label : torch.Tensor
+    label : torch.Tensor or None
         Label tensor
     scale : torch.Tensor
         Scale of the sample
@@ -50,7 +52,9 @@ def get_prediction(input, label, scale, device, net, params, scale_input=False, 
             input = utils.scale_tensor(
                 input, params.data['input_channels'], scale, params
                 )
-        input, label = input.to(device), label.to(device)
+        input = input.to(device)
+        if not label is None:
+            label = label.to(device)
         if verbose:
             torch.cuda.synchronize()
             start_time = time.time()
@@ -62,7 +66,8 @@ def get_prediction(input, label, scale, device, net, params, scale_input=False, 
 
         if len(input.shape) == 4:
             input = input.unsqueeze(0)
-            label = label.unsqueeze(0)
+            if not label is None:
+                label = label.unsqueeze(0)
         elif len(input.shape) < 4 or len(input.shape) > 5:
             raise ValueError('Expected a 4D or 5D tensor')
 
@@ -75,9 +80,13 @@ def get_prediction(input, label, scale, device, net, params, scale_input=False, 
         prediction['pred'] = utils.rescale_tensor(
             prediction['pred'], params.data['label_channels'], scale, params
             )
-        label_rescaled = utils.rescale_tensor(
-            label, params.data['label_channels'], scale, params
-            )
+        if label is None:
+            label_rescaled = None
+        else:
+            label_rescaled = utils.rescale_tensor(
+                label, params.data['label_channels'], scale, params
+                )
+
         input_rescaled = utils.rescale_tensor(
             input, params.data['input_channels'], scale, params
             )

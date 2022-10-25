@@ -146,9 +146,8 @@ class TestRescaleTensor(unittest.TestCase):
         params.data['uy_scaling'] = 1.0
         out = utils.scale_tensor(input, ['ux', 'uy'], scale, params)
         out = utils.rescale_tensor(out, ['ux', 'uy'], scale, params)
-        self.assertTrue(
-            torch.equal(out, input)
-            )
+        self.assertTrue(torch.equal(out, input))
+
 
 if __name__ == '__main__':
     unittest.main()
