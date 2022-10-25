@@ -95,20 +95,20 @@ class PlotUtils():
             'ux': 'Velocity X [m/s]',
             'uy': 'Velocity Y [m/s]',
             'uz': 'Velocity Z [m/s]',
-            'turb': 'Turb. kin. energy [m^2/s^2]',
-            'p': 'Rho-norm. pressure [m^2/s^2]',
-            'epsilon': 'Dissipation [m^2/s^3]',
-            'nut': 'Turb. viscosity [m^2/s]',
+            'turb': 'Turb. kin. energy [m2/s2]',
+            'p': 'Rho-norm. pressure [m2/s2]',
+            'epsilon': 'Dissipation [m2/s3]',
+            'nut': 'Turb. viscosity [m2/s]',
             'ux_in': ' Input Velocity X [m/s]',
             'uy_in': 'Input Velocity Y [m/s]',
             'uz_in': 'Input Velocity Z [m/s]',
             'ux_cfd': ' CFD Velocity X [m/s]',
             'uy_cfd': 'CFD Velocity Y [m/s]',
             'uz_cfd': 'CFD Velocity Z [m/s]',
-            'turb_cfd': 'CFD Turb. kin. energy [m^2/s^2]',
-            'p_cfd': 'CFD Rho-norm. pressure [m^2/s^2]',
-            'epsilon_cfd': 'CFD Dissipation [m^2/s^3]',
-            'nut_cfd': 'CFD Turb. viscosity [m^2/s]',
+            'turb_cfd': 'CFD Turb. kin. energy [m2/s2]',
+            'p_cfd': 'CFD Rho-norm. pressure [m2/s2]',
+            'epsilon_cfd': 'CFD Dissipation [m2/s3]',
+            'nut_cfd': 'CFD Turb. viscosity [m2/s]',
             'div': 'Divergence [1/s]',
             'mask': 'Input Mask'
             }
@@ -559,7 +559,7 @@ class PlotUtils():
             self._plot_label = False
 
         # color map
-        self._cmap = cmap
+        self._cmap = cmap.copy()
         self._cmap.set_bad(invalid_color)
 
         # terrain color map

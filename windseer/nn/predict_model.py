@@ -13,7 +13,7 @@ from sklearn import metrics
 import pandas as pd
 
 
-def get_prediction(input, label, scale, device, net, params, verbose=False):
+def get_prediction(input, label, scale, device, net, params, scale_input=False, verbose=False):
     '''
     Get a prediction from the neural network and rescale all tensors.
 
@@ -31,7 +31,9 @@ def get_prediction(input, label, scale, device, net, params, verbose=False):
         Fully trained neural network that is evaluated
     params : WindseerParams
         Parameter dictionary
-    verbose : bool, defualt : True
+    scale_input : bool, default : False
+        Flag indicating if the input first needs to be scaled according to the config
+    verbose : bool, default : True
         Flag indicating if the prediction times are printed to the console
 
     Returns
@@ -44,6 +46,10 @@ def get_prediction(input, label, scale, device, net, params, verbose=False):
         Rescaled label tensor
     '''
     with torch.no_grad():
+        if scale_input:
+            input = utils.scale_tensor(
+                input, params.data['input_channels'], scale, params
+                )
         input, label = input.to(device), label.to(device)
         if verbose:
             torch.cuda.synchronize()
@@ -360,7 +366,7 @@ def predict_and_visualize(
             scale = data[3].item()
 
         prediction, inputs, labels = get_prediction(
-            input, label, scale, device, net, params, True
+            input, label, scale, device, net, params, verbose=True
             )
 
         pred = prediction['pred'].squeeze()
