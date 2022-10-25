@@ -79,6 +79,76 @@ class TestRescaleTensor(unittest.TestCase):
                         input * torch.Tensor([[[[[0.1]]], [[[1.0]]]]]) * scale)
             )
 
+    def test_scale_tensor(self):
+        params = utils.WindseerParams(config_filename)
+        input = torch.ones(1, 2, 3, 3, 3)
+        scale = 0.5
+
+        params.data['ux_scaling'] = 0.1
+        params.data['uy_scaling'] = 1.0
+        out = utils.scale_tensor(input, ['ux', 'uy'], scale, params)
+        self.assertTrue(
+            torch.equal(out,
+                        input * torch.Tensor([[[[[10.0]]], [[[1.0]]]]]) / scale)
+            )
+
+        params.data['ux_scaling'] = 0.1
+        params.data['uy_scaling'] = 1.0
+        out = utils.scale_tensor(input, ['uy', 'ux'], scale, params)
+        self.assertTrue(
+            torch.equal(out,
+                        input * torch.Tensor([[[[[10.0]]], [[[1.0]]]]]) / scale)
+            )
+
+        params.data['ux_scaling'] = 1.0
+        params.data['uy_scaling'] = 0.1
+        out = utils.scale_tensor(input, ['ux', 'uy'], scale, params)
+        self.assertTrue(
+            torch.equal(out,
+                        input * torch.Tensor([[[[[1.0]]], [[[10.0]]]]]) / scale)
+            )
+
+        params.data['p_scaling'] = 0.02
+        params.data['turb_scaling'] = 2.0
+        out = utils.scale_tensor(input, ['turb', 'p'], scale, params)
+        self.assertTrue(
+            torch.equal(
+                out,
+                input * torch.Tensor([[[[[0.5]]], [[[50.0]]]]]) / scale / scale
+                )
+            )
+
+        input = torch.ones(1, 3, 3, 3)
+
+        params.data['terrain_scaling'] = 0.02
+        out = utils.scale_tensor(input, ['terrain'], scale, params)
+        self.assertTrue(torch.equal(out, input * torch.Tensor([[[[50.0]]]])))
+
+        params.data['epsilon_scaling'] = 5.0
+        out = utils.scale_tensor(input, ['epsilon'], scale, params)
+        self.assertTrue(
+            torch.equal(out,
+                        input * torch.Tensor([[[[0.2]]]]) / scale / scale / scale)
+            )
+
+        input = torch.ones(10, 2, 3, 3, 3)
+        params.data['ux_scaling'] = 0.1
+        params.data['uy_scaling'] = 1.0
+        out = utils.scale_tensor(input, ['ux', 'uy'], scale, params)
+        self.assertTrue(
+            torch.equal(out,
+                        input * torch.Tensor([[[[[10.0]]], [[[1.0]]]]]) / scale)
+            )
+
+    def test_scaling_and_rescaling(self):
+        input = torch.ones(10, 2, 3, 3, 3)
+        params.data['ux_scaling'] = 0.1
+        params.data['uy_scaling'] = 1.0
+        out = utils.scale_tensor(input, ['ux', 'uy'], scale, params)
+        out = utils.rescale_tensor(out, ['ux', 'uy'], scale, params)
+        self.assertTrue(
+            torch.equal(out, input)
+            )
 
 if __name__ == '__main__':
     unittest.main()
