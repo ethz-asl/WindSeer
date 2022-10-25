@@ -150,3 +150,39 @@ def interpolate_sparse_data(data, mask, grid_dimensions, linear=True):
         data_interpolated[i] = torch.from_numpy(vals)
 
     return data_interpolated
+
+
+def get_smooth_data(data, mask, grid_size, interpolation, linear_interpolation):
+    '''
+    Set the values of the unknown cells in the input tensor according to the settings
+
+    Parameters
+    ----------
+    data : torch.Tensor
+        Input data tensor
+    mask : torch.Tensor
+        Mask indicating the cells containing valid measurements
+    grid_size : list of int
+        Dimensions of the data tensor
+    interpolation : bool
+        True: The cells are interpolated. False: The average of all measurements is used as the fill value
+    linear_interpolation : bool
+        If True linear interpolation is used, else nearest
+
+    Returns
+    -------
+    data_smoothed : torch.Tensor
+        Processed data tensor
+    '''
+    if interpolation:
+        return interpolate_sparse_data(data, mask, grid_size, linear_interpolation)
+    else:
+        data_smoothed = torch.ones_like(data)
+        scale = data.sum(-1).sum(-1).sum(-1) / mask.sum()
+
+        data_smoothed *= scale.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+
+        for i in range(data.shape[0]):
+            data_smoothed[i, mask] = data[i, mask]
+
+        return data_smoothed

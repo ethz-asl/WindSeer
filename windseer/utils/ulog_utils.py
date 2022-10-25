@@ -443,7 +443,8 @@ def filter_wind_data(wind_data, filter_size):
     skip = int((filter_size - 1) * 0.5)
     wind_out = {}
     for key in wind_data:
-        wind_out[key] = wind_data[key][skip:-skip]
+        if not wind_data[key] is None:
+            wind_out[key] = wind_data[key][skip:-skip]
 
     wind_out['we_raw'] = wind_out['we']
     wind_out['wn_raw'] = wind_out['wn']

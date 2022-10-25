@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from windseer.data.interpolation import DataInterpolation, interpolate_sparse_data
+from windseer.data.interpolation import DataInterpolation, get_smooth_data
 import windseer.data.generate_turbulence as generate_turbulence
 import windseer.utils as windseer_utils
 
@@ -1490,17 +1490,7 @@ class HDF5Dataset(Dataset):
         data_smoothed : torch.Tensor
             Processed data tensor
         '''
-        if self._input_smoothing_interpolation:
-            return interpolate_sparse_data(
-                data, mask, grid_size, self._input_smoothing_interpolation_linear
-                )
-        else:
-            data_smoothed = torch.ones_like(data)
-            scale = data.sum(-1).sum(-1).sum(-1) / mask.sum()
-
-            data_smoothed *= scale.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-
-            for i in range(data.shape[0]):
-                data_smoothed[i, mask] = data[i, mask]
-
-            return data_smoothed
+        return get_smooth_data(
+            data, mask, grid_size, self._input_smoothing_interpolation,
+            self._input_smoothing_interpolation_linear
+            )
