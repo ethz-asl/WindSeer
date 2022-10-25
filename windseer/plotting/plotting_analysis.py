@@ -4,21 +4,82 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import torch
-from nn_wind_prediction.utils import PlotUtils
-import nn_wind_prediction.utils as nn_utils
 
-plt.rc('font',**{'family':'serif','sans-serif':['Computer Modern Roman']})
+plt.rc('font', **{'family': 'serif', 'sans-serif': ['Computer Modern Roman']})
 plt.rc('text', usetex=True)
 
 
 def vector_lims(uvw, axis=0):
+    '''
+    Get the limits of the values in a vector along a certain axis.
+
+    Parameters
+    ----------
+    uvw : np.array
+        Data vector
+    axis : int, default : 0
+        Data along which the limits are calculated
+
+    Returns
+    -------
+    limits : np.array
+        Array with the lower and upper bound
+    '''
     vflat = (uvw * uvw).sum(axis=axis).flatten()
     return np.sqrt([vflat.min(), vflat.max()])
 
 
+def rec2polar(vx, vy, wind_bearing=False, deg=False):
+    '''
+    Convert the wind into polar coordinates
+
+    Parameters
+    ----------
+    vx : np.array
+        Wind in x-direction
+    vy : np.array
+        Wind in y-direction
+    wind_bearing : bool, default : False
+        If True the heading is the direction where the wind is coming from, else the vector direction
+    deg : bool, default : False
+        If True the heading is returned in degrees, else in radians
+
+    Returns
+    -------
+    limits : np.array
+        Array with the lower and upper bound
+    '''
+    mag = np.sqrt(vx**2 + vy**2)
+    if wind_bearing:
+        dir = np.pi / 2 - np.arctan2(vy, vx)
+    else:
+        dir = np.arctan2(vy, vx)
+    if deg:
+        return mag, 360.0 / np.pi * dir
+    else:
+        return mag, dir
+
+
 def get_colors(uvw, cmap=plt.cm.hsv, Vlims=None):
+    '''
+    Compute the colors of the entries in a vector according to a colormap
+
+    Parameters
+    ----------
+    uvw : np.array
+        Data vector
+    cmap : colormap, default : plt.cm.hsv
+        Colormap
+    Vlims : None or np.array, default : None
+        If not None sets the boundaries for the colormap
+
+    Returns
+    -------
+    colors : np.array
+        Array with colors for each entry in the input data vector
+    '''
     # Color by magnitude
-    c = np.sqrt((uvw*uvw).sum(axis=0))
+    c = np.sqrt((uvw * uvw).sum(axis=0))
     # Flatten and normalize
     if Vlims is None:
         Vlims = (c.min(), c.max())
@@ -31,7 +92,51 @@ def get_colors(uvw, cmap=plt.cm.hsv, Vlims=None):
     return cmap(c)
 
 
-def plot_wind_3d(pos, wind, x_terr, y_terr, h_terr, cosmo_wind, origin=(0.0, 0.0, 0.0), wskip=5, Vlims=None, plot_cosmo=True):
+def plot_wind_3d(
+        pos,
+        wind,
+        x_terr,
+        y_terr,
+        h_terr,
+        cosmo_wind=None,
+        origin=(0.0, 0.0, 0.0),
+        wskip=5,
+        Vlims=None,
+        plot_cosmo=False
+    ):
+    '''
+    Plot the logged wind, cosmo wind, and the terrain.
+
+    Parameters
+    ----------
+    pos : np.array
+        Position of wind measurements location
+    wind : np.array
+        Measured wind
+    x_terr : np.array
+        X-coordinates of the terrain
+    y_terr : np.array
+        Y-coordinates of the terrain
+    h_terr : np.array
+        Terrain height array
+    cosmo_wind : dict or None, default : None
+        Dictionary with the cosmo wind data
+    origin : np.array or tuple, default : (0.0, 0.0, 0.0)
+        Set the origin
+    wskip : int, default : 5
+        Only plot every nth wind measurement
+    Vlims : None or np.array, default : None
+        If not None sets the boundaries for the colormap, if None the boundaries are computed
+    plot_cosmo : bool, default : False
+        If true the cosmo data is plotted
+
+    Returns
+    -------
+    fig: Figure
+        Figure handle
+    ax : Axes3DSubplot
+        Axes handle
+    '''
     # Plot the wind vector estimates
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -39,30 +144,35 @@ def plot_wind_3d(pos, wind, x_terr, y_terr, h_terr, cosmo_wind, origin=(0.0, 0.0
     ax.set_ylabel('Northing (m)')
     ax.set_zlabel('Altitude (m)')
 
-    X, Y = np.meshgrid(x_terr-origin[0], y_terr-origin[1])
-    ax.plot_surface(X, Y, h_terr-origin[2], cmap=cm.terrain)
+    X, Y = np.meshgrid(x_terr - origin[0], y_terr - origin[1])
+    ax.plot_surface(X, Y, h_terr - origin[2], cmap=cm.terrain)
 
-    cwind = np.array([cosmo_wind['wind_x'], cosmo_wind['wind_y'], cosmo_wind['wind_z']])
-    if Vlims is None:
-        wind_lims = vector_lims(wind)
-        cw_lims = vector_lims(cwind)
-        Vlims = (min(wind_lims[0], cw_lims[0]), max(wind_lims[1], cw_lims[1]))
+    if plot_cosmo:
+        cwind = np.array([
+            cosmo_wind['wind_x'], cosmo_wind['wind_y'], cosmo_wind['wind_z']
+            ])
+        if Vlims is None:
+            wind_lims = vector_lims(wind)
+            cw_lims = vector_lims(cwind)
+            Vlims = (min(wind_lims[0], cw_lims[0]), max(wind_lims[1], cw_lims[1]))
 
-    xx, yy, zz = pos[0]-origin[0], pos[1]-origin[1], pos[2]-origin[2]
+    xx, yy, zz = pos[0] - origin[0], pos[1] - origin[1], pos[2] - origin[2]
     ax.plot(xx, yy, zz, 'k.', ms=1)
     wind_skip = wind[:, ::wskip]
-    ax.quiver(xx[::wskip], yy[::wskip], zz[::wskip], wind_skip[0], wind_skip[1], wind_skip[2],
-              colors=get_colors(wind_skip, Vlims=Vlims), length=5.0)
+    ax.quiver(
+        xx[::wskip],
+        yy[::wskip],
+        zz[::wskip],
+        wind_skip[0],
+        wind_skip[1],
+        wind_skip[2],
+        colors=get_colors(wind_skip, Vlims=Vlims),
+        length=5.0
+        )
 
     # Plot cosmo wind
-    # ax.plot(cosmo_wind['x'].flatten()-origin[0], cosmo_wind['y'].flatten()-origin[1], cosmo_wind['hsurf'].flatten()-origin[2], 'k.')
     if plot_cosmo:
-        ones_vec = np.ones(cwind.shape[1])
-        for ix in range(2):
-            for iy in range(2):
-                cw = cwind[:,:,ix,iy]
-                ax.quiver(cosmo_wind['x'][ix, iy]*ones_vec-origin[0], cosmo_wind['y'][ix, iy]*ones_vec-origin[1],
-                          cosmo_wind['z'][:, ix, iy] - origin[2], cw[0], cw[1], cw[2], colors=get_colors(cw, Vlims=Vlims), length=5.0)
+        ax = plot_cosmo_corners(ax, cosmo_wind, origin, Vlims)
 
     norm = matplotlib.colors.Normalize()
 
@@ -72,44 +182,98 @@ def plot_wind_3d(pos, wind, x_terr, y_terr, h_terr, cosmo_wind, origin=(0.0, 0.0
     sm.set_array([])
     hc = fig.colorbar(sm, ax=ax)
     hc.set_label('Wind speed (m/s)')
-    # ax.set_xlim(xx.min(), xx.max())
-    # ax.set_ylim(yy.min(), yy.max())
-    # ax.set_zlim(zz.min(), zz.max())
     return fig, ax
 
 
-def plot_cosmo_corners(ax, cosmo_corners, x_terr, y_terr, z_terr, origin=(0.0, 0.0, 0.0), Vlims=None):
-    if Vlims is None:
-        Vlims = vector_lims(cosmo_corners)
+def plot_cosmo_corners(ax, cosmo_wind, origin=(0.0, 0.0, 0.0), Vlims=None):
+    '''
+    Plot the wind of the cosmo corners
 
-    ones_vec = np.ones(z_terr.shape)
-    for yi in [0, -1]:
-        for xi in [0, -1]:
-            cw = np.array([cosmo_corners[0, :, yi, xi], cosmo_corners[1, :, yi, xi], cosmo_corners[2, :, yi, xi]])
-            ax.quiver(x_terr[xi]*ones_vec - origin[0], y_terr[yi]*ones_vec - origin[1], z_terr - origin[2],
-                      cw[0], cw[1], cw[2], colors=get_colors(cw, Vlims=Vlims), length=5.0)
+    Parameters
+    ----------
+    cosmo_wind : dict
+        Dictionary with the cosmo wind data
+    origin : np.array or tuple, default : (0.0, 0.0, 0.0)
+        Set the origin
+    Vlims : None or np.array, default : None
+        If not None sets the boundaries for the colormap, if None the boundaries are computed
+
+    Returns
+    -------
+    ax : Axes3DSubplot
+        Axes handle
+    '''
+    cwind = np.array([cosmo_wind['wind_x'], cosmo_wind['wind_y'], cosmo_wind['wind_z']])
+    if Vlims is None:
+        Vlims = vector_lims(cwind)
+
+    ones_vec = np.ones(cwind.shape[1])
+    for ix in range(2):
+        for iy in range(2):
+            cw = cwind[:, :, ix, iy]
+            ax.quiver(
+                cosmo_wind['x'][ix, iy] * ones_vec - origin[0],
+                cosmo_wind['y'][ix, iy] * ones_vec - origin[1],
+                cosmo_wind['z'][:, ix, iy] - origin[2],
+                cw[0],
+                cw[1],
+                cw[2],
+                colors=get_colors(cw, Vlims=Vlims),
+                length=5.0
+                )
+
+    return ax
 
 
 def plot_vertical_profile(z_terr, cosmo_corner, wind_est, alt, t):
-    fig, ax = plt.subplots(1,2)
+    '''
+    Plot and compare the measured wind to the cosmo wind for a vertical profile
+
+    Parameters
+    ----------
+    z_terr : np.array
+        Terrain height
+    cosmo_corner : np.array
+        Cosmo corner wind prediction
+    wind_est : np.array
+        Estimated wind along the flight path
+    alt : np.array
+        Altitude of the wind estimates
+    t : np.array
+        Time of the wind estimates
+
+    Returns
+    -------
+    fig: Figure
+        Figure handle
+    ax : Axes3DSubplot
+        Axes handle
+    '''
+    fig, ax = plt.subplots(1, 2)
     # magnitude
-    vv = np.sqrt(cosmo_corner[0,:]**2+ cosmo_corner[1,:]**2)
+    vv = np.sqrt(cosmo_corner[0, :]**2 + cosmo_corner[1, :]**2)
     ht, = ax[0].plot(vv, z_terr)
-    v3 = np.sqrt(wind_est[0,:]**2+ wind_est[1,:]**2)
+    v3 = np.sqrt(wind_est[0, :]**2 + wind_est[1, :]**2)
     h2 = ax[0].scatter(v3, alt, c=t, s=15)
-    ax[0].grid(b=True, which='both')
+    try:
+        ax[0].grid(visible=True, which='both')
+    except:
+        ax[0].grid(b=True, which='both')
     ax[0].set_xlabel('Wind speed [m/s]')
     ax[0].set_ylabel('Alt, m')
-    ax[0].set_ylim(np.floor(alt.min()/100)*100, np.ceil(alt.max()/100)*100)
+    ax[0].set_ylim(np.floor(alt.min() / 100) * 100, np.ceil(alt.max() / 100) * 100)
 
     # direction
-    dir_cosmo = np.degrees(np.arctan2(-cosmo_corner[0,:], -cosmo_corner[1,:])) % 360
-    dir_wind = np.degrees(np.arctan2(-wind_est[0,:], -wind_est[1,:])) % 360
+    dir_cosmo = np.degrees(np.arctan2(-cosmo_corner[0, :], -cosmo_corner[1, :])) % 360
+    dir_wind = np.degrees(np.arctan2(-wind_est[0, :], -wind_est[1, :])) % 360
     h_dc, = ax[1].plot(dir_cosmo, z_terr)
     h_dm = ax[1].scatter(dir_wind, alt, c=t, s=15)
-    ax[1].grid(b=True, which='both')
+    try:
+        ax[1].grid(visible=True, which='both')
+    except:
+        ax[1].grid(b=True, which='both')
     ax[1].set_xlabel('Wind Direction [deg]')
-    ax[1].set_ylim(np.floor(alt.min()/100)*100, np.ceil(alt.max()/100)*100)
+    ax[1].set_ylim(np.floor(alt.min() / 100) * 100, np.ceil(alt.max() / 100) * 100)
     hl_2 = ax[1].legend([h_dc, h_dm], ['COSMO profile', 'UAV data'])
 
     hc = fig.colorbar(h_dm, ax=ax[1])
@@ -117,7 +281,36 @@ def plot_vertical_profile(z_terr, cosmo_corner, wind_est, alt, t):
     return fig, ax
 
 
-def plot_lateral_variation(wind_est, pos, t, min_alt=None, max_alt=None, fig=None, ax=None, scale=100.0):
+def plot_lateral_variation(
+        wind_est, pos, t, min_alt=None, max_alt=None, fig=None, ax=None, scale=100.0
+    ):
+    '''
+    Plot a top down view of the wind estimates and potentially filter for a certain altitude band.
+
+    Parameters
+    ----------
+    wind_est : np.array
+        Estimated wind along the flight path
+    pos : np.array
+        Position of the wind estimates
+    t : np.array
+        Time of the wind estimates
+    min_alt  : None or float, default : None
+        Filter for a minimum altitude
+    max_alt  : None or float, default : None
+        Filter for a maximum altitude
+    fig  : Figure or float, default : None
+        If none a new figure is created, else the provided figure handle is used
+    ax  : Axes3DSubplot or float, default : None
+        If none a new axes handle is created, else the provided handle is used
+
+    Returns
+    -------
+    fig: Figure
+        Figure handle
+    ax : Axes3DSubplot
+        Axes handle
+    '''
     if ax is None or fig is None:
         fig, ax = plt.subplots()
     dex = np.ones(pos[0].shape, dtype='bool')
@@ -125,8 +318,18 @@ def plot_lateral_variation(wind_est, pos, t, min_alt=None, max_alt=None, fig=Non
         dex = np.logical_and(dex, pos[2] > min_alt)
     if max_alt is not None:
         dex = np.logical_and(dex, pos[2] < max_alt)
-    h2 = ax.quiver(pos[0][dex], pos[1][dex], wind_est[0][dex], wind_est[1][dex], t[dex], scale=scale)
-    ax.grid(b=True, which='both')
+    h2 = ax.quiver(
+        pos[0][dex],
+        pos[1][dex],
+        wind_est[0][dex],
+        wind_est[1][dex],
+        t[dex],
+        scale=scale
+        )
+    try:
+        ax.grid(visible=True, which='both')
+    except:
+        ax.grid(b=True, which='both')
     ax.plot(pos[0][0], pos[1][0], 'g^')
     ax.plot(pos[0][-1], pos[1][-1], 'ro')
     ax.set_xlabel('$x$ (East), m')
@@ -135,108 +338,29 @@ def plot_lateral_variation(wind_est, pos, t, min_alt=None, max_alt=None, fig=Non
     hc.set_label('Mission time (s)')
     return fig, ax
 
-def plot_optimizer_results(results):
-    # plot the losses
-    fig = plt.figure()
-    fig.patch.set_facecolor('white')
-    for i, loss in enumerate(results['losses']):
-        x = np.arange(len(loss))
-        plt.plot(x, loss, label = results['optimizers'][i]['name'])
-    plt.xlabel('Iteration')
-    plt.ylabel('Loss')
-    plt.legend(loc='best')
-
-    # plot the parameter and the gradients
-    max_figs_per_figure = 4
-    num_params = results['parameter'][0].shape[2]
-    num_fig = int(np.ceil(num_params / max_figs_per_figure))
-
-    for co in range(results['gradients'][0].shape[1]):
-        for i in range(num_fig):
-            num_plots = min(max_figs_per_figure, num_params - i * max_figs_per_figure)
-
-            fig, ah = plt.subplots(2, num_plots, squeeze=False)
-
-            if results['gradients'][0].shape[1] > 1:
-                fig.suptitle('Parameter Corner ' + str(co))
-            else:
-                fig.suptitle('Parameter for all Corners')
-
-            for j in range(len(results['gradients'])):
-                for k in range(num_plots):
-                    x = np.arange(len(results['parameter'][j][:, co, i * max_figs_per_figure + k]))
-                    ah[0][k].plot(x, results['parameter'][j][:, co, i * max_figs_per_figure + k].numpy(), label = results['optimizers'][j]['name'])
-                    ah[1][k].plot(x, results['gradients'][j][:, co, i * max_figs_per_figure + k].numpy(), label = results['optimizers'][j]['name'])
-                    ah[1][k].set_xlabel('Iteration')
-                    ah[0][k].set_title('Parameter ' + str(i * max_figs_per_figure + k))
-
-            ah[0][0].set_ylabel('Parameter Value')
-            ah[1][0].set_ylabel('Gradients')
-            plt.legend(loc='best')
-
-            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-    # plot the corner profiles
-    corner_counter = 0
-    fig, ah = plt.subplots(results['input'][1:].shape[0], 4)
-    fig.suptitle('Velocity Profiles')
-    for i in [0, -1]:
-        for j in [0, -1]:
-            corner_input = results['input'][1: , :, i, j].cpu().detach().numpy()
-            height = np.arange(corner_input.shape[1])
-
-            if results['ground_truth'] is not None:
-                corner_gt = results['ground_truth'][:, :, i, j].cpu().detach().numpy()
-
-            xlabels = ['ux', 'uy', 'uz']
-
-            for k in range(corner_input.shape[0]):
-                ah[k][corner_counter].plot(corner_input[k], height, label = 'prediction')
-                if results['ground_truth'] is not None:
-                    ah[k][corner_counter].plot(corner_gt[k], height, label = 'ground truth')
-
-                ah[k][corner_counter].set_xlabel(xlabels[k] + ' corner ' + str(corner_counter))
-                ah[k][0].set_ylabel('Height [cells]')
-
-            corner_counter += 1
-
-    if results['ground_truth'] is not None:
-        plt.legend(loc='best')
-
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-    if results['mask'] is not None:
-        results['mask'] = results['mask'].squeeze()
-
-    nn_utils.plot_prediction(results['label_channels'],
-                             prediction = results['prediction'],
-                             label = results['ground_truth'],
-                             provided_input_channels = results['input_channels'],
-                             input = results['input'],
-                             terrain = results['terrain'].squeeze(),
-                             measurements = results['measurement'],
-                             measurements_mask = results['mask'])
-
-def rec2polar(vx, vy, wind_bearing=False, deg=False):
-    mag = np.sqrt(vx**2 + vy**2)
-    if wind_bearing:
-        dir = np.pi/2 - np.arctan2(vy, vx)
-    else:
-        dir = np.arctan2(vy, vx)
-    if deg:
-        return mag, 360.0/np.pi*dir
-    else:
-        return mag, dir
-
-
-def U_abl(z, z_0=0.5, U_ref=10.0, Z_ref=10.0, kappa=0.4, z_ground=0.0, U_star=None):
-    if U_star is None:
-        U_star = kappa*U_ref/(np.log((Z_ref+z_0)/z_0))
-    U_star/kappa*np.log((z-z_ground+z_0)/z_0)
-    return U_star/kappa*np.log((z-z_ground+z_0)/z_0)
-
 
 def plot_wind_estimates(time, wind_array, wind_names=None, polar=False):
+    '''
+    Plot the wind estimates
+
+    Parameters
+    ----------
+    time : np.array
+        Time of the wind estimates
+    wind_array : list of np.array
+        Estimated wind along the flight path, multiple wind estimates are supported
+    wind_names : list of str or None, default : None
+        Labels for the different wind estimates
+    polar : bool, default : False
+        Plot the wind in polar coordinates instead of Cartesian wind components
+
+    Returns
+    -------
+    fig: Figure
+        Figure handle
+    ax : Axes3DSubplot
+        Axes handle
+    '''
     if wind_names is None:
         wind_names = ['W{0:d}'.format(n) for n in range(len(wind_array))]
     f2, a2 = plt.subplots(3, 1)

@@ -8,7 +8,7 @@ except ImportError:
     print("     sudo apt-get install python-numpy")
 
 try:
-    from scipy.io import netcdf
+    import scipy.io as scipy_io
 except ImportError:
     print("'scipy' is not installed. Use the command below to install it:")
     print("     sudo apt-get install python-scipy")
@@ -40,7 +40,7 @@ def read_cosmo_nc_file(filename, variable_list):
     # open input file, throw warning if it fails
     file_err = False
     try:
-        f = netcdf.netcdf_file(filename, "r")
+        f = scipy_io.netcdf_file(filename, "r")
     except TypeError:
         print("ERROR: COSMO input file '" + filename + "'is not a NetCDF 3 file!")
         raise IOError
