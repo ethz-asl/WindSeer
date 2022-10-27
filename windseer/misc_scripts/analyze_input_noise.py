@@ -5,29 +5,36 @@ import random
 import scipy
 import torch
 
-from analysis_utils import utils
-import nn_wind_prediction.utils as nn_utils
+import windseer.data as data
+import windseer.utils as utils
+import windseer.plotting as plotting
 
-parser = argparse.ArgumentParser(description='Optimize wind speed and direction from COSMO data using observations')
+parser = argparse.ArgumentParser(
+    description='Analyze the noise of the wind measurements'
+    )
 parser.add_argument('config_yaml', help='Input yaml config')
-parser.add_argument('-p', '--plot', action='store_true', help='Plot the optimization results')
-parser.add_argument('-s', '--seed', default=0, type=int, help='Seed of the random generators')
-parser.add_argument('-r', '--rate', default=50, type=int, help='Sampling rate of the wind measurements')
+parser.add_argument(
+    '-s', '--seed', default=0, type=int, help='Seed of the random generators'
+    )
+parser.add_argument(
+    '-r', '--rate', default=50, type=int, help='Sampling rate of the wind measurements'
+    )
 args = parser.parse_args()
 
 if args.seed > 0:
     random.seed(args.seed)
     np.random.seed(args.seed)
 
-config = nn_utils.BasicParameters(args.config_yaml)
-#nn_params = nn_utils.EDNNParameters(args.model_dir + '/params.yaml')
+config = utils.BasicParameters(args.config_yaml)
 
 config.params['model'] = {}
 config.params['model']['input_channels'] = ['terrain', 'ux', 'uy', 'uz']
 config.params['model']['label_channels'] = ['ux', 'uy', 'uz']
 config.params['model']['autoscale'] = False
 
-measurement, _, _, mask, _, wind_data, _ = utils.load_measurements(config.params['measurements'], config.params['model'])
+measurement, _, _, mask, _, wind_data, _ = data.load_measurements(
+    config.params['measurements'], config.params['model']
+    )
 
 data = []
 label = []
@@ -69,7 +76,7 @@ if wind_data is not None:
     ax[2].set_ylabel('amplitude wd')
     ax[2].set_xlabel('frequency [Hz]')
     ax[2].set_yscale('log')
-    
+
     data += [wind_data['wn'], wind_data['we'], wind_data['wd']]
     label += ['wn raw', 'we raw', 'wd raw']
 
@@ -82,8 +89,6 @@ if wind_data is not None:
     print('Raw wd:')
     print('\tmean: ', wind_data['wd'].mean())
     print('\tstd:  ', wind_data['wd'].std())
-
-
 
 meas_z = torch.masked_select(measurement[0, 2], mask[0] > 0)
 meas_y = torch.masked_select(measurement[0, 1], mask[0] > 0)
@@ -100,9 +105,7 @@ print('\tmean: ', meas_z.mean().item())
 print('\tstd:  ', meas_z.std().item())
 
 data += [meas_x.numpy(), meas_y.numpy(), meas_z.numpy()]
-label += ['ux binned', 'uy binned', 'uz binned'] 
-nn_utils.violin_plot(label, data, None, 'vel [m/s]', ylim=None)
+label += ['ux binned', 'uy binned', 'uz binned']
+plotting.violin_plot(label, data, None, 'vel [m/s]', ylim=None)
 
 plt.show()
-
-
