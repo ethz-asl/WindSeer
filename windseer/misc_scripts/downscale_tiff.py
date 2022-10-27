@@ -2,8 +2,6 @@ import argparse
 import matplotlib.pyplot as plt
 from osgeo import gdal
 
-from analysis_utils import get_mapgeo_terrain
-
 parser = argparse.ArgumentParser(description='Rescale a geotiff')
 parser.add_argument('-i', dest='input', required=True, help='Input geotiff')
 parser.add_argument('-o', dest='output', required=True, help='Output geotiff')
