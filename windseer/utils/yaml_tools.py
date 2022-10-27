@@ -416,12 +416,12 @@ class COSMOParameters(BasicParameters):
     def get_cosmo_time(self, target_time):
         '''
         Get the relative time of the requested COSMO data
-
+    
         Parameters
         ----------
         target_time : int
             Target time
-
+    
         Returns
         -------
         delta_t : int

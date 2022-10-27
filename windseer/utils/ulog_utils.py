@@ -379,7 +379,7 @@ def extract_wind_data(filename, use_estimate):
             'x': ulog_data['x'],
             'y': ulog_data['y'],
             'alt': ulog_data['alt'],
-            'time_gps': None,
+            'time_gps': ulog_data['utc_microsec'] / 1e6,
             }
         if (use_estimate):
             wind_data['we'] = ulog_data['we_east']
