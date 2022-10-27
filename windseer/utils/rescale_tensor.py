@@ -13,6 +13,8 @@ def scale_tensor(tensor, tensor_channels, scale, params):
         Input tensor
     tensor_channels : list of str
         Channel names of the input tensor
+    scale : float or None
+        Scale of the sample, if None the scale is set to 1.0
     params : WindseerParams
         Parameter class
 
@@ -29,6 +31,9 @@ def scale_tensor(tensor, tensor_channels, scale, params):
 
     else:
         raise ValueError('A 4D or 5D input tensor is expected')
+
+    if scale is None:
+        scale = 1.0
 
     # make sure the channels to predict exist and are properly ordered
     default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
@@ -70,6 +75,8 @@ def rescale_tensor(tensor, tensor_channels, scale, params):
         Input tensor
     tensor_channels : list of str
         Channel names of the input tensor
+    scale : float or None
+        Scale of the sample, if None the scale is set to 1.0
     params : WindseerParams
         Parameter class
 
@@ -86,6 +93,9 @@ def rescale_tensor(tensor, tensor_channels, scale, params):
 
     else:
         raise ValueError('A 4D or 5D input tensor is expected')
+
+    if scale is None:
+        scale = 1.0
 
     # make sure the channels to predict exist and are properly ordered
     default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
