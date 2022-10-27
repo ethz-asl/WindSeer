@@ -7,6 +7,33 @@ import windseer.utils as utils
 
 
 def load_measurements(config, config_model):
+    '''
+    Load the sparse data according to the input settings
+
+    Parameters
+    ----------
+    config : dict
+        Configuration dictionary for the measurements
+    config_model : dict
+        Configuration dictionary for the model params
+
+    Returns
+    -------
+    measurement : torch.Tensor
+        Tensor containing the wind measurements
+    terrain : torch.Tensor
+        Terrain tensor, either a distance field or a boolean mask depending on the settings
+    label : torch.Tensor or None
+        If available the ground truth label tensor, else None
+    mask : torch.Tensor
+        Tensor indicating cells containing wind measurements
+    scale : float or None
+        If available the estimated scale of the sample
+    wind_data : dict or None
+        Raw measurements along the flight path if available, else None
+    grid_dimensions : dict
+        Spatial dimensions of the grid if available, else None
+    '''
     # manually add uz if it was not present in the input channels since we want to return all the velocities as measurements
     measurement_channels = ['terrain', 'ux', 'uy', 'uz']
     return_variance = False
