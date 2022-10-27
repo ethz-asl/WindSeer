@@ -41,7 +41,24 @@ measurements:
         t_start: 0 # Use data from this time onwards from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
         t_end: 1000000 # Use data up to this time from the log file, relative to the first timestamp (deactivated for no or negative values) [s]
 
+loiter_detection:
+    target_radius: 100 # expected loiter radius in m
+    radius_tolerance: 12 # tolerance of the radius for the fitted circle in m
+    max_climb_rate: 1.5 # tolerance on the climb rate in m/s
+    error_tolerance: 12 # maximum allowable error for the circle fit to any point along the segment in m
+    max_altitude_change: 18 # maximum allowed altitude difference within the loiter [m]
+    loiter_threshold: 1.0 # minimum amount of loiters in the segment [-]
+    min_window_time: 20 # initial window size in s to check if it is circular
+    step: 1 # step size in seconds to extend the segment if it is a loiter
+    plot_results: false # show the results of the detected loiter
+
 evaluation:
+    # General eval params
+    compute_baseline: False
+    baseline_method: 'averaging' # 'averaging', 'zero'
+    plot_magnitude: True # Plot the horizontal magnitude and direction instead of the north and east component
+
+    # Specific flight path eval params
     # Modes:
     # 0: Single flight, take a window as an input and predict/compare the wind for the rest of the flight along the path
     # 1: Single flight, take a sliding window as an input and predict/compare the wind for the full flight or a small window along the path
@@ -52,11 +69,16 @@ evaluation:
     t_start: 0 # Use data from this time onwards from the log file, relative to the first timestamp (0 for negative values) [s]
     dt_input: 120 # Window size of the input for the sliding window approach [s]
     dt_pred: 120 # Window size of the prediction for the sliding window approach [s]
-    compute_baseline: False
-    baseline_method: 'averaging' # 'averaging', 'zero'
     full_flight: False # Indicates if for the sliding window evaluation the flight should be predicted
     cumulative: False # Indicates if for the sliding window evaluation the data from the beginning of the flight up to time t should be used
     validation_file: ['data/chasseral/EZG6_20210928_Chasseral_flight01_fpr_wind.hdf5']
     plot_turbulence: false # display the turbulence if it is predicted
     single_figure: True # Put all flights in one figure (only applies to mode 4)
-    plot_magnitude: True # Plot the horizontal magnitude and direction instead of the north and east component
+
+    # Specific loiter eval params
+    input_flight: 0 # Use the nth flight as the input
+    input_loiter: 0 # Use the ith loiter of the nth input flight
+    benchmark: false # loop over all loiters and compare the prediction
+    show_plots: true # Display the results
+    early_averaging: false # Average the data for one loiter before compiling the network input
+    

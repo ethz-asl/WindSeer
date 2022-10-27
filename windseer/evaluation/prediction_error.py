@@ -6,7 +6,7 @@ threshold_low = 7.0  # this corresponds to roughly 80 m for the unscaled terrain
 eps = 1e-1
 
 
-def compute_prediction_error(label, prediction, terrain, device, turbulence):
+def compute_prediction_error_sample(label, prediction, terrain, device, turbulence):
     '''
     Compute the prediction errors for one single sample.
     Assumes that ux, uy, uz, and optionally the TKE are predicted.

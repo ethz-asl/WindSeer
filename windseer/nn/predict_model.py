@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import h5py
+import windseer.evaluation as eval
 import windseer.utils as utils
 import windseer.data as nn_data
 import windseer.plotting as plotting
@@ -55,19 +56,21 @@ def get_prediction(
         input = input.to(device)
         if not label is None:
             label = label.to(device)
+
+            if not len(input.shape) == len(label.shape):
+                raise ValueError(
+                    'The input and label tensor are expected to have the same number of dimensions'
+                    )
+
         if verbose:
             torch.cuda.synchronize()
             start_time = time.time()
-
-        if not len(input.shape) == len(label.shape):
-            raise ValueError(
-                'The input and label tensor are expected to have the same number of dimensions'
-                )
 
         if len(input.shape) == 4:
             input = input.unsqueeze(0)
             if not label is None:
                 label = label.unsqueeze(0)
+
         elif len(input.shape) < 4 or len(input.shape) > 5:
             raise ValueError('Expected a 4D or 5D tensor')
 
@@ -254,7 +257,7 @@ def compute_prediction_error(
                 metrics_dataset['trajectory_length'][i] = 0
 
             # compute the prediction errors and extract the data
-            error_stats = utils.compute_prediction_error(
+            error_stats = eval.compute_prediction_error_sample(
                 labels, outputs, inputs[0, 0], device, 'turb'
                 in params.data['label_channels']
                 )

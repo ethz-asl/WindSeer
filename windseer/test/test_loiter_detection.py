@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Testcases for the ulog utilities
+Testcases for the loiter detection
 '''
 
 import windseer.utils as utils
@@ -17,7 +17,7 @@ test_file_hdf5 = os.path.join(testdata_folder, 'test_hdf5.hdf5')
 
 class TestLoiterDetection(unittest.TestCase):
 
-    def test_handle_hdf5(self):
+    def test_loiter_detection(self):
         wind_data = utils.extract_wind_data(test_file_hdf5, True)
 
         config = {
