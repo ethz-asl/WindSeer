@@ -135,29 +135,13 @@ def prediction_sparse(
             use_gps_time=use_gps_time
             )
 
-        input_idx = []
-        if 'ux' in config.params['model']['input_channels']:
-            input_idx.append(0)
-        if 'uy' in config.params['model']['input_channels']:
-            input_idx.append(1)
-        if 'uz' in config.params['model']['input_channels']:
-            input_idx.append(2)
-
-        if config.params['model']['input_smoothing']:
-            measurement = data.get_smooth_data(
-                measurement, mask.bool(), config.params['model']['grid_size'],
-                config.params['model']['input_smoothing_interpolation'],
-                config.params['model']['input_smoothing_interpolation_linear']
-                )
-
-        measurement = measurement.unsqueeze(0).float()
-        mask = mask.unsqueeze(0).float()
-
-        input = torch.cat([terrain, measurement[:, input_idx],
-                           mask.unsqueeze(0)],
-                          dim=1)
-
-        input = input.to(device)
+        input = data.compose_model_input(
+            measurement,
+            mask,
+            terrain,
+            config.params['model'],
+            device
+            )
 
         prediction, _, _ = nn.get_prediction(
             input,

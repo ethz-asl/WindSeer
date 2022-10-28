@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from .interpolation import interpolate_sparse_data
+from .interpolation import interpolate_sparse_data, get_smooth_data
 from .HDF5Dataset import HDF5Dataset
 import windseer.utils as utils
 
@@ -205,3 +205,68 @@ def load_measurements(config, config_model):
         scale = None
 
     return measurement, terrain, label, mask, scale, wind_data, grid_dimensions
+
+
+def compose_model_input(
+        measurement,
+        mask,
+        terrain,
+        config,
+        grid_size,
+        device=None
+    ):
+    '''
+    Compose the input from the measurements tensor and the terrain
+
+    Parameters
+    ----------
+    measurement : torch.Tensor
+        Tensor containing the measurements of the wind in all three axis
+    mask : torch.Tensor
+        Tensor containing the measurements mask
+    terrain : torch.Tensor
+        Tensor containing terrain information
+    config : dict
+        Configuration dictionary containing the input smoothing configuration and the input channels
+    device : torch.device or None, default : None
+        If not None the tensors are moved to that device
+
+    Returns
+    -------
+    input : torch.Tensor
+        Composed model input tensor
+    '''
+    if not device is None:
+        measurement = measurement.to(device)
+        terrain = terrain.to(device)
+        mask = mask.to(device)
+
+    # make sure all tensors are 5D tensors
+    while len(measurement.shape) < 5:
+        measurement.unsqueeze_(0)
+    while len(terrain.shape) < 5:
+        terrain.unsqueeze_(0)
+    while len(mask.shape) < 5:
+        mask.unsqueeze_(0)
+
+    input_idx = []
+    if 'ux' in config['input_channels']:
+        input_idx.append(0)
+    if 'uy' in config['input_channels']:
+        input_idx.append(1)
+    if 'uz' in config['input_channels']:
+        input_idx.append(2)
+
+    # fill the holes in the input if requested
+    input_measurement = measurement
+    if config['input_smoothing']:
+        input_measurement = get_smooth_data(
+            measurement[0], mask[0, 0].bool(), config['grid_size'], config['input_smoothing_interpolation'],
+            config['input_smoothing_interpolation_linear']
+            ).unsqueeze(0)
+
+    input = torch.cat([terrain, input_measurement[:, input_idx],
+                       mask],
+                      dim=1)
+
+    return input

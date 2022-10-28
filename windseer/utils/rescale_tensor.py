@@ -36,7 +36,7 @@ def scale_tensor(tensor, tensor_channels, scale, params):
         scale = 1.0
 
     # make sure the channels to predict exist and are properly ordered
-    default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+    default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut', 'mask']
     for channel in tensor_channels:
         if channel not in default_channels:
             raise ValueError(
@@ -98,7 +98,7 @@ def rescale_tensor(tensor, tensor_channels, scale, params):
         scale = 1.0
 
     # make sure the channels to predict exist and are properly ordered
-    default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut']
+    default_channels = ['terrain', 'ux', 'uy', 'uz', 'turb', 'p', 'epsilon', 'nut', 'mask']
     for channel in tensor_channels:
         if channel not in default_channels:
             raise ValueError(
