@@ -47,7 +47,7 @@ class TestSparseEvaluation(unittest.TestCase):
                                                                 ] = test_file_hdf5
         self.eval_config_baseline.params['measurements']['log']['geotiff_file'
                                                                 ] = terrain_filename
-        self.eval_config_baseline = eval.update_eval_config(
+        self.eval_config_baseline = utils.update_sparse_config(
             self.eval_config_baseline, None
             )
 
@@ -68,7 +68,7 @@ class TestSparseEvaluation(unittest.TestCase):
                                                              ] = test_file_hdf5
         self.eval_config_model.params['measurements']['log']['geotiff_file'
                                                              ] = terrain_filename
-        self.eval_config_model = eval.update_eval_config(
+        self.eval_config_model = utils.update_sparse_config(
             self.eval_config_model, self.params
             )
 

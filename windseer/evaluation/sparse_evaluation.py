@@ -77,57 +77,6 @@ def load_wind_data(config, detect_loiters=False):
     return out_data
 
 
-def update_eval_config(config_eval, config_model=None):
-    '''
-    Get a wind prediction from the neural network using the sparse wind measurements as input.
-
-    Parameters
-    ----------
-    config_eval : BasicParameters
-        Evaluation configuration
-    config_model : WindseerParameters or None
-        Model and data configuration, none in case of the baseline prediction
-
-    Returns
-    -------
-    config_eval : BasicParameters
-        Updated evaluation configuration with the model and data configs
-    '''
-    config_eval.params['model'] = {}
-    if config_eval.params['evaluation']['compute_baseline']:
-        config_eval.params['model']['input_channels'] = ['ux', 'uy', 'uz']
-        config_eval.params['model']['label_channels'] = ['ux', 'uy', 'uz']
-        config_eval.params['model']['autoscale'] = False
-
-    else:
-        config_eval.params['model']['config'] = config_model
-        config_eval.params['model']['input_channels'] = config_model.data[
-            'input_channels']
-        config_eval.params['model']['label_channels'] = config_model.data[
-            'label_channels']
-        config_eval.params['model']['autoscale'] = config_model.data['autoscale']
-        config_eval.params['model']['grid_size'] = config_model.model['model_args'][
-            'grid_size']
-
-        if 'input_smoothing' in config_model.data.keys():
-            config_eval.params['model']['input_smoothing'] = config_model.data[
-                'input_smoothing']
-            config_eval.params['model']['input_smoothing_interpolation'
-                                        ] = config_model.data[
-                                            'input_smoothing_interpolation']
-            config_eval.params['model']['input_smoothing_interpolation_linear'
-                                        ] = config_model.data[
-                                            'input_smoothing_interpolation_linear']
-        else:
-            config_eval.params['model']['input_smoothing'] = False
-
-        for key in config_model.data.keys():
-            if 'scaling' in key:
-                config_eval.params['model'][key] = config_model.data[key]
-
-    return config_eval
-
-
 def prediction_sparse(
         wind_data,
         grid_dimensions,

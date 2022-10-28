@@ -483,3 +483,54 @@ class UlogParameters(BasicParameters):
         Print the parameter to the console.
         '''
         self._print('Ulog parameters:')
+
+
+def update_sparse_config(config_sparse, config_model=None):
+    '''
+    Update the configuration for the sparse data with the model parameter
+
+    Parameters
+    ----------
+    config_sparse : BasicParameters
+        Configuration for the prediction with sparse data
+    config_model : WindseerParameters or None
+        Model and data configuration, none in case of the baseline prediction
+
+    Returns
+    -------
+    config_sparse : BasicParameters
+        Updated evaluation configuration with the model and data configs
+    '''
+    config_sparse.params['model'] = {}
+    if config_sparse.params['evaluation']['compute_baseline']:
+        config_sparse.params['model']['input_channels'] = ['ux', 'uy', 'uz']
+        config_sparse.params['model']['label_channels'] = ['ux', 'uy', 'uz']
+        config_sparse.params['model']['autoscale'] = False
+
+    else:
+        config_sparse.params['model']['config'] = config_model
+        config_sparse.params['model']['input_channels'] = config_model.data[
+            'input_channels']
+        config_sparse.params['model']['label_channels'] = config_model.data[
+            'label_channels']
+        config_sparse.params['model']['autoscale'] = config_model.data['autoscale']
+        config_sparse.params['model']['grid_size'] = config_model.model['model_args'][
+            'grid_size']
+
+        if 'input_smoothing' in config_model.data.keys():
+            config_sparse.params['model']['input_smoothing'] = config_model.data[
+                'input_smoothing']
+            config_sparse.params['model']['input_smoothing_interpolation'
+                                          ] = config_model.data[
+                                              'input_smoothing_interpolation']
+            config_sparse.params['model']['input_smoothing_interpolation_linear'
+                                          ] = config_model.data[
+                                              'input_smoothing_interpolation_linear']
+        else:
+            config_sparse.params['model']['input_smoothing'] = False
+
+        for key in config_model.data.keys():
+            if 'scaling' in key:
+                config_sparse.params['model'][key] = config_model.data[key]
+
+    return config_sparse
