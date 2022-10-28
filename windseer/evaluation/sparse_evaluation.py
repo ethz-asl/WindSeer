@@ -136,11 +136,7 @@ def prediction_sparse(
             )
 
         input = data.compose_model_input(
-            measurement,
-            mask,
-            terrain,
-            config.params['model'],
-            device
+            measurement, mask, terrain, config.params['model'], device
             )
 
         prediction, _, _ = nn.get_prediction(

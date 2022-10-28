@@ -207,14 +207,7 @@ def load_measurements(config, config_model):
     return measurement, terrain, label, mask, scale, wind_data, grid_dimensions
 
 
-def compose_model_input(
-        measurement,
-        mask,
-        terrain,
-        config,
-        grid_size,
-        device=None
-    ):
+def compose_model_input(measurement, mask, terrain, config, grid_size, device=None):
     '''
     Compose the input from the measurements tensor and the terrain
 
@@ -261,12 +254,11 @@ def compose_model_input(
     input_measurement = measurement
     if config['input_smoothing']:
         input_measurement = get_smooth_data(
-            measurement[0], mask[0, 0].bool(), config['grid_size'], config['input_smoothing_interpolation'],
+            measurement[0], mask[0, 0].bool(), config['grid_size'],
+            config['input_smoothing_interpolation'],
             config['input_smoothing_interpolation_linear']
             ).unsqueeze(0)
 
-    input = torch.cat([terrain, input_measurement[:, input_idx],
-                       mask],
-                      dim=1)
+    input = torch.cat([terrain, input_measurement[:, input_idx], mask], dim=1)
 
     return input
