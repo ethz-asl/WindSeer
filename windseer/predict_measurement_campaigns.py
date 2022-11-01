@@ -72,9 +72,41 @@ parser.add_argument(
     action='store_true',
     help='Extrapolate predictions to mast positions outside the domain.'
     )
+parser.add_argument(
+    '--streamlines', action='store_true', help='Display the streamlines with mayavi.'
+    )
+parser.add_argument(
+    '--save_animation',
+    action='store_true',
+    help='Save an animation of the streamline plot.'
+    )
+parser.add_argument(
+    '--azimuth', type=float, help='Set the azimuth angle of the mayavi view'
+    )
+parser.add_argument(
+    '--elevation', type=float, help='Set the elevation angle of the mayavi view'
+    )
+parser.add_argument(
+    '--distance', type=float, help='Set the distance of the mayavi view'
+    )
+parser.add_argument(
+    '--focalpoint', type=float, nargs=3, help='Set the focalpoint of the mayavi view'
+    )
 parser.add_argument('--save', action='store_true', help='Save the prediction results')
 
 args = parser.parse_args()
+
+mayavi_configs = {'view_settings': {}}
+if not args.azimuth is None:
+    mayavi_configs['view_settings']['azimuth'] = args.azimuth
+if not args.elevation is None:
+    mayavi_configs['view_settings']['elevation'] = args.elevation
+if not args.distance is None:
+    mayavi_configs['view_settings']['distance'] = args.distance
+if not args.focalpoint is None:
+    mayavi_configs['view_settings']['focalpoint'] = args.focalpoint
+if len(mayavi_configs['view_settings']) == 0:
+    mayavi_configs['view_settings'] = None
 
 if args.no_gpu:
     device = torch.device("cpu")
@@ -430,7 +462,7 @@ else:
             'ob',
             label='prediction'
             )
-        ah[3][0].set_ylabel('TKE [m^2/s^2]')
+        ah[3][0].set_ylabel('TKE [m2/s2]')
 
         ah[2][0].axes.xaxis.set_visible(False)
         ah[3][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
@@ -510,7 +542,7 @@ else:
             'ob',
             label='in bounds'
             )
-        ah[3][0].set_ylabel('Error TKE [m^2/s^2]')
+        ah[3][0].set_ylabel('Error TKE [m2/s2]')
 
         ah[2][0].axes.xaxis.set_visible(False)
         ah[3][0].set_xticks(np.arange(len(ret['results']['labels_3d'])))
@@ -817,6 +849,7 @@ else:
                 terrain_mode='blocks',
                 terrain_uniform_color=False,
                 prediction_channels=config.data['label_channels'],
+                view_settings=mayavi_configs['view_settings'],
                 blocking=False
                 )
             )
@@ -827,7 +860,21 @@ else:
             ret['terrain'],
             terrain_mode='blocks',
             terrain_uniform_color=False,
+            view_settings=mayavi_configs['view_settings'],
             blocking=False
+            )
+
+    if args.streamlines:
+        plotting.mlab_plot_streamlines(
+            ret['prediction']['pred'],
+            ret['terrain'],
+            terrain_mode='blocks',
+            terrain_uniform_color=True,
+            blocking=False,
+            view_settings=mayavi_configs['view_settings'],
+            animate=args.save_animation,
+            save_animation=args.save_animation,
+            title='Predicted Flow'
             )
 
     plotting.plot_prediction(
