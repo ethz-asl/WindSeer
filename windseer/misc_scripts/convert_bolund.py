@@ -1,6 +1,5 @@
 import argparse
 import copy
-import csv
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -9,56 +8,8 @@ import os
 from scipy.interpolate import RegularGridInterpolator, interp1d
 from scipy import ndimage
 import torch
-import zipfile
 
-
-def read_grd(infile):
-    with open(infile, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=' ')
-        type_str = next(reader)
-        nx, ny = [int(v) for v in next(reader)]
-        min_x, max_x = [float(v) for v in next(reader)]  # west, east
-        min_y, max_y = [float(v) for v in next(reader)]  # north, south
-        min_z, max_z = [float(v) for v in next(reader)]
-        next(reader)
-        Z = np.zeros((nx, ny))
-        cx, cy = 0, 0
-        for line in reader:
-            nnx = len(line)
-            Z[cx:(cx + nnx), cy] = [float(v) for v in line]
-            cx += nnx
-            if cx >= nx - 1:
-                cx = 0
-                cy += 1
-
-    x, y = np.linspace(min_x, max_x, nx), np.linspace(min_y, max_y, ny)
-    return x, y, Z
-
-
-def read_dat(infile):
-    csv.register_dialect('bolund_measurements', delimiter=' ', skipinitialspace=True)
-    with open(infile, 'r') as csvfile:
-        reader = csv.reader(csvfile, 'bolund_measurements')
-        next(reader)  # skip the headers
-
-        measurements = []
-        measurements_names = []
-        for line in reader:
-            # check if that sensor recorded any measurement
-            if float(line[2]) > 0:
-                measurements.append([float(v) for v in line[1:]])
-                measurements_names.append(line[0])
-
-    measurements = np.array(measurements, dtype=float)
-    return measurements, measurements_names
-
-
-def get_measurement(archive, infile):
-    archive.extract(infile)
-    measurements, measurements_names = read_dat(infile)
-    os.remove(infile)
-    return measurements, measurements_names
-
+import windseer.measurement_campaigns as mc_utils
 
 parser = argparse.ArgumentParser(
     description='Convert the Bolund data from the zip files to the hdf5 format'
@@ -136,34 +87,16 @@ parser.add_argument(
 args = parser.parse_args()
 
 # load the terrain data
-archive_terrain = zipfile.ZipFile(args.terrain_file, 'r')
-archive_terrain.extract('Bolund.grd')
-x, y, Z = read_grd('Bolund.grd')
-X, Y = np.meshgrid(x, y, indexing='xy')
-os.remove('Bolund.grd')
-archive_terrain.close()
+terrain_dict = mc_utils.get_terrain_Bolund(args.terrain_file)
 
 # load the measurements
-archive_meas = zipfile.ZipFile(args.measurement_file, 'r')
-measurements = []
-measurements_names = []
-meas, meas_name = get_measurement(archive_meas, 'Dir_90.dat')
-measurements.append(meas)
-measurements_names.append(meas_name)
-meas, meas_name = get_measurement(archive_meas, 'Dir_239.dat')
-measurements.append(meas)
-measurements_names.append(meas_name)
-meas, meas_name = get_measurement(archive_meas, 'Dir_255.dat')
-measurements.append(meas)
-measurements_names.append(meas_name)
-meas, meas_name = get_measurement(archive_meas, 'Dir_270.dat')
-measurements.append(meas)
-measurements_names.append(meas_name)
-names = ['dir_90', 'dir_239', 'dir_255', 'dir_270']
+measurements, measurements_names, names = mc_utils.get_measurements_Bolund(
+    args.measurement_file
+    )
 
 if args.save:
-    grid_interpolator = RegularGridInterpolator((y, x),
-                                                Z.T,
+    grid_interpolator = RegularGridInterpolator((terrain_dict['y'], terrain_dict['x']),
+                                                terrain_dict['Z'].T,
                                                 method='linear',
                                                 bounds_error=False,
                                                 fill_value=None)
@@ -267,42 +200,9 @@ if args.save:
             ds_file['terrain'].create_dataset(key, data=terrain)
 
             # convert the prediction lines
-            ds_file['lines'].create_group(key)
-
-            ds_file['lines'][key].create_group('lineA_2m')
-            ds_file['lines'][key].create_group('lineA_5m')
-            t = np.linspace(-200, 200, 401)
-            x = np.cos(31.0 / 180.0 * np.pi) * t
-            y = np.sin(31.0 / 180.0 * np.pi) * t
-            z = grid_interpolator((y, x))
-
-            ds_file['lines'][key]['lineA_2m'].create_dataset('x', data=x_inter(x))
-            ds_file['lines'][key]['lineA_2m'].create_dataset('y', data=y_inter(y))
-            ds_file['lines'][key]['lineA_2m'].create_dataset('z', data=z_inter(z + 2.0))
-            ds_file['lines'][key]['lineA_2m'].create_dataset('terrain', data=z)
-            ds_file['lines'][key]['lineA_2m'].create_dataset('dist', data=t)
-            ds_file['lines'][key]['lineA_5m'].create_dataset('x', data=x_inter(x))
-            ds_file['lines'][key]['lineA_5m'].create_dataset('y', data=y_inter(y))
-            ds_file['lines'][key]['lineA_5m'].create_dataset('z', data=z_inter(z + 5.0))
-            ds_file['lines'][key]['lineA_5m'].create_dataset('terrain', data=z)
-            ds_file['lines'][key]['lineA_5m'].create_dataset('dist', data=t)
-
-            ds_file['lines'][key].create_group('lineB_2m')
-            ds_file['lines'][key].create_group('lineB_5m')
-            x = np.cos(0.0) * t
-            y = np.sin(0.0) * t
-            z = grid_interpolator((y, x))
-
-            ds_file['lines'][key]['lineB_2m'].create_dataset('x', data=x_inter(x))
-            ds_file['lines'][key]['lineB_2m'].create_dataset('y', data=y_inter(y))
-            ds_file['lines'][key]['lineB_2m'].create_dataset('z', data=z_inter(z + 2.0))
-            ds_file['lines'][key]['lineB_2m'].create_dataset('terrain', data=z)
-            ds_file['lines'][key]['lineB_2m'].create_dataset('dist', data=t)
-            ds_file['lines'][key]['lineB_5m'].create_dataset('x', data=x_inter(x))
-            ds_file['lines'][key]['lineB_5m'].create_dataset('y', data=y_inter(y))
-            ds_file['lines'][key]['lineB_5m'].create_dataset('z', data=z_inter(z + 5.0))
-            ds_file['lines'][key]['lineB_5m'].create_dataset('terrain', data=z)
-            ds_file['lines'][key]['lineB_5m'].create_dataset('dist', data=t)
+            mc_utils.add_Bolund_measurement_lines(
+                ds_file, key, x_inter, y_inter, z_inter, grid_interpolator
+                )
 
             # add the measurements
             for meas, meas_names, name in zip(
@@ -334,7 +234,9 @@ if args.plot:
     for meas, name in zip(measurements, names):
         # plot the data
         fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-        surf = ax.plot_surface(X, Y, Z.T, cmap=cm.terrain)
+        surf = ax.plot_surface(
+            terrain_dict['X'], terrain_dict['Y'], terrain_dict['Z'].T, cmap=cm.terrain
+            )
 
         # Get colors
         c_array = [v for v in meas[:, 7]]

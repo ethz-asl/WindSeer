@@ -1,13 +1,10 @@
 import argparse
 import copy
-import csv
-import datetime
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
 import os
-from osgeo import gdal
 import re
 from scipy.interpolate import LinearNDInterpolator, interp1d
 from scipy import ndimage
@@ -16,404 +13,7 @@ import torch
 
 import pyproj
 
-try:
-    import netCDF4 as nc
-except ImportError:
-    print('Install netCDF4: pip3 install netCDF4')
-    exit(1)
-
-tower_positions = {
-    'tnw01': {
-        'x': 32611.28,
-        'y': 4623.17
-        },
-    'tnw02': {
-        'x': 32804.29,
-        'y': 4750.27
-        },
-    'tnw03': {
-        'x': 32917.67,
-        'y': 4860.89
-        },
-    'tnw04': {
-        'x': 33158.81,
-        'y': 4964.16
-        },
-    'tnw05': {
-        'x': 33203.54,
-        'y': 5041.16
-        },
-    'tnw06': {
-        'x': 33434.16,
-        'y': 5224.15
-        },
-    'tnw07': {
-        'x': 33587.18,
-        'y': 5351.36
-        },
-    'tnw08': {
-        'x': 33749.53,
-        'y': 5479.08
-        },
-    'tnw09': {
-        'x': 33864.06,
-        'y': 5587.77
-        },
-    'tnw10': {
-        'x': 33952.07,
-        'y': 5628.10
-        },
-    'tnw11': {
-        'x': 34043.02,
-        'y': 5696.25
-        },
-    'tnw12': {
-        'x': 34095.80,
-        'y': 5717.10
-        },
-    'tnw13': {
-        'x': 34140.92,
-        'y': 5777.09
-        },
-    'tnw14': {
-        'x': 34220.92,
-        'y': 5817.32
-        },
-    'tnw15': {
-        'x': 34272.97,
-        'y': 5843.29
-        },
-    'tnw16': {
-        'x': 34349.78,
-        'y': 5868.89
-        },
-    'tse01': {
-        'x': 32960.86,
-        'y': 3942.30
-        },
-    'tse02': {
-        'x': 33260.11,
-        'y': 4138.28
-        },
-    'tse04': {
-        'x': 33394.18,
-        'y': 4258.87
-        },
-    'tse05': {
-        'x': 33539.00,
-        'y': 4362.00
-        },
-    'tse06': {
-        'x': 33636.59,
-        'y': 4487.36
-        },
-    'tse07': {
-        'x': 33820.59,
-        'y': 4487.36
-        },
-    'tse08': {
-        'x': 33977.69,
-        'y': 4634.04
-        },
-    'tse09': {
-        'x': 34153.02,
-        'y': 4844.78
-        },
-    'tse10': {
-        'x': 34274.35,
-        'y': 4922.95
-        },
-    'tse11': {
-        'x': 34334.33,
-        'y': 4973.22
-        },
-    'tse12': {
-        'x': 34448.07,
-        'y': 5044.25
-        },
-    'tse13': {
-        'x': 34533.60,
-        'y': 5112.01
-        },
-    'rsw01': {
-        'x': 33730.49,
-        'y': 3803.31
-        },
-    'rsw02': {
-        'x': 33633.50,
-        'y': 3901.20
-        },
-    'rsw03': {
-        'x': 33569.86,
-        'y': 4006.84
-        },
-    'rsw04': {
-        'x': 33453.60,
-        'y': 4169.17
-        },
-    'rsw05': {
-        'x': 33195.80,
-        'y': 4548.30
-        },
-    'rsw06': {
-        'x': 33087.97,
-        'y': 4686.07
-        },
-    'rsw07': {
-        'x': 32822.82,
-        'y': 5000.93
-        },
-    'rsw08': {
-        'x': 32734.37,
-        'y': 5141.90
-        },
-    'rne01': {
-        'x': 34886.81,
-        'y': 4772.73
-        },
-    'rne02': {
-        'x': 34737.46,
-        'y': 4877.19
-        },
-    'rne03': {
-        'x': 34630.65,
-        'y': 5025.52
-        },
-    'rne04': {
-        'x': 34414.87,
-        'y': 5281.94
-        },
-    'rne06': {
-        'x': 34178.28,
-        'y': 5565.25
-        },
-    'rne07': {
-        'x': 33886.57,
-        'y': 5852.00
-        },
-    'v01': {
-        'x': 34575.06,
-        'y': 4503.58
-        },
-    'v03': {
-        'x': 34235.98,
-        'y': 4696.84
-        },
-    'v04': {
-        'x': 33951.14,
-        'y': 4978.78
-        },
-    'v05': {
-        'x': 33814.75,
-        'y': 5122.54
-        },
-    'v06': {
-        'x': 33704.27,
-        'y': 5238.11
-        },
-    'v07': {
-        'x': 33388.58,
-        'y': 5457.11
-        }
-    }
-
-
-def sliding_std(in_arr, window_size):
-    c1 = uniform_filter(in_arr, window_size * 2, mode='constant', origin=-window_size)
-    c2 = uniform_filter(
-        in_arr * in_arr, window_size * 2, mode='constant', origin=-window_size
-        )
-    return (np.sqrt(c2 - c1 * c1))[:-window_size * 2 + 1]
-
-
-def get_terrain_tif(filename, lon_center, lat_center):
-    dataset = gdal.Open(filename, gdal.GA_ReadOnly)
-    geoTransform = dataset.GetGeoTransform()
-
-    Z_geo = dataset.GetRasterBand(1).ReadAsArray()
-
-    x, y = np.meshgrid(
-        np.arange(dataset.RasterXSize), np.arange(dataset.RasterYSize), indexing='xy'
-        )
-    X_geo = geoTransform[0] + x * geoTransform[1] + y * geoTransform[2]
-    Y_geo = geoTransform[3] + x * geoTransform[4] + y * geoTransform[5]
-
-    projection_string = dataset.GetProjection().split('PROJ4","')[-1].split('"]')[0]
-    proj1 = pyproj.Proj(projection_string)
-    proj2 = pyproj.Proj(init='epsg:4326')
-    X_wgs84, Y_wgs84, Z_wgs84 = pyproj.transform(proj1, proj2, X_geo, Y_geo, Z_geo)
-
-    # cut the data to an extent of +-3 km around the center
-    distance = (X_wgs84 - lon_center)**2 + (Y_wgs84 - lat_center)**2
-    idx_center = np.unravel_index(np.argmin(distance), distance.shape)
-    size_x_half = int(np.abs(3100.0 / geoTransform[1]))
-    size_y_half = int(np.abs(3100.0 / geoTransform[5]))
-
-    terrain_dict = {
-        'lat':
-            Y_wgs84[idx_center[0] - size_y_half:idx_center[0] + size_y_half,
-                    idx_center[1] - size_x_half:idx_center[1] + size_x_half],
-        'lon':
-            X_wgs84[idx_center[0] - size_y_half:idx_center[0] + size_y_half,
-                    idx_center[1] - size_x_half:idx_center[1] + size_x_half],
-        'z':
-            Z_wgs84[idx_center[0] - size_y_half:idx_center[0] + size_y_half,
-                    idx_center[1] - size_x_half:idx_center[1] + size_x_half],
-        }
-
-    return terrain_dict
-
-
-def get_terrain_nc(filename, wgs84_to_local, x_center, y_center):
-    # load the terrain data
-    terrain_dict = read_nc_file(filename, ['x', 'y', 'z', 'lat', 'lon'])
-    x_terrain, y_terrain = wgs84_to_local(terrain_dict['lon'], terrain_dict['lat'])
-
-    # create an interpolator object with a subset of the data
-    idx_x = np.argmin(np.abs(x_terrain[0, :] - x_center))
-    idx_y = np.argmin(np.abs(y_terrain[:, 0] - y_center))
-
-    for key in terrain_dict.keys():
-        terrain_dict[key] = terrain_dict[key][idx_y - 250:idx_y + 250,
-                                              idx_x - 250:idx_x + 250]
-
-    return terrain_dict
-
-
-def read_nc_file(filename, variable_list):
-    # open input file, throw warning if it fails
-    try:
-        ds = nc.Dataset(filename)
-    except TypeError:
-        print("ERROR: COSMO input file '" + filename + "'is not a NetCDF 3 file!")
-        raise IOError
-    except IOError as e:
-        print("ERROR: COSMO input file '" + filename + "'does not exist!")
-        raise e
-
-    # read in all required variables, generate warning if error occurs
-    try:
-        out = {}
-        for variable in variable_list:
-            out[variable] = ds[variable][:].copy()
-    except:
-        print(
-            "ERROR: Variable(s) of NetCDF input file '" + filename +
-            "'not valid, at least one variable does not exist. "
-            )
-        raise IOError
-    ds.close()
-    return out
-
-
-def get_tower_names(filename):
-    # open input file, throw warning if it fails
-    try:
-        ds = nc.Dataset(filename)
-    except TypeError:
-        print("ERROR: COSMO input file '" + filename + "'is not a NetCDF 3 file!")
-        raise IOError
-    except IOError as e:
-        print("ERROR: COSMO input file '" + filename + "'does not exist!")
-        raise e
-
-    tower_keys = [k.split('_')[1] for k in ds.variables.keys() if 'latitude' in k]
-
-    # special treatment for tnw12-tnw16 since they do not have lat/lon reported
-    tnw_id = [k.split('_')[-1] for k in ds.variables.keys() if 'm_tnw1' in k]
-    towers = ['tnw12', 'tnw13', 'tnw14', 'tnw15', 'tnw16']
-
-    for twr in towers:
-        if twr in tnw_id:
-            tower_keys.append(twr)
-
-    return tower_keys
-
-
-def get_tower_heights(filename, twr):
-    # open input file, throw warning if it fails
-    try:
-        ds = nc.Dataset(filename)
-    except TypeError:
-        print("ERROR: COSMO input file '" + filename + "'is not a NetCDF 3 file!")
-        raise IOError
-    except IOError as e:
-        print("ERROR: COSMO input file '" + filename + "'does not exist!")
-        raise e
-
-    twr_keys = [k for k in ds.variables.keys() if twr in k]
-
-    regex = re.compile('u_[0-9].*')
-    vel_keys = list(filter(regex.match, twr_keys))
-
-    return [s.split('_')[1] for s in vel_keys]
-
-
-def get_tower_data(filename, tower_id, heights):
-    variables = ['time']
-    for height in heights:
-        variables.append('u_' + height + '_' + tower_id)
-        variables.append('v_' + height + '_' + tower_id)
-        variables.append('w_' + height + '_' + tower_id)
-        variables.append('spd_' + height + '_' + tower_id)
-
-    return read_nc_file(filename, variables)
-
-
-def get_time_key(seconds):
-    return str(datetime.timedelta(seconds=seconds))
-
-
-def get_lidar_data(filename):
-    data_dict = read_nc_file(
-        filename, [
-            'position_x', 'position_y', 'position_z', 'range', 'time', 'VEL', 'CNR',
-            'azimuth_angle', 'elevation_angle', 'elevation_sweep'
-            ]
-        )
-    # the data consists of several sweeps
-    data_dict['elevation_sweep'][0] = np.nanmax(
-        data_dict['elevation_sweep']
-        ) - 0.1  # fix the first nan value
-    period = np.argmax(data_dict['elevation_sweep'])
-    num_sweeps = np.sum(
-        data_dict['elevation_sweep'] > data_dict['elevation_sweep'].max() - 0.2
-        )
-
-    elevation_angle = np.radians(data_dict['elevation_angle'])[:period]
-    try:
-        azimuth_angle = np.radians(data_dict['azimuth_angle'])[:period]
-    except IndexError:
-        # it is a 0 dim array
-        azimuth_angle = np.radians(data_dict['azimuth_angle'])
-
-    if period * num_sweeps != len(data_dict['elevation_angle']):
-        print('Elevation sweep data for the lidar could not be properly parsed:')
-        print(filename)
-        exit()
-
-    out_dict = {}
-    out_dict['x'] = data_dict['position_x'] + (
-        np.sin(azimuth_angle) * np.cos(elevation_angle)
-        )[:, np.newaxis] * data_dict['range']
-    out_dict['y'] = data_dict['position_y'] + (
-        np.cos(azimuth_angle) * np.cos(elevation_angle)
-        )[:, np.newaxis] * data_dict['range']
-    out_dict['z'] = data_dict['position_z'] + np.sin(elevation_angle[:, np.newaxis]
-                                                     ) * data_dict['range']
-    out_dict['elevation_angle'] = elevation_angle
-    out_dict['azimuth_angle'] = azimuth_angle
-
-    vel = np.zeros((num_sweeps, period, len(data_dict['range'])))
-    for i in range(num_sweeps):
-        mask = data_dict['CNR'][i * period:(i + 1) * period] < -20.0
-        vel[i] = data_dict['VEL'][i * period:(i + 1) * period].copy()
-        vel[i][mask] = np.nan
-
-    out_dict['vel'] = np.nanmean(vel, axis=0)
-
-    return out_dict
-
+import windseer.measurement_campaigns as mc_utils
 
 parser = argparse.ArgumentParser(
     description='Convert the Bolund data from the zip files to the hdf5 format'
@@ -427,12 +27,7 @@ parser.add_argument(
     required=True,
     help='Filename of the measurement zip file'
     )
-parser.add_argument(
-    '-l',
-    dest='lidar_folder',
-    default='perdigao_lidar_data',
-    help='Folder containing the lidar data'
-    )
+parser.add_argument('-l', dest='lidar_folder', help='Folder containing the lidar data')
 parser.add_argument(
     '-p',
     dest='plot',
@@ -500,18 +95,12 @@ wgs84_to_local = pyproj.Proj(
 lat_center = 39.710497
 lon_center = -7.739925
 x_center, y_center = wgs84_to_local(lon_center, lat_center)
-z_offset = 250.0  # roughtly the height of the lowest tower
+z_offset = 250.0  # roughly the height of the lowest tower
 
 # load the terrain data
-if args.terrain_file.lower().endswith(('.nc')):
-    terrain_dict = get_terrain_nc(args.terrain_file, wgs84_to_local, x_center, y_center)
-
-elif args.terrain_file.lower().endswith(('.tif')):
-    terrain_dict = get_terrain_tif(args.terrain_file, lon_center, lat_center)
-
-else:
-    print('Unknown terrain file type: ', args.terrain_file)
-    exit()
+terrain_dict = mc_utils.get_terrain_Perdigao(
+    args.terrain_file, wgs84_to_local, lon_center, lat_center
+    )
 
 x_terrain, y_terrain = wgs84_to_local(terrain_dict['lon'], terrain_dict['lat'])
 terrain_interpolator = LinearNDInterpolator(
@@ -524,13 +113,16 @@ terrain_interpolator = LinearNDInterpolator(
 # load the measurements
 tower_data = []
 tower_heights = []
-tower_names = get_tower_names(args.measurement_file)
+tower_names = mc_utils.get_Perdigao_tower_names(args.measurement_file)
 
 for twr in tower_names:
-    twr_heights = get_tower_heights(args.measurement_file, twr)
+    twr_heights = mc_utils.get_Perdigao_tower_heights(args.measurement_file, twr)
     tower_heights.append(twr_heights)
-    tower_data.append(get_tower_data(args.measurement_file, twr, twr_heights))
+    tower_data.append(
+        mc_utils.get_Perdigao_tower_data(args.measurement_file, twr, twr_heights)
+        )
 
+tower_positions = mc_utils.get_tower_positions()
 warning_threshold = 111.0  # m
 measurements_dict = {}
 for data, heights, twr in zip(tower_data, tower_heights, tower_names):
@@ -560,14 +152,20 @@ for data, heights, twr in zip(tower_data, tower_heights, tower_names):
 # load the lidar data if available
 filename = args.measurement_file.split('/')[-1]
 datestring = filename.split('.')[0].split('_')[-1]
-lidar_filenames = [
-    f for f in os.listdir(args.lidar_folder)
-    if os.path.isfile(os.path.join(args.lidar_folder, f))
-    ]
+lidar_filenames = []
+if not args.lidar_folder is None:
+    try:
+        lidar_filenames = [
+            f for f in os.listdir(args.lidar_folder)
+            if os.path.isfile(os.path.join(args.lidar_folder, f))
+            ]
+    except FileNotFoundError:
+        pass
+
 lidar_data = {}
 for lfn in lidar_filenames:
     if datestring in lfn:
-        l_data = get_lidar_data(os.path.join(args.lidar_folder, lfn))
+        l_data = mc_utils.get_Perdigao_lidar_data(os.path.join(args.lidar_folder, lfn))
         for key in l_data.keys():
             if isinstance(l_data[key], np.ma.MaskedArray):
                 l_data[key] = l_data[key].filled(np.nan)
@@ -672,7 +270,7 @@ if args.save:
     ds_file.create_group('lidar')
 
     for t in times:
-        ds_file['measurement'].create_group(get_time_key(t))
+        ds_file['measurement'].create_group(mc_utils.get_Perdigao_time_key(t))
 
     for i in range(24):
         t_key = 'avg_' + str(i) + ':00-' + str(i + 1) + ':00'
@@ -688,79 +286,14 @@ if args.save:
             ds_file['terrain'].create_dataset(s_key, data=terrain)
 
             # convert the prediction lines
-            ds_file['lines'].create_group(s_key)
-
-            # line TSE
-            t = np.linspace(0, 2500, 501) - 100
-            start = measurements_dict['tse01']['pos'][0, :2]
-            end = measurements_dict['tse13']['pos'][0, :2]
-            dir = (end - start)
-            dir /= np.linalg.norm(dir)
-            positions = np.expand_dims(start,
-                                       1) + np.expand_dims(t,
-                                                           0) * np.expand_dims(dir, 1)
-            z = terrain_interpolator((positions[0], positions[1]))
-
-            # minimum distance to center mast
-            idx_center = np.argmin(
-                np.linalg.norm(
-                    positions -
-                    np.expand_dims(measurements_dict['tse09']['pos'][0, :2], 1),
-                    axis=0
-                    )
+            mc_utils.add_Perdigao_measurement_lines(
+                ds_file, s_key, x_inter, y_inter, z_inter, terrain_interpolator,
+                measurements_dict
                 )
-            t -= idx_center * (t[1] - t[0]) - 100
-
-            ds_file['lines'][s_key].create_group('lineTSE_30m')
-            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset(
-                'x', data=x_inter(positions[0])
-                )
-            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset(
-                'y', data=y_inter(positions[1])
-                )
-            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset(
-                'z', data=z_inter(z + 30.0)
-                )
-            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset('terrain', data=z)
-            ds_file['lines'][s_key]['lineTSE_30m'].create_dataset('dist', data=t)
-
-            # line TNW
-            t = np.linspace(0, 2500, 501) - 200
-            start = measurements_dict['tnw01']['pos'][0, :2]
-            end = measurements_dict['tnw11']['pos'][0, :2]
-            dir = (end - start)
-            dir /= np.linalg.norm(dir)
-            positions = np.expand_dims(start,
-                                       1) + np.expand_dims(t,
-                                                           0) * np.expand_dims(dir, 1)
-
-            z = terrain_interpolator((positions[0], positions[1]))
-            # minimum distance to center mast
-            idx_center = np.argmin(
-                np.linalg.norm(
-                    positions -
-                    np.expand_dims(measurements_dict['tnw07']['pos'][0, :2], 1),
-                    axis=0
-                    )
-                )
-            t -= idx_center * (t[1] - t[0]) - 200
-
-            ds_file['lines'][s_key].create_group('lineTNW_20m')
-            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset(
-                'x', data=x_inter(positions[0])
-                )
-            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset(
-                'y', data=y_inter(positions[1])
-                )
-            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset(
-                'z', data=z_inter(z + 20.0)
-                )
-            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset('terrain', data=z)
-            ds_file['lines'][s_key]['lineTNW_20m'].create_dataset('dist', data=t)
 
             # Add the mast measurements
             for i in range(len(times)):
-                t_key = get_time_key(times[i])
+                t_key = mc_utils.get_Perdigao_time_key(times[i])
                 ds_file['measurement'][t_key].create_group(s_key)
 
                 for ms_post in measurements_dict.keys():
@@ -791,7 +324,7 @@ if args.save:
 
             # Add the lidar scans
             for i in lidar_data.keys():
-                t_key = get_time_key(times[i])
+                t_key = mc_utils.get_Perdigao_time_key(times[i])
 
                 if not t_key in ds_file['lidar'].keys():
                     ds_file['lidar'].create_group(t_key)
@@ -888,7 +421,10 @@ if args.plot:
     print(
         'Maximum average speed encountered in Dataset:', sum_vel[idx] / counter, 'm/s'
         )
-    print('Time key of maximum average velocity:', get_time_key(times[idx]))
+    print(
+        'Time key of maximum average velocity:',
+        mc_utils.get_Perdigao_time_key(times[idx])
+        )
     scale = 20
 
     s = []

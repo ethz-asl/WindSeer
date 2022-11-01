@@ -2,7 +2,20 @@ import numpy as np
 import sys
 
 
-def get_measurements(name):
+def get_Askervein_measurements(name):
+    '''
+    Get the measurements form the Askervein experiment from the specified run.
+    
+    Parameters
+    ----------
+    name : str
+        Name of the requested run
+
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the requested run
+    '''
     available_runs = [
         'TU25', 'TU30A', 'TU30B', 'TU01A', 'TU01B', 'TU01C', 'TU01D', 'TU03A', 'TU03B',
         'TU05A', 'TU05B', 'TU05C', 'TU07B'
@@ -16,6 +29,30 @@ def get_measurements(name):
 
 
 def add_sample_upw(data, mast, x, y, z, s, upw_deg, dir_deg, tke=np.nan):
+    '''
+    Add a measurement to the data dictionary
+    
+    Parameters
+    ----------
+    data : dict
+        Data dictionary that is updated with the data from the mast
+    mast : str
+        Mast name/identifier
+    x : float
+        X-position of the measurements
+    y : float
+        Y-position of the measurements
+    z : float
+        Z-position of the measurements
+    s : float
+        Measured wind magnitude in m/s
+    upw_deg : float
+        Measured vertical wind direction in degrees
+    dir_deg : float
+        Measured horizontal wind direction in degrees
+    tke : float, default : np.nan
+        Measured TKE value in m^2/s^2
+    '''
     upw = upw_deg * np.pi / 180.0
     dir = dir_deg * np.pi / 180.0
     sample = {
@@ -35,6 +72,30 @@ def add_sample_upw(data, mast, x, y, z, s, upw_deg, dir_deg, tke=np.nan):
 
 
 def add_sample_w(data, mast, x, y, z, s, w, dir_deg, tke=np.nan):
+    '''
+    Add a measurement to the data dictionary
+    
+    Parameters
+    ----------
+    data : dict
+        Data dictionary that is updated with the data from the mast
+    mast : str
+        Mast name/identifier
+    x : float
+        X-position of the measurements
+    y : float
+        Y-position of the measurements
+    z : float
+        Z-position of the measurements
+    s : float
+        Measured wind magnitude in m/s
+    w : float
+        Measured vertical wind magnitude in m/s
+    dir_deg : float
+        Measured horizontal wind direction in degrees
+    tke : float, default : np.nan
+        Measured TKE value in m^2/s^2
+    '''
     dir = dir_deg * np.pi / 180.0
     sample = {
         'x': x,
@@ -53,6 +114,24 @@ def add_sample_w(data, mast, x, y, z, s, w, dir_deg, tke=np.nan):
 
 
 def add_sample_s(data, mast, x, y, z, s):
+    '''
+    Add a measurement to the data dictionary
+    
+    Parameters
+    ----------
+    data : dict
+        Data dictionary that is updated with the data from the mast
+    mast : str
+        Mast name/identifier
+    x : float
+        X-position of the measurements
+    y : float
+        Y-position of the measurements
+    z : float
+        Z-position of the measurements
+    s : float
+        Measured wind magnitude in m/s
+    '''
     sample = {'x': x, 'y': y, 'z': z, 's': s, 'u': np.nan, 'v': np.nan, 'w': np.nan}
     if mast in data.keys():
         data[mast].append(sample)
@@ -61,6 +140,14 @@ def add_sample_s(data, mast, x, y, z, s):
 
 
 def TU25():
+    '''
+    Get the measurements from the TU25 run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU25 run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 5.51, 1.3, 208,
@@ -183,6 +270,14 @@ def TU25():
 
 
 def TU30A():
+    '''
+    Get the measurements from the TU30A run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU30A run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 8.06, 2.8, 133,
@@ -316,6 +411,14 @@ def TU30A():
 
 
 def TU30B():
+    '''
+    Get the measurements from the TU30B run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU30B run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 13.06, 2.5, 125,
@@ -453,6 +556,14 @@ def TU30B():
 
 
 def TU01A():
+    '''
+    Get the measurements from the TU01A run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU01A run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 9.44, 2.7, 174,
@@ -594,6 +705,14 @@ def TU01A():
 
 
 def TU01B():
+    '''
+    Get the measurements from the TU01B run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU01B run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 9.25, 2.8, 180,
@@ -737,6 +856,14 @@ def TU01B():
 
 
 def TU01C():
+    '''
+    Get the measurements from the TU01C run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU01C run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 7.81, 2.7, 185,
@@ -880,6 +1007,14 @@ def TU01C():
 
 
 def TU01D():
+    '''
+    Get the measurements from the TU01D run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU01D run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 7.70, 2.5, 203,
@@ -1024,6 +1159,14 @@ def TU01D():
 
 
 def TU03A():
+    '''
+    Get the measurements from the TU03A run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU03A run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 9.90, 2.0, 210,
@@ -1167,6 +1310,14 @@ def TU03A():
 
 
 def TU03B():
+    '''
+    Get the measurements from the TU03B run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU03B run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 9.11, 2.2, 211,
@@ -1327,6 +1478,14 @@ def TU03B():
 
 
 def TU05A():
+    '''
+    Get the measurements from the TU05A run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU05A run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 10.19, 1.5, 285,
@@ -1465,6 +1624,14 @@ def TU05A():
 
 
 def TU05B():
+    '''
+    Get the measurements from the TU05B run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU05B run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 8.69, 0.4, 303,
@@ -1599,6 +1766,14 @@ def TU05B():
 
 
 def TU05C():
+    '''
+    Get the measurements from the TU05C run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU05C run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 8.15, 0.0, 298,
@@ -1727,6 +1902,14 @@ def TU05C():
 
 
 def TU07B():
+    '''
+    Get the measurements from the TU07B run.
+    
+    Returns
+    -------
+    data : dict
+        Dictionary with the measurements from the TU07B run
+    '''
     data = {}
     add_sample_upw(
         data, 'RS', -99, -1062, 10, 10.27, 0.4, 256,
