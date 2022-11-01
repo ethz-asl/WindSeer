@@ -27,7 +27,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # load the NN
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-net, params = utils.load_model(args.model_dir, 'latest', None, device, True)
+net, params = utils.load_model(args.model_dir, args.model_version, None, device, True)
 
 if params.data['input_mode'] < 3:
     raise ValueError('Models with an input mode other than 5 are not supported')
