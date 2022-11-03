@@ -53,7 +53,6 @@ class ModelEDNN3D(ModelBase):
             )
         self._skipping = parser.get_safe('skipping', True, bool, verbose)
         self._align_corners = parser.get_safe('align_corners', False, bool, verbose)
-        self._use_terrain_mask = parser.get_safe('align_corners', True, bool, verbose)
         self._pooling_method = parser.get_safe(
             'pooling_method', 'striding', str, verbose
             )
