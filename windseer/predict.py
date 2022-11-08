@@ -131,7 +131,7 @@ mayavi_configs['save_animation'] = args.save_animation
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 net, params = utils.load_model(
-    args.model_dir, 'latest', args.dataset, device, eval=True
+    args.model_dir, args.model_version, args.dataset, device, eval=True
     )
 
 testset = nn_data.HDF5Dataset(
