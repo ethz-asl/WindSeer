@@ -7,7 +7,6 @@ import argparse
 import windseer.utils as utils
 import windseer.nn as nn_custom
 
-t_start = time.time()
 parser = argparse.ArgumentParser(
     description='Training a neural network for predicting wind data from terrain'
     )
