@@ -206,7 +206,7 @@ for key in prediction_errors.keys():
             if not args.relative:
                 plot = False
 
-        if not args.absolute:
+        elif not args.absolute:
             plot = False
     except:
         if not args.absolute:
