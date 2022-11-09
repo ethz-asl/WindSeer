@@ -53,7 +53,7 @@ def compute_prediction_error_sample(label, prediction, terrain, device, turbulen
         'error_ver': abs_error[2],
         'vel_tot': label[:3].norm(dim=0).clamp(min=eps),
         'vel_hor': label[:2].norm(dim=0).clamp(min=eps),
-        'vel_ver': label[2].clamp(min=eps),
+        'vel_ver': label[2].abs().clamp(min=eps),
         }
     channels = ['tot', 'hor', 'ver']
 
@@ -77,7 +77,7 @@ def compute_prediction_error_sample(label, prediction, terrain, device, turbulen
                     ).max().cpu().item()
                 error_stats[domain + ch + '_median'] = torch.masked_select(
                     properties_dict['error_' + ch], mask
-                    ).max().cpu().item()
+                    ).median().cpu().item()
 
                 rel_error = torch.masked_select(
                     properties_dict['error_' + ch], mask
