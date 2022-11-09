@@ -4,6 +4,7 @@ import windseer.utils as utils
 import sys
 import warnings
 import re
+import copy
 
 
 class CombinedLoss(Module):
@@ -168,12 +169,18 @@ class CombinedLoss(Module):
             channel_scaling = channel_scaling.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
             channel_scaling = channel_scaling.expand_as(target)
 
-            target /= channel_scaling
-            predicted['pred'] /= channel_scaling
+            predicted_scaled = copy.deepcopy(predicted)
+            predicted_scaled['pred'] /= channel_scaling
 
-        return self.compute_loss(
-            predicted, target, input, W, terrain_correction_factors
-            )
+            return self.compute_loss(
+                predicted_scaled, target / channel_scaling, input, W,
+                terrain_correction_factors
+                )
+
+        else:
+            return self.compute_loss(
+                predicted, target, input, W, terrain_correction_factors
+                )
 
     def compute_loss(
             self, predicted, target, input, W=None, terrain_correction_factors=None
