@@ -1,13 +1,13 @@
 cosmo:
-  file: 'cosmo-1_fcst_2018112300.nc'
+  file: 'windseer/test/testdata/test_cosmo.nc'
   time: 'auto'
-  terrain_file: 'cosmo-1_ana_const.nc'
-  terrain_tiff: 'terrain.tif'
+  terrain_file: 'windseer/test/testdata/test_cosmo_terrain.nc'
+  terrain_tiff: 'windseer/test/testdata/test_geotiff.tif'
   rotate: 0.0
   scale: 1.0
   prediction_prefix: ''
 
 ulog:
-  file: 'flight.ulg'
-  filtered_file: 'wind.hdf5'
+  file: 'windseer/test/testdata/test_ulog.ulg'
+  filtered_file: 'windseer/test/testdata/test_hdf5.hdf5'
   
