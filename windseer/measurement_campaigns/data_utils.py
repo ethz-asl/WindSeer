@@ -1,5 +1,6 @@
 import csv
 import datetime
+import h5py
 import numpy as np
 import os
 from osgeo import gdal
@@ -630,3 +631,42 @@ def sliding_std(in_arr, window_size):
         in_arr * in_arr, window_size * 2, mode='constant', origin=-window_size
         )
     return (np.sqrt(c2 - c1 * c1))[:-window_size * 2 + 1]
+
+
+def get_tower_measurements(filename, experiment_name, scale_index=0):
+    '''
+    Get the time key from the seconds elapsed since midnight.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the hdf5 dataset
+    experiment_name : str
+        Key of the requested experiment of the dataset
+    scale_index : int, default: 0
+        Index of the requested scale of the experiment
+
+    Returns
+    -------
+    measurements : dict
+        Dictionary with the measurements for that experiment
+    '''
+    h5_file = h5py.File(filename, 'r')
+    scale_key = list(h5_file['terrain'].keys())[scale_index]
+
+    measurements = {}
+    available_masts = h5_file['measurement'][experiment_name][scale_key].keys()
+    for mast in available_masts:
+        ds_mast = h5_file['measurement'][experiment_name][scale_key][mast]
+        measurements[mast] = {
+            'pos': ds_mast['pos'][...],
+            'u': ds_mast['u'][...],
+            'v': ds_mast['v'][...],
+            'w': ds_mast['w'][...],
+            's': ds_mast['s'][...]
+            }
+
+        if 'tke' in ds_mast.keys():
+            measurements[mast]['tke'] = ds_mast['tke'][...]
+
+    return measurements

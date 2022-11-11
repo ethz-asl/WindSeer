@@ -230,3 +230,74 @@ def add_Perdigao_measurement_lines(
     ds_file['lines'][key]['lineTNW_20m'].create_dataset('z', data=z_inter(z + 20.0))
     ds_file['lines'][key]['lineTNW_20m'].create_dataset('terrain', data=z)
     ds_file['lines'][key]['lineTNW_20m'].create_dataset('dist', data=t)
+
+
+def get_tower_distances_on_line(line):
+    '''
+    Get the towers and the respective distances along this line for the measurement campaigns.
+
+    Parameters
+    ----------
+    line : str
+        Key of the measurement line.
+
+    Returns
+    -------
+    towers : dict
+        Dictionary tower names as key and the respective distances in the data
+    '''
+    if line == 'lineB_5m':
+        line_height = 5
+        towers = {'M3': 3.2, 'M6': -46.1, 'M7': -66.9, 'M8': 92.0}
+
+    elif line == 'lineA_10m':
+        towers = {
+            'ASW85': -841,
+            'ASW60': -608,
+            'ASW50': -492,
+            'ASW35': -327,
+            'ASW20': -186,
+            'ASW10': -96,
+            'HT': 0,
+            'ANE10': 100,
+            'ANE20': 198,
+            'ANE40': 393,
+            }
+
+    elif line == 'lineTSE_30m':
+        towers = {
+            'TSE01': -1495,
+            'TSE02': -1140,
+            'TSE04': -960,
+            'TSE06': -630,
+            'TSE07*': -480,
+            'TSE08*': -265,
+            'TSE09': 0,
+            'TSE10': 145,
+            'TSE11': 220,
+            'TSE12*': 355,
+            'TSE13': 465,
+            }
+
+    elif line == 'lineTNW_20m':
+        towers = {
+            'TNW01': -1220,
+            'TNW02': -990,
+            'TNW03*': -830,
+            'TNW05': -495,
+            'TNW06': -200,
+            'TNW07': 0,
+            'TNW08': 205,
+            'TNW09*': 360,
+            'TNW10': 455,
+            'TNW11': 570,
+            'TNW12': 625,
+            'TNW13': 695,
+            'TNW14': 785,
+            'TNW15': 840,
+            }
+
+    else:
+        raise ValueError('Unknown measurement line')
+
+    return towers
