@@ -205,7 +205,7 @@ def compute_prediction_error(
                 scale = data[3].item()
 
             prediction, inputs, labels = get_prediction(
-                data[0], data[1], scale, device, net, params
+                data[0], data[1], scale, device, net, params, False
                 )
 
             # compute the overall loss
@@ -377,6 +377,8 @@ def predict_and_visualize(
         if params.data['autoscale']:
             scale = data[3].item()
 
+        print(dataset.get_name(index))
+
         prediction, inputs, labels = get_prediction(
             input, label, scale, device, net, params, verbose=True
             )
@@ -465,18 +467,6 @@ def predict_and_visualize(
                 )
 
             plotting.mlab_plot_streamlines(
-                pred,
-                terrain,
-                terrain_mode='blocks',
-                terrain_uniform_color=True,
-                blocking=False,
-                view_settings=mayavi_configs['view_settings'],
-                animate=mayavi_configs['animate'] == 4,
-                save_animation=mayavi_configs['save_animation'],
-                title='Predicted Flow'
-                )
-
-            plotting.mlab_plot_streamlines(
                 label,
                 terrain,
                 terrain_mode='blocks',
@@ -488,6 +478,17 @@ def predict_and_visualize(
                 title='Label Flow'
                 )
 
+            plotting.mlab_plot_streamlines(
+                pred,
+                terrain,
+                terrain_mode='blocks',
+                terrain_uniform_color=True,
+                blocking=False,
+                view_settings=mayavi_configs['view_settings'],
+                animate=mayavi_configs['animate'] == 4,
+                save_animation=mayavi_configs['save_animation'],
+                title='Predicted Flow'
+                )
             ui.append(
                 plotting.mlab_plot_error(
                     label - pred,

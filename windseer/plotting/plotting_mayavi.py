@@ -882,6 +882,9 @@ def mlab_plot_streamlines(
                 f.update_streamlines = True
 
             visualize_flow()
+
+            mlab_set_view(view_settings, fig)
+
             if animate:
                 mlab_animate_rotate(save_animation, figure=fig)
 
@@ -912,13 +915,15 @@ def mlab_plot_streamlines(
                 integration_direction='both',
                 figure=fig
                 )
-            f.stream_tracer.maximum_propagation = 5000
+            f.stream_tracer.maximum_propagation = 50000
             f.seed.widget.point1 = seed_points[direction] + [1]
             f.seed.widget.point2 = seed_points[direction + 1] + [1]
             f.update_streamlines = True
 
+            mlab_set_view(view_settings, fig)
+
             @mlab.animate(delay=50, ui=True)
-            def anim():
+            def anim_streamlines():
                 iter = 0
                 while 1:
                     for h in range(2, terrain_shape[0]):
@@ -944,7 +949,8 @@ def mlab_plot_streamlines(
                             iter += 1
                         yield
 
-            anim()
+            anim_streamlines()
+
             mlab.show()
 
 
