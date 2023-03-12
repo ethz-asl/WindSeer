@@ -118,6 +118,23 @@ if config.data['input_mode'] < 3:
 
 config.data['input_channels'] += ['mask']
 
+if args.save:
+    if args.baseline:
+        if args.gpr:
+            model_name = 'GPR'
+        else:
+            model_name = 'AVG'
+    else:
+        if args.model_dir.split('/')[-1] == '':
+            model_name = args.model_dir.split('/')[-2]
+        else:
+            model_name = args.model_dir.split('/')[-1]
+
+    h5_file = h5py.File(args.dataset, 'r')
+    scale_keys = list(h5_file['terrain'].keys())
+    scale_key = scale_keys[args.index]
+    h5_file.close()
+
 if args.benchmark:
     results = {}
 
@@ -348,6 +365,24 @@ if args.benchmark:
         plt.legend()
         plt.title('TKE')
 
+    if args.save:
+        savename = args.dataset.split('/')[-1].split('.')[
+            0] + '_' + args.experiment + '_' + scale_key + '_' + model_name
+        out_dict = {}
+        channels = ['u_', 'v_', 'w_']
+        if turbulence_predicted:
+            channels += ['tke_']
+        for ch in channels:
+            for property in ['meas', 'pred']:
+                key = ch + property
+                if not key in out_dict:
+                    out_dict[key] = []
+
+                for mast in results.keys():
+                    out_dict[key] += results[mast][key].tolist()
+        np.save(savename, out_dict)
+        exit()
+
     plt.show()
 
 else:
@@ -361,19 +396,8 @@ else:
         raise ValueError('No prediction because input mast not in prediction domain')
 
     if args.save:
-        if args.baseline:
-            if args.gpr:
-                model_name = 'GPR'
-            else:
-                model_name = 'AVG'
-        else:
-            if args.model_dir.split('/')[-1] == '':
-                model_name = args.model_dir.split('/')[-2]
-            else:
-                model_name = args.model_dir.split('/')[-1]
-
         savename = args.dataset.split('/')[-1].split('.')[
-            0] + '_' + args.experiment + '_' + args.input_mast[0] + '_' + model_name
+            0] + '_' + args.experiment + '_' + args.input_mast[0] + '_' + scale_key + '_' + model_name
         savedata = [ret['results']]
         if 'profiles' in ret.keys():
             savedata.append(ret['profiles'])
