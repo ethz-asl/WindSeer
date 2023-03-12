@@ -3,11 +3,16 @@ import datetime
 import h5py
 import numpy as np
 import os
-from osgeo import gdal
 import pyproj
 import re
 from scipy.io import loadmat
 import zipfile
+
+try:
+    from osgeo import gdal
+except ImportError:
+    print("'pygdal' is not installed. Use the command below to install it:")
+    print("     pip3 install pygdal")
 
 try:
     import netCDF4 as nc
