@@ -414,108 +414,117 @@ def plot_measurement_campaigns_prediction_lines(ret, measurements_masts):
     fig_size = (16.0, 5.6)
 
     for line_key in ret['profiles'].keys():
-        fig, ah = plt.subplots(4, 1, squeeze=False, figsize=fig_size)
-        ah[0][0].set_title(line_key)
-        if ret['turb_predicted']:
-            channel_keys = ['s_pred', 'w_pred', 'tke_pred']
-            ah[0][0].set_ylabel(r'$S$ $[m/s]$')
-            ah[1][0].set_ylabel(r'$W$ $[m/s]$')
-            ah[2][0].set_ylabel(r'$TKE$ $[m^2/s^2]$')
-        else:
-            channel_keys = ['u_pred', 'v_pred', 'w_pred']
-            ah[0][0].set_ylabel(r'$U$ $[m/s]$')
-            ah[1][0].set_ylabel(r'$V$ $[m/s]$')
-            ah[2][0].set_ylabel(r'$W$ $[m/s]$')
+        supported_lines = ['lineB_5m', 'lineA_10m', 'lineTSE_30m', 'lineTNW_20m']
 
-        towers = get_tower_distances_on_line(line_key)
+        if line_key in supported_lines:
+            fig, ah = plt.subplots(4, 1, squeeze=False, figsize=fig_size)
+            ah[0][0].set_title(line_key)
+            if ret['turb_predicted']:
+                channel_keys = ['s_pred', 'w_pred', 'tke_pred']
+                ah[0][0].set_ylabel(r'$S$ $[m/s]$')
+                ah[1][0].set_ylabel(r'$W$ $[m/s]$')
+                ah[2][0].set_ylabel(r'$TKE$ $[m^2/s^2]$')
+            else:
+                channel_keys = ['u_pred', 'v_pred', 'w_pred']
+                ah[0][0].set_ylabel(r'$U$ $[m/s]$')
+                ah[1][0].set_ylabel(r'$V$ $[m/s]$')
+                ah[2][0].set_ylabel(r'$W$ $[m/s]$')
 
-        if line_key == 'lineB_5m':
-            line_height = 5
-            tower_height = 23
-            terrain_limits = [0, 30]
-            x_lims = [-100, 150]
+            towers = get_tower_distances_on_line(line_key)
 
-        elif line_key == 'lineA_10m':
-            line_height = 10
-            tower_height = 170
-            terrain_limits = [0, 250]
-            x_lims = [-900, 450]
+            if line_key == 'lineB_5m':
+                line_height = 5
+                tower_height = 23
+                terrain_limits = [0, 30]
+                x_lims = [-100, 150]
 
-        elif line_key == 'lineTSE_30m':
-            line_height = 30
-            tower_height = 330
-            terrain_limits = [0, 530]
-            x_lims = [-1680, 810]
+            elif line_key == 'lineA_10m':
+                line_height = 10
+                tower_height = 170
+                terrain_limits = [0, 250]
+                x_lims = [-900, 450]
 
-        elif line_key == 'lineTNW_20m':
-            x_lims = [-1450, 1100]
-            tower_height = 150
-            terrain_limits = [0, 530]
-            line_height = 20
+            elif line_key == 'lineTSE_30m':
+                line_height = 30
+                tower_height = 330
+                terrain_limits = [0, 530]
+                x_lims = [-1680, 810]
 
-        # prediction
-        for i, ch in enumerate(channel_keys):
-            ah[i][0].plot(
-                ret['profiles'][line_key]['dist'], ret['profiles'][line_key][ch], lw=1
-                )
+            elif line_key == 'lineTNW_20m':
+                x_lims = [-1450, 1100]
+                tower_height = 150
+                terrain_limits = [0, 530]
+                line_height = 20
 
-        ah[0][0].axes.xaxis.set_visible(False)
-        ah[1][0].axes.xaxis.set_visible(False)
-        ah[2][0].axes.xaxis.set_visible(False)
-
-        # terrain and measurements
-        for twr in towers.keys():
-            index_dist = np.argmin(
-                np.abs(ret['profiles'][line_key]['dist'] - towers[twr])
-                )
-            line_height = ret['profiles'][line_key]['z'][index_dist]
-            terrain_height = ret['profiles'][line_key]['terrain'][index_dist]
-            tower_data = measurements_masts[twr.lower().replace('*', '')]
-            measurement_heights = tower_data['pos'][:, 2]
-            idx_measurement = np.argmin(np.abs(line_height - measurement_heights))
-
+            # prediction
             for i, ch in enumerate(channel_keys):
-                ah[i][0].errorbar(
-                    towers[twr],
-                    tower_data[ch.split('_')[0]][idx_measurement],
-                    fmt='D',
-                    color='black',
-                    ecolor='black',
-                    barsabove=False,
-                    markersize=2.5,
-                    elinewidth=2,
-                    capsize=3,
-                    zorder=50
+                ah[i][0].plot(
+                    ret['profiles'][line_key]['dist'], ret['profiles'][line_key][ch], lw=1
                     )
 
-            ah[3][0].annotate(
-                twr,
-                xy=(towers[twr], 0),
-                xytext=(towers[twr], terrain_height + tower_height),
-                horizontalalignment="center",
-                arrowprops=dict(arrowstyle="-"),
-                verticalalignment="top",
-                zorder=0
-                )
+            ah[0][0].axes.xaxis.set_visible(False)
+            ah[1][0].axes.xaxis.set_visible(False)
+            ah[2][0].axes.xaxis.set_visible(False)
 
-        ah[3][0].plot(
-            ret['profiles'][line_key]['dist'],
-            ret['profiles'][line_key]['terrain'] + line_height,
-            color='black',
-            lw=1.0
-            )
-        ah[3][0].fill_between(
-            ret['profiles'][line_key]['dist'],
-            ret['profiles'][line_key]['terrain'],
-            color='lightgrey',
-            linewidth=0.0
-            )
-        ah[3][0].plot(
-            ret['profiles'][line_key]['dist'],
-            ret['profiles'][line_key]['terrain'],
-            color='dimgrey',
-            lw=0.3
-            )
-        ah[3][0].set_ylim(terrain_limits)
-        ah[3][0].set_ylabel(r'Terrain $[m]$')
-        ah[3][0].set_xlabel(r'Distance $[m]$')
+            # terrain and measurements
+            for twr in towers.keys():
+                index_dist = np.argmin(
+                    np.abs(ret['profiles'][line_key]['dist'] - towers[twr])
+                    )
+                line_height = ret['profiles'][line_key]['z'][index_dist]
+                terrain_height = ret['profiles'][line_key]['terrain'][index_dist]
+                try:
+                    tower_data = measurements_masts[twr.replace('*', '')]
+                except KeyError:
+                    tower_data = measurements_masts[twr.lower().replace('*', '')]
+                measurement_heights = tower_data['pos'][:, 2]
+                idx_measurement = np.argmin(np.abs(line_height - measurement_heights))
+
+                for i, ch in enumerate(channel_keys):
+                    ah[i][0].errorbar(
+                        towers[twr],
+                        tower_data[ch.split('_')[0]][idx_measurement],
+                        fmt='D',
+                        color='black',
+                        ecolor='black',
+                        barsabove=False,
+                        markersize=2.5,
+                        elinewidth=2,
+                        capsize=3,
+                        zorder=50
+                        )
+
+                ah[3][0].annotate(
+                    twr,
+                    xy=(towers[twr], 0),
+                    xytext=(towers[twr], terrain_height + tower_height),
+                    horizontalalignment="center",
+                    arrowprops=dict(arrowstyle="-"),
+                    verticalalignment="top",
+                    zorder=0
+                    )
+
+            ah[3][0].plot(
+                ret['profiles'][line_key]['dist'],
+                ret['profiles'][line_key]['terrain'] + line_height,
+                color='black',
+                lw=1.0
+                )
+            ah[3][0].fill_between(
+                ret['profiles'][line_key]['dist'],
+                ret['profiles'][line_key]['terrain'],
+                color='lightgrey',
+                linewidth=0.0
+                )
+            ah[3][0].plot(
+                ret['profiles'][line_key]['dist'],
+                ret['profiles'][line_key]['terrain'],
+                color='dimgrey',
+                lw=0.3
+                )
+            ah[3][0].set_ylim(terrain_limits)
+            ah[3][0].set_ylabel(r'Terrain $[m]$')
+            ah[3][0].set_xlabel(r'Distance $[m]$')
+
+        else:
+            print('Plotting for ' + line_key + ' not supported yet.')

@@ -298,6 +298,6 @@ def get_tower_distances_on_line(line):
             }
 
     else:
-        raise ValueError('Unknown measurement line')
+        raise ValueError('Unknown measurement line: ' + line)
 
     return towers
