@@ -1601,7 +1601,7 @@ def TU05A():
         data, 'CP', 1289, 1451, 16.0, 13.31, -0.03, 279,
         0.5 * (1.318**2 + 1.166**2 + 0.361**2)
         )
-    add_sample_w(data, 'CP', 1287, 1415, 10, 102.82, np.nan, 285)
+    add_sample_w(data, 'CP', 1287, 1415, 10, 12.82, np.nan, 285)
 
     add_sample_w(data, 'AASW10', 1214, 1354, 10, 12.63, np.nan, 284)
     add_sample_w(
