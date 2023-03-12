@@ -63,7 +63,8 @@ def get_prediction(
                     )
 
         if verbose:
-            torch.cuda.synchronize()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
             start_time = time.time()
 
         if len(input.shape) == 4:
@@ -77,7 +78,8 @@ def get_prediction(
         prediction = net(input)
 
         if verbose:
-            torch.cuda.synchronize()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
             print('INFO: Inference time: ', (time.time() - start_time), 'seconds')
 
         prediction['pred'] = utils.rescale_tensor(
@@ -333,7 +335,8 @@ def predict_and_visualize(
         plottools=False,
         mayavi=False,
         blocking=False,
-        mayavi_configs={}
+        mayavi_configs={},
+        density_plot=False
     ):
     '''
     Predict the flow with the network and visualize the results.
@@ -503,6 +506,9 @@ def predict_and_visualize(
                     save_animation=mayavi_configs['save_animation']
                     )
                 )
+
+        if density_plot:
+            plotting.plot_prediction_density_scatter(pred, label, terrain, channels_to_predict, use_mpl=False, resolution=15)
 
         if channels_to_plot and plottools:
             if plot_divergence:

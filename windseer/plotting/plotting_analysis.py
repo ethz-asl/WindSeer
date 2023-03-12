@@ -2,8 +2,20 @@ import numpy as np
 from mpl_toolkits.mplot3d import axes3d
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
+from matplotlib.colors import Normalize
+from scipy.interpolate import interpn
+import scipy
 import torch
+from copy import copy
+
+try:
+    import mpl_scatter_density
+    mpl_imported = True
+except ImportError:
+    mpl_imported = False
+    pass
 
 plt.rc('font', **{'family': 'serif', 'sans-serif': ['Computer Modern Roman']})
 plt.rc('text', usetex=True)
@@ -382,3 +394,114 @@ def plot_wind_estimates(time, wind_array, wind_names=None, polar=False):
         a2[2].plot(time, wind[2])
     a2[2].set_ylabel('$V_D$')
     return f2, a2
+
+def plot_mpl_scatter_density(fig, x, y, dpi=20):
+    if mpl_imported:
+        jet_white = LinearSegmentedColormap.from_list('white_viridis', [
+                (0, '#ffffff'),
+                (1e-20, '#000080'),
+                (0.1, '#0000f1'),
+                (0.2, '#0000f1'),
+                (0.3, '#004cff'),
+                (0.4, '#29ffce'),
+                (0.5, '#7dff7a'),
+                (0.6, '#ceff29'),
+                (0.7, '#ffc400'),
+                (0.8, '#ff6800'),
+                (0.9, '#f10800'),
+                (1.0, '#800000'),
+            ], N=256)
+        ax = fig.add_subplot(1, 1, 1, projection='scatter_density')
+        density = ax.scatter_density(x, y, cmap=jet_white, dpi=dpi)
+        colorbar = fig.colorbar(density, extend='min', label='Number of points per pixel')
+    else:
+        print('Could not import mpl_scatter_density, install that package to use scatter plots')
+
+def density_scatter( x , y, ax = None, sort = True, bins = 20, **kwargs)   :
+    """
+    Scatter plot colored by 2d histogram
+
+    According to:
+    https://stackoverflow.com/questions/20105364/how-can-i-make-a-scatter-plot-colored-by-density-in-matplotlib/53865762#53865762
+    """
+    if ax is None:
+        fig , ax = plt.subplots()
+    else:
+        fig = ax.figure
+    data , x_e, y_e = np.histogram2d( x, y, bins = bins, density = True )
+    z = interpn( ( 0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1]) ) , data , np.vstack([x,y]).T , method = "splinef2d", bounds_error = False)
+
+    #To be sure to plot all data
+    z[np.where(np.isnan(z))] = 0.0
+
+    # Sort the points by density, so that the densest points are plotted last
+    if sort :
+        idx = z.argsort()
+        x, y, z = np.array(x)[idx], np.array(y)[idx], np.array(z)[idx]
+
+    ax.scatter(x, y, c=z, **kwargs )
+
+    norm = Normalize(vmin = np.min(z), vmax = np.max(z))
+    cbar = fig.colorbar(cm.ScalarMappable(norm = norm), ax=ax)
+    cbar.ax.set_ylabel('Density')
+
+    return ax
+
+def plot_prediction_density_scatter(prediction, label, terrain, prediction_channels, use_mpl=False, resolution=20):
+    non_terrain_cells = terrain.nonzero(as_tuple=True)
+    for pred, lbl, channel in zip(prediction, label, prediction_channels):
+        pred_np = pred[non_terrain_cells].cpu().numpy()
+        lbl_np = lbl[non_terrain_cells].cpu().numpy()
+        max_val = max(max(pred_np), max(lbl_np))
+        min_val = min(min(pred_np), min(lbl_np))
+
+        fig, ax = plt.subplots(figsize=(8,7))
+        ax.set_aspect('equal', 'box')
+        if use_mpl:
+            plot_mpl_scatter_density(fig, lbl_np, pred_np, resolution)
+        else:
+            density_scatter(lbl_np, pred_np, ax, bins=resolution, s=1)
+        plt.plot([min_val, max_val], [min_val, max_val])
+        plt.xlabel('measurement ' + channel)
+        plt.ylabel('prediction ' + channel)
+
+        # compute metrics
+        bias = np.mean(pred_np - lbl_np)
+        rmse = np.sqrt(np.mean((pred_np - lbl_np)**2))
+        rho, p = scipy.stats.pearsonr(lbl_np, pred_np)
+        print(channel)
+        print('\tBIAS:', bias)
+        print('\tRMSE:', rmse)
+        print('\tR:', rho, ' (p:', p, ')')
+
+    if (('ux' in prediction_channels) and
+        ('uy' in prediction_channels) and
+        ('uz' in prediction_channels)):
+        ux_pred = prediction[prediction_channels.index('ux')][non_terrain_cells]
+        uy_pred = prediction[prediction_channels.index('uy')][non_terrain_cells]
+        uz_pred = prediction[prediction_channels.index('uz')][non_terrain_cells]
+        ux_lbl = label[prediction_channels.index('ux')][non_terrain_cells]
+        uy_lbl = label[prediction_channels.index('uy')][non_terrain_cells]
+        uz_lbl = label[prediction_channels.index('uz')][non_terrain_cells]
+
+        s_pred = torch.sqrt(ux_pred**2 + uy_pred**2 + uz_pred**2).cpu().numpy()
+        s_lbl = torch.sqrt(ux_lbl**2 + uy_lbl**2 + uz_lbl**2).cpu().numpy()
+
+        fig, ax = plt.subplots(figsize=(8,7))
+        ax.set_aspect('equal', 'box')
+        if use_mpl:
+            plot_mpl_scatter_density(fig, s_lbl, s_pred, resolution)
+        else:
+            density_scatter(s_lbl, s_pred, ax, s=1)
+        plt.plot([min_val, max_val], [min_val, max_val])
+        plt.xlabel('measurement s')
+        plt.ylabel('prediction s')
+
+        # compute metrics
+        bias = np.mean(s_pred - s_lbl)
+        rmse = np.sqrt(np.mean((s_pred - s_lbl)**2))
+        rho, p = scipy.stats.pearsonr(s_lbl, s_pred)
+        print('s')
+        print('\tBIAS:', bias)
+        print('\tRMSE:', rmse)
+        print('\tR:', rho, ' (p:', p, ')')

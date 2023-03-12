@@ -100,6 +100,9 @@ parser.add_argument(
 parser.add_argument(
     '--save_animation', action='store_true', help='Save snapshots of the animation'
     )
+parser.add_argument(
+    '--density', action='store_true', help='Show density plot'
+    )
 args = parser.parse_args()
 
 if args.seed > 0:
@@ -219,5 +222,6 @@ nn.predict_and_visualize(
     plottools=args.plottools,
     mayavi=args.mayavi,
     blocking=True,
-    mayavi_configs=mayavi_configs
+    mayavi_configs=mayavi_configs,
+    density_plot=args.density
     )
