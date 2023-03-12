@@ -5,7 +5,7 @@ import h5py
 from scipy.stats import pearsonr
 import torch
 
-import windseer.measurement_campaigns as mc_utils
+from windseer.measurement_campaigns.predict import predict_case, masts_to_string
 import windseer.plotting as plotting
 import windseer.utils as utils
 
@@ -147,7 +147,7 @@ if args.benchmark:
     h5_file.close()
 
     for mast in mast_keys:
-        ret = mc_utils.predict_case(
+        ret = predict_case(
             args.dataset,
             net,
             device,
@@ -386,7 +386,7 @@ if args.benchmark:
     plt.show()
 
 else:
-    ret = mc_utils.predict_case(
+    ret = predict_case(
         args.dataset, net, device, args.index, args.input_mast, args.experiment, config,
         args.baseline, args.profile, args.reference_mast, args.lidar, args.gpr,
         args.extrapolate
@@ -409,7 +409,7 @@ else:
 
     # Display results
     print('---------------------------------------------------')
-    print('Prediction using mast: ' + mc_utils.masts_to_string(args.input_mast))
+    print('Prediction using mast: ' + masts_to_string(args.input_mast))
     print(
         'Error U: ' +
         str(np.nanmean(np.abs(ret['results']['u_meas'] - ret['results']['u_pred']))),
@@ -477,7 +477,8 @@ else:
     print('---------------------------------------------------')
 
     if args.profile:
-        measurements_masts = mc_utils.get_tower_measurements(
+        from windseer.measurement_campaigns import get_tower_measurements
+        measurements_masts = get_tower_measurements(
             args.dataset, args.experiment, args.index
             )
         plotting.plot_measurement_campaigns_prediction_lines(ret, measurements_masts)
