@@ -4,16 +4,16 @@ This repository contains the tools to predict the wind using a neural network.
 
 ## Structure
 ### Benchmark Planner
-This folder contains the planning benchmark tools used to compare the planning performance using different wind predictions.
+The planning benchmark tools used to compare the planning performance using different wind predictions.
 
 ### Data Generation
-This folder contains the pipeline to generate the training data to learn the wind prediction
+The pipeline to generate the training data to learn the wind prediction.
 
-### Test
-This folder contains some test functions for the python scripts.
+### Libs
+Submodules with alternative optimizers.
 
-### Wind Prediction
-This folder contains the tools to train and evaluate the networks for the wind prediction.
+### WindSeer
+The tools to train and evaluate the networks for the wind prediction.
 
 ## Installation
 This guide explains how to set up the environment in Ubuntu to make the scripts in the repository run.
@@ -25,21 +25,19 @@ This guide explains how to set up the environment in Ubuntu to make the scripts 
    Earlier Pytorch Version have some Cudnn issues with Cuda 11.1.
 
 3. Install the following required python packages:
-   `pip3 install tensorboardX lz4 numpy tqdm matplotlib scipy pandas h5py interpolation termcolor pyyaml scikit-learn`
-   
-4. Install python tkinter
-   `sudo apt-get install python3-tk`
+   `pip3 install scipy sklearn pyproj h5py matplotlib GDAL netCDF4 tqdm pandas tensorboard pyulog interpolation mayavi mpl-scatter-density PyQt5 yapf`
 
-5. Clone the repo and update the submodules with:
+4. Clone the repo and update the submodules with:
    `git clone --recurse-submodules https://github.com/ethz-asl/intel_wind.git`
 
-5. Install the `nn_wind_prediction` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
-   `pip3 install -e wind_prediction/`
+5. Install the `windseer` package in developer mode. To do so change into the `intel_wind` directory and execute the following command:
+   `pip3 install -e .`
 
-6. Install RAdam and Ranger if you want to use the Ranger optimizer. To do so change into respective folders and install the packages using:
+6. Install the LV03 projection to pyproj:
+   `python3 windseer/proj_definitions/install_ch_defs.py`
+
+7. Install RAdam and Ranger if you want to use the Ranger optimizer. To do so change into respective folders and install the packages using:
    `pip3 install . --user --no-deps`
-
-TODO: add installation for the planning benchmark locally and on the cluster
 
 ### llmvlite build errors
 If you have trouble installing `llvmlite` on Ubuntu 18.04 (a dependency of `interpolate`), it may be due to a version mismatch. Try this:
@@ -47,30 +45,7 @@ If you have trouble installing `llvmlite` on Ubuntu 18.04 (a dependency of `inte
    sudo apt-get install llvm-10-dev
    export LLVM_CONFIG='/usr/bin/llvm-config-10'
    pip3 install interpolation
-   ```   
-
-## Working with Leonhard
-
-On the leonhard cluster, you need to perform a few setup steps
-
-1. Load python 3.7.4 and h5py python package, you can load all required modules by executing the `cluster_setup.sh` script:
-   `module load python/3.7.4 hdf5 cuda/11.1.1 cudnn/8.1.0.77`
-   
-2. Install required packages:
-   `python -m pip install --user tqdm interpolation`
-   
-3. Setup to use PyTorch 1.9.0:
-   ~~~
-   bsub -Is -W 4:00 -R "rusage[mem=4096, ngpus_excl_p=1]" bash
-   module load magma/2.2.0 libffi/3.2.1 python/3.7.4 eth_proxy cuda/11.1.1 cudnn/8.1.0.77
-   pip3 install pip3 install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/cu111/torch_stable.html --user
-   python -c 'import torch; print(torch.__version__); print("cuda avail: {0}".format(torch.cuda.is_available()))'
-   ~~~
-   (Packages will be installed in `$HOME/.local/lib64/python3.7/site-packages`)
-
-If you get a runtime error when importing interpolation it can be that the numba version is too new.
-Either downgrade the numba version to 0.43 or change`from numba import jitclass` to `from numba.experimental import jitclass` in
-`/cluster/home/USERNAME/.local/lib/python3.7/site-packages/interpolation/splines/option_types.py`
+   ```
 
 ## Guidelines
 ### Branches
