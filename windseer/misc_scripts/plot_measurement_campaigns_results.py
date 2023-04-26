@@ -21,7 +21,7 @@ parser.add_argument(
     '-fig',
     dest='fig_size',
     nargs=2,
-    default=(5.0,4.0),
+    default=(8.0,7.0),
     type=float,
     help='Set the figure size in inches'
     )
@@ -60,8 +60,12 @@ all_data['S_pred'] = np.sqrt(np.array(all_data['u_pred'])**2 + np.array(all_data
 all_data['S_meas'] = np.sqrt(np.array(all_data['u_meas'])**2 + np.array(all_data['v_meas'])**2 + np.array(all_data['w_meas'])**2).tolist()
 
 # generate the plots
-channels = ['u', 'v', 'w', 'tke', 'Shor', 'S']
-labels = ['u [m/s]', 'v [m/s]', 'w [m/s]', 'TKE [m2/s2]', 'S horizontal [m/s]', 'S [m/s]']
+channels = ['u', 'v', 'w', 'Shor', 'S']
+labels = ['u [m/s]', 'v [m/s]', 'w [m/s]', 'S horizontal [m/s]', 'S [m/s]']
+
+if 'tke_meas' in all_data.keys():
+    channels += ['tke']
+    labels += ['TKE [m2/s2]']
 
 for ch, lbl in zip(channels, labels):
     mask = np.isfinite(all_data[ch + '_meas'])
@@ -74,7 +78,7 @@ for ch, lbl in zip(channels, labels):
     if args.mpl_scatter_density:
         plot_mpl_scatter_density(fig, data_meas, data_pred, args.dpi)
     else:
-        density_scatter(data_meas, data_pred, ax)
+        density_scatter(data_meas, data_pred, ax, bins=75, s=0.1)
     plt.plot([min_val, max_val], [min_val, max_val])
     plt.xlabel('measurement ' + lbl)
     plt.ylabel('prediction ' + lbl)
