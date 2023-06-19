@@ -169,8 +169,10 @@ class CombinedLoss(Module):
             channel_scaling = channel_scaling.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
             channel_scaling = channel_scaling.expand_as(target)
 
-            predicted_scaled = copy.deepcopy(predicted)
-            predicted_scaled['pred'] /= channel_scaling
+            predicted_scaled = {'pred': predicted['pred'] / channel_scaling}
+            for key in predicted.keys():
+                if not key is 'pred':
+                    predicted_scaled[key] = predicted[key]
 
             return self.compute_loss(
                 predicted_scaled, target / channel_scaling, input, W,
