@@ -1,0 +1,20 @@
+for each stl file:
+    use python script to process stl, create a dictionary for meshing
+
+    if we want to slice:
+        for each slice:
+            create slice dictionary
+            blockMesh
+            snappy
+            extrudeMesh
+            copy polyMesh
+
+            create resampled grid
+            
+            for each wind:
+                run wind case
+
+    if we want 3D:
+        blockMesh
+        snappy
+        

@@ -1,0 +1,108 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5                                     |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+convertToMeters 1.00;
+#include "terrainDict"
+
+vertices
+(
+    ($TERRAIN_DICT.MINX $TERRAIN_DICT.MINY $TERRAIN_DICT.MINZ)
+    ($TERRAIN_DICT.MAXX $TERRAIN_DICT.MINY $TERRAIN_DICT.MINZ)
+    ($TERRAIN_DICT.MAXX $TERRAIN_DICT.MAXY $TERRAIN_DICT.MINZ)
+    ($TERRAIN_DICT.MINX $TERRAIN_DICT.MAXY $TERRAIN_DICT.MINZ)
+    ($TERRAIN_DICT.MINX $TERRAIN_DICT.MINY $TERRAIN_DICT.MAXZ)
+    ($TERRAIN_DICT.MAXX $TERRAIN_DICT.MINY $TERRAIN_DICT.MAXZ)
+    ($TERRAIN_DICT.MAXX $TERRAIN_DICT.MAXY $TERRAIN_DICT.MAXZ)
+    ($TERRAIN_DICT.MINX $TERRAIN_DICT.MAXY $TERRAIN_DICT.MAXZ)
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7)
+    (
+        $TERRAIN_DICT.SUBGRADE.X.N
+        $TERRAIN_DICT.SUBGRADE.Y.N
+        $TERRAIN_DICT.SUBGRADE.Z.N
+    )
+    simpleGrading
+    (
+        $TERRAIN_DICT.SUBGRADE.X.S
+        $TERRAIN_DICT.SUBGRADE.Y.S
+        $TERRAIN_DICT.SUBGRADE.Z.S
+    )
+);
+
+edges
+(
+);
+
+boundary
+(
+    north_face
+    {
+        type patch;
+        faces
+        (
+            (3 7 6 2)
+        );
+    }
+    west_face
+    {
+        type patch;
+        faces
+        (
+            (0 4 7 3)
+        );
+    }
+    east_face
+    {
+        type patch;
+        faces
+        (
+            (2 6 5 1)
+        );
+    }
+    south_face
+    {
+        type patch;
+        faces
+        (
+            (1 5 4 0)
+        );
+    }
+    minZ
+    {
+        type wall;
+        faces
+        (
+            (0 3 2 1)
+        );
+    }
+    maxZ
+    {
+        type patch;
+        faces
+        (
+            (4 5 6 7)
+        );
+    }     
+);
+
+mergePatchPairs
+(
+);
+
+// ************************************************************************* //

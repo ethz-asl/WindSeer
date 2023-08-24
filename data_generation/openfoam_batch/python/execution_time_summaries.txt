@@ -1,0 +1,68 @@
+Stats for /media/intel_data2/3d/openfoam_cases/batch02_F
+Mesh times:
+    Total meshes: 118
+    Total time 122.88 hrs
+    Average time 62.48 min
+Converged:
+    Terrains for which at least one solution converged: 76
+    Total time for 990 runs: 660.25 hours
+    Full average time: 40.01 mins
+    W1 average times: 302.09 mins
+    W2+ average times: 18.22 mins
+Unconverged:
+    Terrains for which at least one solution did not converge: 53
+    Total time for 77 runs: 358.74 hours
+    Full average time: 279.54 mins
+
+
+Stats for /media/intel_data/3d/openfoam_cases/batch03_F
+Mesh times:
+    Total meshes: 123
+    Total time 103.68 hrs
+    Average time 50.57 min
+Converged:
+    Terrains for which at least one solution converged: 65
+    Total time for 892 runs: 728.50 hours
+    Full average time: 49.00 mins
+    W1 average times: 220.45 mins
+    W2+ average times: 35.53 mins
+Unconverged:
+    Terrains for which at least one solution did not converge: 72
+    Total time for 103 runs: 840.51 hours
+    Full average time: 489.62 mins
+
+
+Stats for /media/intel_data/3d/openfoam_cases/batch04_F
+Mesh times:
+    Total meshes: 216
+    Total time 228.18 hrs
+    Average time 63.38 min
+Converged:
+    Terrains for which at least one solution converged: 175
+    Total time for 2311 runs: 1803.18 hours
+    Full average time: 46.84 mins
+    W1 average times: 359.47 mins
+    W2+ average times: 21.21 mins
+Unconverged:
+    Terrains for which at least one solution did not converge: 53
+    Total time for 73 runs: 416.22 hours
+    Full average time: 361.93 mins
+
+
+Stats for /media/intel_data/3d/openfoam_cases/batch05_N/
+Mesh times:
+    Total meshes: 251
+    Total time 326.97 hrs
+    Average time 78.16 min
+Converged:
+    Terrains for which at least one solution converged: 191
+    Total time for 2652 runs: 2104.75 hours
+    Full average time: 47.62 mins
+    W1 average times: 340.67 mins
+    W2+ average times: 24.88 mins
+Unconverged:
+    Terrains for which at least one solution did not converge: 130
+    Total time for 263 runs: 1474.40 hours
+    Full average time: 336.37 mins
+
+

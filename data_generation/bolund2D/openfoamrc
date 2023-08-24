@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Run with: bash --rcfile ~/.openfoamrc
+source ~/.bashrc
+
+# OpenFOAM
+source /opt/openfoam5/etc/bashrc
+
+# OpenFOAM specific bash history
+HISTFILESIZE=
+HISTSIZE=
+# export HISTTIMEFORMAT="[%F %T] "
+HISTFILE=~/.bash_openfoam_history
+PROMPT_COMMAND="history -a; $PROMPT_COMMAND"
+
+PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u-FOAM\[\033[00m\]:\[\033[01;34m\]\W\[\033[00m\]\$ '
+
+# My default run directory
+FOAM_NRUN=$HOME/OpenFOAM/run
+
+export PYTHONPATH="${PYTHONPATH}:${ParaView_LIB_DIR}/site-packages:${ParaView_LIB_DIR}/site-packages/vtk"
+
+cd $FOAM_NRUN
+

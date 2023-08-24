@@ -1,0 +1,52 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5                                     |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0";
+    object      nut;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 2 -1 0 0 0 0];
+
+internalField   uniform 0.0;
+
+boundaryField
+{
+    #include "include/ABLConditions"
+
+    west_face
+    {
+        type            calculated;
+        value           $internalField;
+    }
+
+    east_face
+    {
+        type            calculated;
+        value           $internalField;
+    }
+
+    "(north_face|south_face|maxZ)"
+    {
+        type            slip;
+    }
+
+    "(hill_geometry|minZ)"
+    {
+        type            nutkAtmRoughWallFunction;
+        z0              $z0;
+        value           $internalField;
+    }
+}
+
+
+// ************************************************************************* //

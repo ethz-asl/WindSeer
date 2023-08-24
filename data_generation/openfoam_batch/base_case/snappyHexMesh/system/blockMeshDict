@@ -1,0 +1,107 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5                                     |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#include "sliceDict"
+convertToMeters $SLICEDICT.MCONVERT;
+
+vertices
+(
+    ($SLICEDICT.MINX $SLICEDICT.MINY $SLICEDICT.MINZ)
+    ($SLICEDICT.MAXX $SLICEDICT.MINY $SLICEDICT.MINZ)
+    ($SLICEDICT.MAXX $SLICEDICT.MAXY $SLICEDICT.MINZ)
+    ($SLICEDICT.MINX $SLICEDICT.MAXY $SLICEDICT.MINZ)
+    ($SLICEDICT.MINX $SLICEDICT.MINY $SLICEDICT.MAXZ)
+    ($SLICEDICT.MAXX $SLICEDICT.MINY $SLICEDICT.MAXZ)
+    ($SLICEDICT.MAXX $SLICEDICT.MAXY $SLICEDICT.MAXZ)
+    ($SLICEDICT.MINX $SLICEDICT.MAXY $SLICEDICT.MAXZ)
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) ($SLICEDICT.GRADE.X.N $SLICEDICT.GRADE.Y.N $SLICEDICT.GRADE.Z.N)
+    simpleGrading
+    (
+        $SLICEDICT.GRADE.X.S
+        $SLICEDICT.GRADE.Y.S
+        $SLICEDICT.GRADE.Z.S
+    )
+);
+
+edges
+(
+);
+
+boundary
+(
+    north_face
+    {
+        type empty;
+        inGroups (frontAndBack);
+        faces
+        (
+            (3 7 6 2)
+        );
+    }
+    west_face
+    {
+        type patch;
+        inGroups (inlet);
+        faces
+        (
+            (0 4 7 3)
+        );
+    }
+    east_face
+    {
+        type patch;
+        inGroups (outlet);
+        faces
+        (
+            (2 6 5 1)
+        );
+    }
+    south_face
+    {
+        type empty;
+        inGroups (frontAndBack);
+        faces
+        (
+            (1 5 4 0)
+        );
+    }
+    minZ
+    {
+        type wall;
+        faces
+        (
+            (0 3 2 1)
+        );
+    }
+    maxZ
+    {
+        type symmetryPlane;
+        faces
+        (
+            (4 5 6 7)
+        );
+    }     
+);
+
+mergePatchPairs
+(
+);
+
+// ************************************************************************* //

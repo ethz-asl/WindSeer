@@ -1,0 +1,46 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5                                     |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+
+#include "terrainDict"
+
+SLICEDICT
+{
+    SLICEWIDTH 0.1;
+    
+    // These are mostly unneccessary copies, but make it a bit more readable
+    MCONVERT $:TERRAIN_DICT.MCONVERT;
+    STL_FILE $:TERRAIN_DICT.STL_FILE;
+
+    MINX $:TERRAIN_DICT.MINX;
+    MAXX $:TERRAIN_DICT.MAXX;
+    MINY YSLICE;
+    MAXY #calc "$MINY+$SLICEWIDTH";
+    MINZ $:TERRAIN_DICT.MINZ;
+    MAXZ $:TERRAIN_DICT.MAXZ;
+
+    GRADE
+    {
+        X { N 300; S   1; }
+        Y { N   1; S   1; }
+        Z { N 128; S   6; }
+    }
+
+    INPOINT
+    {
+        X #calc "($MINX+$MAXX)/2.0";
+        Y #calc "$MINY+$SLICEWIDTH/2.0";
+        Z #calc "$MAXZ-$SLICEWIDTH";
+    }
+
+    SUBGRADE
+    {
+        X { N 127; S 1; }
+        Y { N   1; S 1; }
+        Z { N  63; S 1; }
+    }
+}

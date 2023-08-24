@@ -1,0 +1,90 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5                                     |
+|   \\  /    A nd           | Web:      http://www.OpenFOAM.org               |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      fvSchemes;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+ddtSchemes
+{
+    default        steadyState;
+}
+
+gradSchemes
+{
+    default         Gauss linear;
+
+    limited         cellLimited Gauss linear 1;
+    grad(U)         $limited;
+    // grad(k)         $limited;
+    // grad(epsilon)     $limited;
+}
+
+//* First order (robust) scheme
+divSchemes
+{
+    default         Gauss upwind;
+    div((nuEff*dev2(T(grad(U)))))   Gauss linear;
+} //*/
+
+/* Second order (more accurate, still quite stable?) scheme
+divSchemes
+{
+    default         Gauss linearUpwind default;
+    div(phi,U)      Gauss linearUpwind grad(U);
+    div((nuEff*dev2(T(grad(U)))))   Gauss linear;
+} //*/
+
+/* Second order (even more accurate, oscillatory) scheme
+divSchemes
+{
+    default         Gauss linearUpwind default;
+    div(phi,U)      Gauss linear;
+    div((nuEff*dev2(T(grad(U)))))   Gauss linear;
+} //*/
+
+/*
+divSchemes
+{
+    default         none;
+
+    div(phi,U)      bounded Gauss linearUpwind limited;
+
+    turbulence      bounded Gauss limitedLinear 1;
+    div(phi,k)      $turbulence;
+    div(phi,epsilon) $turbulence;
+
+    div((nuEff*dev2(T(grad(U))))) Gauss linear;
+} //*/
+
+laplacianSchemes
+{
+    // default         Gauss linear corrected;
+    default         Gauss linear limited 0.333;    
+}
+
+interpolationSchemes
+{
+    default         linear;
+}
+
+snGradSchemes
+{
+    default         corrected;
+}
+
+wallDist
+{
+    method meshWave;
+}
+
+// ************************************************************************* //
