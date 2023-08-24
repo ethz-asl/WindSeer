@@ -46,13 +46,3 @@ If you have trouble installing `llvmlite` on Ubuntu 18.04 (a dependency of `inte
    export LLVM_CONFIG='/usr/bin/llvm-config-10'
    pip3 install interpolation
    ```
-
-## Guidelines
-### Branches
-- master: Current main release, i.e. under development but bench-tested and thus operational.
-- features/MYFEATURENAME: A new feature branch. All new features shall be added like this.
-- fix/MYFIX: A new fix. All new fixes shall be added like this.
-
-### Other
-- Do not include any file larger than 10 MB to a commit. If the data needs to be copied for example from the cluster computer to the local machine use:
-    `scp -r USERNAME@login.leonhard.ethz.ch:DIR_TO_COPY* TARGET_DIR`
