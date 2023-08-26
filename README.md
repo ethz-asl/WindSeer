@@ -1,4 +1,4 @@
-# intel_wind
+# WindSeer
 
 This repository contains the tools to predict the wind using a neural network.
 
