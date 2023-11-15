@@ -4,7 +4,6 @@ Testcases for the HDF5Dataset
 '''
 
 from windseer.data import HDF5Dataset
-import windseer.plotting as plotting
 import windseer
 
 import argparse
@@ -76,6 +75,7 @@ default_config = {
 
 
 def plot_sample(input_mode):
+    import windseer.plotting as plotting
     np.random.seed(0)
     torch.manual_seed(0)
     random.seed(0)
