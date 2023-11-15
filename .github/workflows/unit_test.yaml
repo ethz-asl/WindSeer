@@ -25,7 +25,9 @@ jobs:
     - name: Install Windseer Package
       working-directory: 
       run: |
-        cd $GITHUB_WORKSPACE/windseer
+        pwd
+        cd $GITHUB_WORKSPACE/WindSeer
+        pwd
         pip3 install .
         python3 windseer/proj_definitions/install_ch_defs.py
       shell: bash
