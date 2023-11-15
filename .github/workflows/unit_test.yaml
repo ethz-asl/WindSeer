@@ -19,7 +19,7 @@ jobs:
     - name: Install Dependencies
       run: |
         apt update && apt install -y python3-pip
-        apt install -y libgdal-dev=3.0.4+dfsg-1build3 libhdf5-dev libnetcdf-dev
+        apt install -y libgdal-dev=3.0.4+dfsg-1build3 libhdf5-dev libnetcdf-dev unzip
         pip3 install scipy scikit-learn pyproj h5py matplotlib GDAL==3.0.4 netCDF4 tqdm pandas 
         pip3 install tensorboard pyulog interpolation mayavi mpl-scatter-density PyQt5 yapf
       shell: bash
@@ -29,8 +29,19 @@ jobs:
         pip3 install .
         python3 windseer/proj_definitions/install_ch_defs.py
       shell: bash
-    - name: unit_tests
+    - name: Download Testdata
+      working-directory: 
+      run: |
+        wget http://robotics.ethz.ch/~asl-datasets/CI_WindSeerData/testdata.zip --directory-prefix windseer/test/testdata
+        unzip windseer/test/testdata/testdata.zip -d windseer/test/testdata/
+      shell: bash
+    - name: Dataset Test
       working-directory:
       run: |
-        echo "Unit tests"
+        python3 windseer/test/test_dataset.py
+      shell: bash
+    - name: Dataset Processing Test
+      working-directory:
+      run: |
+        python3 windseer/test/test_dataset_processing.py
       shell: bash
