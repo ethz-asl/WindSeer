@@ -20,7 +20,6 @@ jobs:
       run: |
         apt update && apt install -y python3-pip
         apt install -y libgdal-dev=3.0.4+dfsg-1build3 libhdf5-dev libnetcdf-dev unzip wget
-        apt install -y '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev
         pip3 install scipy scikit-learn pyproj h5py matplotlib GDAL==3.0.4 netCDF4 tqdm pandas 
         pip3 install tensorboard pyulog interpolation mpl-scatter-density PyQt5 yapf
         pip3 install torch==1.13.1+cpu torchvision==0.14.1+cpu torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cpu
@@ -40,7 +39,6 @@ jobs:
     - name: Dataset Processing Test
       working-directory:
       run: |
-        export QT_QPA_PLATFORM=offscreen
         python3 windseer/test/test_dataset_processing.py
       shell: bash
     - name: Dataset Test
