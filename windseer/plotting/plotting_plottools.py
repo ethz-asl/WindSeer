@@ -6,6 +6,7 @@ import numpy as np
 from matplotlib.widgets import Slider, RadioButtons
 import torch
 import math
+import copy
 
 
 class PlotUtils():
@@ -559,7 +560,7 @@ class PlotUtils():
             self._plot_label = False
 
         # color map
-        self._cmap = cmap.copy()
+        self._cmap = copy.copy(cmap)
         self._cmap.set_bad(invalid_color)
 
         # terrain color map
