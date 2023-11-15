@@ -17,17 +17,19 @@ jobs:
     - uses: actions/checkout@v3
     - name: Install Dependencies
       run: |
-        apt update
-        apt-get install python3-pip
+        apt update && apt install -y python3-pip
         pip3 install scipy sklearn pyproj h5py matplotlib GDAL netCDF4 tqdm pandas 
         pip3 install tensorboard pyulog interpolation mayavi mpl-scatter-density PyQt5 yapf
+      shell: bash
     - name: Install Windseer Package
       working-directory: 
       run: |
         cd $GITHUB_WORKSPACE/windseer
         pip3 install .
         python3 windseer/proj_definitions/install_ch_defs.py
+      shell: bash
     - name: unit_tests
       working-directory:
       run: |
         echo "Unit tests"
+      shell: bash
