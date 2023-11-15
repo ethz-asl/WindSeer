@@ -18,8 +18,9 @@ jobs:
     - name: Install Dependencies
       run: |
         apt update
-        pip install scipy sklearn pyproj h5py matplotlib GDAL netCDF4 tqdm pandas 
-        pip install tensorboard pyulog interpolation mayavi mpl-scatter-density PyQt5 yapf
+        apt-get install python3.8
+        pip3 install scipy sklearn pyproj h5py matplotlib GDAL netCDF4 tqdm pandas 
+        pip3 install tensorboard pyulog interpolation mayavi mpl-scatter-density PyQt5 yapf
     - name: Install Windseer Package
       working-directory: 
       run: |
