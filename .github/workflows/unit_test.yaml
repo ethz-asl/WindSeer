@@ -27,7 +27,7 @@ jobs:
     - name: Install Windseer Package
       working-directory: 
       run: |
-        pip3 install .
+        pip3 install -e .
         python3 windseer/proj_definitions/install_ch_defs.py
       shell: bash
     - name: Download Testdata
