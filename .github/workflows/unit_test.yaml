@@ -18,7 +18,7 @@ jobs:
     - name: Install Dependencies
       run: |
         apt update && apt install -y python3-pip
-        apt install -y libgdal-dev=3.0.4 libhdf5-dev libnetcdf-dev
+        apt install -y libgdal-dev=3.0.4+dfsg-1build3 libhdf5-dev libnetcdf-dev
         pip3 install scipy sklearn pyproj h5py matplotlib GDAL==3.0.4 netCDF4 tqdm pandas 
         pip3 install tensorboard pyulog interpolation mayavi mpl-scatter-density PyQt5 yapf
       shell: bash
