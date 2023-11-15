@@ -9,14 +9,10 @@ import windseer
 
 import argparse
 import copy
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import random
-import sys
-import time
 import torch
-from torch.utils.data import DataLoader
 import unittest
 
 windseer_path = os.path.dirname(windseer.__file__)
