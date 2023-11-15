@@ -36,14 +36,40 @@ jobs:
         wget http://robotics.ethz.ch/~asl-datasets/CI_WindSeerData/testdata.zip --directory-prefix windseer/test/testdata
         unzip windseer/test/testdata/testdata.zip -d windseer/test/testdata/
       shell: bash
-    - name: Dataset Processing Test
+    - name: Utils Tests
       working-directory:
       run: |
+        python3 windseer/test/test_derivation.py
+        python3 windseer/test/test_dictutils.py
+        python3 windseer/test/test_interpolation.py
+        python3 windseer/test/test_kwargs_parser.py
+        python3 windseer/test/test_loiter_detection.py
+        python3 windseer/test/test_ulog_utils.py
+        python3 windseer/test/test_yamltools.py
+      shell: bash
+    - name: Data Tests
+      working-directory:
+      run: |
+        python3 windseer/test/test_bin_log_data.py
         python3 windseer/test/test_dataset_processing.py
+        python3 windseer/test/test_dataset.py
+        python3 windseer/test/test_extract_cosmo_data.py
+        python3 windseer/test/test_get_mapgeo_terrain.py
+        python3 windseer/test/test_load_measurements.py
       shell: bash
-    - name: Dataset Test
+    - name: NN Test
       working-directory:
       run: |
-        python3 windseer/test/test_dataset.py
+        python3 windseer/test/test_loadmodel.py
+        python3 windseer/test/test_losses.py
+        python3 windseer/test/test_models.py
+        python3 windseer/test/test_training.py
+        python3 windseer/test/test_rescale_tensor.py
+        python3 windseer/test/test_prediction.py
       shell: bash
-
+    - name: Eval Test
+      working-directory:
+      run: |
+        python3 windseer/test/test_plotting_analysis.py
+        python3 windseer/test/test_sparse_evaluation.py
+      shell: bash
