@@ -42,7 +42,7 @@ jobs:
       run: |
         export QT_QPA_PLATFORM=offscreen
         python3 windseer/test/test_dataset_processing.py
-      shell: basha
+      shell: bash
     - name: Dataset Test
       working-directory:
       run: |
