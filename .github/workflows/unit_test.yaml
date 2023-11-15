@@ -14,7 +14,8 @@ jobs:
       fail-fast: false
     container: osrf/ros:noetic-desktop
     steps:
-    - uses: actions/checkout@v3
+    - name: Check out repository
+      uses: actions/checkout@v3
     - name: Install Dependencies
       run: |
         apt update && apt install -y python3-pip
@@ -25,9 +26,6 @@ jobs:
     - name: Install Windseer Package
       working-directory: 
       run: |
-        pwd
-        cd $GITHUB_WORKSPACE/WindSeer
-        pwd
         pip3 install .
         python3 windseer/proj_definitions/install_ch_defs.py
       shell: bash
