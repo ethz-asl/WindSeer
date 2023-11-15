@@ -22,6 +22,7 @@ jobs:
         apt install -y libgdal-dev=3.0.4+dfsg-1build3 libhdf5-dev libnetcdf-dev unzip wget
         pip3 install scipy scikit-learn pyproj h5py matplotlib GDAL==3.0.4 netCDF4 tqdm pandas 
         pip3 install tensorboard pyulog interpolation mayavi mpl-scatter-density PyQt5 yapf
+        pip3 install torch==1.13.1+cpu torchvision==0.14.1+cpu torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cpu
       shell: bash
     - name: Install Windseer Package
       working-directory: 
