@@ -141,9 +141,11 @@ class TestRescaleTensor(unittest.TestCase):
             )
 
     def test_scaling_and_rescaling(self):
+        params = utils.WindseerParams(config_filename)
         input = torch.ones(10, 2, 3, 3, 3)
         params.data['ux_scaling'] = 0.1
         params.data['uy_scaling'] = 1.0
+        scale = 0.5
         out = utils.scale_tensor(input, ['ux', 'uy'], scale, params)
         out = utils.rescale_tensor(out, ['ux', 'uy'], scale, params)
         self.assertTrue(torch.equal(out, input))

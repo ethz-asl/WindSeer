@@ -4,19 +4,14 @@ Testcases for the HDF5Dataset
 '''
 
 from windseer.data import HDF5Dataset
-import windseer.plotting as plotting
 import windseer
 
 import argparse
 import copy
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import random
-import sys
-import time
 import torch
-from torch.utils.data import DataLoader
 import unittest
 
 windseer_path = os.path.dirname(windseer.__file__)
@@ -80,6 +75,7 @@ default_config = {
 
 
 def plot_sample(input_mode):
+    import windseer.plotting as plotting
     np.random.seed(0)
     torch.manual_seed(0)
     random.seed(0)

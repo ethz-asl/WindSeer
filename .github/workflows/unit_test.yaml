@@ -1,0 +1,76 @@
+name: Unit Test
+on:
+  push:
+    branches:
+    - 'main'
+  pull_request:
+    branches:
+    - '*'
+
+jobs:
+  tests:
+    runs-on: [self-hosted, linux]
+    strategy:
+      fail-fast: false
+    container: osrf/ros:noetic-desktop
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+    - name: Install Dependencies
+      run: |
+        apt update && apt install -y python3-pip
+        apt install -y libgdal-dev=3.0.4+dfsg-1build3 libhdf5-dev libnetcdf-dev unzip wget
+        apt install -y texlive-latex-extra texlive-fonts-recommended dvipng cm-super texlive-latex-base
+        pip3 install scipy scikit-learn pyproj h5py matplotlib GDAL==3.0.4 netCDF4 tqdm pandas 
+        pip3 install tensorboard pyulog interpolation mpl-scatter-density PyQt5 yapf
+        pip3 install torch==1.13.1+cpu torchvision==0.14.1+cpu torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cpu
+      shell: bash
+    - name: Install Windseer Package
+      working-directory: 
+      run: |
+        pip3 install -e .
+        python3 windseer/proj_definitions/install_ch_defs.py
+      shell: bash
+    - name: Download Testdata
+      working-directory: 
+      run: |
+        wget http://robotics.ethz.ch/~asl-datasets/CI_WindSeerData/testdata.zip --directory-prefix windseer/test/testdata
+        unzip windseer/test/testdata/testdata.zip -d windseer/test/testdata/
+      shell: bash
+    - name: Utils Tests
+      working-directory:
+      run: |
+        python3 windseer/test/test_derivation.py
+        python3 windseer/test/test_dictutils.py
+        python3 windseer/test/test_interpolation.py
+        python3 windseer/test/test_kwargs_parser.py
+        python3 windseer/test/test_loiter_detection.py
+        python3 windseer/test/test_ulog_utils.py
+        python3 windseer/test/test_yamltools.py
+      shell: bash
+    - name: Data Tests
+      working-directory:
+      run: |
+        python3 windseer/test/test_bin_log_data.py
+        python3 windseer/test/test_dataset_processing.py
+        python3 windseer/test/test_dataset.py
+        python3 windseer/test/test_extract_cosmo_data.py
+        python3 windseer/test/test_get_mapgeo_terrain.py
+        python3 windseer/test/test_load_measurements.py
+      shell: bash
+    - name: NN Test
+      working-directory:
+      run: |
+        python3 windseer/test/test_loadmodel.py
+        python3 windseer/test/test_losses.py
+        python3 windseer/test/test_models.py
+        python3 windseer/test/test_training.py
+        python3 windseer/test/test_rescale_tensor.py
+        python3 windseer/test/test_prediction.py
+      shell: bash
+    - name: Eval Test
+      working-directory:
+      run: |
+        python3 windseer/test/test_plotting_analysis.py
+        python3 windseer/test/test_sparse_evaluation.py
+      shell: bash
