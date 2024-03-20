@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='windseer',
-    version='0.0.1',
+    version='1.0.1',
     description='Wind prediction around complex terrain using a neural network',
     license='BSD 3-Clause',
     packages=['windseer'],
