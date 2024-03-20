@@ -151,7 +151,7 @@ def plot_wind_3d(
     '''
     # Plot the wind vector estimates
     fig = plt.figure()
-    ax = fig.gca(projection='3d')
+    ax = fig.add_subplot(projection = '3d')
     ax.set_xlabel('Easting (m)')
     ax.set_ylabel('Northing (m)')
     ax.set_zlabel('Altitude (m)')
