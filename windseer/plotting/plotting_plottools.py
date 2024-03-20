@@ -33,7 +33,7 @@ class PlotUtils():
             title_fontsize=14,
             label_fontsize=12,
             tick_fontsize=8,
-            cmap=cm.jet,
+            cmap=cm.viridis,
             terrain_color='grey',
             invalid_color='white',
             blocking=True
