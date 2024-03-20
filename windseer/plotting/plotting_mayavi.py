@@ -4,6 +4,8 @@ try:
     from mayavi.core.api import PipelineBase
     from traits.api import HasTraits, Range, Instance, on_trait_change, Enum
     from traitsui.api import View, Item, VGroup, HGroup
+    from tvtk.util import ctf
+    from mayavi.core.lut_manager import LUTManager
     mayavi_available = True
 except ImportError:
     print(
@@ -12,7 +14,6 @@ except ImportError:
     mayavi_available = False
 
 import numpy as np
-import scipy
 
 
 def mlab_plot_terrain(terrain, mode='blocks', uniform_color=False, figure=None):
@@ -42,6 +43,9 @@ def mlab_plot_terrain(terrain, mode='blocks', uniform_color=False, figure=None):
 
         keep_idx = (terrain_np == 0)[:, :, 0]
         Z[~keep_idx] = np.NaN
+
+        if (np.isnan(Z).all() == True):
+            return None
 
         terrain_modes = ['mesh', 'blocks']
         if mode == terrain_modes[0]:
@@ -171,7 +175,8 @@ def mlab_plot_slice(
                     self.scalar,
                     plane_orientation='x_axes',
                     slice_index=0,
-                    figure=self.scene.mayavi_scene
+                    figure=self.scene.mayavi_scene,
+                    colormap='viridis'
                     )
 
                 self.o = mlab.outline(
@@ -426,15 +431,14 @@ def mlab_plot_prediction(
             fig = mlab.figure()
 
         mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
+        src = mlab.pipeline.vector_field(
+            prediction_np[0], prediction_np[1], prediction_np[2]
+            )
         mlab.outline(
             extent=[
                 0, terrain_shape[2] - 1, 0, terrain_shape[1] - 1, 0, terrain_shape[0] -
                 1
                 ]
-            )
-
-        src = mlab.pipeline.vector_field(
-            prediction_np[0], prediction_np[1], prediction_np[2]
             )
         ret = mlab.pipeline.vector_cut_plane(
             src,
@@ -442,7 +446,8 @@ def mlab_plot_prediction(
             scale_factor=2.5,
             resolution=50,
             view_controls=True,
-            mode='arrow'
+            mode='arrow',
+            colormap='viridis'
             )
         ret.implicit_plane.normal = np.array([np.sqrt(0.5), np.sqrt(0.5), 0])
 
@@ -455,19 +460,21 @@ def mlab_plot_prediction(
             fig = mlab.figure()
 
         mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
-        mlab.outline(
-            extent=[
-                0, terrain_shape[2] - 1, 0, terrain_shape[1] - 1, 0, terrain_shape[0] -
-                1
-                ]
-            )
 
         mlab.quiver3d(
             prediction_np[0],
             prediction_np[1],
             prediction_np[2],
             mask_points=quiver_mask_points,
-            mode='arrow'
+            mode='arrow',
+            colormap='viridis'
+            )
+
+        mlab.outline(
+            extent=[
+                0, terrain_shape[2] - 1, 0, terrain_shape[1] - 1, 0, terrain_shape[0] -
+                1
+                ]
             )
 
         mlab_set_view(view_settings, fig)
@@ -563,6 +570,15 @@ def mlab_plot_error(
             scalar.origin = [0, 0, 0]
             vol = mlab.pipeline.volume(scalar, vmin=1.0)
 
+            # change the colormap to viridis, currently the colorbar does not automatically update
+            # lut_mngr = LUTManager(number_of_colors=256, lut_mode="viridis")
+            # colormap = lut_mngr.lut.table.to_array().astype(float) / 255
+            # rgbs = colormap[:, :3]
+            # volume_ctf = ctf.save_ctfs(vol._volume_property)
+            # volume_ctf["rgb"] = [[i / (len(rgbs) - 1) * np.nanmax(error_norm), *rgb] for i, rgb in enumerate(rgbs)]
+            # ctf.load_ctfs(volume_ctf, vol._volume_property)
+            # vol.update_ctf = True
+
             mlab.outline(
                 extent=[
                     0, terrain_shape[2] - 1, 0, terrain_shape[1] -
@@ -587,9 +603,19 @@ def mlab_plot_error(
 
                 mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color)
 
-                scalar = mlab.pipeline.scalar_field(np.linalg.norm(error_np[i], axis=0))
+                error_norm = np.linalg.norm(error_np[i], axis=0)
+                scalar = mlab.pipeline.scalar_field(error_norm)
                 scalar.origin = [0, 0, 0]
                 vol = mlab.pipeline.volume(scalar, vmin=np.abs(error_np[i]).max() * 0.1)
+
+                # change the colormap to viridis, currently the colorbar does not automatically update
+                # lut_mngr = LUTManager(number_of_colors=256, lut_mode="viridis")
+                # colormap = lut_mngr.lut.table.to_array().astype(float) / 255
+                # rgbs = colormap[:, :3]
+                # volume_ctf = ctf.save_ctfs(vol._volume_property)
+                # volume_ctf["rgb"] = [[i / (len(rgbs) - 1) * np.nanmax(error_norm), *rgb] for i, rgb in enumerate(rgbs)]
+                # ctf.load_ctfs(volume_ctf, vol._volume_property)
+                # vol.update_ctf = True
 
                 mlab.outline(
                     extent=[
@@ -701,6 +727,15 @@ def mlab_plot_uncertainty(
             scalar.origin = [0, 0, 0]
             vol = mlab.pipeline.volume(scalar, vmax=uncertainty_np.max() * 0.5)
 
+            # change the colormap to viridis, currently the colorbar does not automatically update
+            # lut_mngr = LUTManager(number_of_colors=256, lut_mode="viridis")
+            # colormap = lut_mngr.lut.table.to_array().astype(float) / 255
+            # rgbs = colormap[:, :3]
+            # volume_ctf = ctf.save_ctfs(vol._volume_property)
+            # volume_ctf["rgb"] = [[i / (len(rgbs) - 1) * np.nanmax(uncertainty_np), *rgb] for i, rgb in enumerate(rgbs)]
+            # ctf.load_ctfs(volume_ctf, vol._volume_property)
+            # vol.update_ctf = True
+
             mlab.outline(
                 extent=[
                     0, terrain_shape[2] - 1, 0, terrain_shape[1] -
@@ -732,6 +767,15 @@ def mlab_plot_uncertainty(
                 vol = mlab.pipeline.volume(
                     scalar, vmin=np.abs(uncertainty_np[i]).max() * 0.1
                     )
+
+                # change the colormap to viridis, currently the colorbar does not automatically update
+                # lut_mngr = LUTManager(number_of_colors=256, lut_mode="viridis")
+                # colormap = lut_mngr.lut.table.to_array().astype(float) / 255
+                # rgbs = colormap[:, :3]
+                # volume_ctf = ctf.save_ctfs(vol._volume_property)
+                # volume_ctf["rgb"] = [[i / (len(rgbs) - 1) * np.nanmax(np.abs(uncertainty_np[i])), *rgb] for i, rgb in enumerate(rgbs)]
+                # ctf.load_ctfs(volume_ctf, vol._volume_property)
+                # vol.update_ctf = True
 
                 mlab.outline(
                     extent=[
@@ -853,12 +897,6 @@ def mlab_plot_streamlines(
             fig = mlab.figure(figure=title)
 
         mlab_plot_terrain(terrain, terrain_mode, terrain_uniform_color, fig)
-        mlab.outline(
-            extent=[
-                0, terrain_shape[2] - 1, 0, terrain_shape[1] - 1, 0, terrain_shape[0] -
-                1
-                ]
-            )
 
         if not animate:
 
@@ -882,6 +920,12 @@ def mlab_plot_streamlines(
                 f.update_streamlines = True
 
             visualize_flow()
+            mlab.outline(
+                extent=[
+                    0, terrain_shape[2] - 1, 0, terrain_shape[1] - 1, 0, terrain_shape[0] -
+                    1
+                    ]
+                )
 
             mlab_set_view(view_settings, fig)
 
@@ -913,12 +957,20 @@ def mlab_plot_streamlines(
                 seed_resolution=int(terrain_shape[1] / 4),
                 seed_scale=2.0,
                 integration_direction='both',
-                figure=fig
+                figure=fig,
+                colormap='viridis'
                 )
             f.stream_tracer.maximum_propagation = 50000
             f.seed.widget.point1 = seed_points[direction] + [1]
             f.seed.widget.point2 = seed_points[direction + 1] + [1]
             f.update_streamlines = True
+
+            mlab.outline(
+                extent=[
+                    0, terrain_shape[2] - 1, 0, terrain_shape[1] - 1, 0, terrain_shape[0] -
+                    1
+                    ]
+                )
 
             mlab_set_view(view_settings, fig)
 
