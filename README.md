@@ -2,6 +2,8 @@
 
 This repository contains the tools to predict the wind using a neural network.
 
+If you are viewing a downloaded copy of this repository (ZIP archive), consider obtaining the latest version online from https://github.com/ethz-asl/WindSeer.
+
 ## Structure
 ### Benchmark Planner
 The planning benchmark tools used to compare the planning performance using different wind predictions.
